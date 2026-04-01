@@ -41,23 +41,24 @@ Shared Contracts ──→ File System (FileEntry schema)
 
 ### 1. Local File Storage
 
-Manage the student's local file directory within the app's data folder.
+All storage is local-only — no cloud sync. No storage cap; students manage their own disk.
 
 **Storage locations:**
 - `~/.student-claw/files/` — General file storage
 - `~/.student-claw/files/courses/<course>/` — Per-course file organization
 - `~/.student-claw/files/downloads/` — Files downloaded from Canvas
+- `~/.student-claw/trash/` — Soft-deleted files (purged after 30 days or on manual empty)
 - `~/.student-claw/memory/` — Memory markdown files (shared with Memory System)
 - `~/.student-claw/skills/` — Skill files (shared with Skill System)
 
 ### 2. File Import
 
-Students can bring files into Student Claw from various sources.
+Every import copies the file into the app's storage directory. The app always works with its own copy — no references to external paths that could break if the student moves or deletes the original.
 
-- **Drag and drop**: Drop a file onto the app window
-- **File picker**: Native Electron file dialog
-- **Canvas download**: Automatically download assignment attachments during sync
-- **AI-generated**: When the AI creates a study guide or outline, save it as a file
+- **Drag and drop**: Drop a file onto the app window — copied into `~/.student-claw/files/`
+- **File picker**: Native Electron file dialog — copied into `~/.student-claw/files/`
+- **Canvas download**: Downloaded and copied into `~/.student-claw/files/downloads/`
+- **AI-generated**: When the AI creates a study guide or outline, saved directly into storage
 
 ### 3. Markdown Viewer
 
@@ -81,24 +82,50 @@ Built-in PDF rendering for assignment sheets, research papers, and lecture slide
 - Thumbnail navigation for long documents
 - Optional: AI-powered PDF summary ("Summarize this paper in 3 bullet points")
 
-### 5. File Metadata Index
+### 5. Other File Viewers
+
+Support for the full range of files students commonly work with.
+
+| Format | Viewer |
+|---|---|
+| `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` | Inline image display |
+| `.docx` | Rendered text view (via mammoth.js or similar) |
+| `.pptx` | Slide-by-slide view (best-effort rendering) |
+| `.txt`, `.csv` | Plain text display |
+| Code files (`.py`, `.js`, `.ts`, `.java`, etc.) | Syntax-highlighted text view |
+
+Files with no supported viewer open externally via `shell.openPath`.
+
+### 6. File Metadata Index
 
 SQLite index for fast search and organization without scanning the filesystem.
 
+Primary organization axis is **course** — files belong to a course or are uncategorized. **Tags** are secondary: optional free-form labels (e.g. "midterm prep", "primary source") that can span courses and are filterable in the File Explorer.
+
 ```
 files
-  id, name, path, type (md/pdf/txt/other), size,
-  courseId (nullable), tags, createdAt, lastAccessedAt
+  id, name, path, type (md/pdf/txt/docx/image/code/other), size,
+  courseId (nullable), tags (string array), createdAt, lastAccessedAt,
+  deletedAt (nullable) — set on soft delete, null means active
 ```
 
-### 6. File Context for AI
+### 7. File Context for AI
 
-When the student wants the AI to work with a file, the File System provides it.
+When the student wants the AI to work with a file, the File System extracts the content and passes a structured object to the AI Harness. The Harness handles all prompt formatting.
 
-- **Injection**: Read file content and inject into AI context window
-- **Size limits**: Large PDFs are summarized or chunked before injection
-- **Supported formats**: Markdown (full text), PDF (extracted text), plain text, code files
-- **Reference tracking**: When the AI references a file, link back to it in the response
+```ts
+interface FileContext {
+  name: string
+  type: 'md' | 'pdf' | 'docx' | 'txt' | 'image' | 'code' | 'other'
+  content: string             // extracted text (images: empty or alt description)
+  summarized: boolean         // true if content was produced via layered summarization
+}
+```
+
+- **Markdown**: full text passed as-is
+- **PDF / DOCX**: text extracted before passing
+- **Images**: content is empty; the Harness handles multimodal injection separately
+- **Large files**: layered summarization — split into chunks, summarize each chunk, then summarize the summaries into a single condensed representation that fits the context window. `summarized` is set to `true` so the Harness can surface a note that the content was compressed.
 
 ---
 
@@ -110,8 +137,10 @@ When the student wants the AI to work with a file, the File System provides it.
 | **View** | Click in File Explorer | Open in built-in MD/PDF viewer |
 | **Edit** | Toggle edit mode (markdown only) | In-app markdown editor |
 | **Send to AI** | Right-click → "Ask AI about this" | Inject file content into chat context |
-| **Export** | Share button | Open in external app or copy to clipboard |
-| **Delete** | Right-click → Delete | Remove from local storage and index |
+| **Open Externally** | Share button → "Open in [App]" | `shell.openPath()` to OS default app |
+| **Export** | Share button → "Save a Copy…" | OS save dialog — copies file to user-chosen location |
+| **Delete** | Right-click → Delete | Move to trash (`~/.student-claw/trash/`); purged after 30 days or manual empty |
+| **Restore** | Trash → Restore | Move file back to its original location and re-index |
 | **Organize** | Drag to course folder | Associate file with a course |
 
 ---
@@ -124,24 +153,23 @@ packages/server/src/files/
   FileIndex.ts                # SQLite metadata index management
   MarkdownProcessor.ts        # Parse and process markdown content
   PdfExtractor.ts             # Extract text from PDFs for AI context
-  FileWatcher.ts              # Watch directories for external changes
+  FileWatcher.ts              # Watch directories for external changes; silently re-indexes on modification (updates metadata, invalidates content cache)
 
 packages/ui/src/components/files/
-  FileExplorer.tsx            # Sidebar file tree browser
+  FileExplorer.tsx            # Sidebar file tree browser (course folders + tag filters)
   MarkdownViewer.tsx          # Render markdown with math/code support
   MarkdownEditor.tsx          # Edit mode for markdown files
   PdfViewer.tsx               # PDF rendering with navigation
+  DocxViewer.tsx              # Rendered text view for .docx files
+  ImageViewer.tsx             # Inline image display
+  CodeViewer.tsx              # Syntax-highlighted plain text / code files
+  TrashView.tsx               # Trash browser with restore and empty actions
   FileDropZone.tsx            # Drag-and-drop file import
-  FileContextMenu.tsx         # Right-click actions (Send to AI, Export, Delete)
+  FileContextMenu.tsx         # Right-click actions (Send to AI, Share, Delete, Organize)
 ```
 
 ---
 
-## Open Questions
+## Future Considerations
 
-- **Storage limits**: Should we cap local storage usage? Students on laptops with small SSDs might care.
-- **File sync**: Should files sync anywhere (cloud backup)? Or is local-only the philosophy?
-- **Version history**: Should we keep versions of edited markdown files (like a simple git)?
-- **Image support**: Should the viewer handle images (screenshots of whiteboards, diagrams)?
-- **Annotation**: Should the PDF viewer support highlighting and annotation? This is a major feature unto itself.
-- **File sharing**: Could students share files with study group members through the app?
+- **PDF annotation** (post-V1): Highlighting and inline notes on PDFs. Significant scope — store annotation data separately from the file, render highlight layer over the PDF viewer. Defer until core features are stable.

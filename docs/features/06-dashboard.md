@@ -48,16 +48,24 @@ Shared Contracts ───→ Dashboard (Course, Assignment, Grade, StudyPlan sc
 
 The most important section. Shows what the student should work on right now, ranked by a priority score.
 
+**Score recalculation triggers:**
+- Canvas sync completes (new assignments or grades)
+- Completion check-in submitted (progress changed)
+- Nightly scheduled recalc (catches deadline drift)
+- UI re-renders **only if the top-5 ranking changes** — silent recalcs don't reshuffle the list while a student is actively viewing it
+
 **Priority score factors:**
 - **Deadline proximity**: Closer = higher priority
 - **Estimated effort**: Larger tasks need earlier starts
 - **Grade weight**: A final paper worth 30% ranks above a 2% participation post
-- **Student history**: If the student tends to procrastinate on essays, those get boosted earlier
+- **Student history**: Procrastination multiplier pulled from Memory System — tracks how many times each assignment type was skipped or started late. Higher skip/late count = effective deadline moved earlier in the score. Shape: `{ type: "essay", times_skipped: 3, times_started_late: 5 }`
 - **Current progress**: Started but incomplete work gets a boost
 
 **Display:**
 - Card-based layout, top 5-7 items
 - Each card shows: assignment title, course, due date (with countdown), estimated hours, progress indicator
+- **Estimated hours**: Sourced directly from the [Smart Planner](09-smart-planner.md), which is the single source of truth for time estimates. The Dashboard displays whatever the planner produces — no separate defaults.
+- **Large assignments** (estimated >3hrs) are automatically split into multiple study sessions by the Smart Planner. The Priority Card shows total estimated hours; individual sessions appear in the Weekly Calendar.
 - Color-coded urgency: calm (7+ days), attention (3-6 days), urgent (1-2 days), overdue (red)
 
 ### 2. Grade Overview
@@ -65,16 +73,16 @@ The most important section. Shows what the student should work on right now, ran
 Per-course grade tracking with trend analysis.
 
 - **Current grades**: Letter grade + percentage per course
-- **Trend arrows**: Improving, stable, or declining based on last 3-4 graded items
+- **Trend arrows**: Improving, stable, or declining based on **weighted grade movement** over last 3-4 graded items (assignments with weight < 2% ignored). Thresholds: up (>+1%), stable (±1%), down (<-1%)
 - **Grade chart**: Line chart showing grade trajectory over the semester
-- **GPA projection**: Estimated semester GPA based on current grades and remaining work weight
+- **GPA projection**: Estimated semester GPA based on current grades, remaining work weight, and credit hours. Credit hours sourced from Canvas if available; otherwise entered manually by student during onboarding and stored in SQLite. Falls back to unweighted average with a visible disclaimer if credit hours are unavailable.
 
 ### 3. Upcoming Deadlines
 
 A timeline/calendar strip view of the next 14 days.
 
 - Visual timeline with assignments placed by due date
-- Stacked bars for days with multiple deadlines
+- Stacked bars for days with multiple deadlines — capped at 3 visible per day, with a "+N more" chip that expands to a popover showing full details
 - Click to expand and see assignment details
 - Integrates with plan-mode: if a study plan exists, show scheduled study blocks alongside deadlines
 
@@ -84,7 +92,7 @@ How much the student accomplished this week vs. planned.
 
 - **Assignments completed**: Count with progress bar toward weekly goal
 - **Study time logged**: Hours spent vs. planned (from plan-mode or manual tracking)
-- **Streak**: Consecutive days with study activity
+- **Streak**: Consecutive days with at least one completed study session (check-in marked "Yes" or "Yes, but..."). Opening the app alone doesn't count. Days with no sessions scheduled are skipped and don't break the streak. Missing a scheduled day resets to 0.
 - **Comparison**: This week vs. last week
 
 ### 5. Announcements Feed
@@ -93,8 +101,9 @@ Recent announcements from all courses, sorted by date.
 
 - Professor name, course, timestamp
 - Truncated body with expand-to-read
+- **Attachments**: Download only for v1 — show attachment chip, clicking downloads the file. ⚠️ Resolve before building: decide between download-only vs. open-in-default-app via `shell.openPath`.
 - Mark as read/unread
-- AI summary option: "Summarize this announcement" triggers a quick AI call
+- AI summary option: "Summarize this announcement" triggers a cloud API call via the **OpenAI Codex CLI bridge**. Summary cached in SQLite — re-opening the same announcement does not re-call the API.
 
 ### 6. Weekly Calendar View
 
@@ -103,6 +112,7 @@ A visual calendar showing planned study sessions from the [Smart Planner](09-sma
 - Shows the current week with study sessions as colored blocks
 - Color-coded by course (consistent colors across the app)
 - Tap a session to see details: assignment name, estimated duration, session label ("Research phase", "Writing session 2/3")
+- **Conflicts**: Overlapping sessions render as side-by-side split columns with a red border and "Schedule conflict" warning chip. Resolving opens the Smart Planner, which asks which session is higher priority and reschedules the conflicting one(s) to the next available slot.
 - Tap to trigger rescheduling ("Can't do this tonight" → Smart Planner finds alternative slots)
 - Deadline markers overlaid on the calendar for context
 
@@ -116,7 +126,12 @@ At the scheduled end of a study session (or when the student opens the app), sho
 | **No** | Reschedule the session, adjust downstream sessions in the plan |
 | **Yes, but...** | Capture the student's note (e.g., "finished reading but didn't start writing"), partial reschedule, feed note into memory for future planning accuracy |
 
-Check-ins are non-blocking — dismissed if the student navigates away. Missed check-ins are shown on next app open.
+**Delivery mechanism:**
+- The Smart Planner emits `SessionCheckIn` events to the [Notification Service](10-notification-service.md) at +9 min and +30 min after session end. The Notification Service handles OS delivery. Both are silenced as soon as the student checks in. No further prompts after 30 minutes — unacted sessions enter an unresolved state.
+- On notification click or next app open, the check-in prompt appears
+- Unresolved check-ins are capped at 3. When a 4th would be created, the oldest is auto-promoted to `skipped` (FIFO eviction) and fed into the reschedule engine. Students are prompted at login with any unresolved sessions before seeing their plan.
+
+Check-ins are non-blocking — dismissed if the student navigates away.
 
 ### 8. Proactive Insight Cards
 
@@ -126,7 +141,11 @@ AI-generated insight cards surfaced by the [Notification Service](10-notificatio
 - "Your grades in CS 301 have been trending up — nice work."
 - "You've been skipping Sunday study sessions — want to reschedule those?"
 
-Cards are generated periodically (e.g., Sunday evening) by spinning up Codex with the week's data and asking for insights. They appear as a horizontal scrollable strip at the top of the Dashboard.
+Cards are generated on two triggers:
+- **Weekly (Sunday evening)**: Reflective insights — grade trends, study streak summaries, week-ahead planning prompts
+- **Event-driven**: Urgent insights triggered immediately when: 3+ deadlines cluster within 7 days, a grade drops significantly (letter grade drops by a full letter OR scored 10+ percentage points below the student's course average), or a study plan has fallen behind
+
+Cards appear as a horizontal scrollable strip at the top of the Dashboard (below Priority Queue). Generated by an AI call with the week's Canvas + Memory data as context.
 
 ### 9. Quick Actions
 
@@ -136,6 +155,8 @@ One-click actions that open the Chat with pre-filled context.
 - "Help with [assignment name]" → Opens chat with assignment context loaded
 - "What's most important right now?" → Opens chat with priority context
 
+**Interaction model**: Chat opens as a **slide-over panel from the right** — overlays the Dashboard without navigating away. Student can see Priority Queue while chatting. Closing the panel restores the full Dashboard view. No new Electron window.
+
 ---
 
 ## Data Flow
@@ -143,20 +164,40 @@ One-click actions that open the Chat with pre-filled context.
 ### Initial load
 ```
 App opens
-  → Dashboard requests cached data from SQLite (instant)
+  → Renderer sends IPC request to main process
+  → Main process reads cached data from SQLite (instant)
   → Renders with cached data
-  → Background sync triggers Canvas refresh
-  → New data arrives via WebSocket push
+  → Main process triggers Canvas background sync
+  → New data arrives via IPC push (ipcMain → ipcRenderer)
   → Dashboard updates incrementally (no full reload)
+```
+
+### Offline / staleness handling
+```
+Dashboard always renders from SQLite cache — never blocks on Canvas
+  → If last sync < 1 day ago: no indicator
+  → If last sync 1–2 days ago: warning banner ("Data may be outdated")
+  → Canvas sync resumes automatically when connection restores
 ```
 
 ### Real-time updates
 ```
-Canvas sync detects new grade
-  → Server pushes `grade.updated` via WebSocket
+Canvas sync detects new grade (main process)
+  → Main process pushes `grade.updated` event via IPC
   → Dashboard's grade chart animates the update
   → Notification badge appears if the app was in background
 ```
+
+---
+
+## Platform
+
+Student Claw is a **desktop-first application**. The Dashboard is designed for a desktop environment (target: 1280px+ screen width).
+
+- **Primary platform**: Desktop app built with **Electron**
+- **Interaction model**: Mouse/keyboard — do not assume touch or hover-only interactions; avoid hover-dependent UI patterns that won't translate
+- **Mobile companion**: Out of scope for v1, but a lightweight phone component may exist for **push notifications only** (deadline reminders, grade updates). The Dashboard itself will not be replicated on mobile in v1.
+- **Responsive degradation**: Components should be responsive enough to not break at smaller window sizes, but the Dashboard is not optimized for mobile viewports
 
 ---
 
@@ -177,11 +218,13 @@ The Dashboard should feel like a focused command center, not an overwhelming dat
 
 ## Technology
 
-| Library | Purpose |
+| Library / Service | Purpose |
 |---|---|
-| `recharts` or `victory` | Lightweight React charting for grade trajectories and progress visualization |
-| WebSocket subscription | Real-time updates when Canvas syncs or plan changes |
-| Effect Schema | Typed WebSocket event contracts shared between server and UI |
+| `recharts` | Lightweight React charting for grade trajectories and progress visualization |
+| Electron IPC | Main ↔ renderer communication for data and real-time updates |
+| Effect Schema | Typed IPC event contracts shared between main and renderer |
+| OpenAI Codex CLI bridge | Cloud AI calls for announcement summaries and insight card generation |
+| Electron `safeStorage` | Secure local storage for API credentials |
 
 ---
 
@@ -204,20 +247,21 @@ packages/ui/src/components/dashboard/
   AnnouncementCard.tsx          # Individual announcement
   QuickActions.tsx              # One-click chat launchers
 
-packages/server/src/dashboard/
-  DashboardService.ts           # Effect service: aggregate data for dashboard
-  PriorityScorer.ts             # Calculate priority scores for assignments
-  GradeAnalyzer.ts              # Trend analysis, GPA projection
-  ProgressTracker.ts            # Weekly progress computation
+packages/main/src/dashboard/
+  DashboardService.ts           # Effect service: aggregate data for dashboard (main process)
+  PriorityScorer.ts             # Calculate priority scores for assignments (main process)
+  GradeAnalyzer.ts              # Trend analysis, GPA projection (main process)
+  ProgressTracker.ts            # Weekly progress computation (main process)
+  ipc-handlers.ts               # IPC bridge — exposes dashboard data to renderer
 ```
 
 ---
 
 ## Open Questions
 
-- **Customization**: Should students be able to rearrange Dashboard sections? Hide sections they don't care about?
-- **Widgets**: Is a widget/card-based system (like macOS widgets) better than fixed sections?
-- **Notifications**: When a new grade is posted, should the Dashboard show a notification banner, or is the system tray notification enough?
-- **Multiple semesters**: How does the Dashboard handle semester transitions? Archive old data? Show a semester picker?
-- **Offline mode**: When Canvas is unreachable, how stale can Dashboard data be before we visually indicate it's outdated?
-- **Mobile companion**: If Student Claw ever gets a mobile companion, the Dashboard is the most important view to replicate. Design with this in mind?
+- **Customization**: ~~Should students be able to rearrange Dashboard sections?~~ **Resolved**: Fixed section order for v1. No customization. Order: Priority Queue → Insight Cards → Upcoming Deadlines → Weekly Calendar → Grade Overview → Weekly Progress → Announcements.
+- **Widgets**: ~~Is a widget/card-based system better than fixed sections?~~ **Resolved**: Fixed sections. Widget system deferred to v2.
+- **Notifications**: ~~Should the Dashboard show a notification banner when a new grade is posted?~~ **Resolved**: No in-app banner. Grade chart animates the update via IPC push. Insight card fires if threshold is crossed. OS notification handles backgrounded state. Three signals is enough — no fourth banner.
+- **Multiple semesters**: ~~How does the Dashboard handle semester transitions?~~ **Resolved**: Auto-archive by semester. Semester end is detected from the last assignment/class date in the Canvas syllabus data. On transition, old courses move to a visible archive (accessible from settings or a "Past Semesters" link). Dashboard only shows active semester. Memory System behavioral data (procrastination patterns etc.) persists across semesters.
+- **Offline mode**: ~~When Canvas is unreachable, how stale can Dashboard data be before we visually indicate it's outdated?~~ **Resolved**: Always render from SQLite cache — never block on Canvas. Show a warning banner if last sync was 1–2 days ago.
+- **Mobile companion**: ~~If Student Claw ever gets a mobile companion, the Dashboard is the most important view to replicate. Design with this in mind?~~ **Resolved**: Mobile companion is out of scope for v1. Phone component may exist for push notifications only. Dashboard is desktop-first.
