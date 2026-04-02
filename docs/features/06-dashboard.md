@@ -22,7 +22,7 @@ Students lose track of things. Assignments are spread across Canvas pages, email
 Canvas Integration ──→ Dashboard (grades, assignments, announcements)
 Memory System ──────→ Dashboard (study patterns, time estimates, preferences)
 WebSocket Server ───→ Dashboard (real-time updates from background sync)
-Shared Contracts ───→ Dashboard (Course, Assignment, Grade, StudyPlan schemas)
+Shared Contracts ───→ Dashboard (Course, CourseWorkItem, Grade, PlannedSession schemas)
 ```
 
 | Depends On | Why |
@@ -32,7 +32,7 @@ Shared Contracts ───→ Dashboard (Course, Assignment, Grade, StudyPlan sc
 | **Memory System** | Study patterns, time estimates, behavioral data for insights |
 | **Notification Service** | Proactive insight cards surfaced on the dashboard |
 | **WebSocket Server** | Real-time push updates when background sync finds changes |
-| **Shared Contracts** | `Course`, `Assignment`, `Grade`, `StudyPlan` schemas |
+| **Shared Contracts** | `Course`, `CourseWorkItem`, `Grade`, `PlannedSession` schemas |
 
 | Depended On By | Why |
 |---|---|

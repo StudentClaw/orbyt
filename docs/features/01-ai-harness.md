@@ -58,14 +58,14 @@ Codex CLI runs as a subprocess with stdin/stdout communication using JSON-RPC pr
 - **Graceful shutdown**: Clean termination on app close
 - **Pre-warm**: Initialize the app-server on app launch, not on first user message, to avoid cold start latency
 - **Pre-warm failure**: If startup fails (install, auth, timeout), enter **degraded** mode: clear UI, disable send or offer **Retry**, **exponential backoff** on auto-retry, telemetry the failure class. **Do not** block the rest of the app (dashboard, cached data, offline queue).
-- **Auth modes**: Support both ChatGPT subscription auth and direct OpenAI API key
+- **Auth mode (v1)**: ChatGPT subscription auth via OAuth
 
 ### 2. Auth Coordinator
 
 Handles authentication with the LLM provider.
 
 - **ChatGPT OAuth** (primary path): Trigger device auth flow via app-server `account/login/start` with type `chatgpt`. Opens a browser for OAuth, app listens for completion.
-- **API key fallback**: Manual OpenAI API key entry, validated with a test call
+- **Fallback policy**: No API-key fallback in v1; on auth failure, prompt re-auth through OAuth
 - **Auth state persistence**: Store auth state so students don't re-authenticate every session
 - **Expiry handling**: Detect expired sessions, prompt re-auth via UI
 
@@ -229,7 +229,7 @@ The AI Harness is an Effect Service, meaning:
 | **Codex CLI versioning** | App-server protocol may change between CLI versions | Pin a known-good version. Test against CLI updates before shipping. |
 | **ChatGPT rate limits** | Students on Plus get limited Codex usage per 5-hour window | Graceful degradation: show a "rate limited" message, queue requests, suggest trying later. Surface remaining quota in the UI. |
 | **Cold start latency** | App-server initialization + auth takes several seconds | Pre-warm on app launch (not on first user message). Show a loading state in the chat UI. |
-| **Auth expiry** | ChatGPT sessions and API keys can expire mid-use | Detect auth failures, prompt re-auth without losing conversation context |
+| **Auth expiry** | ChatGPT session can expire mid-use | Detect auth failures, prompt re-auth without losing conversation context |
 
 ---
 
@@ -238,7 +238,7 @@ The AI Harness is an Effect Service, meaning:
 ```
 packages/server/src/ai/
   CodexCli.ts           # Effect service: spawn, lifecycle, health, pre-warm
-  AuthCoordinator.ts    # ChatGPT OAuth + API key fallback + auth state
+  AuthCoordinator.ts    # ChatGPT OAuth + auth state persistence
   JsonRpcProtocol.ts    # Encode/decode JSON-RPC messages
   StreamManager.ts      # Token buffering, chunked push to WS
   SessionManager.ts     # Session lifecycle: create, submit, interrupt, cleanup
@@ -259,6 +259,7 @@ soul/
 | Topic | Decision |
 |---|---|
 | **SDK surface** | Codex CLI only in v1; optional second backend later via the same internal port. |
+| **Auth path** | OAuth-only in v1 (no direct API key fallback). |
 | **Context overflow** | Summarization + rolling summary/recent turns; **retrieval** over stored transcript; **spill** huge tool output to files. |
 | **Multi-backend** | Thin provider port + **one** Codex adapter in v1; no multi-vendor picker in v1. |
 | **Turn steer** | Not a v1 feature; use **interrupt** + **next user message**. |

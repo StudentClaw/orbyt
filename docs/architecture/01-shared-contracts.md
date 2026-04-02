@@ -20,7 +20,7 @@ Effect Schema was chosen over Zod/Yup/io-ts because:
 
 - **Dual-direction**: Schemas define both encoding (TS → JSON) and decoding (JSON → TS) with full type inference
 - **Composability**: Schemas compose with Effect pipes, same as the rest of the Effect-TS stack
-- **Branded types**: `CourseId`, `AssignmentId` are branded strings — you can't accidentally pass a CourseId where an AssignmentId is expected
+- **Branded types**: `CourseId`, `CourseWorkItemId` are branded strings — you can't accidentally pass a CourseId where a coursework item ID is expected
 - **Transformation**: Parse and transform in one step (e.g., string dates → Date objects during decode)
 - **Error messages**: Structured parse errors that can be surfaced in the UI
 
@@ -35,21 +35,26 @@ Core data types shared across the entire application.
 | Schema | Key Fields | Used By |
 |---|---|---|
 | `CourseId` | Branded string | Canvas, Dashboard, Memory |
-| `AssignmentId` | Branded string | Canvas, Dashboard, Skills |
+| `CourseWorkItemId` | Branded string | Canvas, Planner, Dashboard |
 | `SkillId` | Branded string | Skill System |
 | `Course` | name, code, professor, canvasId, term | Canvas, Dashboard, Memory |
-| `Assignment` | title, dueDate, status, grade, courseId, pointsPossible | Canvas, Dashboard, Skills, Priority Queue |
+| `CourseWorkItem` | title, effectiveDueAt, sourceType, sourceId, freshnessStatus | Canvas, Planner, Dashboard |
 | `Grade` | courseId, assignmentId, score, maxScore, letterGrade, postedAt | Canvas, Dashboard, Grade Chart |
-| `StudyPlan` | blocks[], calendar events, estimates | Plan-Mode, Calendar View |
+| `PlannedSession` | taskId, startTime, endTime, status, completionNote | Planner, Dashboard, Notifications |
+| `ActivityFeedEntry` | category, type, title, body, priority, deepLink | Notifications, Dashboard Activity Center |
 | `MemoryEntry` | content, scope, source, createdAt, confidence | Memory System |
 | `Extension` | id, name, version, status, permissions | Plugin System, Extension Manager |
-| `StudentPreference` | studyTimes, courseRanking, notificationPrefs | Memory, Onboarding |
+| `StudentPreference` | studyTimes, courseRanking, notificationPrefs, quietHours | Memory, Onboarding, Notifications |
+| `OnboardingState` | step, status, completedAt | Onboarding |
 
-### 2. WebSocket Protocol
+### 2. Transport Contracts (WebSocket + IPC)
 
-Every message between the React UI and the Local Server is typed.
+All cross-boundary messages are typed. Student Claw uses:
 
-**Client → Server (requests):**
+- **WebSocket contracts** for real-time domain streams and chat
+- **IPC contracts** for Electron shell/native capabilities and preload-bridged desktop flows
+
+**WebSocket Client → Server (requests):**
 | Message | Purpose |
 |---|---|
 | `chat.sendMessage` | Student sends a chat message |
@@ -59,16 +64,30 @@ Every message between the React UI and the Local Server is typed.
 | `skills.activate` | Activate a skill by ID |
 | `skills.planMode.start` | Start plan-mode flow |
 | `dashboard.refresh` | Request fresh dashboard data |
+| `planner.reschedule` | Request task/session move or conflict resolution |
+| `preferences.updateCoursePriority` | Persist conversational course-priority updates |
 
-**Server → Client (push events):**
+**WebSocket Server → Client (push events):**
 | Message | Purpose |
 |---|---|
 | `chat.streaming` | Streaming token chunk (sequenced) |
 | `chat.complete` | AI response finished |
 | `chat.toolCall` | AI is calling a tool (show in UI) |
 | `canvas.syncProgress` | Background sync progress update |
-| `assignment.alert` | New assignment or grade detected |
+| `activity.feedUpsert` | Unified feed entry (canvas/planner/workflow/insight) |
+| `planner.sessionCheckIn` | Check-in prompt signal for session completion |
 | `dashboard.update` | Dashboard data changed |
+
+**IPC Renderer ↔ Main (selected channels):**
+
+| Channel | Direction | Purpose |
+|---|---|---|
+| `file:open-dialog` | Renderer → Main | Open native file picker |
+| `file:save-dialog` | Renderer → Main | Open native save dialog |
+| `notification:show` | Renderer/Server → Main | Trigger native OS notification |
+| `plugin:tool-call` | Server/Main bridge | Execute MCP tool through Electron Plugin Orchestrator |
+| `plugin:tools-changed` | Main → Server | Notify server that plugin tool inventory changed |
+| `dashboard:open-chat-panel` | Renderer local event | Slide-over chat launch from dashboard quick actions |
 
 ### 3. Typed Errors
 
@@ -85,6 +104,8 @@ Errors are values in Effect-TS, tracked in the type system.
 | `VaultDecryptError` | Credential decryption failed |
 | `MemoryWriteError` | Failed to persist a memory |
 | `SchemaDecodeError` | Incoming data didn't match expected schema |
+| `PolicyDeniedError` | Requested skill/planner/plugin capability blocked by policy gate |
+| `PluginToolCallError` | Plugin tool execution failed or timed out |
 
 ---
 
@@ -96,19 +117,22 @@ packages/shared/
   tsconfig.json
   src/
     schemas/
-      ids.ts                  # CourseId, AssignmentId, SkillId (branded)
+      ids.ts                  # CourseId, CourseWorkItemId, SkillId (branded)
       course.ts               # Course schema
-      assignment.ts           # Assignment schema
+      coursework-item.ts      # CourseWorkItem schema
       grade.ts                # Grade schema
-      study-plan.ts           # StudyPlan schema
+      planned-session.ts      # PlannedSession schema
+      activity-feed-entry.ts  # Activity feed schema
       memory-entry.ts         # MemoryEntry schema
       extension.ts            # Extension/Plugin schema
       student-preference.ts   # StudentPreference schema
+      onboarding-state.ts     # Onboarding wizard state
     protocol/
       messages.ts             # Union type of all WS messages
       client-messages.ts      # Client → Server message schemas
       server-events.ts        # Server → Client push event schemas
-      rpc.ts                  # JSON-RPC envelope schema
+      ipc-channels.ts         # Renderer ↔ Main IPC schemas
+      rpc.ts                  # JSON-RPC envelope schema (internal/plugin)
     errors/
       canvas-errors.ts
       ai-errors.ts

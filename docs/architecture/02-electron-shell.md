@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The Electron Shell is the thinnest possible desktop wrapper. It has no business logic, no data processing, no AI code. It does three things: show the React UI in a BrowserWindow, spawn the Local Server as a child process, and provide native OS capabilities (file dialogs, notifications, system tray, auto-update) via IPC.
+The Electron Shell is the thinnest possible desktop wrapper around native desktop concerns. It does not own product-domain reasoning, but it **does** own process hosting and native integration boundaries: show the React UI in a BrowserWindow, spawn the Local Server as a child process, host the MCP Plugin Orchestrator in Main, and provide native OS capabilities (file dialogs, notifications, system tray, auto-update) via IPC.
 
 ---
 
@@ -50,7 +50,7 @@ The Electron Main Process spawns the Local Server (Effect-TS backend) as a child
 
 ### 4. IPC Bridge
 
-All communication between the React UI and native capabilities goes through IPC.
+All communication between the React UI and native capabilities goes through IPC. The Local Server also uses a typed Main bridge for plugin orchestration calls.
 
 | Channel | Direction | Purpose |
 |---|---|---|
@@ -59,7 +59,9 @@ All communication between the React UI and native capabilities goes through IPC.
 | `notification:show` | Renderer → Main | Show OS notification |
 | `tray:update-badge` | Renderer → Main | Update tray icon badge |
 | `app:get-path` | Renderer → Main | Get app data directory path |
-| `vault:get-credential` | Main → Plugin | Decrypt and pass credential |
+| `plugin:tool-call` | Server/Main bridge | Execute MCP tool through Main-owned orchestrator |
+| `plugin:tools-changed` | Main → Server | Notify server of plugin tool inventory changes |
+| `vault:get-credential` | Main → Plugin | Decrypt and pass plugin-scoped credential |
 | `plugin:lifecycle` | Main → Renderer | Plugin state changes |
 
 ### 5. System Tray
@@ -88,6 +90,7 @@ OS-level notifications for time-sensitive events.
 - Assignment due tomorrow
 - Canvas sync found new content
 - Click notification → open relevant section in the app
+- Delivery rules (quiet hours, per-type toggles, batching) are evaluated by Notification Service; Main performs final OS delivery only
 
 ---
 
@@ -99,7 +102,8 @@ Key points at this layer:
 - `utilityProcess.fork()` spawns an isolated Node.js process
 - No access to the Renderer — plugins can't touch the UI
 - Crashed plugins don't crash the app
-- The Main Process manages plugin lifecycle and IPC
+- The Main Process manages plugin lifecycle and credential injection
+- The Local Server requests tool execution through a typed Main bridge, keeping feature policy in server code and plugin process control in Main
 
 ---
 
@@ -119,6 +123,7 @@ packages/electron/
       handlers/
         file-handlers.ts        # File dialog IPC handlers
         notification-handlers.ts
+        server-bridge-handlers.ts # Server ↔ Main bridge for plugin tool calls
         vault-handlers.ts
         plugin-handlers.ts
     tray/

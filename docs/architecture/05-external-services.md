@@ -2,7 +2,7 @@
 
 ## What It Is
 
-Tier 3 encompasses everything outside of Student Claw that the app communicates with: the Codex CLI subprocess (which connects to OpenAI), the Canvas LMS REST API, and any MCP server plugins that reach external services (Google Calendar, Apple Calendar, Notion, etc.). The Local Server manages all external communication — nothing reaches the React UI directly.
+Tier 3 encompasses everything outside of Student Claw that the app communicates with: the Codex CLI subprocess (which connects to OpenAI), the Canvas LMS REST API, and any MCP server plugins that reach external services (Google Calendar, Apple Calendar, Notion, etc.). The Local Server orchestrates external workflows while Electron Main owns plugin process hosting/security boundaries; nothing reaches the React UI directly.
 
 ---
 
@@ -22,7 +22,7 @@ External services are unreliable. APIs go down, tokens expire, rate limits kick 
 
 **What**: OpenAI's Codex CLI, running as a child process of the Local Server.
 **Protocol**: JSON-RPC 2.0 over stdin/stdout.
-**Auth**: ChatGPT subscription (browser OAuth) or OpenAI API key.
+**Auth (v1)**: ChatGPT subscription via browser OAuth.
 **Failure modes**: Process crash, timeout, auth expiry, rate limiting, network loss.
 
 Detailed in: [01-ai-harness.md](../features/01-ai-harness.md)
@@ -65,6 +65,13 @@ The plugin architecture means any service with an MCP server (28,000+ available)
 | Spotify | Focus playlists during study sessions | Community MCP exists |
 | Zotero | Research citation management | To be built |
 
+### 6. OpenAI Model APIs (Memory Extraction + Embeddings)
+
+**What**: OpenAI model endpoints used by mem0 integration for post-turn memory extraction and embedding generation.
+**Protocol**: HTTPS API calls from Local Server memory services.
+**Auth (v1 UX)**: Reuses the app's single auth broker/session source; no separate student-facing second sign-in flow.
+**Failure modes**: Auth/session invalidation, rate limits, transient network failures.
+
 ---
 
 ## Communication Patterns
@@ -90,7 +97,9 @@ Timeout: Configurable per-request (default: 2 minutes)
 ### Pattern 3: Background Sync (Canvas)
 
 ```
-Scheduled trigger (every 30 min) → Fetch changes since last sync
+Scheduled trigger (adaptive cadence) → Fetch changes since last sync
+  - Active app window: every 15 minutes
+  - Tray/background mode: every 60 minutes
 Diff against local cache → Update SQLite → Push changes to UI via WS
 Non-blocking: Runs in a background Effect Fiber
 Smart: Only fetches what changed (If-Modified-Since, updated_at filters)
@@ -113,7 +122,7 @@ External Call
 
 **Offline mode**: When a student has no internet:
 - Dashboard shows cached data with a "Last synced: X minutes ago" indicator
-- Chat works if Codex CLI is already authenticated (session cached)
+- Chat requires a valid Codex OAuth session and network reachability
 - File viewer, skills, and memory all work fully offline (they're local)
 - Canvas sync pauses and resumes when connectivity returns
 
@@ -134,6 +143,14 @@ Local Server (Child Process)
   │ ✓ Makes all network requests
   │ ✓ Manages all file I/O
   │ ✓ Spawns Codex CLI
+  │ ✓ Orchestrates AI tool flow via PluginGateway (IPC to Main)
+  │
+  ▼
+Electron Main (Plugin Orchestrator)
+  │
+  │ ✓ Spawns/monitors utilityProcess plugins
+  │ ✓ Enforces plugin runtime policy (allow/prompt/deny)
+  │ ✓ Owns safeStorage-backed credential handling
   │
   ▼
 MCP Plugins (utilityProcess)
@@ -155,9 +172,13 @@ packages/server/src/
   ai/
     CodexCli.ts                 # Manages Codex CLI subprocess
   mcp/
-    Orchestrator.ts             # Manages MCP plugin communication
-    ProtocolAdapter.ts          # MCP protocol encoding/decoding
-    ToolRouter.ts               # Route tool calls to the right plugin
+    PluginGateway.ts            # Server-side bridge to Main-owned orchestrator
+    ToolRouter.ts               # Route AI tool calls through PluginGateway
+
+packages/electron/src/plugins/
+  PluginManager.ts              # Main-process plugin lifecycle + health
+  Vault.ts                      # Main-process safeStorage credential vault
+  PermissionManager.ts          # Runtime allow/prompt/deny policy checks
 
 packages/extensions/
   canvas-mcp/                   # Canvas LMS MCP server
@@ -172,6 +193,6 @@ packages/extensions/
 
 - **Rate limiting coordination**: When multiple features hit Canvas simultaneously (background sync + user query), how do we share rate limit budgets?
 - **Credential rotation**: When tokens expire, the flow is: detect failure → notify user → guide re-auth → retry. How seamless can we make this?
-- **MCP transport**: Local plugins use stdio. Should we support SSE for future remote MCP servers?
+- **MCP transport**: v1 is stdio-only for local plugins. When should we add SSE/remote transport support?
 - **Service health dashboard**: Should the Extension Manager show the health status of each external connection (green/yellow/red)?
 - **Analytics**: Should we track (locally) how often each service is called, response times, failure rates? Useful for debugging but adds complexity.

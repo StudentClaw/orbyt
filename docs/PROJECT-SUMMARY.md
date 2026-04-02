@@ -2,7 +2,7 @@
 
 ## What It Is
 
-A desktop application (Electron) that acts as an AI-powered student assistant. It connects to Canvas LMS, shows students what's due and when, and helps them plan their week — all powered by their existing ChatGPT subscription.
+A desktop application (Electron) that acts as a local-first AI-powered student assistant. It connects to Canvas LMS, builds a normalized local view of coursework and grades, helps students plan their week, and surfaces autonomous agent activity through a unified feed — powered by a local Codex CLI harness and optimized around the student's existing ChatGPT subscription.
 
 ## Primary Use Case (v1)
 
@@ -15,10 +15,10 @@ A desktop application (Electron) that acts as an AI-powered student assistant. I
 Three-tier design inspired by T3 Code (pingdotgg):
 
 1. **Electron Shell** — Thin desktop wrapper, handles native OS features (file dialogs, notifications, tray icon)
-2. **Local Server** — Core logic layer running alongside the app. Manages the AI harness, WebSocket communication with the UI, and coordinates extensions
+2. **Local Server** — Core logic layer running alongside the app. Manages the AI harness, sync orchestration, policy enforcement, autonomous workflows, WebSocket domain streams to the UI, and extension coordination via Electron Main
 3. **External Services** — Canvas LMS, calendar providers, and other integrations via MCP servers
 
-Communication: `React UI ↔ WebSocket (JSON-RPC) ↔ Local Server ↔ Codex CLI (stdin/stdout)`
+Communication: `React UI ↔ (WebSocket domain streams + typed IPC) ↔ Local Server ↔ Codex CLI (stdin/stdout)` and `Local Server ↔ Electron Main (plugin gateway IPC) ↔ MCP plugins`
 
 ## Tech Stack
 
@@ -28,7 +28,7 @@ Communication: `React UI ↔ WebSocket (JSON-RPC) ↔ Local Server ↔ Codex CLI
 | Frontend | React + Vite |
 | Backend | Effect-TS (type-safe, structured concurrency/error handling) |
 | Database | SQLite (local persistence) |
-| AI | Codex CLI subprocess with JSON-RPC protocol |
+| AI | Codex CLI subprocess with JSON-RPC protocol; OpenAI model APIs for mem0 extraction/embeddings (via shared auth broker) |
 | Desktop | Electron |
 | Shared Contracts | Effect Schema for type-safe frontend ↔ backend communication |
 
@@ -38,11 +38,11 @@ Communication: `React UI ↔ WebSocket (JSON-RPC) ↔ Local Server ↔ Codex CLI
 
 ### 1. AI Harness
 
-Codex CLI subprocess, JSON-RPC protocol, ChatGPT subscription or API key auth, streaming responses, session lifecycle management, context window budget manager, Soul/Personality system (immutable core + adaptive layer), MCP server registry.
+Codex CLI subprocess, JSON-RPC protocol, streaming responses, session lifecycle management, context window budget manager, Soul/Personality system (immutable core + adaptive layer), context compaction, and MCP server registry.
 
 ### 2. Canvas Integration
 
-Implemented as an MCP server (not baked into the core). Course discovery, assignment tracking, grade retrieval, announcement scraping. Adaptive background sync (15min active / 1hr tray) with typed change events (`AssignmentAdded`, `GradePosted`, etc.) that feed into the Notification Service.
+Implemented as a Student Claw-owned TypeScript MCP plugin plus server-side sync orchestration. Course discovery, normalized `CourseWorkItem` tracking, grade retrieval, announcement scraping, and professor-pattern learning. Adaptive background sync (15min active / 1hr tray) with cache-first reads, freshness policy, and typed change events (`AssignmentAdded`, `GradePosted`, etc.) that feed the planner, notifications, and autonomous workflows.
 
 ### 3. Skill System
 
@@ -50,31 +50,31 @@ Two-tier skill system: curated first-party skills and student-authored custom sk
 
 ### 4. Memory System
 
-mem0 with entity partitioning as the single source of truth. Memory categories scoped via `user_id`, `agent_id`, `run_id` tags. Real-time extraction after each conversation (ADD/UPDATE/DELETE pipeline). Profile compiler generates compact context for AI injection. Two markdown files: `soul.md` (personality) and `MEMORY.md` (read-only human-readable projection).
+mem0 with entity partitioning as the single source of truth. Memory categories scoped via `user_id`, `agent_id`, and `run_id` tags. Real-time extraction after each conversation (ADD/UPDATE/DELETE pipeline). Profile compiler generates compact context for AI injection. `MEMORY.md` is the read-only human-readable projection; `SOUL.md` remains a separate personality artifact loaded by the AI Harness.
 
 ### 5. Plugin System (Local MCP Orchestrator)
 
-See [Plugin Architecture](#plugin-architecture-local-mcp-orchestrator) below.
+Local-first MCP orchestrator in Electron's main process. Discovers extensions, validates manifests, lazy-loads plugins into isolated `utilityProcess` sandboxes, manages safeStorage-backed credentials and per-plugin permissions, and aggregates tools for the AI harness. See [Plugin Architecture](#plugin-architecture-local-mcp-orchestrator) below.
 
 ### 6. Dashboard
 
-Priority queue with scoring, grade charts per course, upcoming deadline timeline, weekly calendar view (from Smart Planner), completion check-ins (Yes/No/Yes-but), proactive AI insight cards, announcements feed, quick actions.
+Desktop-first command center with a priority queue, insight cards, upcoming deadline timeline, weekly planner calendar, completion check-ins (Yes/No/Yes-but), grade overview, weekly progress, announcements, and quick actions that open chat with prefilled context.
 
 ### 7. File System
 
-Local file storage for downloaded assignments and research. Markdown and PDF viewers. Export to extensions.
+Local copy-based storage for imported and downloaded coursework, research, and generated artifacts. Built-in markdown/PDF viewers, additional document/image/code viewers, a SQLite-backed metadata index, and AI context extraction for asking the assistant about files.
 
 ### 8. Onboarding
 
-Institution selector for Canvas URL, step-by-step token guide, Codex CLI auth flow, preference + routines setup (stored in mem0), extension recommendations, first sync with memory population, plan-mode live demo walkthrough.
+Guided first-run setup: Canvas institution selector and token wizard, Codex auth, preference and routines capture (stored in mem0), first sync with memory population, extension recommendations, and a live dashboard walkthrough using the student's real data and first plan.
 
 ### 9. Smart Planner
 
-The flagship intelligence feature. Hybrid AI + deterministic scheduling: task analyzer (importance scoring, time estimation), task decomposer (multi-session splitting), deterministic slot finder and schedule builder, reschedule engine (student-initiated + event-driven), completion handler (Yes/No/Yes-but). Persistent in SQLite (`tasks`, `planned_sessions` tables).
+The flagship intelligence feature. Hybrid AI + deterministic scheduling with streamed planning UX: task analyzer (three-layer priority model, time estimation), task decomposer (multi-session splitting), deterministic slot finder and schedule builder, rolling 6-week planning window, reschedule engine (student-initiated + event-driven), and completion handler (Yes/No/Yes-but). Persistent in SQLite (`tasks`, `planned_sessions`, `user_preferences` tables). Calendar sync is optional through installed calendar MCPs.
 
 ### 10. Notification Service
 
-Event-driven notifications bridging background intelligence to the student. Listens to Canvas change events and planner reminders. Evaluates, composes (templates + AI for complex events), and delivers via native OS notifications. Quiet hours enforcement. Weekly insight generator surfaces AI-powered cards on the Dashboard.
+Feed-first notification and awareness system. Listens to Canvas change events, planner reminders, and autonomous workflow runs; writes durable `activity_feed` records; delivers optional native OS notifications; enforces quiet hours and per-type preferences; and generates weekly AI-powered insight cards for the Dashboard.
 
 ---
 
@@ -93,25 +93,26 @@ The application uses a **Hub-and-Spoke** model. The Electron **Main Process** ac
 | **Orchestrator (Main Process)** | Manages the lifecycle (start/stop/monitor) of plugins |
 | **Plugin Sandbox (UtilityProcess)** | Each plugin runs in its own isolated Node.js environment via Electron's `utilityProcess` |
 | **Local Vault** | Encrypted storage layer using Electron `safeStorage` to hold API tokens per plugin |
-| **IPC Bridge** | Communication layer between the React Chat UI and the Orchestrator |
+| **IPC Bridge** | Typed bridge used by React UI for native shell calls and by Local Server for plugin gateway calls into Main |
 
 ### Plugin Structure & Discovery
 
-Plugins are stored in a dedicated directory within the user's Application Support folder.
+Plugins are stored in a dedicated directory under the student's local app data.
 
 #### Directory Hierarchy
 
 ```text
-/UserData/StudentClaw/
+~/.student-claw/
 ├── extensions/
 │   ├── canvas-mcp/
-│   │   ├── index.js       # The MCP Server entry point
-│   │   └── manifest.json  # Metadata (name, version, required permissions)
+│   │   ├── manifest.json
+│   │   ├── index.js
+│   │   └── canvas-icon.png
 │   └── notion-mcp/
-│       ├── index.js
-│       └── manifest.json
+│       ├── manifest.json
+│       └── index.js
 └── vault/
-    └── secrets.json       # Encrypted credentials
+    └── secrets.json
 ```
 
 #### The `manifest.json` Standard
@@ -122,10 +123,12 @@ Every plugin must include a manifest so the Orchestrator knows how to handle it.
 {
   "id": "canvas-mcp",
   "name": "Canvas Assistant",
+  "description": "Connects to Canvas coursework, grades, and announcements",
   "version": "1.0.0",
   "entry": "index.js",
-  "permissions": ["assignments", "grades", "announcements"],
-  "authType": "manual_token"
+  "permissions": ["assignments", "grades", "announcements", "modules"],
+  "authType": "manual_token",
+  "requiredCredentials": ["CANVAS_TOKEN", "CANVAS_BASE_URL"]
 }
 ```
 
@@ -135,8 +138,8 @@ When the user sends a message in the Chat UI, the following sequence occurs:
 
 1. **Intent Recognition** — The AI (via the Codex harness) determines if a tool is needed (e.g., "What assignments are due?").
 2. **Plugin Activation** — The Orchestrator checks if `canvas-mcp` is running. If not, it spawns the process.
-3. **Credential Injection** — The Orchestrator retrieves the encrypted Canvas token from the Vault and passes it to the Plugin via a secure message.
-4. **Tool Call** — The Orchestrator sends a JSON-RPC request to the Plugin: `callTool("get_assignments")`.
+3. **Credential Handshake** — The Orchestrator retrieves encrypted credentials from the Vault and sends a one-time secure runtime payload to the plugin after startup.
+4. **Tool Call** — The Orchestrator sends a JSON-RPC request to the Plugin, for example `callTool("get_coursework")`.
 5. **Result Routing** — The Plugin returns the data; the Orchestrator passes it to the AI to format a natural response for the student.
 
 ### Security & Isolation Standards
@@ -164,8 +167,14 @@ class PluginManager {
     const pluginPath = path.join(this.extensionDir, pluginId, 'index.js');
 
     const child = utilityProcess.fork(pluginPath, [], {
-      stdio: 'pipe',
-      env: { CANVAS_TOKEN: credentials }
+      stdio: 'pipe'
+    });
+
+    // One-time secure credential handshake after spawn (not env vars)
+    child.postMessage({
+      type: 'plugin.credentials',
+      pluginId,
+      payload: encryptForPlugin(credentials)
     });
 
     this.instances.set(pluginId, child);
@@ -192,14 +201,14 @@ class PluginManager {
 
 Plan-mode is a skill file that instructs the AI how to approach weekly planning. The Smart Planner is the backend that executes the plan:
 
-1. **Scans Canvas** for upcoming assignments (via MCP tools)
+1. **Scans Canvas** for upcoming coursework (via MCP tools)
 2. **Analyzes tasks** — importance scoring, time estimation, dependency detection (AI-driven)
 3. **Decomposes large tasks** into multi-session blocks (AI-driven)
 4. **Finds available slots** in the student's schedule (deterministic)
-5. **Builds the schedule** — places sessions optimally, respects constraints (deterministic)
+5. **Builds a draft schedule** — places sessions optimally and respects constraints (deterministic)
 6. **Handles rescheduling** — student-initiated ("can't do this tonight") and event-driven (Canvas deadline moved)
 7. **Tracks completion** — Yes/No/Yes-but three-way check-in with memory updates
-8. Works with any installed calendar MCP extension (Apple Calendar, Google Calendar)
+8. **Optionally syncs to calendars** via installed calendar MCP extensions (Apple Calendar, Google Calendar) after approval
 
 ---
 
@@ -216,6 +225,6 @@ Plan-mode is a skill file that instructs the AI how to approach weekly planning.
 | Adaptive Canvas sync (15min active / 1hr tray) | Resource-conscious on student laptops |
 | OpenAI text-embedding-3-small for memory | Quality retrieval, student already has auth, ~$0.02/1M tokens |
 | Electron safeStorage for credentials | OS-level encryption (Keychain on macOS, etc.) |
-| Electron Notification API | Native OS notifications, works in tray mode |
+| Feed-first activity model + native notifications | Students need a durable in-app audit trail plus optional OS-level alerts |
 | Build from scratch, borrow patterns | Not a fork; adopts the best architectural ideas from T3 Code and OpenClaw |
 | Local-first plugin isolation | Student data never leaves their machine unless the plugin explicitly sends it |

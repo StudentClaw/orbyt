@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The React UI is the frontend layer — everything the student sees and interacts with. It runs inside Electron's BrowserWindow (Chromium), built with Vite, and communicates with the Local Server exclusively through WebSocket. It never makes network requests directly. It never accesses the filesystem directly. It's a pure presentation and interaction layer.
+The React UI is the frontend layer — everything the student sees and interacts with. It runs inside Electron's BrowserWindow (Chromium), built with Vite, and communicates through two typed channels: WebSocket (domain/chat streams) and preload IPC (desktop-native capabilities). It never makes network requests directly and never accesses the filesystem directly. It's a presentation and interaction layer with no direct external I/O.
 
 ---
 
@@ -43,14 +43,14 @@ The UI needs to manage:
 
 ---
 
-## Communication: WebSocket Only
+## Communication: Typed WebSocket + IPC
 
-The React UI talks to one place: the Local Server via WebSocket. It does not:
+The React UI receives domain state and streaming events from the Local Server and uses preload IPC for desktop shell operations. It does not:
 - Call Canvas APIs directly (security: no network from renderer)
 - Read/write the filesystem (memory files, skills, etc. go through the server)
 - Spawn processes (plugins are managed by Electron Main)
 
-This constraint is intentional — it keeps the UI thin, testable, and secure.
+This boundary keeps the UI thin, testable, and secure while still supporting desktop-native workflows like file dialogs and notification click handling.
 
 **WebSocket hook:**
 ```typescript
@@ -62,6 +62,12 @@ send({ method: "chat.sendMessage", params: { text: userInput } });
 
 // Subscribe to streaming
 subscribe("chat.streaming", (chunk) => appendToMessage(chunk));
+```
+
+**IPC examples (preload API):**
+```typescript
+window.electronAPI.invoke("file:open-dialog", { allowMultiple: false });
+window.electronAPI.on("plugin:lifecycle", (evt) => updatePluginStatus(evt));
 ```
 
 ---
@@ -150,7 +156,7 @@ packages/ui/
         StudyBlockEditor.tsx
       notifications/                    # → see 10-notification-service.md
         NotificationSettings.tsx        # Per-type notification preferences
-        NotificationHistory.tsx         # Past notifications list
+        ActivityCenter.tsx              # Unified feed: Canvas, Planner, Agent Activity, Insights
       files/                            # → see 07-file-system.md
         FileExplorer.tsx
         MarkdownViewer.tsx

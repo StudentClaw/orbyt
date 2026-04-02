@@ -103,7 +103,7 @@ Every plugin that connects to an external service needs credentials.
 - Credentials encrypted using Electron's `safeStorage` API (OS keychain-backed)
 - Stored in `~/.student-claw/vault/secrets.json`
 - Each plugin only receives its own credentials, never another plugin's
-- Credentials injected as environment variables when spawning the utilityProcess
+- Credentials are delivered via a one-time secure runtime handshake from Main to plugin after startup (not via environment variables)
 
 ### 4. Permission System
 
@@ -144,6 +144,14 @@ When a plugin starts, it declares its available tools. The Orchestrator aggregat
 - Tool names are namespaced: `canvas-mcp.get_assignments`, `calendar-mcp.create_event`
 - Tool schemas (parameters, return types) are surfaced to the AI so it knows how to call them
 - Tools are dynamically available — when a new plugin starts, its tools immediately become callable
+
+### 7. Main Process vs Server Ownership (Locked v1)
+
+Plugin orchestration is intentionally split across trust boundaries:
+
+- **Electron Main Process owns**: plugin discovery, lifecycle (`utilityProcess` spawn/stop/health), credential vault (`safeStorage`), permission prompts, and per-plugin runtime policy checks
+- **Local Server owns**: AI-facing tool routing flow and business orchestration; it requests tool execution from Main over IPC and receives normalized results
+- **Renderer owns**: plugin state display and user actions only (never direct plugin process control or credential access)
 
 ---
 
@@ -235,11 +243,23 @@ packages/electron/src/plugins/
 
 ---
 
-## Open Questions
+## Resolved decisions (grill-me)
 
-- **Plugin installation**: How do students install new plugins? Download a zip? Clone a repo? In-app store?
-- **Plugin updates**: How are plugins updated? Auto-update from a registry? Manual replacement?
-- **SSE vs. stdio**: MCP supports both stdio and SSE transports. Should we support both for flexibility, or standardize on stdio for local plugins?
-- **Plugin sandboxing depth**: `utilityProcess` provides process isolation, but should we also restrict filesystem access? Network access per-plugin?
-- **Community plugins**: What's the trust model for third-party plugins? Code signing? A review process? Trust-on-first-use?
-- **Plugin dependencies**: Can plugins depend on each other? E.g., a "study group" plugin that depends on Calendar + Canvas.
+| Topic | Decision |
+|---|---|
+| **Transport** | Stdio-only for v1 local plugins. SSE/remote transport deferred behind a transport abstraction. |
+| **Trust model** | v1 is curated-plugin-first. Fresh installs include only `canvas-mcp`; all other plugins are optional one-click installs from curated catalog entries. |
+| **Developer flexibility** | Optional Developer Mode sideload path exists for internal/testing workflows, disabled by default with explicit warnings. |
+| **Credential delivery** | Credentials are never passed via environment variables in v1; Main sends one-time secure runtime credential payloads after plugin startup. |
+| **Permission model** | Two-layer enforcement: manifest scopes + runtime operation policy (`allow` / `prompt` / `deny`) per tool/action. |
+| **Plugin composition** | No plugin-to-plugin dependencies/chaining in v1. Main orchestrator composes multi-plugin workflows explicitly. |
+| **Update model** | Manual curated updates in v1 (explicit install/update actions), no silent auto-update channels for plugin code. |
+| **Sandbox baseline** | `utilityProcess` isolation, no direct `safeStorage` access in plugin, per-plugin credential namespace, constrained file access footprint. |
+| **UI visibility** | Dedicated Plugins tab shows installed plugins, lifecycle/auth/permission state, last error, and retry actions. |
+| **Ownership split** | Electron Main owns lifecycle/vault/permissions; Local Server owns AI tool-routing flow and calls Main via IPC. |
+
+## Deferred follow-ups
+
+- Add signed update channels for curated plugins after trust and rollback policy is finalized.
+- Revisit SSE/remote plugins only after local stdio path is stable and hardened.
+- Consider broader community plugin model post-v1 with provenance and signature verification.

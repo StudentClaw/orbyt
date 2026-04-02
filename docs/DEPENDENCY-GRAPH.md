@@ -87,7 +87,7 @@ Each phase can begin once its dependencies from the previous phase are at least 
 
 | Piece | Write-up | What it establishes |
 |-------|----------|---------------------|
-| Shared Contracts | [01-shared-contracts.md](architecture/01-shared-contracts.md) | Effect Schema domain types, WebSocket protocol types, typed errors |
+| Shared Contracts | [01-shared-contracts.md](architecture/01-shared-contracts.md) | Effect Schema domain types, transport contracts (WebSocket + IPC), typed errors |
 | Electron Shell | [02-electron-shell.md](architecture/02-electron-shell.md) | BrowserWindow, preload, IPC bridge, utilityProcess API |
 | Monorepo structure | — | `packages/electron`, `packages/server`, `packages/ui`, `packages/shared`, `packages/skills` |
 | SQLite initialization | — | Database file creation, migration system |
@@ -97,7 +97,7 @@ Each phase can begin once its dependencies from the previous phase are at least 
 | Piece | Write-up | What it establishes |
 |-------|----------|---------------------|
 | Local Server | [03-local-server.md](architecture/03-local-server.md) | Effect-TS server, WebSocket, SQLite, Layer composition |
-| React UI Shell | [04-react-ui.md](architecture/04-react-ui.md) | Vite + React skeleton, WebSocket hook, router, shadcn base |
+| React UI Shell | [04-react-ui.md](architecture/04-react-ui.md) | Vite + React skeleton, typed WebSocket + IPC hooks, router, shadcn base |
 
 ### Phase 2 — Parallel Feature Tracks (Weeks 2-3)
 
@@ -129,7 +129,7 @@ Each phase can begin once its dependencies from the previous phase are at least 
 |-------|----------|--------------|------|
 | Dashboard: layout + priority queue + grades | [06-dashboard.md](features/06-dashboard.md) | Canvas, Memory | 6 |
 | Dashboard: weekly calendar + completion check-ins | [06-dashboard.md](features/06-dashboard.md) | Smart Planner | 6 |
-| Dashboard: real-time WebSocket updates | [06-dashboard.md](features/06-dashboard.md) | Canvas sync events | 6 |
+| Dashboard: real-time updates (WS + IPC push) | [06-dashboard.md](features/06-dashboard.md) | Canvas sync events | 6 |
 | Notification evaluator + composer | [10-notification-service.md](features/10-notification-service.md) | Canvas change events, Memory (preferences) | 7 |
 | Notification delivery + quiet hours | [10-notification-service.md](features/10-notification-service.md) | Electron Notification API | 7 |
 | Reschedule engine (event-driven) | [09-smart-planner.md](features/09-smart-planner.md) | Canvas change events, Notification Service | 7 |
@@ -165,31 +165,49 @@ Each phase can begin once its dependencies from the previous phase are at least 
 
 ```sql
 -- Canvas sync snapshot
-CREATE TABLE canvas_courses (
+CREATE TABLE canvas_accounts (
     id INTEGER PRIMARY KEY,
-    canvas_id INTEGER UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    code TEXT,
-    term TEXT,
-    synced_at DATETIME
+    base_url TEXT NOT NULL,
+    last_validated_at DATETIME
 );
 
-CREATE TABLE canvas_assignments (
+CREATE TABLE courses (
     id INTEGER PRIMARY KEY,
-    canvas_id INTEGER UNIQUE NOT NULL,
-    course_id INTEGER NOT NULL REFERENCES canvas_courses(id),
+    canvas_account_id INTEGER REFERENCES canvas_accounts(id),
+    canvas_id INTEGER NOT NULL,
     name TEXT NOT NULL,
+    code TEXT,
+    professor TEXT,
+    term TEXT,
+    last_sync_at DATETIME
+);
+
+CREATE TABLE coursework_items (
+    id INTEGER PRIMARY KEY,
+    course_id INTEGER NOT NULL REFERENCES courses(id),
+    source_type TEXT NOT NULL,        -- 'assignment' | 'module' | 'page' | 'announcement'
+    source_id TEXT NOT NULL,
+    canonical_canvas_assignment_id TEXT,
+    title TEXT NOT NULL,
     description TEXT,
-    due_at DATETIME,
+    effective_due_at DATETIME,
+    source_due_date_kind TEXT,        -- 'base' | 'override' | 'inferred'
     points_possible REAL,
-    submission_status TEXT,           -- 'submitted', 'missing', 'not_yet', 'graded'
-    score REAL,
-    synced_at DATETIME
+    submission_status TEXT,
+    grade REAL,
+    grade_posted_at DATETIME,
+    cached_at DATETIME,
+    last_verified_at DATETIME,
+    source_updated_at DATETIME,
+    freshness_status TEXT,
+    raw_source_snapshot TEXT,
+    deleted_by_user INTEGER DEFAULT 0,
+    last_sync_at DATETIME
 );
 
 CREATE TABLE canvas_sync_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_type TEXT NOT NULL,        -- 'assignment', 'grade', 'announcement'
+    entity_type TEXT NOT NULL,        -- 'coursework_item', 'grade', 'announcement'
     entity_id INTEGER,
     change_type TEXT NOT NULL,        -- 'added', 'updated', 'removed'
     old_value TEXT,                   -- JSON of previous state
@@ -201,14 +219,16 @@ CREATE TABLE canvas_sync_log (
 -- Smart Planner
 CREATE TABLE tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    canvas_assignment_id INTEGER REFERENCES canvas_assignments(id),
-    course_id INTEGER REFERENCES canvas_courses(id),
+    course_work_item_id INTEGER REFERENCES coursework_items(id),
+    course_id INTEGER REFERENCES courses(id),
     title TEXT NOT NULL,
-    importance_score REAL,            -- 0-1 computed score
+    urgency_zone TEXT,                -- 'red', 'yellow', 'green'
+    impact_score REAL,
+    effort_confidence REAL,
     estimated_minutes INTEGER,
     needs_splitting INTEGER DEFAULT 0,
     deadline DATETIME,
-    status TEXT DEFAULT 'pending',    -- 'pending', 'planned', 'completed', 'skipped'
+    status TEXT DEFAULT 'pending',    -- 'pending', 'planned', 'completed', 'skipped', 'cancelled'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -218,21 +238,26 @@ CREATE TABLE planned_sessions (
     session_label TEXT,               -- "Research phase", "Writing session 2/3"
     start_time DATETIME NOT NULL,
     end_time DATETIME NOT NULL,
-    status TEXT DEFAULT 'scheduled',  -- 'scheduled', 'completed', 'skipped', 'partial'
+    status TEXT DEFAULT 'scheduled',  -- 'scheduled', 'completed', 'skipped', 'partial', 'unresolved', 'cancelled'
     completion_note TEXT,             -- student's "yes, but..." note
     completed_at DATETIME
 );
 
--- Notification Service
-CREATE TABLE notification_queue (
+-- Notification Service (feed-first model)
+CREATE TABLE activity_feed (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL,               -- 'deadline_reminder', 'grade_posted', 'plan_change', 'insight'
+    category TEXT NOT NULL,           -- 'canvas', 'planner', 'workflow', 'insight'
+    type TEXT NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
-    priority TEXT DEFAULT 'normal',   -- 'low', 'normal', 'high'
+    priority TEXT DEFAULT 'normal',
+    workflow_run_id TEXT,
+    source_event TEXT,
     scheduled_for DATETIME,
-    delivered INTEGER DEFAULT 0,
-    delivered_at DATETIME,
+    os_notified INTEGER DEFAULT 0,
+    os_notified_at DATETIME,
+    chat_surfaced INTEGER DEFAULT 0,
+    read_at DATETIME,
     deep_link TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
