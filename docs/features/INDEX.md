@@ -2,11 +2,11 @@
 
 Use this list while running the [grill-me skill](../../.agents/skills/grill-me/SKILL.md) on each document. Toggle a line from `[ ]` to `[x]` when you have finished a grilling pass for that spec.
 
-**Progress:** 1 / 10 — update the numerator as you go.
+**Progress:** 3 / 10 — update the numerator as you go.
 
 - [x] **01** — [AI Harness](01-ai-harness.md)
-- [ ] **02** — [Canvas Integration](02-canvas-integration.md)
-- [ ] **03** — [Skill System](03-skill-system.md)
+- [x] **02** — [Canvas Integration](02-canvas-integration.md)
+- [x] **03** — [Skill System](03-skill-system.md)
 - [ ] **04** — [Memory System](04-memory-system.md)
 - [ ] **05** — [Plugin System (Local MCP Orchestrator)](05-plugin-system.md)
 - [ ] **06** — [Dashboard](06-dashboard.md)

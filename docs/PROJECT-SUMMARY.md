@@ -46,7 +46,7 @@ Implemented as an MCP server (not baked into the core). Course discovery, assign
 
 ### 3. Skill System
 
-Markdown-based skill files (Cursor-style) with YAML frontmatter. Six pre-installed skills (plan-mode, study-helper, essay-reviewer, exam-prep, citation-helper, explain-like). In-app Skill Editor UI. Context budget management for competing skills. Students can author custom skills.
+Two-tier skill system: curated first-party skills and student-authored custom skills. Markdown-based skill files (Cursor-style) with YAML frontmatter, plus a server-side policy gate that enforces capabilities. Six pre-installed skills (plan-mode, study-helper, essay-reviewer, exam-prep, citation-helper, explain-like). In-app Skill Editor UI with fork-and-promote flow. Context budget management for competing skills. Custom skills start in read-suggest mode with planner-scope access and can be promoted capability-by-capability.
 
 ### 4. Memory System
 
@@ -208,7 +208,7 @@ Plan-mode is a skill file that instructs the AI how to approach weekly planning.
 | Decision | Rationale |
 |----------|-----------|
 | Canvas as MCP plugin (not built into core) | Keeps server architecture clean; sets the pattern for all integrations |
-| Cursor-style skills (markdown files) | Students can create and share their own skills |
+| Two-tier markdown skills + server policy gate | Students can create their own workflows without turning prompt files into a privilege-escalation path |
 | mem0 with entity partitioning (not discrete files) | Scoped retrieval, automatic contradiction resolution, simpler than maintaining 15+ markdown files |
 | Hybrid planner (AI reasoning + deterministic scheduling) | AI estimates and decomposes; code enforces constraints and prevents hallucinated schedules |
 | Effect-TS | Type safety and structured error handling works well with LLM-driven code |
