@@ -215,8 +215,8 @@ Processes the three completion states from the [Dashboard](06-dashboard.md)'s ch
 ```
 tasks
   id              INTEGER PRIMARY KEY AUTOINCREMENT
-  canvas_assignment_id  INTEGER REFERENCES canvas_assignments(id)
-  course_id       INTEGER REFERENCES canvas_courses(id)
+  course_work_item_id  INTEGER REFERENCES coursework_items(id)
+  course_id       INTEGER REFERENCES courses(id)
   title           TEXT NOT NULL
   urgency_zone      TEXT             -- 'red', 'yellow', 'green' (Layer 1 gate)
   impact_score      REAL             -- grade_impact × course_priority (Layer 2)

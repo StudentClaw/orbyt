@@ -247,12 +247,13 @@ The compiled profile is cached and reused until a regeneration trigger fires.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| **Memory engine** | mem0 OSS with Codex CLI as LLM (Option B) | Battle-tested extraction pipeline, uses student's existing auth, saves development time |
+| **Memory engine** | mem0 OSS Node SDK in local server | Native Node runtime path keeps deployment simple in Electron and avoids sidecar complexity in v1 |
 | **Embedding model** | OpenAI `text-embedding-3-small` | Quality retrieval, student already has auth. ~$0.02/1M tokens. |
 | **Storage** | SQLite (vectors + history) | Local-first, single file, aligns with rest of the stack |
-| **Extraction timing** | Real-time (after each conversation) | Immediate availability, no batch job complexity |
+| **Extraction timing** | Asynchronous post-turn with durable queue | Keeps chat latency low while guaranteeing eventual memory writes with retry |
 | **Transparency** | `MEMORY.md` projection + Memory Manager UI | Students can see what's stored without understanding vector databases |
 | **Daily log granularity** | Summarized interaction notes (not full transcripts) | Cheaper storage, better retrieval quality, privacy-friendlier |
+| **Auth UX** | Single OAuth sign-in for AI + memory | One secure auth broker serves both Codex chat and OpenAI extraction clients |
 
 ---
 
@@ -275,12 +276,24 @@ packages/server/src/memory/
 
 ---
 
-## Open Questions
+## Resolved decisions (grill-me)
 
-- **mem0 OSS maturity in Node/Bun**: The primary SDK is Python. The Node SDK exists but is it production-ready? May need to run mem0 as a sidecar process or use the Python SDK via subprocess.
-- **Local LLM for extraction**: Can we use a small local model (e.g., via Ollama) for memory extraction to avoid API calls? This would improve privacy and reduce costs.
-- **Vector storage performance**: SQLite with vector extensions vs. running a local Qdrant instance. SQLite is simpler but Qdrant is faster at scale.
-- **Memory bloat**: Over a 4-year degree, how much memory data accumulates? Need a pruning/archival strategy.
-- **Privacy controls**: Students should be able to see, edit, and delete any memory. The `MEMORY.md` projection helps for reading, but we need a full Memory Manager UI for editing and deletion.
-- **Graph memory**: mem0^g (graph variant) would be powerful for representing relationships between courses, professors, and assignments. Worth the added complexity?
-- **Memory export/portability**: If a student switches devices, how do they migrate their memory? SQLite files are portable, but we need an export/import flow.
+| Topic | Decision |
+|---|---|
+| **Runtime path** | Memory stack is native to Node in v1 (mem0 Node SDK in the local server). No Python sidecar path in the v1 design. |
+| **Model integration split** | AI chat uses Codex CLI; memory extraction uses OpenAI model config directly via mem0 integration. |
+| **Auth flow** | Single sign-in UX. The app uses one secure auth broker/session source so students do not authenticate separately for chat and memory extraction. |
+| **Write timing** | Extraction and writes run asynchronously after each turn via a durable queue with retries and typed failures. |
+| **Retention policy** | Deterministic v1 lifecycle: session scope TTL 30 days, daily scope TTL 90 days, `course_*`/`prof_*` archived at term end then deleted after 18 months, profile/preference/routines/behavioral persistent unless edited/deleted. |
+| **Bloat controls** | Weekly compaction job enforces per-scope caps by recency + confidence while preserving high-signal profile memories. |
+| **Vector backend** | Keep SQLite vector/history stores for v1. Re-evaluate only if measured latency or corpus size crosses operational thresholds. |
+| **Privacy controls** | Memory Manager is required in v1 for inspect/edit/delete operations against mem0 entries; `MEMORY.md` remains read-only projection for transparency. |
+| **Graph memory** | Out of scope for v1. Keep flat entity-partitioned memory only. |
+| **Portability** | v1 includes export/import of memory DB artifacts with metadata manifest to support device migration. |
+| **Local extraction model** | Out of scope for v1; revisit after baseline quality/stability is validated. |
+
+## Deferred follow-ups
+
+- Define concrete operational thresholds for when SQLite vector storage should be upgraded.
+- Evaluate local extraction models only after v1 quality and cost telemetry is available.
+- Revisit graph-memory relationships if planner/course reasoning shows clear retrieval gaps.

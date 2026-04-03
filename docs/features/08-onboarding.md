@@ -28,7 +28,7 @@ Shared Contracts ────→ Onboarding (StudentPreference, OnboardingState 
 | Depends On | Why |
 |---|---|
 | **Canvas Integration** | Needs Canvas MCP to validate token and run first sync |
-| **AI Harness** | Needs Codex CLI to authenticate (ChatGPT subscription or API key) |
+| **AI Harness** | Needs Codex CLI to authenticate via ChatGPT OAuth (v1 required) |
 | **Plugin System** | Extension recommendations require the plugin registry |
 | **Memory System** | Saves student preferences, routines, and course priorities via mem0 |
 | **Smart Planner** | First plan generation runs after onboarding completes |
@@ -206,7 +206,7 @@ packages/ui/src/components/onboarding/
   InstitutionSelector.tsx           # Step 2: Searchable university list + manual URL
   CanvasCredentialStep.tsx          # Step 2: Canvas URL + token guide
   CanvasTokenGuide.tsx              # Visual step-by-step token generation guide
-  AiAuthStep.tsx                    # Step 3: ChatGPT subscription or API key
+  AiAuthStep.tsx                    # Step 3: ChatGPT OAuth auth gate
   PreferencesStep.tsx               # Step 4: Study schedule, priorities
   RoutinesStep.tsx                  # Step 5: Weekly recurring blocks input
   FirstSyncStep.tsx                 # Step 6: Initial Canvas sync + memory population
