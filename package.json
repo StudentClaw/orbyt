@@ -12,9 +12,15 @@
     "dev:ui": "bun --cwd packages/ui dev",
     "dev:server": "bun --cwd packages/server dev",
     "dev:electron": "bun --cwd packages/electron dev",
+    "dev:standalone": "bun run dev:server & bun run dev:ui",
     "build": "bun --cwd packages/shared build && bun --cwd packages/server build && bun --cwd packages/ui build && bun --cwd packages/electron build",
+    "build:shared": "bun --cwd packages/shared build",
     "typecheck": "bun --cwd packages/shared typecheck && bun --cwd packages/server typecheck && bun --cwd packages/ui typecheck && bun --cwd packages/electron typecheck && bun --cwd packages/extensions/template-mcp typecheck",
-    "lint": "bun --cwd packages/ui lint"
+    "lint": "bun --cwd packages/ui lint",
+    "test": "bun run test:shared && bun run test:server && bun run test:ui",
+    "test:shared": "bun test --cwd packages/shared",
+    "test:server": "bun test --cwd packages/server",
+    "test:ui": "bun --cwd packages/ui vitest run"
   },
   "devDependencies": {}
 }
