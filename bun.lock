@@ -5,19 +5,33 @@
     "": {
       "name": "student-claw",
     },
+    "packages/contracts": {
+      "name": "@student-claw/contracts",
+      "version": "0.1.0",
+      "dependencies": {
+        "@effect/schema": "^0.75.5",
+        "effect": "^3.21.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/electron": {
       "name": "@student-claw/electron",
       "version": "0.1.0",
       "dependencies": {
-        "@student-claw/shared": "workspace:*",
+        "@student-claw/contracts": "workspace:*",
         "electron": "^41.1.1",
         "ws": "^8.20.0",
       },
       "devDependencies": {
+        "@tailwindcss/vite": "^4.2.2",
         "@types/node": "^25.5.2",
         "@types/ws": "^8.18.1",
+        "@vitejs/plugin-react": "^6.0.1",
         "electron-vite": "^5.0.0",
         "typescript": "^5.9.3",
+        "vite": "^8.0.1",
       },
     },
     "packages/extensions/template-mcp": {
@@ -35,7 +49,8 @@
       "dependencies": {
         "@effect/platform": "^0.96.0",
         "@effect/schema": "^0.75.5",
-        "@student-claw/shared": "workspace:*",
+        "@student-claw/contracts": "workspace:*",
+        "@student-claw/shared-runtime": "workspace:*",
         "effect": "^3.21.0",
         "ws": "^8.20.0",
       },
@@ -50,10 +65,16 @@
       "name": "@student-claw/shared",
       "version": "0.1.0",
       "dependencies": {
-        "@effect/platform": "^0.96.0",
-        "@effect/schema": "^0.75.5",
-        "effect": "^3.21.0",
+        "@student-claw/contracts": "workspace:*",
+        "@student-claw/shared-runtime": "workspace:*",
       },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/shared-runtime": {
+      "name": "@student-claw/shared-runtime",
+      "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.9.3",
       },
@@ -63,9 +84,12 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "^1.3.0",
+        "@effect/schema": "^0.75.5",
         "@fontsource-variable/geist": "^5.2.8",
         "@hugeicons/core-free-icons": "^4.1.1",
         "@hugeicons/react": "^1.1.6",
+        "@student-claw/contracts": "workspace:*",
+        "@student-claw/shared-runtime": "workspace:*",
         "@tanstack/react-router": "^1.168.10",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -534,11 +558,15 @@
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
+    "@student-claw/contracts": ["@student-claw/contracts@workspace:packages/contracts"],
+
     "@student-claw/electron": ["@student-claw/electron@workspace:packages/electron"],
 
     "@student-claw/server": ["@student-claw/server@workspace:packages/server"],
 
     "@student-claw/shared": ["@student-claw/shared@workspace:packages/shared"],
+
+    "@student-claw/shared-runtime": ["@student-claw/shared-runtime@workspace:packages/shared-runtime"],
 
     "@student-claw/template-mcp": ["@student-claw/template-mcp@workspace:packages/extensions/template-mcp"],
 

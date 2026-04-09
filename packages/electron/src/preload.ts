@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron"
+import type { DesktopBootstrap } from "@student-claw/contracts"
 
 const ALLOWED_CHANNELS = [
   "app:get-path",
-  "app:get-server-port",
+  "app:get-bootstrap",
   "notification:show",
   "tray:update-badge",
   "file:open-dialog",
@@ -10,6 +11,12 @@ const ALLOWED_CHANNELS = [
 ]
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  getBootstrap: async (): Promise<DesktopBootstrap | null> => {
+    const bootstrap = await ipcRenderer.invoke("app:get-bootstrap")
+    return typeof bootstrap === "object" && bootstrap !== null
+      ? bootstrap as DesktopBootstrap
+      : null
+  },
   invoke: (channel: string, ...args: unknown[]): Promise<unknown> => {
     if (!ALLOWED_CHANNELS.includes(channel)) {
       return Promise.reject(new Error(`Channel not allowed: ${channel}`))

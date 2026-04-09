@@ -1,5 +1,2 @@
-export * from "./schemas/index.js"
-export * from "./protocol/index.js"
-export * from "./errors/index.js"
-
-export const sharedVersion = "0.1.0"
+export * from "@student-claw/contracts"
+export * from "@student-claw/shared-runtime"

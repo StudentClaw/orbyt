@@ -1,5 +1,5 @@
 import { Context, Layer, Effect } from "effect"
-import { Database as BunDatabase } from "bun:sqlite"
+import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { homedir } from "node:os"
@@ -8,8 +8,10 @@ import { runMigrations } from "./migrations/runner.js"
 
 export interface DatabaseService {
   readonly db: BunDatabase
-  readonly query: <T>(sql: string, params?: unknown[]) => T[]
-  readonly execute: (sql: string, params?: unknown[]) => void
+  readonly get: <T>(sql: string, params?: SQLQueryBindings[]) => T | null
+  readonly query: <T>(sql: string, params?: SQLQueryBindings[]) => T[]
+  readonly execute: (sql: string, params?: SQLQueryBindings[]) => void
+  readonly transaction: <T>(fn: () => T) => T
   readonly close: () => void
 }
 
@@ -33,11 +35,14 @@ export const DatabaseLive = Layer.effect(
 
     return {
       db,
-      query: <T>(sql: string, params: unknown[] = []): T[] =>
+      get: <T>(sql: string, params: SQLQueryBindings[] = []): T | null =>
+        (db.query(sql).get(...params) as T | null) ?? null,
+      query: <T>(sql: string, params: SQLQueryBindings[] = []): T[] =>
         db.query(sql).all(...params) as T[],
-      execute: (sql: string, params: unknown[] = []): void => {
+      execute: (sql: string, params: SQLQueryBindings[] = []): void => {
         db.run(sql, params)
       },
+      transaction: <T>(fn: () => T): T => db.transaction(fn)(),
       close: () => db.close(),
     }
   }),

@@ -1,42 +1,86 @@
 import { describe, test, expect } from "bun:test"
+import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
 import { routeMessage } from "../ws/Router.js"
 
+const mockWs = { readyState: 1, send: () => undefined } as never
+
+function makeDependencies() {
+  const threadId = "thread_1" as ThreadId
+  const turnId = "turn_1" as TurnId
+  return {
+    readiness: {
+      awaitReady: async () => undefined,
+      markReady: () => undefined,
+      isReady: () => true,
+    },
+    pushBus: {
+      registerClient: () => undefined,
+      removeClient: () => undefined,
+      subscribe: () => undefined,
+      publish: async () => 1,
+      publishTo: async () => 1,
+      getLastSequence: () => 1,
+    },
+    orchestration: {
+      getDesktopBootstrap: async () => ({
+        wsUrl: "ws://127.0.0.1:8787",
+        appVersion: "0.1.0",
+        platform: "test",
+      }),
+      getSnapshot: async () => ({
+        threads: [],
+        turns: [],
+        providerStatus: "idle" as const,
+        ready: true,
+        lastSequence: 1,
+      }),
+      createThread: async () => ({ threadId }),
+      sendTurn: async () => ({ turnId }),
+      interruptTurn: async () => ({ interrupted: true }),
+    },
+  }
+}
+
 describe("Router", () => {
-  test("health.ping returns health.pong", () => {
+  test("server.getBootstrap returns a success response", async () => {
     const response = JSON.parse(
-      routeMessage(JSON.stringify({
-        method: "health.ping",
+      await routeMessage(JSON.stringify({
+        kind: "request",
+        method: RPC_METHODS.SERVER_GET_BOOTSTRAP,
         id: "1",
         params: {},
-      }))
+      }), mockWs, makeDependencies())
     )
-    expect(response.event).toBe("health.pong")
-    expect(response.data.uptime).toBeGreaterThanOrEqual(0)
+    expect(response.kind).toBe("response")
+    expect(response.ok).toBe(true)
+    expect(response.result.wsUrl).toContain("127.0.0.1")
   })
 
-  test("invalid JSON returns error event", () => {
-    const response = JSON.parse(routeMessage("not json"))
-    expect(response.event).toBe("error")
-    expect(response.data.code).toBe(-32700)
+  test("invalid JSON returns error response", async () => {
+    const response = JSON.parse(await routeMessage("not json", mockWs, makeDependencies()))
+    expect(response.kind).toBe("response")
+    expect(response.ok).toBe(false)
+    expect(response.error.code).toBe("parse_error")
   })
 
-  test("invalid message schema returns error", () => {
+  test("invalid request envelope returns error", async () => {
     const response = JSON.parse(
-      routeMessage(JSON.stringify({ method: "unknown", id: "1", params: {} }))
+      await routeMessage(JSON.stringify({ method: "unknown", id: "1", params: {} }), mockWs, makeDependencies())
     )
-    expect(response.event).toBe("error")
-    expect(response.data.code).toBe(-32600)
+    expect(response.ok).toBe(false)
+    expect(response.error.code).toBe("invalid_request")
   })
 
-  test("unimplemented method returns not-implemented error", () => {
+  test("unimplemented method returns not-found error", async () => {
     const response = JSON.parse(
-      routeMessage(JSON.stringify({
-        method: "chat.sendMessage",
+      await routeMessage(JSON.stringify({
+        kind: "request",
+        method: "unknown.method",
         id: "1",
-        params: { content: "hello" },
-      }))
+        params: {},
+      }), mockWs, makeDependencies())
     )
-    expect(response.event).toBe("error")
-    expect(response.data.code).toBe(-32601)
+    expect(response.ok).toBe(false)
+    expect(response.error.code).toBe("method_not_found")
   })
 })

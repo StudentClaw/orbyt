@@ -1,0 +1,145 @@
+import { Schema } from "@effect/schema"
+import { DesktopBootstrap } from "./desktop.js"
+
+export const ThreadId = Schema.String.pipe(Schema.brand("ThreadId"))
+export const TurnId = Schema.String.pipe(Schema.brand("TurnId"))
+export const CommandId = Schema.String.pipe(Schema.brand("CommandId"))
+
+export type ThreadId = Schema.Schema.Type<typeof ThreadId>
+export type TurnId = Schema.Schema.Type<typeof TurnId>
+export type CommandId = Schema.Schema.Type<typeof CommandId>
+
+export const RPC_METHODS = {
+  SERVER_GET_BOOTSTRAP: "server.getBootstrap",
+  SERVER_SUBSCRIBE_LIFECYCLE: "server.subscribeLifecycle",
+  ORCHESTRATION_GET_SNAPSHOT: "orchestration.getSnapshot",
+  ORCHESTRATION_CREATE_THREAD: "orchestration.createThread",
+  ORCHESTRATION_SEND_TURN: "orchestration.sendTurn",
+  ORCHESTRATION_INTERRUPT_TURN: "orchestration.interruptTurn",
+  ORCHESTRATION_SUBSCRIBE_DOMAIN: "orchestration.subscribeDomain",
+  PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
+} as const
+
+export const PUSH_CHANNELS = {
+  SERVER_LIFECYCLE: "server.lifecycle",
+  ORCHESTRATION_DOMAIN: "orchestration.domain",
+  PROVIDER_RUNTIME: "provider.runtime",
+} as const
+
+export const ServerLifecycleEvent = Schema.Struct({
+  type: Schema.Literal("server.ready"),
+  bootstrap: DesktopBootstrap,
+})
+
+export const OrchestrationThread = Schema.Struct({
+  id: ThreadId,
+  title: Schema.String,
+  status: Schema.Literal("idle", "streaming", "interrupted", "completed"),
+  createdAt: Schema.String,
+  currentTurnId: Schema.NullOr(TurnId),
+})
+
+export const OrchestrationTurn = Schema.Struct({
+  id: TurnId,
+  threadId: ThreadId,
+  input: Schema.String,
+  output: Schema.String,
+  status: Schema.Literal("pending", "streaming", "interrupted", "completed"),
+  startedAt: Schema.String,
+  completedAt: Schema.NullOr(Schema.String),
+})
+
+export const OrchestrationSnapshot = Schema.Struct({
+  threads: Schema.Array(OrchestrationThread),
+  turns: Schema.Array(OrchestrationTurn),
+  providerStatus: Schema.Literal("idle", "streaming", "interrupted", "offline"),
+  ready: Schema.Boolean,
+  lastSequence: Schema.Number,
+})
+
+export const CreateThreadParams = Schema.Struct({
+  title: Schema.optional(Schema.String),
+})
+
+export const CreateThreadResult = Schema.Struct({
+  threadId: ThreadId,
+})
+
+export const SendTurnParams = Schema.Struct({
+  threadId: ThreadId,
+  content: Schema.String,
+})
+
+export const SendTurnResult = Schema.Struct({
+  turnId: TurnId,
+})
+
+export const InterruptTurnParams = Schema.Struct({
+  threadId: ThreadId,
+})
+
+export const InterruptTurnResult = Schema.Struct({
+  interrupted: Schema.Boolean,
+})
+
+export const ProviderRuntimeEvent = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("provider.turnStarted"),
+    threadId: ThreadId,
+    turnId: TurnId,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.token"),
+    threadId: ThreadId,
+    turnId: TurnId,
+    token: Schema.String,
+    index: Schema.Number,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.turnCompleted"),
+    threadId: ThreadId,
+    turnId: TurnId,
+    output: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.turnInterrupted"),
+    threadId: ThreadId,
+    turnId: TurnId,
+  }),
+)
+
+export const OrchestrationDomainEvent = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("thread.created"),
+    thread: OrchestrationThread,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("turn.started"),
+    turn: OrchestrationTurn,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("turn.updated"),
+    turn: OrchestrationTurn,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("turn.completed"),
+    turn: OrchestrationTurn,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("turn.interrupted"),
+    turn: OrchestrationTurn,
+  }),
+)
+
+export type ServerLifecycleEvent = Schema.Schema.Type<typeof ServerLifecycleEvent>
+export type OrchestrationThread = Schema.Schema.Type<typeof OrchestrationThread>
+export type OrchestrationTurn = Schema.Schema.Type<typeof OrchestrationTurn>
+export type OrchestrationSnapshot = Schema.Schema.Type<typeof OrchestrationSnapshot>
+export type CreateThreadParams = Schema.Schema.Type<typeof CreateThreadParams>
+export type CreateThreadResult = Schema.Schema.Type<typeof CreateThreadResult>
+export type SendTurnParams = Schema.Schema.Type<typeof SendTurnParams>
+export type SendTurnResult = Schema.Schema.Type<typeof SendTurnResult>
+export type InterruptTurnParams = Schema.Schema.Type<typeof InterruptTurnParams>
+export type InterruptTurnResult = Schema.Schema.Type<typeof InterruptTurnResult>
+export type ProviderRuntimeEvent = Schema.Schema.Type<typeof ProviderRuntimeEvent>
+export type OrchestrationDomainEvent = Schema.Schema.Type<typeof OrchestrationDomainEvent>

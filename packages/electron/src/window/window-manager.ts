@@ -1,7 +1,20 @@
-import { BrowserWindow } from "electron"
+import { app, BrowserWindow } from "electron"
+import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import path from "node:path"
 
-export function createWindow(serverPort?: number): BrowserWindow {
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+
+function resolvePreloadPath(): string {
+  const esmPreloadPath = path.join(currentDir, "../preload/preload.mjs")
+  if (existsSync(esmPreloadPath)) {
+    return esmPreloadPath
+  }
+
+  return path.join(currentDir, "../preload/preload.js")
+}
+
+export function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -10,7 +23,7 @@ export function createWindow(serverPort?: number): BrowserWindow {
     backgroundColor: "#09090b",
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, "../preload.js"),
+      preload: resolvePreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -21,11 +34,11 @@ export function createWindow(serverPort?: number): BrowserWindow {
   })
 
   // In dev, load Vite dev server URL; in production, load bundled HTML
-  const devUrl = process.env.VITE_DEV_SERVER_URL
+  const devUrl = process.env.ELECTRON_RENDERER_URL ?? (!app.isPackaged ? "http://localhost:5173" : undefined)
   if (devUrl) {
     win.loadURL(devUrl)
   } else {
-    win.loadFile(path.join(__dirname, "../../packages/ui/dist/index.html"))
+    win.loadFile(path.join(currentDir, "../renderer/index.html"))
   }
 
   return win

@@ -1,42 +1,114 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { WebSocket } from "ws"
+import { RPC_METHODS, type DesktopBootstrap } from "@student-claw/contracts"
 
 export interface ServerProcess {
   readonly port: number
+  readonly bootstrap: DesktopBootstrap
   readonly process: ChildProcess
   readonly kill: () => void
 }
 
-function healthCheck(port: number): Promise<boolean> {
+type WebSocketFactory = (url: string) => WebSocket
+
+const HEALTH_CHECK_REQUEST_ID = "health-check"
+
+function isBootstrapResponse(
+  message: unknown,
+): message is {
+  readonly kind: "response"
+  readonly id: typeof HEALTH_CHECK_REQUEST_ID
+  readonly ok: true
+  readonly result: DesktopBootstrap
+} {
+  if (typeof message !== "object" || message === null) {
+    return false
+  }
+
+  const candidate = message as Record<string, unknown>
+  return (
+    candidate.kind === "response"
+    && candidate.id === HEALTH_CHECK_REQUEST_ID
+    && candidate.ok === true
+    && typeof candidate.result === "object"
+    && candidate.result !== null
+  )
+}
+
+function isFailedBootstrapResponse(
+  message: unknown,
+): message is {
+  readonly kind: "response"
+  readonly id: typeof HEALTH_CHECK_REQUEST_ID
+  readonly ok: false
+} {
+  if (typeof message !== "object" || message === null) {
+    return false
+  }
+
+  const candidate = message as Record<string, unknown>
+  return (
+    candidate.kind === "response"
+    && candidate.id === HEALTH_CHECK_REQUEST_ID
+    && candidate.ok === false
+  )
+}
+
+export function healthCheck(
+  port: number,
+  createWebSocket: WebSocketFactory = (url) => new WebSocket(url),
+): Promise<DesktopBootstrap | null> {
   return new Promise((resolve) => {
-    const ws = new WebSocket(`ws://localhost:${port}`)
-    const timeout = setTimeout(() => {
+    const ws = createWebSocket(`ws://127.0.0.1:${port}`)
+    let settled = false
+
+    const finish = (result: DesktopBootstrap | null) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      clearTimeout(timeout)
       ws.close()
-      resolve(false)
+      resolve(result)
+    }
+
+    const timeout = setTimeout(() => {
+      finish(null)
     }, 2000)
 
     ws.on("open", () => {
       ws.send(JSON.stringify({
-        method: "health.ping",
-        id: "health-check",
+        kind: "request",
+        method: RPC_METHODS.SERVER_GET_BOOTSTRAP,
+        id: HEALTH_CHECK_REQUEST_ID,
         params: {},
       }))
     })
 
     ws.on("message", (data) => {
-      clearTimeout(timeout)
       try {
         const msg = JSON.parse(data.toString())
-        resolve(msg.event === "health.pong")
+        if (isBootstrapResponse(msg)) {
+          finish(msg.result)
+          return
+        }
+
+        if (isFailedBootstrapResponse(msg)) {
+          finish(null)
+        }
       } catch {
-        resolve(false)
+        // Ignore unrelated or malformed frames and keep waiting for the
+        // bootstrap RPC response.
       }
-      ws.close()
     })
 
     ws.on("error", () => {
-      clearTimeout(timeout)
-      resolve(false)
+      finish(null)
+    })
+
+    ws.on("close", () => {
+      finish(null)
     })
   })
 }
@@ -70,10 +142,11 @@ export async function spawnServer(): Promise<ServerProcess> {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, delay))
-    const healthy = await healthCheck(port)
-    if (healthy) {
+    const bootstrap = await healthCheck(port)
+    if (bootstrap) {
       return {
         port,
+        bootstrap,
         process: child,
         kill: () => {
           child.kill("SIGTERM")
