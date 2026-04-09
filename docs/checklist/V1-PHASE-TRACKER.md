@@ -42,7 +42,6 @@ Status: T3code-style runtime alignment landed; automated verification passes; a 
 ### Pending manual verification
 
 - [ ] Confirm the tray icon/menu is visible and the Show/Hide/Quit actions work on the target machine
-- [ ] Confirm `app:get-bootstrap` responds through the running Electron preload bridge
 - [ ] Confirm the `/chat` proof slice can create a thread, stream stub output, and interrupt successfully in the live app
 - [ ] Confirm standalone mode using separate `bun run dev:server` and `bun run dev:ui` terminals in a manual smoke test
 

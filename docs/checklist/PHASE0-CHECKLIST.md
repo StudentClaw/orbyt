@@ -39,7 +39,7 @@
 - [ ] Chat page proof slice can create a thread, send a turn, stream stub output, and interrupt a turn
 - [x] Shared runtime initializes once at app root and supplies connection state through cached atoms
 - [x] Late subscribers receive current connection state immediately (no page-local drift)
-- [ ] Connection status shows transport state and platform bootstrap info in the live app
+- [x] Connection status shows transport state and platform bootstrap info in the live app
 - [ ] Renderer bootstraps from Electron `app:get-bootstrap`, then reconnects/resubscribes on disconnect in a manual smoke test
 - [x] `bun --cwd packages/ui vitest run` — all tests pass
 
@@ -51,7 +51,7 @@
 - [x] Bootstrap RPC health check passes and returns server metadata
 - [x] BrowserWindow loads React UI
 - [ ] System tray appears with Show/Hide/Quit menu
-- [ ] IPC bridge responds to `app:get-bootstrap`
+- [x] IPC bridge responds to `app:get-bootstrap`
 - [x] App quits cleanly (server process killed)
 
 ## Cross-cutting

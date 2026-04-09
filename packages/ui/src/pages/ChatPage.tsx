@@ -10,6 +10,17 @@ import {
   useRuntimeProviderEvents,
 } from "@/hooks/useAppRuntime"
 
+export function resolveCurrentThread(
+  snapshot: ReturnType<typeof useRuntimeOrchestrationSnapshot>,
+  threadId: string | null,
+): OrchestrationThread | null {
+  if (!snapshot) {
+    return null
+  }
+
+  return snapshot.threads.find((entry) => entry.id === threadId) ?? snapshot.threads.at(-1) ?? null
+}
+
 export function ChatPage() {
   const bootstrap = useRuntimeBootstrap()
   const connectionStatus = useRuntimeConnectionStatus()
@@ -20,10 +31,7 @@ export function ChatPage() {
   const [threadId, setThreadId] = useState<string | null>(null)
 
   const currentThread = useMemo<OrchestrationThread | null>(() => {
-    if (!snapshot) {
-      return null
-    }
-    return snapshot.threads.find((entry) => entry.id === threadId) ?? snapshot.threads.at(-1) ?? null
+    return resolveCurrentThread(snapshot, threadId)
   }, [snapshot, threadId])
 
   const currentTurn = useMemo(() => {
@@ -54,11 +62,12 @@ export function ChatPage() {
   }
 
   const handleInterrupt = async () => {
-    if (!threadId) {
+    const activeThreadId = currentThread?.id ?? threadId
+    if (!activeThreadId) {
       return
     }
 
-    await actions.interruptTurn(threadId)
+    await actions.interruptTurn(activeThreadId)
   }
 
   return (

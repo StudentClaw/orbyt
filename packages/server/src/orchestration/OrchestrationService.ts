@@ -1,4 +1,4 @@
-import { Context, Layer, Effect, Queue } from "effect"
+import { Context, Layer, Effect } from "effect"
 import {
   PUSH_CHANNELS,
   type DesktopBootstrap,
@@ -72,8 +72,9 @@ export const OrchestrationServiceLive = Layer.scoped(
     const pushBus = yield* PushBus
     const readiness = yield* ServerReadiness
     const receiptBus = yield* RuntimeReceiptBus
-    const queue = yield* Queue.unbounded<WorkItem>()
     const activeTurns = new Map<string, { interrupted: boolean }>()
+    const workQueue: WorkItem[] = []
+    let drainingQueue = false
 
     const appendEvent = (
       eventType: string,
@@ -149,6 +150,35 @@ export const OrchestrationServiceLive = Layer.scoped(
       await pushBus.publish(PUSH_CHANNELS.PROVIDER_RUNTIME, event)
     }
 
+    const reconcileStaleStreamingState = (): void => {
+      const now = new Date().toISOString()
+      database.transaction(() => {
+        database.execute(
+          `UPDATE orchestration_turns
+           SET status = 'interrupted',
+               completed_at = COALESCE(completed_at, ?),
+               updated_at = ?
+           WHERE status = 'streaming'`,
+          [now, now],
+        )
+        database.execute(
+          `UPDATE orchestration_threads
+           SET status = 'interrupted',
+               current_turn_id = NULL,
+               updated_at = ?
+           WHERE status = 'streaming'`,
+          [now],
+        )
+        database.execute(
+          `UPDATE provider_runtime_sessions
+           SET status = 'interrupted',
+               updated_at = ?
+           WHERE status = 'streaming'`,
+          [now],
+        )
+      })
+    }
+
     const completeTurn = async (
       commandId: string,
       threadId: string,
@@ -207,8 +237,8 @@ export const OrchestrationServiceLive = Layer.scoped(
       activeTurns.delete(turnId)
     }
 
-    const processWork = (work: WorkItem) =>
-      Effect.promise(async () => {
+    const processWork = async (work: WorkItem): Promise<void> => {
+      try {
         const tokens = tokenizeStubResponse(work.content)
         let output = ""
 
@@ -248,13 +278,60 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
 
         await completeTurn(work.commandId, work.threadId, work.turnId, output, false)
-      })
+      } catch (error) {
+        const now = new Date().toISOString()
+        database.transaction(() => {
+          database.execute(
+            `UPDATE orchestration_turns
+             SET status = 'interrupted', completed_at = ?, updated_at = ?
+             WHERE id = ?`,
+            [now, now, work.turnId],
+          )
+          database.execute(
+            `UPDATE orchestration_threads
+             SET status = 'interrupted', current_turn_id = NULL, updated_at = ?
+             WHERE id = ?`,
+            [now, work.threadId],
+          )
+          database.execute(
+            `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              work.threadId,
+              "stub",
+              "interrupted",
+              error instanceof Error ? error.message : "Unknown orchestration error",
+              now,
+            ],
+          )
+        })
+        activeTurns.delete(work.turnId)
+      }
+    }
 
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Queue.take(queue).pipe(Effect.flatMap(processWork)),
-      ),
-    )
+    const drainQueue = async (): Promise<void> => {
+      if (drainingQueue) {
+        return
+      }
+
+      drainingQueue = true
+      try {
+        while (workQueue.length > 0) {
+          const next = workQueue.shift()
+          if (!next) {
+            continue
+          }
+          await processWork(next)
+        }
+      } finally {
+        drainingQueue = false
+        if (workQueue.length > 0) {
+          void drainQueue()
+        }
+      }
+    }
+
+    reconcileStaleStreamingState()
 
     return {
       getDesktopBootstrap: async () => ({
@@ -387,7 +464,8 @@ export const OrchestrationServiceLive = Layer.scoped(
           threadId: threadId as ProviderRuntimeEvent["threadId"],
           turnId: turn.id as ProviderRuntimeEvent["turnId"],
         })
-        await Queue.offer(queue, { commandId, threadId, turnId: turn.id, content })
+        workQueue.push({ commandId, threadId, turnId: turn.id, content })
+        void drainQueue()
         return { turnId: turn.id }
       },
       interruptTurn: async (commandId, threadId) => {
@@ -396,6 +474,18 @@ export const OrchestrationServiceLive = Layer.scoped(
           recordReceipt(commandId, "completed", { interrupted: false })
           await receiptBus.resolve(commandId, { interrupted: false })
           return { interrupted: false }
+        }
+
+        if (!activeTurns.has(thread.currentTurnId)) {
+          const persistedTurn = readTurn(thread.currentTurnId)
+          await completeTurn(
+            commandId,
+            threadId,
+            thread.currentTurnId,
+            persistedTurn?.output ?? "",
+            true,
+          )
+          return { interrupted: true }
         }
 
         activeTurns.set(thread.currentTurnId, { interrupted: true })
