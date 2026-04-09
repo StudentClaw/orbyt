@@ -27,6 +27,16 @@ function makeDependencies() {
         appVersion: "0.1.0",
         platform: "test",
       }),
+      getServerConfig: async () => ({
+        appVersion: "0.1.0",
+        platform: "test",
+        protocolVersion: "rpc-v1",
+        capabilities: {
+          orchestration: true,
+          providerRuntime: true,
+          desktopBootstrap: true,
+        },
+      }),
       getSnapshot: async () => ({
         threads: [],
         turns: [],
@@ -54,6 +64,20 @@ describe("Router", () => {
     expect(response.kind).toBe("response")
     expect(response.ok).toBe(true)
     expect(response.result.wsUrl).toContain("127.0.0.1")
+  })
+
+  test("server.getConfig returns a success response", async () => {
+    const response = JSON.parse(
+      await routeMessage(JSON.stringify({
+        kind: "request",
+        method: RPC_METHODS.SERVER_GET_CONFIG,
+        id: "2",
+        params: {},
+      }), mockWs, makeDependencies())
+    )
+    expect(response.kind).toBe("response")
+    expect(response.ok).toBe(true)
+    expect(response.result.protocolVersion).toBe("rpc-v1")
   })
 
   test("invalid JSON returns error response", async () => {

@@ -5,6 +5,7 @@ import {
   type InterruptTurnResult,
   type OrchestrationDomainEvent,
   type OrchestrationSnapshot,
+  type ServerConfig,
   type OrchestrationThread,
   type OrchestrationTurn,
   type ProviderRuntimeEvent,
@@ -46,6 +47,7 @@ type WorkItem = {
 
 export interface OrchestrationServiceShape {
   readonly getDesktopBootstrap: () => Promise<DesktopBootstrap>
+  readonly getServerConfig: () => Promise<ServerConfig>
   readonly getSnapshot: () => Promise<OrchestrationSnapshot>
   readonly createThread: (commandId: string, title?: string) => Promise<CreateThreadResult>
   readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
@@ -233,6 +235,16 @@ export const OrchestrationServiceLive = Layer.scoped(
             token,
             index,
           })
+
+          const turn = readTurn(work.turnId)
+          if (turn) {
+            appendEvent("turn.updated", { turn }, {
+              threadId: work.threadId,
+              turnId: work.turnId,
+              commandId: work.commandId,
+            })
+            await publishDomainEvent({ type: "turn.updated", turn })
+          }
         }
 
         await completeTurn(work.commandId, work.threadId, work.turnId, output, false)
@@ -249,6 +261,16 @@ export const OrchestrationServiceLive = Layer.scoped(
         wsUrl: `ws://127.0.0.1:${config.port}`,
         appVersion: "0.1.0",
         platform: process.platform,
+      }),
+      getServerConfig: async () => ({
+        appVersion: "0.1.0",
+        platform: process.platform,
+        protocolVersion: "rpc-v1",
+        capabilities: {
+          orchestration: true,
+          providerRuntime: true,
+          desktopBootstrap: true,
+        },
       }),
       getSnapshot: async () => {
         const threads = database.query<ThreadRow>(

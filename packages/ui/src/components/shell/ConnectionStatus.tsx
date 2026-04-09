@@ -1,7 +1,8 @@
-import { useWebSocket } from "@/hooks/useWebSocket"
+import { useRuntimeBootstrap, useRuntimeConnectionStatus } from "@/hooks/useAppRuntime"
 
 export function ConnectionStatus() {
-  const { connectionState, bootstrap } = useWebSocket()
+  const connectionStatus = useRuntimeConnectionStatus()
+  const bootstrap = useRuntimeBootstrap()
 
   const colors: Record<string, string> = {
     connected: "bg-green-500",
@@ -12,9 +13,9 @@ export function ConnectionStatus() {
 
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      <span className={`h-2 w-2 rounded-full ${colors[connectionState] ?? "bg-gray-500"}`} />
+      <span className={`h-2 w-2 rounded-full ${colors[connectionStatus.phase] ?? "bg-gray-500"}`} />
       <span className="capitalize">
-        {connectionState}
+        {connectionStatus.phase}
         {bootstrap ? ` · ${bootstrap.platform}` : ""}
       </span>
     </div>

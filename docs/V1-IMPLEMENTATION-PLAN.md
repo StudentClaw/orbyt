@@ -2,16 +2,16 @@
 
 ## Current State
 
-The harness is in place but contains near-zero feature code:
+The app is no longer a bare scaffold. Phase 0 foundation work is substantially implemented:
 
-- **Monorepo:** Bun workspaces with 5 packages (`ui`, `server`, `electron`, `shared`, `extensions/template-mcp`)
-- **UI (`@student-claw/ui`):** Vite 8 + React 19, full shadcn/radix component library (50+ primitives), Tailwind v4, Geist font, Hugeicons, recharts, react-resizable-panels — but only the stock Vite counter in `App.tsx`
-- **Server (`@student-claw/server`):** 3-line boot log (`packages/server/src/index.ts`)
-- **Electron (`@student-claw/electron`):** 1-line placeholder (`packages/electron/src/main.ts`)
-- **Shared (`@student-claw/shared`):** `HealthStatus` type + version string (`packages/shared/src/index.ts`)
-- **No** Effect-TS, SQLite, WebSocket, router, or feature code anywhere
+- **Monorepo:** Bun workspaces with `contracts`, `shared-runtime`, `shared` shim, `server`, `ui`, `electron`, and `extensions/template-mcp`
+- **Contracts (`@student-claw/contracts`):** typed desktop bootstrap, RPC envelopes, lifecycle/config streams, orchestration RPC methods, push channels, snapshots, and domain/runtime event contracts
+- **Shared runtime (`@student-claw/shared-runtime`):** small cross-package runtime helpers, with `@student-claw/shared` acting as a compatibility shim
+- **Server (`@student-claw/server`):** typed RPC WebSocket transport, SQLite migrations, readiness gate, push bus, orchestration runtime, append-only event log, projection tables, durable receipts, and a deterministic stub provider
+- **UI (`@student-claw/ui`):** React app shell, route structure, T3code-style shared runtime cache, replayable transport state, and a `/chat` proof slice wired to the stub orchestration runtime
+- **Electron (`@student-claw/electron`):** BrowserWindow, preload bootstrap bridge, server lifecycle management, tray wiring, and startup logic that can attach to an already-running local server
 
-Documentation is comprehensive: 10 grilled feature specs, 5 architecture docs, full SQLite DDL, dependency graph, UI screen map with 30+ surfaces.
+Automated verification currently passes with `bun install`, `bun run typecheck`, `bun run test`, and `bun run build`. A small set of manual Electron/UI smoke checks still remain.
 
 ---
 
@@ -20,12 +20,18 @@ Documentation is comprehensive: 10 grilled feature specs, 5 architecture docs, f
 **Primary use case (from `docs/PROJECT-SUMMARY.md`):**
 > Connect to Canvas and show students what's due, when, and help plan their week.
 
+### Progress snapshot
+
+- **Phase 0 foundation:** largely complete
+- **Phase 1 chat/orchestration:** proof slice complete with a stub provider; real Codex-backed harness not started
+- **Phase 2+ product features:** not started on the production feature path
+
 ### In scope for v1
 
 - Shared contracts (Effect Schema domain types, WS protocol, typed errors)
 - Electron shell (BrowserWindow, server spawn, IPC bridge, tray, native notifications)
 - Effect-TS local server (WebSocket, SQLite, Layer composition, migrations)
-- React UI shell (router, app frame, WebSocket hooks, stores)
+- React UI shell (router, app frame, shared runtime cache, typed state access hooks)
 - AI Harness (Codex CLI subprocess, JSON-RPC, streaming, sessions, context assembly)
 - Canvas Integration (MCP server + server-side sync, diff engine, change events)
 - Smart Planner (task analyzer, decomposer, slot finder, schedule builder, completion handler)
@@ -49,11 +55,11 @@ Documentation is comprehensive: 10 grilled feature specs, 5 architecture docs, f
 
 ## Team Structure: Two Parallel Tracks
 
-**Person A (Backend Lead):** Owns `packages/shared`, `packages/server`, `packages/extensions/canvas-mcp`. Responsible for Effect-TS services, SQLite schema, AI Harness, Canvas sync, Smart Planner engine, Memory System, Notification evaluator/composer.
+**Person A (Backend Lead):** Owns `packages/contracts`, `packages/shared-runtime`, `packages/shared`, `packages/server`, `packages/extensions/canvas-mcp`. Responsible for transport/domain contracts, Effect-TS services, SQLite schema, AI Harness, Canvas sync, Smart Planner engine, Memory System, Notification evaluator/composer.
 
-**Person B (Frontend Lead):** Owns `packages/electron`, `packages/ui`. Responsible for Electron shell, React app shell, all UI screens (Chat, Dashboard, Onboarding, Activity Center), WebSocket client hooks, stores, IPC bridge.
+**Person B (Frontend Lead):** Owns `packages/electron`, `packages/ui`. Responsible for Electron shell, React app shell, runtime state access layers, all UI screens (Chat, Dashboard, Onboarding, Activity Center), and IPC bridge.
 
-Both developers pair on integration points (WebSocket protocol handshake, IPC contracts, end-to-end flows).
+Both developers pair on integration points (RPC transport, IPC contracts, shared runtime/state semantics, end-to-end flows).
 
 ### Ownership Map
 
@@ -90,60 +96,57 @@ Everything else can be parallelized around this spine.
 
 ## Phase 0 — Foundation (Week 1)
 
-**Goal:** App builds, runs, and has typed communication channels between all three tiers.
+**Goal:** App builds, runs, and has typed communication/runtime channels between all three tiers.
+
+**Status on 2026-04-09:** Mostly complete. The foundation landed through a deeper runtime alignment than this original plan assumed: shared contracts were split into dedicated workspace packages, the server owns a typed orchestration core, and the UI now uses a shared cached runtime model rather than page-local WebSocket hooks and Zustand stores.
 
 ### Person A: Shared Contracts + Server Infrastructure
 
-**Install dependencies in `packages/shared`:**
-- `effect`, `@effect/schema`, `@effect/platform`
-
-**Build out `packages/shared/src/`:**
-- `schemas/` — Branded IDs (`CourseId`, `CourseWorkItemId`, `SkillId`), domain types (`Course`, `CourseWorkItem`, `Grade`, `PlannedSession`, `ActivityFeedEntry`, `MemoryEntry`, `Extension`, `StudentPreference`, `OnboardingState`) per `docs/architecture/01-shared-contracts.md`
-- `protocol/` — WebSocket message schemas (`client-messages.ts`, `server-events.ts`), IPC channel schemas, JSON-RPC envelope
-- `errors/` — Typed error hierarchy (`CanvasAuthError`, `CodexSpawnError`, `CodexTimeoutError`, `JsonRpcParseError`, `PluginStartError`, `VaultDecryptError`, `MemoryWriteError`, `SchemaDecodeError`, `PolicyDeniedError`)
-- Barrel export from `index.ts`
+**Implemented:**
+- `packages/contracts/src/` now owns the shared schemas, transport envelopes, desktop bootstrap contract, orchestration RPC methods, stream events, and typed error exports
+- `packages/shared-runtime/src/` now owns neutral runtime helpers
+- `packages/shared/src/` is a compatibility shim over the new packages
 
 **Install dependencies in `packages/server`:**
 - `effect`, `@effect/schema`, `@effect/platform`, `better-sqlite3` (or use `bun:sqlite`), `ws`
 
-**Build out `packages/server/src/`:**
-- `config/ConfigService.ts` — Load config from defaults + file + env
-- `db/Database.ts` — Effect Service wrapping SQLite connection
-- `db/migrations/001-initial.ts` — Core tables from `docs/DEPENDENCY-GRAPH.md` DDL: `canvas_accounts`, `courses`, `coursework_items`, `canvas_sync_log`, `tasks`, `planned_sessions`, `activity_feed`, `settings`, `onboarding_state`, `user_preferences`
-- `ws/WebSocketServer.ts` — Effect Service: accept connections, validate messages against shared protocol
-- `ws/Router.ts` — Message-to-handler dispatch
-- `index.ts` — Bootstrap: compose Layers, run server, listen on configurable port
+**Implemented in `packages/server/src/`:**
+- `config/ConfigService.ts` — config loading
+- `db/Database.ts` — SQLite wrapper
+- `db/migrations/001-initial.ts` and `002-orchestration-runtime.ts` — core tables plus orchestration runtime persistence
+- `runtime/ServerReadiness.ts` — readiness gate
+- `ws/PushBus.ts`, `ws/WebSocketServer.ts`, `ws/Router.ts` — ordered push path and typed RPC routing
+- `orchestration/OrchestrationService.ts`, `RuntimeReceiptBus.ts`, `StubProvider.ts` — append-only orchestration runtime and proof provider
+- `index.ts` — composed server bootstrap
 
-**Acceptance:** `bun run dev:server` starts a WebSocket server on a configurable port, creates the SQLite DB, runs migrations, and accepts connections.
+**Acceptance status:** Met for automated checks. `bun run dev:server` starts the typed RPC WebSocket server, creates/upgrades the SQLite DB, runs migrations, and accepts connections. Remaining confirmation is a live manual smoke of the proof chat slice.
 
 ### Person B: Electron Shell + React UI Shell
 
-**Install dependencies in `packages/electron`:**
-- `electron`, `electron-forge` toolchain (or `electron-vite`), `@student-claw/shared`
-
-**Build out `packages/electron/src/`:**
-- `main.ts` — BrowserWindow creation, load Vite dev server URL (dev) or bundled HTML (prod)
-- `preload.ts` — `contextBridge` exposing typed `electronAPI` (send, on, invoke)
-- `ipc/bridge.ts` — IPC handler registry with channel constants from shared contracts
-- `tray/tray.ts` — System tray icon + context menu (show/hide, quit)
-- Server lifecycle: spawn `packages/server` as child process, inject port, monitor health
+**Implemented in `packages/electron/src/`:**
+- `main.ts` — BrowserWindow creation and app bootstrap
+- `preload.ts` — typed preload bridge
+- `ipc/bridge.ts` — typed bootstrap IPC registration
+- `tray/` — tray wiring
+- `server/lifecycle.ts` — server spawn/attach logic and bootstrap health checks
 
 **Build out `packages/ui/src/`:**
-- Install `react-router` (or `@tanstack/react-router`), `zustand`
-- `App.tsx` — App shell with persistent left `Sidebar` rail + main content region + right `Sheet` for chat slide-over (per `docs/frontend-design/ui-screen-map-v1.md`)
-- `hooks/useWebSocket.ts` — WebSocket client connecting to local server, typed send/subscribe using shared protocol
-- `hooks/useStreaming.ts` — Token assembly for chat streaming
-- `stores/` — Zustand stores: `chatStore`, `canvasStore`, `dashboardStore`, `plannerStore`, `settingsStore`, `onboardingStore`
-- Placeholder route stubs: `/` (Dashboard), `/chat`, `/onboarding`, `/settings`, `/activity`
-- `lib/ws-client.ts` — Low-level WS client with reconnection logic
+- `App.tsx` — app shell plus one-time runtime startup
+- `rpc/` — shared transport, replayable atom-style cache, runtime sync modules, and typed selectors/hooks
+- `hooks/useAppRuntime.ts` — thin state/action access layer over the runtime cache
+- route surfaces for `/`, `/chat`, `/onboarding`, `/settings`, `/activity`
+- `/chat` proof slice wired to the stub orchestration runtime
+- previous `useWebSocket`, `ws-client`, and Zustand store scaffolding were removed in favor of one shared runtime model
 
-**Acceptance:** `bun run dev` launches Electron, which spawns the server and loads the React UI. The UI connects via WebSocket and shows the app shell with navigation. Sending a test message through WS reaches the server router.
+**Acceptance status:** Mostly met. `bun run dev` launches Electron, the React shell loads, and the UI connects through the shared runtime path. Remaining manual verification is the live `/chat` thread/stream/interrupt flow plus tray/preload smoke checks.
 
 ---
 
 ## Phase 1 — AI Harness + Chat UI (Weeks 2-3)
 
 **Goal:** Student can chat with the AI through the app. Messages flow: React --> WS --> Server --> Codex CLI --> stream back.
+
+**Status on 2026-04-09:** Partially started through the orchestration proof slice. The UI/runtime/server transport path exists, but it currently terminates in a deterministic stub provider rather than the real Codex harness.
 
 ### Person A: AI Harness Backend (Weeks 2-3)
 
@@ -177,7 +180,7 @@ Everything else can be parallelized around this spine.
 
 **Build chat as right `Sheet` slide-over** (per ui-screen-map: "Keep dashboard context visible while interacting with AI").
 
-**Wire `chatStore.ts`:** Manage conversation history, streaming state, active session. Connect to `useWebSocket` and `useStreaming` hooks.
+**Wire the shared runtime chat state:** Manage conversation history, streaming state, active session, and provider runtime events through the app runtime cache plus typed orchestration actions.
 
 **Handle states:** Connected, streaming, interrupted, offline/queued, rate-limited, auth-expired.
 
@@ -352,10 +355,12 @@ Everything else can be parallelized around this spine.
 
 | Package | Dependencies |
 |---------|-------------|
-| `packages/shared` | `effect`, `@effect/schema` |
+| `packages/contracts` | `effect`, `@effect/schema` |
+| `packages/shared-runtime` | small runtime helpers only |
+| `packages/shared` | compatibility shim over `contracts` + `shared-runtime` |
 | `packages/server` | `effect`, `@effect/schema`, `@effect/platform`, `ws`, `@openai/codex`, `mem0ai`, `openai` |
-| `packages/electron` | `electron`, `@electron-forge/cli` (+ makers/plugins), `@student-claw/shared` |
-| `packages/ui` | `react-router` (or `@tanstack/react-router`), `zustand` |
+| `packages/electron` | `electron`, `@electron-forge/cli` (+ makers/plugins), `@student-claw/contracts` |
+| `packages/ui` | `react-router` (or `@tanstack/react-router`) plus the shared runtime modules in-repo |
 | `packages/extensions/canvas-mcp` | `@modelcontextprotocol/sdk` |
 
 SQLite via `bun:sqlite` (built-in) to avoid a native dependency.

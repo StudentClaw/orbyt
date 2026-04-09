@@ -51,6 +51,16 @@ describe("Server integration", () => {
               appVersion: "0.1.0",
               platform: "test",
             }),
+            getServerConfig: async () => ({
+              appVersion: "0.1.0",
+              platform: "test",
+              protocolVersion: "rpc-v1",
+              capabilities: {
+                orchestration: true,
+                providerRuntime: true,
+                desktopBootstrap: true,
+              },
+            }),
             getSnapshot: async () => ({
               threads: [],
               turns: [],

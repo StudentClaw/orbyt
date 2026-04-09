@@ -2,7 +2,6 @@ import { Schema } from "@effect/schema"
 import {
   CreateThreadParams,
   InterruptTurnParams,
-  type DesktopBootstrap,
   OrchestrationSnapshot,
   PUSH_CHANNELS,
   RPC_METHODS,
@@ -10,6 +9,7 @@ import {
   RpcRequestEnvelope,
   RpcSuccessResponseEnvelope,
   SendTurnParams,
+  ServerConfigStreamEvent,
   ServerLifecycleEvent,
 } from "@student-claw/contracts"
 import type { WebSocket } from "ws"
@@ -70,6 +70,10 @@ export async function routeMessage(
         const bootstrap = await dependencies.orchestration.getDesktopBootstrap()
         return encodeSuccess(id, bootstrap)
       }
+      case RPC_METHODS.SERVER_GET_CONFIG: {
+        const config = await dependencies.orchestration.getServerConfig()
+        return encodeSuccess(id, config)
+      }
       case RPC_METHODS.SERVER_SUBSCRIBE_LIFECYCLE: {
         dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.SERVER_LIFECYCLE)
         if (dependencies.readiness.isReady()) {
@@ -78,11 +82,27 @@ export async function routeMessage(
             ws,
             PUSH_CHANNELS.SERVER_LIFECYCLE,
             Schema.encodeSync(ServerLifecycleEvent)({
-              type: "server.ready",
-              bootstrap,
+              type: "welcome",
+              payload: {
+                bootstrap,
+                connectedAt: new Date().toISOString(),
+              },
             }),
           )
         }
+        return encodeSuccess(id, { subscribed: true })
+      }
+      case RPC_METHODS.SERVER_SUBSCRIBE_CONFIG: {
+        dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.SERVER_CONFIG)
+        const config = await dependencies.orchestration.getServerConfig()
+        await dependencies.pushBus.publishTo(
+          ws,
+          PUSH_CHANNELS.SERVER_CONFIG,
+          Schema.encodeSync(ServerConfigStreamEvent)({
+            type: "snapshot",
+            config,
+          }),
+        )
         return encodeSuccess(id, { subscribed: true })
       }
       case RPC_METHODS.ORCHESTRATION_SUBSCRIBE_DOMAIN: {

@@ -11,7 +11,9 @@ export type CommandId = Schema.Schema.Type<typeof CommandId>
 
 export const RPC_METHODS = {
   SERVER_GET_BOOTSTRAP: "server.getBootstrap",
+  SERVER_GET_CONFIG: "server.getConfig",
   SERVER_SUBSCRIBE_LIFECYCLE: "server.subscribeLifecycle",
+  SERVER_SUBSCRIBE_CONFIG: "server.subscribeConfig",
   ORCHESTRATION_GET_SNAPSHOT: "orchestration.getSnapshot",
   ORCHESTRATION_CREATE_THREAD: "orchestration.createThread",
   ORCHESTRATION_SEND_TURN: "orchestration.sendTurn",
@@ -22,14 +24,40 @@ export const RPC_METHODS = {
 
 export const PUSH_CHANNELS = {
   SERVER_LIFECYCLE: "server.lifecycle",
+  SERVER_CONFIG: "server.config",
   ORCHESTRATION_DOMAIN: "orchestration.domain",
   PROVIDER_RUNTIME: "provider.runtime",
 } as const
 
-export const ServerLifecycleEvent = Schema.Struct({
-  type: Schema.Literal("server.ready"),
-  bootstrap: DesktopBootstrap,
+export const ServerCapabilities = Schema.Struct({
+  orchestration: Schema.Boolean,
+  providerRuntime: Schema.Boolean,
+  desktopBootstrap: Schema.Boolean,
 })
+
+export const ServerConfig = Schema.Struct({
+  appVersion: Schema.String,
+  platform: Schema.String,
+  protocolVersion: Schema.String,
+  capabilities: ServerCapabilities,
+})
+
+export const ServerLifecycleWelcomePayload = Schema.Struct({
+  bootstrap: DesktopBootstrap,
+  connectedAt: Schema.String,
+})
+
+export const ServerLifecycleEvent = Schema.Struct({
+  type: Schema.Literal("welcome"),
+  payload: ServerLifecycleWelcomePayload,
+})
+
+export const ServerConfigStreamEvent = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("snapshot"),
+    config: ServerConfig,
+  }),
+)
 
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
@@ -132,6 +160,10 @@ export const OrchestrationDomainEvent = Schema.Union(
 )
 
 export type ServerLifecycleEvent = Schema.Schema.Type<typeof ServerLifecycleEvent>
+export type ServerCapabilities = Schema.Schema.Type<typeof ServerCapabilities>
+export type ServerConfig = Schema.Schema.Type<typeof ServerConfig>
+export type ServerLifecycleWelcomePayload = Schema.Schema.Type<typeof ServerLifecycleWelcomePayload>
+export type ServerConfigStreamEvent = Schema.Schema.Type<typeof ServerConfigStreamEvent>
 export type OrchestrationThread = Schema.Schema.Type<typeof OrchestrationThread>
 export type OrchestrationTurn = Schema.Schema.Type<typeof OrchestrationTurn>
 export type OrchestrationSnapshot = Schema.Schema.Type<typeof OrchestrationSnapshot>

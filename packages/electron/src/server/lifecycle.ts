@@ -5,7 +5,8 @@ import { RPC_METHODS, type DesktopBootstrap } from "@student-claw/contracts"
 export interface ServerProcess {
   readonly port: number
   readonly bootstrap: DesktopBootstrap
-  readonly process: ChildProcess
+  readonly process: ChildProcess | null
+  readonly owned: boolean
   readonly kill: () => void
 }
 
@@ -117,6 +118,17 @@ export async function spawnServer(): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
   const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.student-claw/data.db`
 
+  const existingBootstrap = await healthCheck(port)
+  if (existingBootstrap) {
+    return {
+      port,
+      bootstrap: existingBootstrap,
+      process: null,
+      owned: false,
+      kill: () => undefined,
+    }
+  }
+
   const serverPath = new URL("../../../server/src/index.ts", import.meta.url).pathname
 
   const child = spawn("bun", ["run", serverPath], {
@@ -148,6 +160,7 @@ export async function spawnServer(): Promise<ServerProcess> {
         port,
         bootstrap,
         process: child,
+        owned: true,
         kill: () => {
           child.kill("SIGTERM")
         },

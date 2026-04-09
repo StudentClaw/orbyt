@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite"
 import * as migration001 from "./001-initial.js"
+import * as migration002 from "./002-orchestration-runtime.js"
 
-const migrations = [migration001]
+const migrations = [migration001, migration002]
 
 export function runMigrations(db: Database): void {
   db.run(`

@@ -1,8 +1,6 @@
 import { Context, Layer, Effect } from "effect"
 import { WebSocketServer as WsServer } from "ws"
 import type { WebSocket } from "ws"
-import { Schema } from "@effect/schema"
-import { PUSH_CHANNELS, ServerLifecycleEvent } from "@student-claw/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 import { OrchestrationService } from "../orchestration/OrchestrationService.js"
 import { ServerReadiness } from "../runtime/ServerReadiness.js"
@@ -31,18 +29,6 @@ export const WebSocketServerLive = Layer.effect(
 
     wss.on("connection", (ws) => {
       pushBus.registerClient(ws)
-
-      void readiness.awaitReady().then(async () => {
-        const bootstrap = await orchestration.getDesktopBootstrap()
-        await pushBus.publishTo(
-          ws,
-          PUSH_CHANNELS.SERVER_LIFECYCLE,
-          Schema.encodeSync(ServerLifecycleEvent)({
-            type: "server.ready",
-            bootstrap,
-          }),
-        )
-      })
 
       ws.on("message", async (data) => {
         const raw = data.toString()
