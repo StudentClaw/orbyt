@@ -1,4 +1,6 @@
 import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { dirname, join } from "node:path"
 import { Context, Layer, Effect } from "effect"
 import { type AppConfig, defaultConfig } from "./defaults.js"
 
@@ -13,6 +15,21 @@ type CodexBinaryPathResolverInput = {
   readonly hasPath?: (path: string) => boolean
 }
 
+function resolveLocalCodexBin(hasPath: (p: string) => boolean): string | undefined {
+  // Walk up from this module's directory looking for node_modules/.bin/codex.
+  // Works in both dev (src/) and built (dist/) layouts, and handles bun workspace
+  // hoisting where the binary lands at the workspace root's node_modules.
+  let dir = dirname(fileURLToPath(import.meta.url))
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, "node_modules", ".bin", "codex")
+    if (hasPath(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return undefined
+}
+
 export function resolveCodexBinaryPath(
   input: CodexBinaryPathResolverInput = {},
 ): string {
@@ -25,11 +42,15 @@ export function resolveCodexBinaryPath(
     return configuredPath
   }
 
-  const fallbackCandidates = platform === "darwin"
+  const platformCandidates = platform === "darwin"
     ? ["/Applications/Codex.app/Contents/Resources/codex"]
     : []
 
-  return fallbackCandidates.find((candidate) => hasPath(candidate)) ?? defaultConfig.codexBinaryPath
+  return (
+    platformCandidates.find((candidate) => hasPath(candidate))
+    ?? resolveLocalCodexBin(hasPath)
+    ?? defaultConfig.codexBinaryPath
+  )
 }
 
 export const ConfigServiceLive = Layer.effect(
