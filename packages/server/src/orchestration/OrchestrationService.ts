@@ -11,14 +11,17 @@ import {
   type ProviderRuntimeEvent,
   type CreateThreadResult,
   type SendTurnResult,
+  type RetryProviderInitializeResult,
+  type StartProviderAuthResult,
 } from "@student-claw/contracts"
-import { createId, sleepMs } from "@student-claw/shared-runtime"
+import { createId } from "@student-claw/shared-runtime"
+import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
+import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import { ConfigService } from "../config/ConfigService.js"
 import { Database } from "../db/Database.js"
 import { ServerReadiness } from "../runtime/ServerReadiness.js"
 import { PushBus } from "../ws/PushBus.js"
 import { RuntimeReceiptBus } from "./RuntimeReceiptBus.js"
-import { tokenizeStubResponse } from "./StubProvider.js"
 
 type ThreadRow = {
   id: string
@@ -52,6 +55,8 @@ export interface OrchestrationServiceShape {
   readonly createThread: (commandId: string, title?: string) => Promise<CreateThreadResult>
   readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
+  readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
+  readonly retryProviderInitialize: (commandId: string) => Promise<RetryProviderInitializeResult>
 }
 
 export class OrchestrationService extends Context.Tag("OrchestrationService")<
@@ -72,6 +77,8 @@ export const OrchestrationServiceLive = Layer.scoped(
     const pushBus = yield* PushBus
     const readiness = yield* ServerReadiness
     const receiptBus = yield* RuntimeReceiptBus
+    const runtimeStore = yield* ProviderRuntimeStore
+    const codexCli = yield* CodexCli
     const activeTurns = new Map<string, { interrupted: boolean }>()
     const workQueue: WorkItem[] = []
     let drainingQueue = false
@@ -172,6 +179,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         database.execute(
           `UPDATE provider_runtime_sessions
            SET status = 'interrupted',
+               auth_state = COALESCE(auth_state, 'unknown'),
                updated_at = ?
            WHERE status = 'streaming'`,
           [now],
@@ -202,11 +210,11 @@ export const OrchestrationServiceLive = Layer.scoped(
            WHERE id = ?`,
           [turnStatus, completedAt, threadId],
         )
-        database.execute(
-          `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-           VALUES (?, ?, ?, ?, ?)`,
-          [threadId, "stub", interrupted ? "interrupted" : "idle", null, completedAt],
-        )
+      })
+
+      await runtimeStore.upsertThreadSession(threadId, {
+        status: interrupted ? "interrupted" : "idle",
+        lastError: null,
       })
 
       const turn = readTurn(turnId)
@@ -217,8 +225,8 @@ export const OrchestrationServiceLive = Layer.scoped(
         recordReceipt(commandId, "interrupted", { turnId, threadId })
         await publishRuntimeEvent({
           type: "provider.turnInterrupted",
-          threadId: threadId as ProviderRuntimeEvent["threadId"],
-          turnId: turnId as ProviderRuntimeEvent["turnId"],
+          threadId: threadId as never,
+          turnId: turnId as never,
         })
         await publishDomainEvent({ type: "turn.interrupted", turn })
       } else {
@@ -226,8 +234,8 @@ export const OrchestrationServiceLive = Layer.scoped(
         recordReceipt(commandId, "completed", { turnId, threadId })
         await publishRuntimeEvent({
           type: "provider.turnCompleted",
-          threadId: threadId as ProviderRuntimeEvent["threadId"],
-          turnId: turnId as ProviderRuntimeEvent["turnId"],
+          threadId: threadId as never,
+          turnId: turnId as never,
           output,
         })
         await publishDomainEvent({ type: "turn.completed", turn })
@@ -237,75 +245,179 @@ export const OrchestrationServiceLive = Layer.scoped(
       activeTurns.delete(turnId)
     }
 
-    const processWork = async (work: WorkItem): Promise<void> => {
-      try {
-        const tokens = tokenizeStubResponse(work.content)
-        let output = ""
+    const requeueTurn = async (work: WorkItem): Promise<void> => {
+      const queued = await runtimeStore.listQueuedTurns()
+      if (queued.some((entry) => entry.turnId === work.turnId)) {
+        return
+      }
+      await runtimeStore.enqueueTurn(work.turnId, work.threadId, work.content)
+      workQueue.push(work)
+    }
 
-        for (const [index, token] of tokens.entries()) {
-          if (activeTurns.get(work.turnId)?.interrupted) {
-            await completeTurn(work.commandId, work.threadId, work.turnId, output, true)
-            return
-          }
+    const markTurnStreaming = async (work: WorkItem): Promise<void> => {
+      const now = new Date().toISOString()
+      database.transaction(() => {
+        database.execute(
+          `UPDATE orchestration_turns
+           SET status = 'streaming', updated_at = ?
+           WHERE id = ?`,
+          [now, work.turnId],
+        )
+        database.execute(
+          `UPDATE orchestration_threads
+           SET status = 'streaming', current_turn_id = ?, updated_at = ?
+           WHERE id = ?`,
+          [work.turnId, now, work.threadId],
+        )
+      })
+      await runtimeStore.upsertThreadSession(work.threadId, {
+        status: "streaming",
+        lastError: null,
+      })
+    }
 
-          await sleepMs(45)
-          output += token
+    const failTurn = async (
+      work: WorkItem,
+      error: ProviderRuntimeFailure | Error,
+      allowRetry: boolean,
+    ): Promise<void> => {
+      const message = error.message || "Unknown orchestration error"
+      const retryable = error instanceof ProviderRuntimeFailure ? error.retryable : false
+      const now = new Date().toISOString()
 
-          database.execute(
-            `UPDATE orchestration_turns
-             SET output_text = ?, updated_at = ?
-             WHERE id = ?`,
-            [output, new Date().toISOString(), work.turnId],
-          )
-
-          await publishRuntimeEvent({
-            type: "provider.token",
-            threadId: work.threadId as ProviderRuntimeEvent["threadId"],
-            turnId: work.turnId as ProviderRuntimeEvent["turnId"],
-            token,
-            index,
-          })
-
-          const turn = readTurn(work.turnId)
-          if (turn) {
-            appendEvent("turn.updated", { turn }, {
-              threadId: work.threadId,
-              turnId: work.turnId,
-              commandId: work.commandId,
-            })
-            await publishDomainEvent({ type: "turn.updated", turn })
-          }
-        }
-
-        await completeTurn(work.commandId, work.threadId, work.turnId, output, false)
-      } catch (error) {
-        const now = new Date().toISOString()
+      if (allowRetry && retryable) {
         database.transaction(() => {
           database.execute(
             `UPDATE orchestration_turns
-             SET status = 'interrupted', completed_at = ?, updated_at = ?
+             SET status = 'pending', updated_at = ?
              WHERE id = ?`,
-            [now, now, work.turnId],
+            [now, work.turnId],
           )
           database.execute(
             `UPDATE orchestration_threads
-             SET status = 'interrupted', current_turn_id = NULL, updated_at = ?
+             SET status = 'idle', current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
-            [now, work.threadId],
-          )
-          database.execute(
-            `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            [
-              work.threadId,
-              "stub",
-              "interrupted",
-              error instanceof Error ? error.message : "Unknown orchestration error",
-              now,
-            ],
+            [work.turnId, now, work.threadId],
           )
         })
-        activeTurns.delete(work.turnId)
+        await runtimeStore.upsertThreadSession(work.threadId, {
+          status: "offline",
+          lastError: message,
+        })
+        await requeueTurn(work)
+        return
+      }
+
+      database.transaction(() => {
+        database.execute(
+          `UPDATE orchestration_turns
+           SET status = 'interrupted', completed_at = ?, updated_at = ?
+           WHERE id = ?`,
+          [now, now, work.turnId],
+        )
+        database.execute(
+          `UPDATE orchestration_threads
+           SET status = 'interrupted', current_turn_id = NULL, updated_at = ?
+           WHERE id = ?`,
+          [now, work.threadId],
+        )
+      })
+      await runtimeStore.upsertThreadSession(work.threadId, {
+        status: "interrupted",
+        lastError: message,
+      })
+      activeTurns.delete(work.turnId)
+    }
+
+    const processWork = async (work: WorkItem): Promise<void> => {
+      try {
+        const runtimeState = await runtimeStore.getState()
+        if (runtimeState.status === "auth_required") {
+          await failTurn(
+            work,
+            new ProviderRuntimeFailure(
+              "codex_auth_required",
+              "Codex CLI is not authenticated. Start auth and retry.",
+              false,
+            ),
+            false,
+          )
+          return
+        }
+
+        await runtimeStore.dequeueTurn(work.turnId)
+        await markTurnStreaming(work)
+        await publishRuntimeEvent({
+          type: "provider.turnStarted",
+          threadId: work.threadId as never,
+          turnId: work.turnId as never,
+        })
+
+        await codexCli.streamTurn({
+          localThreadId: work.threadId,
+          localTurnId: work.turnId,
+          content: work.content,
+          onToken: async (token, index) => {
+            if (activeTurns.get(work.turnId)?.interrupted) {
+              const interrupted = await codexCli.interruptTurn(work.threadId, work.turnId)
+              if (!interrupted) {
+                await completeTurn(work.commandId, work.threadId, work.turnId, readTurn(work.turnId)?.output ?? "", true)
+              }
+              return
+            }
+
+            const current = readTurn(work.turnId)
+            const output = `${current?.output ?? ""}${token}`
+
+            database.execute(
+              `UPDATE orchestration_turns
+               SET output_text = ?, updated_at = ?
+               WHERE id = ?`,
+              [output, new Date().toISOString(), work.turnId],
+            )
+
+            await publishRuntimeEvent({
+              type: "provider.token",
+              threadId: work.threadId as never,
+              turnId: work.turnId as never,
+              token,
+              index,
+            })
+
+            const turn = readTurn(work.turnId)
+            if (turn) {
+              appendEvent("turn.updated", { turn }, {
+                threadId: work.threadId,
+                turnId: work.turnId,
+                commandId: work.commandId,
+              })
+              await publishDomainEvent({ type: "turn.updated", turn })
+            }
+          },
+          onCompleted: async () => {
+            const output = readTurn(work.turnId)?.output ?? ""
+            await completeTurn(work.commandId, work.threadId, work.turnId, output, false)
+          },
+          onInterrupted: async () => {
+            const output = readTurn(work.turnId)?.output ?? ""
+            await completeTurn(work.commandId, work.threadId, work.turnId, output, true)
+          },
+          onError: async (error) => {
+            await failTurn(work, error, true)
+          },
+        })
+      } catch (error) {
+        await failTurn(
+          work,
+          error instanceof ProviderRuntimeFailure
+            ? error
+            : new ProviderRuntimeFailure(
+                "codex_turn_failed",
+                error instanceof Error ? error.message : "Unknown orchestration error",
+                true,
+              ),
+          true,
+        )
       }
     }
 
@@ -332,6 +444,18 @@ export const OrchestrationServiceLive = Layer.scoped(
     }
 
     reconcileStaleStreamingState()
+    void runtimeStore.listQueuedTurns().then((persistedQueuedTurns) => {
+      workQueue.push(...persistedQueuedTurns.map((entry) => ({
+        commandId: `queued_${entry.turnId}`,
+        threadId: entry.threadId,
+        turnId: entry.turnId,
+        content: entry.content,
+      })))
+      void runtimeStore.refreshQueuedCount()
+      void codexCli.initialize().then(() => {
+        void drainQueue()
+      }).catch(() => undefined)
+    })
 
     return {
       getDesktopBootstrap: async () => ({
@@ -374,13 +498,12 @@ export const OrchestrationServiceLive = Layer.scoped(
           startedAt: row.started_at,
           completedAt: row.completed_at,
         }))
-        const provider = database.get<{ status: OrchestrationSnapshot["providerStatus"] }>(
-          `SELECT status FROM provider_runtime_sessions ORDER BY updated_at DESC LIMIT 1`,
-        )
+        const providerRuntime = await runtimeStore.getState()
         return {
           threads,
           turns,
-          providerStatus: provider?.status ?? "offline",
+          providerStatus: providerRuntime.status,
+          providerRuntime,
           ready: readiness.isReady(),
           lastSequence: pushBus.getLastSequence(),
         }
@@ -403,9 +526,11 @@ export const OrchestrationServiceLive = Layer.scoped(
             [thread.id, thread.title, thread.status, thread.currentTurnId, thread.createdAt, now],
           )
           database.execute(
-            `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            [thread.id, "stub", "idle", null, now],
+            `INSERT OR REPLACE INTO provider_runtime_sessions (
+               thread_id, provider, status, last_error, updated_at,
+               provider_thread_id, auth_state, runtime_payload
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [thread.id, "codex", "idle", null, now, null, "unknown", null],
           )
         })
 
@@ -421,6 +546,11 @@ export const OrchestrationServiceLive = Layer.scoped(
           throw new Error(`Thread not found: ${threadId}`)
         }
 
+        const runtimeState = await runtimeStore.getState()
+        if (runtimeState.authState === "auth_required" || runtimeState.status === "auth_required") {
+          throw new Error("Codex CLI is not authenticated. Start auth and retry.")
+        }
+
         const turnId = createId("turn")
         const now = new Date().toISOString()
         const turn: OrchestrationTurn = {
@@ -428,7 +558,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           threadId: threadId as OrchestrationTurn["threadId"],
           input: content,
           output: "",
-          status: "streaming",
+          status: "pending",
           startedAt: now,
           completedAt: null,
         }
@@ -445,25 +575,20 @@ export const OrchestrationServiceLive = Layer.scoped(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
-            ["streaming", turn.id, now, threadId],
-          )
-          database.execute(
-            `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            [threadId, "stub", "streaming", null, now],
+            ["idle", turn.id, now, threadId],
           )
           recordReceipt(commandId, "pending", { threadId, turnId: turn.id })
         })
 
         activeTurns.set(turn.id, { interrupted: false })
+        await runtimeStore.enqueueTurn(turn.id, threadId, content)
+        await runtimeStore.upsertThreadSession(threadId, {
+          status: runtimeState.status,
+          authState: runtimeState.authState,
+        })
 
         appendEvent("turn.started", { turn }, { threadId, turnId: turn.id, commandId })
         await publishDomainEvent({ type: "turn.started", turn })
-        await publishRuntimeEvent({
-          type: "provider.turnStarted",
-          threadId: threadId as ProviderRuntimeEvent["threadId"],
-          turnId: turn.id as ProviderRuntimeEvent["turnId"],
-        })
         workQueue.push({ commandId, threadId, turnId: turn.id, content })
         void drainQueue()
         return { turnId: turn.id }
@@ -489,9 +614,25 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
 
         activeTurns.set(thread.currentTurnId, { interrupted: true })
+        await codexCli.interruptTurn(threadId, thread.currentTurnId).catch(() => false)
         recordReceipt(commandId, "completed", { interrupted: true, turnId: thread.currentTurnId })
         await receiptBus.resolve(commandId, { interrupted: true, turnId: thread.currentTurnId })
         return { interrupted: true }
+      },
+      startProviderAuth: async (commandId) => {
+        const started = await codexCli.startAuth()
+        recordReceipt(commandId, started ? "completed" : "failed", { started })
+        await receiptBus.resolve(commandId, { started })
+        return { started }
+      },
+      retryProviderInitialize: async (commandId) => {
+        const started = await codexCli.retryInitialize()
+        if (started) {
+          void drainQueue()
+        }
+        recordReceipt(commandId, started ? "completed" : "failed", { started })
+        await receiptBus.resolve(commandId, { started })
+        return { started }
       },
     }
   }),

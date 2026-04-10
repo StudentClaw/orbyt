@@ -1,10 +1,10 @@
-import { Tray, Menu, app, nativeImage, type BrowserWindow } from "electron"
+import { Tray, Menu, app, type BrowserWindow } from "electron"
+import { createTrayIcon } from "./tray-icon.js"
 
 let tray: Tray | null = null
 
 export function createTray(mainWindow: BrowserWindow): void {
-  // Create a simple 16x16 placeholder icon
-  const icon = nativeImage.createEmpty()
+  const icon = createTrayIcon()
 
   tray = new Tray(icon)
   tray.setToolTip("Student Claw")

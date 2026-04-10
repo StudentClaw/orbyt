@@ -11,7 +11,9 @@ import {
   type CreateThreadResult,
   type DesktopBootstrap,
   type InterruptTurnResult,
+  type RetryProviderInitializeResult,
   type SendTurnResult,
+  type StartProviderAuthResult,
 } from "@student-claw/contracts"
 import { WsTransport } from "./wsTransport"
 
@@ -48,6 +50,8 @@ export interface WsRpcClient {
     ) => () => void
   }
   readonly provider: {
+    readonly startAuth: () => Promise<StartProviderAuthResult>
+    readonly retryInitialize: () => Promise<RetryProviderInitializeResult>
     readonly onRuntimeEvent: (
       listener: (event: ProviderRuntimeEvent, sequence: number) => void,
       options?: StreamSubscriptionOptions,
@@ -107,6 +111,10 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
         ),
     },
     provider: {
+      startAuth: async () =>
+        transport.request<StartProviderAuthResult>(RPC_METHODS.PROVIDER_START_AUTH, {}),
+      retryInitialize: async () =>
+        transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
       onRuntimeEvent: (listener, options) =>
         transport.subscribe(
           PUSH_CHANNELS.PROVIDER_RUNTIME,

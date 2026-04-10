@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react"
-import { type OrchestrationThread } from "@student-claw/contracts"
+import {
+  type OrchestrationSnapshot,
+  type OrchestrationThread,
+  type ProviderRuntimeEvent,
+} from "@student-claw/contracts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -21,6 +25,79 @@ export function resolveCurrentThread(
   return snapshot.threads.find((entry) => entry.id === threadId) ?? snapshot.threads.at(-1) ?? null
 }
 
+function formatProviderStatus(status: OrchestrationSnapshot["providerStatus"]): string {
+  return status.replace(/_/g, " ")
+}
+
+export function resolveProviderGuidance(snapshot: OrchestrationSnapshot | null): {
+  readonly title: string
+  readonly detail: string | null
+  readonly showRetry: boolean
+  readonly showAuth: boolean
+} | null {
+  if (!snapshot) {
+    return null
+  }
+
+  const { providerRuntime } = snapshot
+  const errorMessage = providerRuntime.lastError?.message ?? null
+
+  if (providerRuntime.authState === "auth_required" || providerRuntime.status === "auth_required") {
+    return {
+      title: "Codex login required",
+      detail: errorMessage ?? "Finish the Codex login flow, then retry the runtime.",
+      showRetry: false,
+      showAuth: true,
+    }
+  }
+
+  if (providerRuntime.status === "degraded") {
+    return {
+      title: "Codex runtime degraded",
+      detail: errorMessage ?? "The runtime hit an internal error. Retry initialization to reconnect it.",
+      showRetry: true,
+      showAuth: false,
+    }
+  }
+
+  if (providerRuntime.status === "offline") {
+    return {
+      title: "Codex runtime offline",
+      detail: errorMessage ?? "The runtime is not connected yet. Retry initialization to start it again.",
+      showRetry: true,
+      showAuth: false,
+    }
+  }
+
+  if (providerRuntime.status === "rate_limited") {
+    return {
+      title: "Codex rate limited",
+      detail: errorMessage ?? "Codex reported a rate limit. Retrying may help after a short wait.",
+      showRetry: true,
+      showAuth: false,
+    }
+  }
+
+  return null
+}
+
+export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
+  switch (event.type) {
+    case "provider.stateChanged":
+      return event.state.lastError
+        ? `State changed to ${formatProviderStatus(event.state.status)}: ${event.state.lastError.code}`
+        : `State changed to ${formatProviderStatus(event.state.status)}`
+    case "provider.turnStarted":
+      return `Turn started: ${event.turnId}`
+    case "provider.token":
+      return `Token ${event.index + 1}: ${event.token}`
+    case "provider.turnCompleted":
+      return `Turn completed: ${event.turnId}`
+    case "provider.turnInterrupted":
+      return `Turn interrupted: ${event.turnId}`
+  }
+}
+
 export function ChatPage() {
   const bootstrap = useRuntimeBootstrap()
   const connectionStatus = useRuntimeConnectionStatus()
@@ -29,6 +106,7 @@ export function ChatPage() {
   const actions = useOrchestrationActions()
   const [input, setInput] = useState("")
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [recoveryAction, setRecoveryAction] = useState<"retry" | "auth" | null>(null)
 
   const currentThread = useMemo<OrchestrationThread | null>(() => {
     return resolveCurrentThread(snapshot, threadId)
@@ -41,8 +119,10 @@ export function ChatPage() {
     return snapshot.turns.find((entry) => entry.id === currentThread.currentTurnId) ?? null
   }, [currentThread, snapshot])
 
+  const providerGuidance = useMemo(() => resolveProviderGuidance(snapshot), [snapshot])
+
   const handleCreateThread = async () => {
-    const nextThreadId = await actions.createThread("Stub orchestration demo")
+    const nextThreadId = await actions.createThread("Codex orchestration demo")
     setThreadId(nextThreadId)
   }
 
@@ -53,7 +133,7 @@ export function ChatPage() {
 
     let targetThreadId = threadId
     if (!targetThreadId) {
-      targetThreadId = await actions.createThread("Stub orchestration demo")
+      targetThreadId = await actions.createThread("Codex orchestration demo")
       setThreadId(targetThreadId)
     }
 
@@ -70,15 +150,35 @@ export function ChatPage() {
     await actions.interruptTurn(activeThreadId)
   }
 
+  const handleRetryProviderInitialize = async () => {
+    setRecoveryAction("retry")
+    try {
+      await actions.retryProviderInitialize()
+    } finally {
+      setRecoveryAction(null)
+    }
+  }
+
+  const handleStartProviderAuth = async () => {
+    setRecoveryAction("auth")
+    try {
+      await actions.startProviderAuth()
+    } finally {
+      setRecoveryAction(null)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Chat</h1>
         <p className="text-muted-foreground">
-          Proof slice for the new orchestration runtime.
+          Codex-backed proof slice for the orchestration runtime.
         </p>
         <p className="text-sm text-muted-foreground">
-          {connectionStatus.phase} {bootstrap ? `· ${bootstrap.wsUrl}` : ""}
+          {connectionStatus.phase}
+          {snapshot ? ` · provider ${formatProviderStatus(snapshot.providerStatus)}` : ""}
+          {bootstrap ? ` · ${bootstrap.wsUrl}` : ""}
         </p>
       </div>
 
@@ -103,7 +203,7 @@ export function ChatPage() {
               {currentThread ? `${currentThread.title} · ${currentThread.status}` : "No thread yet"}
             </p>
             <div className="mt-4 min-h-40 whitespace-pre-wrap text-sm">
-              {currentTurn?.output || "Send a turn to watch the stub provider stream tokens here."}
+              {currentTurn?.output || providerGuidance?.detail || "Send a turn to watch Codex stream tokens here."}
             </div>
           </div>
 
@@ -111,11 +211,15 @@ export function ChatPage() {
             <Input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask the stub provider to prove the runtime works"
+              placeholder="Ask Codex to prove the runtime works"
             />
             <Button
               onClick={() => void handleSend()}
-              disabled={!input.trim() || connectionStatus.phase !== "connected"}
+              disabled={
+                !input.trim()
+                || connectionStatus.phase !== "connected"
+                || snapshot?.providerRuntime.authState === "auth_required"
+              }
             >
               Send
             </Button>
@@ -123,6 +227,35 @@ export function ChatPage() {
         </section>
 
         <aside className="space-y-4 rounded-xl border p-4">
+          {providerGuidance ? (
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm font-medium">{providerGuidance.title}</p>
+              {providerGuidance.detail ? (
+                <p className="mt-1 text-sm text-muted-foreground">{providerGuidance.detail}</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {providerGuidance.showRetry ? (
+                  <Button
+                    onClick={() => void handleRetryProviderInitialize()}
+                    variant="outline"
+                    disabled={recoveryAction !== null}
+                  >
+                    {recoveryAction === "retry" ? "Retrying..." : "Retry runtime"}
+                  </Button>
+                ) : null}
+                {providerGuidance.showAuth ? (
+                  <Button
+                    onClick={() => void handleStartProviderAuth()}
+                    variant="secondary"
+                    disabled={recoveryAction !== null}
+                  >
+                    {recoveryAction === "auth" ? "Opening..." : "Connect Codex"}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div>
             <p className="text-sm font-medium">Snapshot</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -137,7 +270,7 @@ export function ChatPage() {
             <div className="mt-2 space-y-2">
               {providerEvents.length > 0 ? providerEvents.map((event, index) => (
                 <div key={`${event.type}-${index}`} className="rounded-md border px-3 py-2 text-sm">
-                  {event.type}
+                  {formatProviderEventLabel(event)}
                 </div>
               )) : (
                 <p className="text-sm text-muted-foreground">No provider events yet.</p>

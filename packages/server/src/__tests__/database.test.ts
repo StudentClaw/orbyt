@@ -37,6 +37,8 @@ describe("Database migrations", () => {
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("orchestration_turns")
     expect(tables).toContain("provider_runtime_sessions")
+    expect(tables).toContain("provider_runtime_state")
+    expect(tables).toContain("queued_provider_turns")
 
     db.close()
   })
@@ -49,7 +51,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(2)
+    expect(version?.version).toBe(3)
 
     db.close()
   })
@@ -61,8 +63,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(2)
-    expect(rows.map((row) => row.version)).toEqual([1, 2])
+    expect(rows.length).toBe(3)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -97,9 +99,20 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(2)
+    expect(version?.version).toBe(3)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
+    expect(tables).toContain("provider_runtime_state")
+    expect(tables).toContain("queued_provider_turns")
+
+    const runtimeSessionColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(provider_runtime_sessions)")
+      .all()
+      .map((column) => column.name)
+
+    expect(runtimeSessionColumns).toContain("provider_thread_id")
+    expect(runtimeSessionColumns).toContain("auth_state")
+    expect(runtimeSessionColumns).toContain("runtime_payload")
 
     db.close()
   })

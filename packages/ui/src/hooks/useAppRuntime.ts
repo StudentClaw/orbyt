@@ -41,6 +41,8 @@ export function useOrchestrationActions() {
       createThread: (title?: string) => createOrchestrationThread(client, title),
       sendTurn: (threadId: string, content: string) => sendOrchestrationTurn(client, threadId, content),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(client, threadId),
+      startProviderAuth: () => client.provider.startAuth(),
+      retryProviderInitialize: () => client.provider.retryInitialize(),
     }
   }, [])
 }

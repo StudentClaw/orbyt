@@ -41,12 +41,22 @@ function makeDependencies() {
         threads: [],
         turns: [],
         providerStatus: "idle" as const,
+        providerRuntime: {
+          adapter: "codex" as const,
+          status: "idle" as const,
+          authState: "authenticated" as const,
+          lastError: null,
+          queuedTurnCount: 0,
+          lastUpdatedAt: "2026-04-09T12:00:00.000Z",
+        },
         ready: true,
         lastSequence: 1,
       }),
       createThread: async () => ({ threadId }),
       sendTurn: async () => ({ turnId }),
       interruptTurn: async () => ({ interrupted: true }),
+      startProviderAuth: async () => ({ started: true }),
+      retryProviderInitialize: async () => ({ started: true }),
     },
   }
 }
