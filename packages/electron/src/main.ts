@@ -45,7 +45,7 @@ app.whenReady()
     })
   })
   .catch((error) => {
-    console.error("Failed to start Electron app:", error)
+    process.stderr.write(`Failed to start Electron app: ${String(error)}\n`)
     app.quit()
   })
 

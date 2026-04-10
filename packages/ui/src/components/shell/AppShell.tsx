@@ -1,10 +1,12 @@
 import { useRef, useCallback, useEffect } from "react"
-import { Outlet, useRouterState } from "@tanstack/react-router"
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import {
   useChatUiActions,
+  useIsOnboardingComplete,
   useRuntimeChatPanelOpen,
   useRuntimeChatPanelWidth,
 } from "@/hooks/useAppRuntime"
+import { useNativeNotification } from "@/hooks/useNativeNotification"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { ChatContainer } from "@/components/chat/ChatContainer"
 import { AppSidebar } from "./AppSidebar"
@@ -18,10 +20,22 @@ export function AppShell() {
   const chatPanelOpen = useRuntimeChatPanelOpen()
   const chatPanelWidth = useRuntimeChatPanelWidth()
   const { setPanelWidth } = useChatUiActions()
+  const onboardingComplete = useIsOnboardingComplete()
+  const navigate = useNavigate()
+  const pathname = routerState.location.pathname
+
+  useNativeNotification()
+
+  // Onboarding guard disabled until backend is ready
+  // useEffect(() => {
+  //   if (!onboardingComplete && pathname !== "/onboarding") {
+  //     navigate({ to: "/onboarding" })
+  //   }
+  // }, [onboardingComplete, pathname, navigate])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const chatPanelRef = useRef<HTMLDivElement>(null)
-  const showPanel = chatPanelOpen && routerState.location.pathname !== "/chat"
+  const showPanel = chatPanelOpen && pathname !== "/chat"
 
   useEffect(() => {
     if (showPanel && chatPanelRef.current) {

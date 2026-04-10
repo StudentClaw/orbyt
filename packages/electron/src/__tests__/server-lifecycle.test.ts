@@ -5,6 +5,7 @@ import { healthCheck, spawnServer } from "../server/lifecycle.js"
 class FakeWebSocket extends EventEmitter {
   constructor(
     readonly url: string,
+    readonly protocols: string[],
     private readonly respond: (socket: FakeWebSocket, payload: string) => void,
   ) {
     super()
@@ -33,16 +34,22 @@ describe("Server lifecycle", () => {
   test("healthCheck ignores lifecycle pushes until the bootstrap response arrives", async () => {
     const bootstrap = {
       wsUrl: "ws://127.0.0.1:8787",
+      wsAuthToken: "a".repeat(64),
       appVersion: "0.1.0",
       platform: "test",
     }
 
     const result = await healthCheck(
       8787,
-      (url) => new FakeWebSocket(url, (socket, payload) => {
+      { authToken: bootstrap.wsAuthToken },
+      (url, protocols) => new FakeWebSocket(url, protocols, (socket, payload) => {
         const request = JSON.parse(payload)
 
         expect(request.id).toBe("health-check")
+        expect(socket.protocols).toEqual([
+          "student-claw.v1",
+          `auth.${bootstrap.wsAuthToken}`,
+        ])
 
         queueMicrotask(() => {
           socket.emit("message", JSON.stringify({
@@ -67,5 +74,29 @@ describe("Server lifecycle", () => {
     )
 
     expect(result).toEqual(bootstrap)
+  })
+
+  test("healthCheck rejects bootstrap responses from a server with the wrong auth token", async () => {
+    const result = await healthCheck(
+      8787,
+      { authToken: "a".repeat(64) },
+      (url, protocols) => new FakeWebSocket(url, protocols, (socket) => {
+        queueMicrotask(() => {
+          socket.emit("message", JSON.stringify({
+            kind: "response",
+            id: "health-check",
+            ok: true,
+            result: {
+              wsUrl: "ws://127.0.0.1:8787",
+              wsAuthToken: "b".repeat(64),
+              appVersion: "0.1.0",
+              platform: "test",
+            },
+          }))
+        })
+      }) as never,
+    )
+
+    expect(result).toBeNull()
   })
 })

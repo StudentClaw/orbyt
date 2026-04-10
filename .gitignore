@@ -7,3 +7,6 @@ dist/
 .turbo/
 .vite/
 package-lock.json
+
+# Local reference repos
+references/

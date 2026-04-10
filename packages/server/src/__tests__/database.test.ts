@@ -49,7 +49,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(2)
+    expect(version?.version).toBe(3)
 
     db.close()
   })
@@ -61,8 +61,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(2)
-    expect(rows.map((row) => row.version)).toEqual([1, 2])
+    expect(rows.length).toBe(3)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -83,6 +83,15 @@ describe("Database migrations", () => {
         code TEXT NOT NULL
       );
     `)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS canvas_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        instance_url TEXT NOT NULL,
+        api_token TEXT NOT NULL,
+        user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `)
     db.run("INSERT INTO schema_version (version) VALUES (1)")
 
     runMigrations(db)
@@ -97,9 +106,81 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(2)
+    expect(version?.version).toBe(3)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
+    expect(tables).toContain("canvas_accounts")
+
+    const columns = db
+      .query<{ name: string }, []>("PRAGMA table_info(canvas_accounts)")
+      .all()
+      .map((column) => column.name)
+
+    expect(columns).toContain("credential_ref")
+    expect(columns).not.toContain("api_token")
+
+    db.close()
+  })
+
+  test("migrations replace plaintext canvas tokens with credential references", () => {
+    const db = new BunDatabase(":memory:")
+    runMigrations(db)
+
+    const columns = db
+      .query<{ name: string }, []>("PRAGMA table_info(canvas_accounts)")
+      .all()
+      .map((column) => column.name)
+
+    expect(columns).toContain("credential_ref")
+    expect(columns).not.toContain("api_token")
+
+    db.close()
+  })
+
+  test("migration preserves canvas account metadata while clearing plaintext credentials", () => {
+    const db = new BunDatabase(":memory:")
+    db.run(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      CREATE TABLE canvas_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        instance_url TEXT NOT NULL,
+        api_token TEXT NOT NULL,
+        user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(
+      "INSERT INTO canvas_accounts (id, instance_url, api_token, user_id, created_at) VALUES (?, ?, ?, ?, ?)",
+      [7, "https://canvas.example", "secret-token", "user-42", "2026-04-10T00:00:00.000Z"],
+    )
+    db.run("INSERT INTO schema_version (version) VALUES (2)")
+
+    runMigrations(db)
+
+    const row = db
+      .query<{
+        id: number
+        instance_url: string
+        credential_ref: string | null
+        user_id: string | null
+        created_at: string
+      }, []>(
+        "SELECT id, instance_url, credential_ref, user_id, created_at FROM canvas_accounts",
+      )
+      .get()
+
+    expect(row).toEqual({
+      id: 7,
+      instance_url: "https://canvas.example",
+      credential_ref: null,
+      user_id: "user-42",
+      created_at: "2026-04-10T00:00:00.000Z",
+    })
 
     db.close()
   })

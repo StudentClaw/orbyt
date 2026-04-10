@@ -48,6 +48,7 @@ describe("Server integration", () => {
           orchestration: {
             getDesktopBootstrap: async () => ({
               wsUrl: `ws://127.0.0.1:${port}`,
+              wsAuthToken: "a".repeat(64),
               appVersion: "0.1.0",
               platform: "test",
             }),
@@ -73,7 +74,7 @@ describe("Server integration", () => {
             interruptTurn: async () => ({ interrupted: true }),
           },
         })
-        ws.send(response)
+        ws.send(response.response)
       })
     })
 

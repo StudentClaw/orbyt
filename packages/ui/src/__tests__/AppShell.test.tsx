@@ -6,17 +6,21 @@ const shellMocks = vi.hoisted(() => ({
   chatPanelOpen: false,
   chatPanelWidth: 33,
   setPanelWidth: vi.fn(),
+  navigateFn: vi.fn(),
+  onboardingComplete: true,
 }))
 
 vi.mock("@tanstack/react-router", () => ({
   Outlet: () => <div>Outlet</div>,
   useRouterState: () => ({ location: { pathname: shellMocks.pathname } }),
+  useNavigate: () => shellMocks.navigateFn,
 }))
 
 vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeChatPanelOpen: () => shellMocks.chatPanelOpen,
   useRuntimeChatPanelWidth: () => shellMocks.chatPanelWidth,
   useChatUiActions: () => ({ setPanelWidth: shellMocks.setPanelWidth }),
+  useIsOnboardingComplete: () => shellMocks.onboardingComplete,
 }))
 
 vi.mock("../components/shell/AppSidebar", () => ({
@@ -27,6 +31,10 @@ vi.mock("../components/chat/ChatContainer", () => ({
   ChatContainer: ({ variant }: { variant: string }) => (
     <div data-testid="chat-container">{variant}</div>
   ),
+}))
+
+vi.mock("../hooks/useNativeNotification", () => ({
+  useNativeNotification: () => {},
 }))
 
 import { AppShell } from "../components/shell/AppShell"

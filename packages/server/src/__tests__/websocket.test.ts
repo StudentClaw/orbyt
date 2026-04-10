@@ -24,6 +24,7 @@ function makeDependencies() {
     orchestration: {
       getDesktopBootstrap: async () => ({
         wsUrl: "ws://127.0.0.1:8787",
+        wsAuthToken: "a".repeat(64),
         appVersion: "0.1.0",
         platform: "test",
       }),
@@ -54,12 +55,12 @@ function makeDependencies() {
 describe("Router", () => {
   test("server.getBootstrap returns a success response", async () => {
     const response = JSON.parse(
-      await routeMessage(JSON.stringify({
+      (await routeMessage(JSON.stringify({
         kind: "request",
         method: RPC_METHODS.SERVER_GET_BOOTSTRAP,
         id: "1",
         params: {},
-      }), mockWs, makeDependencies())
+      }), mockWs, makeDependencies())).response,
     )
     expect(response.kind).toBe("response")
     expect(response.ok).toBe(true)
@@ -68,12 +69,12 @@ describe("Router", () => {
 
   test("server.getConfig returns a success response", async () => {
     const response = JSON.parse(
-      await routeMessage(JSON.stringify({
+      (await routeMessage(JSON.stringify({
         kind: "request",
         method: RPC_METHODS.SERVER_GET_CONFIG,
         id: "2",
         params: {},
-      }), mockWs, makeDependencies())
+      }), mockWs, makeDependencies())).response,
     )
     expect(response.kind).toBe("response")
     expect(response.ok).toBe(true)
@@ -81,29 +82,36 @@ describe("Router", () => {
   })
 
   test("invalid JSON returns error response", async () => {
-    const response = JSON.parse(await routeMessage("not json", mockWs, makeDependencies()))
-    expect(response.kind).toBe("response")
-    expect(response.ok).toBe(false)
-    expect(response.error.code).toBe("parse_error")
+    const response = await routeMessage("not json", mockWs, makeDependencies())
+    const parsed = JSON.parse(response.response)
+    expect(response.close?.code).toBe(1007)
+    expect(parsed.kind).toBe("response")
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error.code).toBe("parse_error")
   })
 
   test("invalid request envelope returns error", async () => {
-    const response = JSON.parse(
-      await routeMessage(JSON.stringify({ method: "unknown", id: "1", params: {} }), mockWs, makeDependencies())
+    const response = await routeMessage(
+      JSON.stringify({ method: "unknown", id: "1", params: {} }),
+      mockWs,
+      makeDependencies(),
     )
-    expect(response.ok).toBe(false)
-    expect(response.error.code).toBe("invalid_request")
+    const parsed = JSON.parse(response.response)
+    expect(response.close?.code).toBe(1007)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error.code).toBe("invalid_request")
   })
 
   test("unimplemented method returns not-found error", async () => {
     const response = JSON.parse(
-      await routeMessage(JSON.stringify({
+      (await routeMessage(JSON.stringify({
         kind: "request",
         method: "unknown.method",
         id: "1",
         params: {},
-      }), mockWs, makeDependencies())
+      }), mockWs, makeDependencies())).response,
     )
+    expect(response.kind).toBe("response")
     expect(response.ok).toBe(false)
     expect(response.error.code).toBe("method_not_found")
   })

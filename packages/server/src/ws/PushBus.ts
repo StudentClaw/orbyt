@@ -7,6 +7,9 @@ type SubscribedClient = {
   readonly channels: Set<string>
 }
 
+/**
+ * Broadcast and per-client push helpers for server-side RPC streams.
+ */
 export interface PushBusService {
   readonly registerClient: (ws: WebSocket) => void
   readonly removeClient: (ws: WebSocket) => void
@@ -16,6 +19,9 @@ export interface PushBusService {
   readonly getLastSequence: () => number
 }
 
+/**
+ * Effect service tag for the in-memory push bus.
+ */
 export class PushBus extends Context.Tag("PushBus")<
   PushBus,
   PushBusService
@@ -37,6 +43,9 @@ function sendEnvelope(
   ))
 }
 
+/**
+ * Provides an in-memory fanout bus for server push channels.
+ */
 export const PushBusLive = Layer.effect(
   PushBus,
   Effect.sync(() => {
