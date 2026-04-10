@@ -118,6 +118,14 @@ export function applyOrchestrationDomainEvent(
           threads: [event.thread],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: {
+            adapter: "codex",
+            status: "idle",
+            authState: "unknown",
+            lastError: null,
+            queuedTurnCount: 0,
+            lastUpdatedAt: new Date(0).toISOString(),
+          },
           ready: true,
           lastSequence: sequence,
         }
@@ -148,10 +156,24 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     return
   }
 
+  if (event.type === "provider.stateChanged") {
+    const nextSnapshot: OrchestrationSnapshot = {
+      ...current,
+      providerStatus: event.state.status,
+      providerRuntime: event.state,
+    }
+    appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    return
+  }
+
   if (event.type === "provider.turnInterrupted") {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "interrupted",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "interrupted",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -161,6 +183,10 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "streaming",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "streaming",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -170,6 +196,10 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "idle",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "idle",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
   }

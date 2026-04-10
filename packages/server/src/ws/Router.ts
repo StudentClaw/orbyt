@@ -4,6 +4,7 @@ import {
   InterruptTurnParams,
   OrchestrationSnapshot,
   PUSH_CHANNELS,
+  RetryProviderInitializeParams,
   RPC_METHODS,
   RpcErrorResponseEnvelope,
   RpcRequestEnvelope,
@@ -11,6 +12,7 @@ import {
   SendTurnParams,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
+  StartProviderAuthParams,
 } from "@student-claw/contracts"
 import type { WebSocket } from "ws"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
@@ -112,6 +114,22 @@ export async function routeMessage(
       case RPC_METHODS.PROVIDER_SUBSCRIBE_RUNTIME: {
         dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.PROVIDER_RUNTIME)
         return encodeSuccess(id, { subscribed: true })
+      }
+      case RPC_METHODS.PROVIDER_START_AUTH: {
+        const decoded = Schema.decodeUnknownEither(StartProviderAuthParams)(params)
+        if (decoded._tag === "Left") {
+          return encodeError(id, "invalid_params", "startAuth params are invalid")
+        }
+        const result = await dependencies.orchestration.startProviderAuth(id)
+        return encodeSuccess(id, result)
+      }
+      case RPC_METHODS.PROVIDER_RETRY_INITIALIZE: {
+        const decoded = Schema.decodeUnknownEither(RetryProviderInitializeParams)(params)
+        if (decoded._tag === "Left") {
+          return encodeError(id, "invalid_params", "retryInitialize params are invalid")
+        }
+        const result = await dependencies.orchestration.retryProviderInitialize(id)
+        return encodeSuccess(id, result)
       }
       case RPC_METHODS.ORCHESTRATION_GET_SNAPSHOT: {
         const snapshot = await dependencies.orchestration.getSnapshot()

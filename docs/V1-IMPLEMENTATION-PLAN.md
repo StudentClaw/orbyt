@@ -7,8 +7,8 @@ The app is no longer a bare scaffold. Phase 0 foundation work is substantially i
 - **Monorepo:** Bun workspaces with `contracts`, `shared-runtime`, `shared` shim, `server`, `ui`, `electron`, and `extensions/template-mcp`
 - **Contracts (`@student-claw/contracts`):** typed desktop bootstrap, RPC envelopes, lifecycle/config streams, orchestration RPC methods, push channels, snapshots, and domain/runtime event contracts
 - **Shared runtime (`@student-claw/shared-runtime`):** small cross-package runtime helpers, with `@student-claw/shared` acting as a compatibility shim
-- **Server (`@student-claw/server`):** typed RPC WebSocket transport, SQLite migrations, readiness gate, push bus, orchestration runtime, append-only event log, projection tables, durable receipts, and a deterministic stub provider
-- **UI (`@student-claw/ui`):** React app shell, route structure, T3code-style shared runtime cache, replayable transport state, and a `/chat` proof slice wired to the stub orchestration runtime
+- **Server (`@student-claw/server`):** typed RPC WebSocket transport, SQLite migrations, readiness gate, push bus, orchestration runtime, append-only event log, projection tables, durable receipts, a Codex-backed provider runtime path, and degraded/auth state persistence
+- **UI (`@student-claw/ui`):** React app shell, route structure, T3code-style shared runtime cache, replayable transport state, and a `/chat` proof slice wired to the orchestration runtime with provider state visibility
 - **Electron (`@student-claw/electron`):** BrowserWindow, preload bootstrap bridge, server lifecycle management, tray wiring, and startup logic that can attach to an already-running local server
 
 Automated verification currently passes with `bun install`, `bun run typecheck`, `bun run test`, and `bun run build`. A small set of manual Electron/UI smoke checks still remain.
@@ -23,7 +23,7 @@ Automated verification currently passes with `bun install`, `bun run typecheck`,
 ### Progress snapshot
 
 - **Phase 0 foundation:** largely complete
-- **Phase 1 chat/orchestration:** proof slice complete with a stub provider; real Codex-backed harness not started
+- **Phase 1 chat/orchestration:** backend Codex harness slice is implemented behind the existing orchestration contracts; live end-to-end validation is still in progress
 - **Phase 2+ product features:** not started on the production feature path
 
 ### In scope for v1
@@ -146,11 +146,27 @@ Everything else can be parallelized around this spine.
 
 **Goal:** Student can chat with the AI through the app. Messages flow: React --> WS --> Server --> Codex CLI --> stream back.
 
-**Status on 2026-04-09:** Partially started through the orchestration proof slice. The UI/runtime/server transport path exists, but it currently terminates in a deterministic stub provider rather than the real Codex harness.
+**Status on 2026-04-09:** Partially implemented. The orchestration transport path now includes a real Codex-backed backend slice with richer provider runtime state, auth/retry RPCs, durable queued turns, and Codex app-server lifecycle handling. The remaining work for this phase is live end-to-end stabilization, production chat UI, and the broader context/tooling surface described below.
 
 ### Person A: AI Harness Backend (Weeks 2-3)
 
-**Install:** `@openai/codex` (pin a known-good version)
+**Current implementation landed:**
+- `packages/contracts/src/protocol/orchestration.ts` now exposes richer `providerRuntime` snapshot state, detailed provider statuses (`initializing`, `auth_required`, `degraded`, `rate_limited`), and `provider.startAuth` / `provider.retryInitialize` RPCs while preserving the existing orchestration method names
+- `packages/server/src/ai/CodexCli.ts` manages the Codex app-server subprocess, initialization, `account/read`, `thread/start`, `turn/start`, token delta ingestion, interrupt forwarding, and degraded/auth state transitions
+- `packages/server/src/ai/ProviderRuntimeStore.ts` owns persisted provider runtime state, per-thread provider session records, and durable queued turns
+- `packages/server/src/db/migrations/003-provider-runtime-state.ts` adds `provider_runtime_state`, `queued_provider_turns`, and richer provider session columns
+- `packages/server/src/orchestration/OrchestrationService.ts` now delegates provider execution to the Codex service, keeps orchestration events/projections intact, queues pending turns, and surfaces provider runtime state through snapshots/events
+- `packages/server/src/ws/Router.ts` and the UI runtime client now support provider auth/retry control actions without changing the top-level orchestration flow
+
+**Automated verification landed:**
+- `bun run typecheck`
+- `bun run test`
+- `bun run build`
+
+**Live validation status:**
+- Local Codex CLI presence and ChatGPT auth were confirmed during development
+- The backend protocol path was probed directly against `codex app-server` (`initialize`, `account/read`, `thread/start`, `turn/start`, token deltas, `turn/interrupt`)
+- The desktop `/chat` proof slice still requires live stabilization; current behavior can fall back to provider `degraded` on first send, so this implementation should be treated as “backend slice landed, live acceptance still in progress”
 
 **Build `packages/server/src/ai/`:**
 - `CodexCli.ts` — Effect Service: spawn Codex app-server subprocess, health monitoring, pre-warm on startup, graceful shutdown, degraded mode on failure with retry+backoff
@@ -164,9 +180,13 @@ Everything else can be parallelized around this spine.
 - `McpRegistry.ts` — Register MCP servers with Codex, aggregate tool schemas
 - `ToolCallRouter.ts` — Parse tool calls from Codex output, route through plugin gateway
 
-**Wire into WS Router:** Handle `chat.sendMessage`, `chat.interrupt` messages.
+**Still remaining inside Person A scope:**
+- Stabilize live `dev` runtime behavior so the first real turn streams in the Electron app instead of degrading
+- Finish the split-out services that are still conceptually planned but not yet extracted (`JsonRpcProtocol`, `ContextAssembler`, `BudgetManager`, `SoulIdentity`, `McpRegistry`, `ToolCallRouter`)
+- Create `soul/SOUL.md`
+- Expand provider/runtime tests beyond the current contract/router/store coverage into dedicated Codex lifecycle integration fixtures
 
-**Create `soul/SOUL.md`** with immutable core personality per `docs/features/01-ai-harness.md` Soul section.
+**Acceptance status:** Backend contracts, persistence, server wiring, and Codex protocol integration are implemented and passing automated verification. End-to-end desktop chat acceptance is not yet complete; use `docs/checklist/PHASE1-AI-HARNESS-BACKEND-CHECKLIST.md` as the source of truth for the remaining live verification steps and known failure modes.
 
 ### Person B: Chat UI (Weeks 2-3)
 

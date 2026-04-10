@@ -1,4 +1,6 @@
 import { Effect, Layer } from "effect"
+import { CodexCli, CodexCliLive } from "./ai/CodexCli.js"
+import { ProviderRuntimeStoreLive } from "./ai/ProviderRuntimeStore.js"
 import { ConfigService, ConfigServiceLive } from "./config/ConfigService.js"
 import { Database, DatabaseLive } from "./db/Database.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
@@ -15,7 +17,15 @@ const CoreLive = Layer.mergeAll(
   RuntimeReceiptBusLive,
 )
 
+const RuntimeStoreLive = ProviderRuntimeStoreLive.pipe(Layer.provideMerge(CoreLive))
+
+const ProviderLive = Layer.mergeAll(
+  RuntimeStoreLive,
+  CodexCliLive.pipe(Layer.provideMerge(CoreLive), Layer.provideMerge(RuntimeStoreLive)),
+)
+
 const OrchestrationLive = OrchestrationServiceLive.pipe(
+  Layer.provideMerge(ProviderLive),
   Layer.provideMerge(CoreLive),
 )
 
@@ -35,6 +45,7 @@ const program = Effect.gen(function* () {
   const db = yield* Database
   const readiness = yield* ServerReadiness
   yield* OrchestrationService
+  const codex = yield* CodexCli
   const ws = yield* WebSocketServerService
 
   readiness.markReady()
@@ -44,11 +55,15 @@ const program = Effect.gen(function* () {
 
   const shutdown = () => {
     console.log("\nShutting down...")
-    db.close()
-    ws.close().then(() => {
-      console.log("Server stopped.")
-      process.exit(0)
-    })
+    codex.shutdown()
+      .catch(() => undefined)
+      .finally(() => {
+        db.close()
+        ws.close().then(() => {
+          console.log("Server stopped.")
+          process.exit(0)
+        })
+      })
   }
 
   process.on("SIGINT", shutdown)

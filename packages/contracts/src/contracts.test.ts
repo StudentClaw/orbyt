@@ -3,6 +3,7 @@ import { Schema } from "@effect/schema"
 import {
   DesktopBootstrap,
   OrchestrationSnapshot,
+  ProviderRuntimeEvent,
   ServerConfig,
   ServerLifecycleEvent,
   RpcRequestEnvelope,
@@ -47,6 +48,14 @@ describe("@student-claw/contracts", () => {
       threads: [],
       turns: [],
       providerStatus: "idle",
+      providerRuntime: {
+        adapter: "codex",
+        status: "idle",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-09T12:00:00.000Z",
+      },
       ready: true,
       lastSequence: 0,
     })
@@ -55,5 +64,26 @@ describe("@student-claw/contracts", () => {
     expect(config.protocolVersion).toBe("rpc-v1")
     expect(lifecycle.payload.bootstrap.platform).toBe("darwin")
     expect(snapshot.ready).toBe(true)
+    expect(snapshot.providerRuntime.adapter).toBe("codex")
+  })
+
+  test("decodes provider runtime state-change events", () => {
+    const event = Schema.decodeUnknownSync(ProviderRuntimeEvent)({
+      type: "provider.stateChanged",
+      state: {
+        adapter: "codex",
+        status: "auth_required",
+        authState: "auth_required",
+        lastError: {
+          code: "codex_auth_required",
+          message: "Codex CLI is not authenticated.",
+        },
+        queuedTurnCount: 2,
+        lastUpdatedAt: "2026-04-09T12:05:00.000Z",
+      },
+    })
+
+    expect(event.type).toBe("provider.stateChanged")
+    expect(event.state.queuedTurnCount).toBe(2)
   })
 })

@@ -19,6 +19,8 @@ export const RPC_METHODS = {
   ORCHESTRATION_SEND_TURN: "orchestration.sendTurn",
   ORCHESTRATION_INTERRUPT_TURN: "orchestration.interruptTurn",
   ORCHESTRATION_SUBSCRIBE_DOMAIN: "orchestration.subscribeDomain",
+  PROVIDER_START_AUTH: "provider.startAuth",
+  PROVIDER_RETRY_INITIALIZE: "provider.retryInitialize",
   PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
 } as const
 
@@ -77,10 +79,43 @@ export const OrchestrationTurn = Schema.Struct({
   completedAt: Schema.NullOr(Schema.String),
 })
 
+export const ProviderRuntimeStatus = Schema.Literal(
+  "idle",
+  "streaming",
+  "interrupted",
+  "offline",
+  "initializing",
+  "auth_required",
+  "degraded",
+  "rate_limited",
+)
+
+export const ProviderAuthState = Schema.Literal(
+  "unknown",
+  "authenticated",
+  "auth_required",
+  "expired",
+)
+
+export const ProviderRuntimeError = Schema.Struct({
+  code: Schema.String,
+  message: Schema.String,
+})
+
+export const ProviderRuntimeState = Schema.Struct({
+  adapter: Schema.Literal("stub", "codex"),
+  status: ProviderRuntimeStatus,
+  authState: ProviderAuthState,
+  lastError: Schema.NullOr(ProviderRuntimeError),
+  queuedTurnCount: Schema.Number,
+  lastUpdatedAt: Schema.String,
+})
+
 export const OrchestrationSnapshot = Schema.Struct({
   threads: Schema.Array(OrchestrationThread),
   turns: Schema.Array(OrchestrationTurn),
-  providerStatus: Schema.Literal("idle", "streaming", "interrupted", "offline"),
+  providerStatus: ProviderRuntimeStatus,
+  providerRuntime: ProviderRuntimeState,
   ready: Schema.Boolean,
   lastSequence: Schema.Number,
 })
@@ -110,7 +145,23 @@ export const InterruptTurnResult = Schema.Struct({
   interrupted: Schema.Boolean,
 })
 
+export const StartProviderAuthParams = Schema.Struct({})
+
+export const StartProviderAuthResult = Schema.Struct({
+  started: Schema.Boolean,
+})
+
+export const RetryProviderInitializeParams = Schema.Struct({})
+
+export const RetryProviderInitializeResult = Schema.Struct({
+  started: Schema.Boolean,
+})
+
 export const ProviderRuntimeEvent = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("provider.stateChanged"),
+    state: ProviderRuntimeState,
+  }),
   Schema.Struct({
     type: Schema.Literal("provider.turnStarted"),
     threadId: ThreadId,
@@ -166,6 +217,10 @@ export type ServerLifecycleWelcomePayload = Schema.Schema.Type<typeof ServerLife
 export type ServerConfigStreamEvent = Schema.Schema.Type<typeof ServerConfigStreamEvent>
 export type OrchestrationThread = Schema.Schema.Type<typeof OrchestrationThread>
 export type OrchestrationTurn = Schema.Schema.Type<typeof OrchestrationTurn>
+export type ProviderRuntimeStatus = Schema.Schema.Type<typeof ProviderRuntimeStatus>
+export type ProviderAuthState = Schema.Schema.Type<typeof ProviderAuthState>
+export type ProviderRuntimeError = Schema.Schema.Type<typeof ProviderRuntimeError>
+export type ProviderRuntimeState = Schema.Schema.Type<typeof ProviderRuntimeState>
 export type OrchestrationSnapshot = Schema.Schema.Type<typeof OrchestrationSnapshot>
 export type CreateThreadParams = Schema.Schema.Type<typeof CreateThreadParams>
 export type CreateThreadResult = Schema.Schema.Type<typeof CreateThreadResult>
@@ -173,5 +228,9 @@ export type SendTurnParams = Schema.Schema.Type<typeof SendTurnParams>
 export type SendTurnResult = Schema.Schema.Type<typeof SendTurnResult>
 export type InterruptTurnParams = Schema.Schema.Type<typeof InterruptTurnParams>
 export type InterruptTurnResult = Schema.Schema.Type<typeof InterruptTurnResult>
+export type StartProviderAuthParams = Schema.Schema.Type<typeof StartProviderAuthParams>
+export type StartProviderAuthResult = Schema.Schema.Type<typeof StartProviderAuthResult>
+export type RetryProviderInitializeParams = Schema.Schema.Type<typeof RetryProviderInitializeParams>
+export type RetryProviderInitializeResult = Schema.Schema.Type<typeof RetryProviderInitializeResult>
 export type ProviderRuntimeEvent = Schema.Schema.Type<typeof ProviderRuntimeEvent>
 export type OrchestrationDomainEvent = Schema.Schema.Type<typeof OrchestrationDomainEvent>

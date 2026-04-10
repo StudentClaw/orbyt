@@ -1,6 +1,10 @@
 import { describe, test, expect, afterEach } from "bun:test"
 import { Effect } from "effect"
-import { ConfigService, ConfigServiceLive } from "../config/ConfigService.js"
+import {
+  ConfigService,
+  ConfigServiceLive,
+  resolveCodexBinaryPath,
+} from "../config/ConfigService.js"
 
 describe("ConfigService", () => {
   const originalEnv = { ...process.env }
@@ -26,6 +30,7 @@ describe("ConfigService", () => {
     process.env.PORT = "9000"
     process.env.DB_PATH = "/tmp/test.db"
     process.env.NODE_ENV = "production"
+    process.env.CODEX_BINARY_PATH = "/tmp/custom-codex"
 
     const config = await Effect.runPromise(
       Effect.provide(ConfigService, ConfigServiceLive)
@@ -33,6 +38,7 @@ describe("ConfigService", () => {
     expect(config.port).toBe(9000)
     expect(config.dbPath).toBe("/tmp/test.db")
     expect(config.isDev).toBe(false)
+    expect(config.codexBinaryPath).toBe("/tmp/custom-codex")
   })
 
   test("throws on invalid port", async () => {
@@ -47,5 +53,25 @@ describe("ConfigService", () => {
       threw = true
     }
     expect(threw).toBe(true)
+  })
+
+  test("prefers the installed codex desktop binary on macOS when present", () => {
+    const resolved = resolveCodexBinaryPath({
+      env: {},
+      platform: "darwin",
+      hasPath: (path) => path === "/Applications/Codex.app/Contents/Resources/codex",
+    })
+
+    expect(resolved).toBe("/Applications/Codex.app/Contents/Resources/codex")
+  })
+
+  test("falls back to plain codex when no explicit binary path is available", () => {
+    const resolved = resolveCodexBinaryPath({
+      env: {},
+      platform: "linux",
+      hasPath: () => false,
+    })
+
+    expect(resolved).toBe("codex")
   })
 })
