@@ -1,21 +1,60 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect, vi, beforeEach } from "vitest"
+import { render, screen } from "@testing-library/react"
 
-describe("AppShell components", () => {
-  test("page components are importable", async () => {
-    const { DashboardPage } = await import("../pages/DashboardPage")
-    const { ChatPage } = await import("../pages/ChatPage")
-    const { OnboardingPage } = await import("../pages/OnboardingPage")
-    const { SettingsPage } = await import("../pages/SettingsPage")
-    const { ActivityPage } = await import("../pages/ActivityPage")
-    expect(DashboardPage).toBeDefined()
-    expect(ChatPage).toBeDefined()
-    expect(OnboardingPage).toBeDefined()
-    expect(SettingsPage).toBeDefined()
-    expect(ActivityPage).toBeDefined()
+const shellMocks = vi.hoisted(() => ({
+  pathname: "/",
+  chatPanelOpen: false,
+  chatPanelWidth: 33,
+  setPanelWidth: vi.fn(),
+}))
+
+vi.mock("@tanstack/react-router", () => ({
+  Outlet: () => <div>Outlet</div>,
+  useRouterState: () => ({ location: { pathname: shellMocks.pathname } }),
+}))
+
+vi.mock("../hooks/useAppRuntime", () => ({
+  useRuntimeChatPanelOpen: () => shellMocks.chatPanelOpen,
+  useRuntimeChatPanelWidth: () => shellMocks.chatPanelWidth,
+  useChatUiActions: () => ({ setPanelWidth: shellMocks.setPanelWidth }),
+}))
+
+vi.mock("../components/shell/AppSidebar", () => ({
+  AppSidebar: () => <div>Sidebar</div>,
+}))
+
+vi.mock("../components/chat/ChatContainer", () => ({
+  ChatContainer: ({ variant }: { variant: string }) => (
+    <div data-testid="chat-container">{variant}</div>
+  ),
+}))
+
+import { AppShell } from "../components/shell/AppShell"
+
+describe("AppShell", () => {
+  beforeEach(() => {
+    shellMocks.pathname = "/"
+    shellMocks.chatPanelOpen = false
+    shellMocks.chatPanelWidth = 33
+    shellMocks.setPanelWidth.mockReset()
   })
 
-  test("ChatSheet is importable", async () => {
-    const { ChatSheet } = await import("../components/shell/ChatSheet")
-    expect(ChatSheet).toBeDefined()
+  test("renders the sidebar and outlet", () => {
+    render(<AppShell />)
+    expect(screen.getByText("Sidebar")).toBeDefined()
+    expect(screen.getByText("Outlet")).toBeDefined()
+  })
+
+  test("shows the side panel on non-chat routes when open", () => {
+    shellMocks.chatPanelOpen = true
+    render(<AppShell />)
+    expect(screen.getByTestId("chat-container").textContent).toBe("panel")
+  })
+
+  test("hides the side panel on /chat even when open", () => {
+    shellMocks.pathname = "/chat"
+    shellMocks.chatPanelOpen = true
+    render(<AppShell />)
+    expect(screen.queryByTestId("chat-container")).toBeNull()
   })
 })

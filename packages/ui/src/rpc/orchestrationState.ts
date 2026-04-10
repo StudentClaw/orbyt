@@ -18,6 +18,49 @@ const providerRuntimeEventsAtom = createAtom<ReadonlyArray<ProviderRuntimeEvent>
   [],
 )
 
+export interface ChatUiState {
+  readonly selectedThreadId: string | null
+  readonly chatPanelOpen: boolean
+  readonly chatPanelWidth: number
+}
+
+export const DEFAULT_CHAT_PANEL_WIDTH = 33
+
+const INITIAL_CHAT_UI_STATE: ChatUiState = {
+  selectedThreadId: null,
+  chatPanelOpen: false,
+  chatPanelWidth: DEFAULT_CHAT_PANEL_WIDTH,
+}
+
+const chatUiStateAtom = createAtom<ChatUiState>(
+  "chat-ui-state",
+  INITIAL_CHAT_UI_STATE,
+)
+
+function syncChatUiState(snapshot: OrchestrationSnapshot | null): void {
+  const current = appAtomRegistry.get(chatUiStateAtom)
+
+  if (!snapshot || snapshot.threads.length === 0) {
+    if (current.selectedThreadId === null) {
+      return
+    }
+    appAtomRegistry.set(chatUiStateAtom, {
+      ...current,
+      selectedThreadId: null,
+    })
+    return
+  }
+
+  if (current.selectedThreadId && snapshot.threads.some((entry) => entry.id === current.selectedThreadId)) {
+    return
+  }
+
+  appAtomRegistry.set(chatUiStateAtom, {
+    ...current,
+    selectedThreadId: snapshot.threads.at(-1)?.id ?? null,
+  })
+}
+
 function applyTurnEvent(
   current: OrchestrationSnapshot,
   turn: OrchestrationTurn,
@@ -55,6 +98,7 @@ export function getOrchestrationSnapshot(): OrchestrationSnapshot | null {
 
 export function setOrchestrationSnapshot(snapshot: OrchestrationSnapshot): void {
   appAtomRegistry.set(orchestrationSnapshotAtom, snapshot)
+  syncChatUiState(snapshot)
 }
 
 export function applyOrchestrationDomainEvent(
@@ -78,6 +122,7 @@ export function applyOrchestrationDomainEvent(
           lastSequence: sequence,
         }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    syncChatUiState(nextSnapshot)
     return
   }
 
@@ -89,6 +134,7 @@ export function applyOrchestrationDomainEvent(
     orchestrationSnapshotAtom,
     applyTurnEvent(current, event.turn, sequence),
   )
+  syncChatUiState(appAtomRegistry.get(orchestrationSnapshotAtom))
 }
 
 export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
@@ -200,7 +246,60 @@ export function useProviderRuntimeEvents(): ReadonlyArray<ProviderRuntimeEvent> 
   return useAtomValue(providerRuntimeEventsAtom)
 }
 
+export function getChatUiState(): ChatUiState {
+  return appAtomRegistry.get(chatUiStateAtom)
+}
+
+export function useChatUiState(): ChatUiState {
+  return useAtomValue(chatUiStateAtom)
+}
+
+export function useSelectedChatThreadId(): string | null {
+  return useAtomValue(chatUiStateAtom, (value) => value.selectedThreadId)
+}
+
+export function useChatPanelOpen(): boolean {
+  return useAtomValue(chatUiStateAtom, (value) => value.chatPanelOpen)
+}
+
+export function useChatPanelWidth(): number {
+  return useAtomValue(chatUiStateAtom, (value) => value.chatPanelWidth)
+}
+
+export function setSelectedChatThread(threadId: string | null): void {
+  const current = getChatUiState()
+  appAtomRegistry.set(chatUiStateAtom, {
+    ...current,
+    selectedThreadId: threadId,
+  })
+}
+
+export function openChatPanel(): void {
+  const current = getChatUiState()
+  appAtomRegistry.set(chatUiStateAtom, {
+    ...current,
+    chatPanelOpen: true,
+  })
+}
+
+export function closeChatPanel(): void {
+  const current = getChatUiState()
+  appAtomRegistry.set(chatUiStateAtom, {
+    ...current,
+    chatPanelOpen: false,
+  })
+}
+
+export function setChatPanelWidth(width: number): void {
+  const current = getChatUiState()
+  appAtomRegistry.set(chatUiStateAtom, {
+    ...current,
+    chatPanelWidth: width,
+  })
+}
+
 export function resetOrchestrationStateForTests(): void {
   appAtomRegistry.set(orchestrationSnapshotAtom, null)
   appAtomRegistry.set(providerRuntimeEventsAtom, [])
+  appAtomRegistry.set(chatUiStateAtom, INITIAL_CHAT_UI_STATE)
 }

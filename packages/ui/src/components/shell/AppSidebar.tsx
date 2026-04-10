@@ -2,13 +2,14 @@ import { Link, useRouterState } from "@tanstack/react-router"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuItem,
   SidebarMenuButton,
-  SidebarFooter,
+  SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { ChatSheet } from "./ChatSheet"
+import { ChatHistory } from "./ChatHistory"
 import { ConnectionStatus } from "./ConnectionStatus"
 
 const navItems = [
@@ -37,9 +38,8 @@ export function AppSidebar() {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <div className="mt-4 px-2">
-          <ChatSheet />
-        </div>
+        <SidebarSeparator />
+        <ChatHistory />
       </SidebarContent>
       <SidebarFooter className="p-4">
         <ConnectionStatus />

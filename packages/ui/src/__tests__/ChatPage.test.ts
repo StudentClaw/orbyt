@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { OrchestrationSnapshot } from "@student-claw/contracts"
-import { resolveCurrentThread } from "../pages/ChatPage"
+import { resolveCurrentThread } from "../hooks/chat-model"
 
 const baseSnapshot: OrchestrationSnapshot = {
   threads: [
