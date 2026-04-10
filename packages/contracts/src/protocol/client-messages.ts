@@ -1,4 +1,12 @@
 import { Schema } from "@effect/schema"
+import {
+  CanvasGetAnnouncementsParams,
+  CanvasGetCourseworkDetailParams,
+  CanvasGetCourseworkParams,
+  CanvasGetCoursesParams,
+  CanvasGetGradesParams,
+  CanvasSyncParams,
+} from "./canvas.js"
 
 export const ChatSendMessage = Schema.Struct({
   method: Schema.Literal("chat.sendMessage"),
@@ -18,15 +26,37 @@ export const ChatInterrupt = Schema.Struct({
 export const CanvasSync = Schema.Struct({
   method: Schema.Literal("canvas.sync"),
   id: Schema.String,
-  params: Schema.Struct({
-    courseId: Schema.optional(Schema.String),
-  }),
+  params: CanvasSyncParams,
 })
 
 export const CanvasGetCourses = Schema.Struct({
   method: Schema.Literal("canvas.getCourses"),
   id: Schema.String,
-  params: Schema.Struct({}),
+  params: CanvasGetCoursesParams,
+})
+
+export const CanvasGetCoursework = Schema.Struct({
+  method: Schema.Literal("canvas.getCoursework"),
+  id: Schema.String,
+  params: CanvasGetCourseworkParams,
+})
+
+export const CanvasGetCourseworkDetail = Schema.Struct({
+  method: Schema.Literal("canvas.getCourseworkDetail"),
+  id: Schema.String,
+  params: CanvasGetCourseworkDetailParams,
+})
+
+export const CanvasGetGrades = Schema.Struct({
+  method: Schema.Literal("canvas.getGrades"),
+  id: Schema.String,
+  params: CanvasGetGradesParams,
+})
+
+export const CanvasGetAnnouncements = Schema.Struct({
+  method: Schema.Literal("canvas.getAnnouncements"),
+  id: Schema.String,
+  params: CanvasGetAnnouncementsParams,
 })
 
 export const DashboardRefresh = Schema.Struct({
@@ -46,6 +76,10 @@ export const ClientMessage = Schema.Union(
   ChatInterrupt,
   CanvasSync,
   CanvasGetCourses,
+  CanvasGetCoursework,
+  CanvasGetCourseworkDetail,
+  CanvasGetGrades,
+  CanvasGetAnnouncements,
   DashboardRefresh,
   HealthPing,
 )
