@@ -14,8 +14,8 @@ describe("AppShell components", () => {
     expect(ActivityPage).toBeDefined()
   })
 
-  test("ChatSheet is importable", async () => {
-    const { ChatSheet } = await import("../components/shell/ChatSheet")
-    expect(ChatSheet).toBeDefined()
+  test("ChatHistory is importable", async () => {
+    const { ChatHistory } = await import("../components/shell/ChatHistory")
+    expect(ChatHistory).toBeDefined()
   })
 })
