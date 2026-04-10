@@ -55,6 +55,14 @@ const snapshot: OrchestrationSnapshot = {
   ],
   turns: [],
   providerStatus: "idle",
+  providerRuntime: {
+    adapter: "codex",
+    status: "idle",
+    authState: "authenticated",
+    lastError: null,
+    queuedTurnCount: 0,
+    lastUpdatedAt: "2026-04-09T00:02:00.000Z",
+  },
   ready: true,
   lastSequence: 2,
 }

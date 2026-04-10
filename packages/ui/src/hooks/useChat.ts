@@ -37,7 +37,13 @@ export function useChat() {
 
   const sendMessage = useCallback(async (content: string) => {
     const trimmed = content.trim()
-    if (!trimmed || connectionStatus.phase !== "connected") {
+    if (
+      !trimmed
+      || connectionStatus.phase !== "connected"
+      || chatState.status === "auth-expired"
+      || chatState.status === "rate-limited"
+      || chatState.status === "error"
+    ) {
       return
     }
 
@@ -48,7 +54,7 @@ export function useChat() {
     }
 
     await actions.sendTurn(threadId, trimmed)
-  }, [actions, connectionStatus.phase, currentThread?.id, selectedThreadId, uiActions])
+  }, [actions, chatState.status, connectionStatus.phase, currentThread?.id, selectedThreadId, uiActions])
 
   const interrupt = useCallback(async () => {
     const activeThreadId = currentThread?.id ?? selectedThreadId
@@ -59,6 +65,14 @@ export function useChat() {
     await actions.interruptTurn(activeThreadId)
   }, [actions, currentThread?.id, selectedThreadId])
 
+  const retry = useCallback(async () => {
+    await actions.retryProviderInitialize()
+  }, [actions])
+
+  const reauth = useCallback(async () => {
+    await actions.startProviderAuth()
+  }, [actions])
+
   return {
     messages,
     status: chatState.status,
@@ -66,6 +80,8 @@ export function useChat() {
     currentThread,
     sendMessage,
     interrupt,
+    retry,
+    reauth,
     connectionState: connectionStatus.phase,
   }
 }

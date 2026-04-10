@@ -13,7 +13,17 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
-  const { messages, status, error, currentThread, sendMessage, interrupt, connectionState } = useChat()
+  const {
+    messages,
+    status,
+    error,
+    currentThread,
+    sendMessage,
+    interrupt,
+    retry,
+    reauth,
+    connectionState,
+  } = useChat()
   const { closePanel } = useChatUiActions()
 
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -73,7 +83,12 @@ export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
 
       {status !== "idle" && status !== "streaming" && status !== "interrupted" && (
         <div className="px-4 pt-3">
-          <ErrorBanner status={status} error={error} />
+          <ErrorBanner
+            status={status}
+            error={error}
+            onRetry={retry ? () => void retry() : undefined}
+            onReauth={reauth ? () => void reauth() : undefined}
+          />
         </div>
       )}
 
