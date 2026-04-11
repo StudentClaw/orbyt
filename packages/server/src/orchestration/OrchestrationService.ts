@@ -84,7 +84,7 @@ type OrchestrationRuntimeState = {
   drainingQueue: boolean
 }
 
-type OrchestrationRuntimeDeps = {
+export type OrchestrationRuntimeDeps = {
   readonly config: AppConfig
   readonly database: DatabaseService
   readonly pushBus: PushBusService
@@ -118,7 +118,7 @@ export class OrchestrationService extends Context.Tag("OrchestrationService")<
   OrchestrationServiceShape
 >() {}
 
-function createRuntimeState(): OrchestrationRuntimeState {
+export function createRuntimeState(): OrchestrationRuntimeState {
   return {
     activeTurns: new Map(),
     workQueue: [],
@@ -966,7 +966,7 @@ async function interruptTurn(
   return { interrupted: true }
 }
 
-function createOrchestrationService(deps: OrchestrationRuntimeDeps): OrchestrationServiceShape {
+export function createOrchestrationService(deps: OrchestrationRuntimeDeps): OrchestrationServiceShape {
   reconcileStaleStreamingState(deps.database)
   refreshFilesystemWorkspaceAvailability(deps.database)
 
@@ -1379,6 +1379,7 @@ export const OrchestrationServiceLive = Layer.scoped(
     return {
       getDesktopBootstrap: async () => ({
         wsUrl: `ws://127.0.0.1:${config.port}`,
+        wsAuthToken: config.wsAuthToken,
         appVersion: "0.1.0",
         platform: process.platform,
       }),
@@ -1393,32 +1394,26 @@ export const OrchestrationServiceLive = Layer.scoped(
         },
       }),
       getSnapshot: async () => {
+        refreshFilesystemWorkspaceAvailability(database)
+
+        const workspaces = database.query<WorkspaceRow>(
+          `SELECT id, kind, name, root_path, availability, created_at, updated_at
+           FROM chat_workspaces
+           ORDER BY created_at ASC`,
+        ).map(mapWorkspaceRow)
         const threads = database.query<ThreadRow>(
-          `SELECT id, title, status, current_turn_id, created_at
+          `SELECT id, workspace_id, title, status, current_turn_id, created_at
            FROM orchestration_threads
            ORDER BY created_at ASC`,
-        ).map((row) => ({
-          id: row.id as OrchestrationThread["id"],
-          title: row.title,
-          status: row.status,
-          createdAt: row.created_at,
-          currentTurnId: row.current_turn_id as OrchestrationThread["currentTurnId"],
-        }))
+        ).map(mapThreadRow)
         const turns = database.query<TurnRow>(
           `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
            FROM orchestration_turns
            ORDER BY started_at ASC`,
-        ).map((row) => ({
-          id: row.id as OrchestrationTurn["id"],
-          threadId: row.thread_id as OrchestrationTurn["threadId"],
-          input: row.input_text,
-          output: row.output_text,
-          status: row.status,
-          startedAt: row.started_at,
-          completedAt: row.completed_at,
-        }))
+        ).map(mapTurnRow)
         const providerRuntime = await runtimeStore.getState()
         return {
+          workspaces,
           threads,
           turns,
           providerStatus: providerRuntime.status,
@@ -1427,22 +1422,149 @@ export const OrchestrationServiceLive = Layer.scoped(
           lastSequence: pushBus.getLastSequence(),
         }
       },
-      createThread: async (commandId, title) => {
-        const id = createId("thread")
-        const now = new Date().toISOString()
-        const thread: OrchestrationThread = {
-          id: id as OrchestrationThread["id"],
-          title: title?.trim() || `Session ${new Date().toLocaleTimeString()}`,
-          status: "idle",
-          createdAt: now,
-          currentTurnId: null,
+      createWorkspace: async (commandId, rootPath) => {
+        const normalized = normalizeRootPath(rootPath)
+        if (!isDirectoryPath(normalized)) {
+          throw new Error(`Workspace folder not found: ${normalized}`)
         }
+
+        const existing = readFilesystemWorkspaceByRootPath(database, normalized)
+        if (existing) {
+          if (existing.kind === "filesystem" && existing.availability !== "ready") {
+            updateWorkspaceAvailability(database, existing.id, "ready")
+            const refreshed = readWorkspace(database, existing.id)
+            if (refreshed) {
+              appendEvent("workspace.updated", { workspace: refreshed }, { commandId })
+              await publishDomainEvent({ type: "workspace.updated", workspace: refreshed })
+            }
+          }
+          recordReceipt(commandId, "completed", { workspaceId: existing.id })
+          await receiptBus.resolve(commandId, { workspaceId: existing.id })
+          return { workspaceId: existing.id }
+        }
+
+        const workspace = buildFilesystemWorkspace(normalized)
+        database.execute(
+          `INSERT INTO chat_workspaces (id, kind, name, root_path, availability, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            workspace.id,
+            workspace.kind,
+            workspace.name,
+            workspace.rootPath,
+            workspace.availability,
+            workspace.createdAt,
+            workspace.updatedAt,
+          ],
+        )
+
+        appendEvent("workspace.created", { workspace }, { commandId })
+        recordReceipt(commandId, "completed", { workspaceId: workspace.id })
+        await publishDomainEvent({ type: "workspace.created", workspace })
+        await receiptBus.resolve(commandId, { workspaceId: workspace.id })
+        return { workspaceId: workspace.id }
+      },
+      relinkWorkspace: async (commandId, workspaceId, rawRootPath) => {
+        const workspace = readWorkspace(database, workspaceId)
+        if (!workspace) {
+          throw new Error(`Workspace not found: ${workspaceId}`)
+        }
+        if (workspace.kind !== "filesystem") {
+          throw new Error("Only filesystem workspaces can be relinked")
+        }
+
+        const normalized = normalizeRootPath(rawRootPath)
+        if (!isDirectoryPath(normalized)) {
+          throw new Error(`Workspace folder not found: ${normalized}`)
+        }
+
+        const duplicate = readFilesystemWorkspaceByRootPath(database, normalized)
+        if (duplicate && duplicate.id !== workspace.id) {
+          throw new Error(`Workspace already exists for folder: ${normalized}`)
+        }
+
+        const now = new Date().toISOString()
+        database.execute(
+          `UPDATE chat_workspaces
+           SET name = ?, root_path = ?, availability = ?, updated_at = ?
+           WHERE id = ?`,
+          [deriveWorkspaceName(normalized), normalized, "ready", now, workspaceId],
+        )
+
+        const updatedWorkspace = readWorkspace(database, workspaceId)
+        if (!updatedWorkspace) {
+          throw new Error(`Workspace not found after relink: ${workspaceId}`)
+        }
+
+        appendEvent("workspace.updated", { workspace: updatedWorkspace }, { commandId })
+        recordReceipt(commandId, "completed", { workspaceId: updatedWorkspace.id })
+        await publishDomainEvent({ type: "workspace.updated", workspace: updatedWorkspace })
+        await receiptBus.resolve(commandId, { workspaceId: updatedWorkspace.id })
+        return { workspaceId: updatedWorkspace.id }
+      },
+      deleteWorkspace: async (commandId, workspaceId) => {
+        const workspace = readWorkspace(database, workspaceId)
+        if (!workspace) {
+          throw new Error(`Workspace not found: ${workspaceId}`)
+        }
+
+        const threadRows = readWorkspaceThreadRows(database, workspaceId)
+        const deletedThreadIds = threadRows.map((row) => row.id as OrchestrationThread["id"])
+        const deletedThreadIdSet = new Set(threadRows.map((row) => row.id))
+        const activeTurnIds = threadRows.flatMap((row) => row.current_turn_id ? [row.current_turn_id] : [])
+
+        for (const turnId of activeTurnIds) {
+          activeTurns.delete(turnId)
+        }
+
+        const remainingQueue = workQueue.filter((item) => !deletedThreadIdSet.has(item.threadId))
+        workQueue.splice(0, workQueue.length, ...remainingQueue)
+
+        database.transaction(() => {
+          if (deletedThreadIds.length > 0) {
+            const placeholders = deletedThreadIds.map(() => "?").join(", ")
+            database.execute(
+              `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
+              deletedThreadIds,
+            )
+            database.execute(
+              `DELETE FROM provider_runtime_sessions WHERE thread_id IN (${placeholders})`,
+              deletedThreadIds,
+            )
+            database.execute(
+              `DELETE FROM orchestration_threads WHERE id IN (${placeholders})`,
+              deletedThreadIds,
+            )
+          }
+
+          database.execute(`DELETE FROM chat_workspaces WHERE id = ?`, [workspaceId])
+        })
+
+        appendEvent("workspace.deleted", { workspaceId, deletedThreadIds }, { commandId })
+        recordReceipt(commandId, "completed", { deleted: true, workspaceId, deletedThreadIds })
+        await publishDomainEvent({
+          type: "workspace.deleted",
+          workspaceId: workspace.id,
+          deletedThreadIds,
+        })
+        await receiptBus.resolve(commandId, { deleted: true })
+        return { deleted: true }
+      },
+      createThread: async (commandId, workspaceId, title) => {
+        const workspace = readWorkspace(database, workspaceId)
+        if (!workspace) {
+          throw new Error(`Workspace not found: ${workspaceId}`)
+        }
+        assertWorkspaceAcceptsChat(workspace)
+
+        const thread = buildThread(workspaceId, title)
+        const now = new Date().toISOString()
 
         database.transaction(() => {
           database.execute(
-            `INSERT INTO orchestration_threads (id, title, status, current_turn_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [thread.id, thread.title, thread.status, thread.currentTurnId, thread.createdAt, now],
+            `INSERT INTO orchestration_threads (id, workspace_id, title, status, current_turn_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [thread.id, thread.workspaceId, thread.title, thread.status, thread.currentTurnId, thread.createdAt, now],
           )
           database.execute(
             `INSERT OR REPLACE INTO provider_runtime_sessions (
@@ -1454,7 +1576,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         })
 
         appendEvent("thread.created", { thread }, { threadId: thread.id, commandId })
-        recordReceipt(commandId, "completed", { threadId: thread.id })
+        recordReceipt(commandId, "completed", { threadId: thread.id, workspaceId })
         await publishDomainEvent({ type: "thread.created", thread })
         await receiptBus.resolve(commandId, { threadId: thread.id })
         return { threadId: thread.id }

@@ -4,9 +4,19 @@ import type {
   OrchestrationThread,
   OrchestrationTurn,
   ProviderRuntimeEvent,
+  ProviderRuntimeState,
 } from "@student-claw/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
+
+const FALLBACK_PROVIDER_RUNTIME: ProviderRuntimeState = {
+  adapter: "stub",
+  status: "idle",
+  authState: "unknown",
+  lastError: null,
+  queuedTurnCount: 0,
+  lastUpdatedAt: new Date().toISOString(),
+}
 
 const orchestrationSnapshotAtom = createAtom<OrchestrationSnapshot | null>(
   "orchestration-snapshot",
@@ -141,6 +151,7 @@ function applyDomainEvent(
             threads: [],
             turns: [],
             providerStatus: "idle",
+            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
             ready: true,
             lastSequence: sequence,
           }
@@ -151,6 +162,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
@@ -169,6 +181,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
@@ -192,6 +205,7 @@ function applyDomainEvent(
             threads: [event.thread],
             turns: [],
             providerStatus: "idle",
+            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
             ready: true,
             lastSequence: sequence,
           }
@@ -205,6 +219,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
