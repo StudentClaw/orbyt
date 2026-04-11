@@ -75,6 +75,7 @@ describe("serverState", () => {
       payload: {
         bootstrap: {
           wsUrl: "ws://127.0.0.1:8787",
+          wsAuthToken: "a".repeat(64),
           appVersion: "0.1.0",
           platform: "test",
         },

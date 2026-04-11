@@ -8,6 +8,7 @@ class MockWebSocket {
   static instances: MockWebSocket[] = []
 
   readonly url: string
+  readonly protocols: string[]
   readyState = MockWebSocket.CONNECTING
   onopen: (() => void) | null = null
   onmessage: ((event: { data: string }) => void) | null = null
@@ -15,8 +16,9 @@ class MockWebSocket {
   onerror: (() => void) | null = null
   readonly sent: string[] = []
 
-  constructor(url: string) {
+  constructor(url: string, protocols: string[]) {
     this.url = url
+    this.protocols = protocols
     MockWebSocket.instances.push(this)
   }
 
@@ -52,9 +54,16 @@ describe("WsTransport", () => {
   })
 
   test("replays the current connection state to late listeners", async () => {
-    const transport = new WsTransport("ws://localhost:3020")
+    const transport = new WsTransport({
+      wsUrl: "ws://localhost:3020",
+      wsAuthToken: "a".repeat(64),
+    })
     const connectPromise = transport.connect()
     const socket = MockWebSocket.instances[0]!
+    expect(socket.protocols).toEqual([
+      "student-claw.v1",
+      `auth.${"a".repeat(64)}`,
+    ])
     socket.open()
     await connectPromise
 
@@ -69,7 +78,10 @@ describe("WsTransport", () => {
   })
 
   test("re-subscribes stream listeners after reconnect", async () => {
-    const transport = new WsTransport("ws://localhost:3020")
+    const transport = new WsTransport({
+      wsUrl: "ws://localhost:3020",
+      wsAuthToken: "a".repeat(64),
+    })
     const onResubscribe = vi.fn()
 
     const unsubscribe = transport.subscribe(

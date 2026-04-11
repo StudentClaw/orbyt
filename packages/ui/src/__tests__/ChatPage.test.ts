@@ -7,9 +7,21 @@ import {
 } from "../hooks/chat-model"
 
 const baseSnapshot: OrchestrationSnapshot = {
+  workspaces: [
+    {
+      id: "workspace-1" as never,
+      kind: "filesystem",
+      name: "Repo",
+      rootPath: "/repo",
+      availability: "ready",
+      createdAt: "2026-04-09T00:00:00.000Z",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+    },
+  ],
   threads: [
     {
       id: "thread-1" as never,
+      workspaceId: "workspace-1" as never,
       title: "Old thread",
       status: "completed",
       createdAt: "2026-04-09T00:00:00.000Z",
@@ -17,6 +29,7 @@ const baseSnapshot: OrchestrationSnapshot = {
     },
     {
       id: "thread-2" as never,
+      workspaceId: "workspace-1" as never,
       title: "Streaming thread",
       status: "streaming",
       createdAt: "2026-04-09T00:01:00.000Z",
@@ -48,8 +61,8 @@ const baseSnapshot: OrchestrationSnapshot = {
 }
 
 describe("ChatPage thread selection", () => {
-  test("falls back to the latest thread when no thread is selected", () => {
-    expect(resolveCurrentThread(baseSnapshot, null)?.id).toBe("thread-2")
+  test("returns null when no thread is selected", () => {
+    expect(resolveCurrentThread(baseSnapshot, null)).toBeNull()
   })
 
   test("uses the explicitly selected thread when available", () => {

@@ -1,9 +1,20 @@
 import { Schema } from "@effect/schema"
-import { RpcServerEnvelope, type RpcPushEnvelope } from "@student-claw/contracts"
+import {
+  WS_PROTOCOL,
+  RpcServerEnvelope,
+  type DesktopBootstrap,
+  type RpcPushEnvelope,
+} from "@student-claw/contracts"
 import { createId } from "@student-claw/shared-runtime"
 
+/**
+ * Connection lifecycle phases emitted by the authenticated WebSocket transport.
+ */
 export type TransportConnectionPhase = "connecting" | "connected" | "disconnected" | "reconnecting"
 
+/**
+ * Snapshot of the current authenticated WebSocket transport state.
+ */
 export interface TransportStatus {
   readonly phase: TransportConnectionPhase
   readonly wsUrl: string
@@ -26,10 +37,17 @@ type ChannelSubscription = {
 
 const INITIAL_RECONNECT_DELAY_MS = 500
 const MAX_RECONNECT_DELAY_MS = 30_000
+const AUTH_PROTOCOL_PREFIX = "auth."
 
+type TransportBootstrap = Pick<DesktopBootstrap, "wsUrl" | "wsAuthToken">
+
+/**
+ * Authenticated WebSocket transport that handles reconnects, requests, and stream subscriptions.
+ */
 export class WsTransport {
   private ws: WebSocket | null = null
   private url: string
+  private authToken: string
   private status: TransportStatus
   private readonly stateListeners = new Set<TransportStateListener>()
   private readonly inflightRequests = new Map<string, {
@@ -42,23 +60,34 @@ export class WsTransport {
   private shouldReconnect = true
   private connectPromise: Promise<void> | null = null
   private hasConnectedOnce = false
+  private bootstrapRefresher: (() => Promise<TransportBootstrap | null>) | null = null
 
-  constructor(url = "ws://127.0.0.1:8787") {
-    this.url = url
+  constructor(bootstrap: TransportBootstrap) {
+    this.url = bootstrap.wsUrl
+    this.authToken = bootstrap.wsAuthToken
     this.status = {
       phase: "disconnected",
-      wsUrl: url,
+      wsUrl: bootstrap.wsUrl,
       lastSequence: 0,
       lastError: null,
     }
   }
 
-  setUrl(url: string): void {
-    this.url = url
+  setBootstrap(bootstrap: TransportBootstrap): void {
+    this.url = bootstrap.wsUrl
+    this.authToken = bootstrap.wsAuthToken
     this.setStatus((current) => ({
       ...current,
-      wsUrl: url,
+      wsUrl: bootstrap.wsUrl,
     }))
+  }
+
+  /**
+   * Registers a callback that is invoked before each connection attempt.
+   * Use this to refresh the auth token when the server may have restarted.
+   */
+  registerBootstrapRefresher(fn: () => Promise<TransportBootstrap | null>): void {
+    this.bootstrapRefresher = fn
   }
 
   getStatus(): TransportStatus {
@@ -110,11 +139,18 @@ export class WsTransport {
 
     return new Promise<T>((resolve, reject) => {
       this.inflightRequests.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
+          resolve: (value) => resolve(value as T),
+          reject,
       })
 
-      this.ws?.send(JSON.stringify({
+      const ws = this.ws
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        this.inflightRequests.delete(id)
+        reject(new Error("Transport is not connected"))
+        return
+      }
+
+      ws.send(JSON.stringify({
         kind: "request",
         id,
         method,
@@ -176,66 +212,8 @@ export class WsTransport {
     }
 
     this.shouldReconnect = true
-    this.connectPromise = new Promise<void>((resolve, reject) => {
-      const phase = this.hasConnectedOnce ? "reconnecting" : "connecting"
-      this.setStatus((current) => ({
-        ...current,
-        phase,
-        wsUrl: this.url,
-      }))
-
-      const ws = new WebSocket(this.url)
-      this.ws = ws
-
-      ws.onopen = () => {
-        const isResubscribe = this.hasConnectedOnce
-        this.reconnectAttempt = 0
-        this.hasConnectedOnce = true
-        this.connectPromise = null
-        this.setStatus((current) => ({
-          ...current,
-          phase: "connected",
-          wsUrl: this.url,
-          lastError: null,
-        }))
-        void this.resubscribeActiveStreams(isResubscribe)
-        resolve()
-      }
-
-      ws.onmessage = (event) => {
-        this.handleMessage(event.data as string)
-      }
-
-      ws.onerror = () => {
-        this.setStatus((current) => ({
-          ...current,
-          lastError: "Transport error",
-        }))
-      }
-
-      ws.onclose = () => {
-        this.ws = null
-        this.connectPromise = null
-        this.failInflightRequests(new Error("Transport disconnected"))
-
-        if (this.shouldReconnect) {
-          this.setStatus((current) => ({
-            ...current,
-            phase: "reconnecting",
-          }))
-          this.scheduleReconnect()
-        } else {
-          this.setStatus((current) => ({
-            ...current,
-            phase: "disconnected",
-          }))
-        }
-
-        if (!this.hasConnectedOnce) {
-          reject(new Error("Unable to connect transport"))
-        }
-      }
-    })
+    this.updateConnectingStatus()
+    this.connectPromise = this.startConnectionAttempt()
 
     return this.connectPromise
   }
@@ -293,6 +271,103 @@ export class WsTransport {
     }
 
     await this.request(subscription.method, {})
+  }
+
+  private async startConnectionAttempt(): Promise<void> {
+    if (this.bootstrapRefresher) {
+      const fresh = await this.bootstrapRefresher().catch(() => null)
+      if (fresh) {
+        this.url = fresh.wsUrl
+        this.authToken = fresh.wsAuthToken
+      }
+    }
+    return new Promise<void>((resolve, reject) => {
+      const ws = this.createSocket()
+      this.attachSocketHandlers(ws, resolve, reject)
+    })
+  }
+
+  private createSocket(): WebSocket {
+    const ws = new WebSocket(this.url, this.buildProtocols())
+    this.ws = ws
+    return ws
+  }
+
+  private buildProtocols(): string[] {
+    return [WS_PROTOCOL, `${AUTH_PROTOCOL_PREFIX}${this.authToken}`]
+  }
+
+  private attachSocketHandlers(
+    ws: WebSocket,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): void {
+    ws.onopen = () => this.handleSocketOpen(resolve)
+    ws.onmessage = (event) => this.handleSocketMessage(event.data)
+    ws.onerror = () => this.handleSocketError()
+    ws.onclose = () => this.handleSocketClose(reject)
+  }
+
+  private handleSocketOpen(resolve: () => void): void {
+    const isResubscribe = this.hasConnectedOnce
+    this.reconnectAttempt = 0
+    this.hasConnectedOnce = true
+    this.connectPromise = null
+    this.setStatus((current) => ({
+      ...current,
+      phase: "connected",
+      wsUrl: this.url,
+      lastError: null,
+    }))
+    void this.resubscribeActiveStreams(isResubscribe)
+    resolve()
+  }
+
+  private handleSocketMessage(data: unknown): void {
+    if (typeof data !== "string") {
+      return
+    }
+
+    this.handleMessage(data)
+  }
+
+  private handleSocketError(): void {
+    this.setStatus((current) => ({
+      ...current,
+      lastError: "Transport error",
+    }))
+  }
+
+  private handleSocketClose(reject: (error: Error) => void): void {
+    this.ws = null
+    this.connectPromise = null
+    this.failInflightRequests(new Error("Transport disconnected"))
+
+    if (this.shouldReconnect) {
+      this.setStatus((current) => ({
+        ...current,
+        phase: "reconnecting",
+      }))
+      this.scheduleReconnect()
+    } else {
+      this.setStatus((current) => ({
+        ...current,
+        phase: "disconnected",
+      }))
+    }
+
+    if (!this.hasConnectedOnce) {
+      reject(new Error("Unable to connect transport"))
+    }
+  }
+
+  private updateConnectingStatus(): void {
+    const phase = this.hasConnectedOnce ? "reconnecting" : "connecting"
+    this.setStatus((current) => ({
+      ...current,
+      phase,
+      wsUrl: this.url,
+    }))
   }
 
   private scheduleReconnect(): void {

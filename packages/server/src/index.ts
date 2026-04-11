@@ -40,6 +40,14 @@ const MainLive = Layer.mergeAll(
   WebSocketLive,
 )
 
+function writeStdout(message: string): void {
+  process.stdout.write(`${message}\n`)
+}
+
+function writeStderr(message: string): void {
+  process.stderr.write(`${message}\n`)
+}
+
 const program = Effect.gen(function* () {
   const config = yield* ConfigService
   const db = yield* Database
@@ -50,17 +58,18 @@ const program = Effect.gen(function* () {
 
   readiness.markReady()
 
-  console.log(`Student Claw server started on :${config.port}`)
-  console.log(`Database: ${config.dbPath}`)
+  writeStdout(`Student Claw server started on :${config.port}`)
+  writeStdout(`Database: ${config.dbPath}`)
 
   const shutdown = () => {
-    console.log("\nShutting down...")
+    writeStdout("")
+    writeStdout("Shutting down...")
     codex.shutdown()
       .catch(() => undefined)
       .finally(() => {
         db.close()
         ws.close().then(() => {
-          console.log("Server stopped.")
+          writeStdout("Server stopped.")
           process.exit(0)
         })
       })
@@ -73,6 +82,6 @@ const program = Effect.gen(function* () {
 Effect.runPromise(
   program.pipe(Effect.provide(MainLive))
 ).catch((err) => {
-  console.error("Failed to start server:", err)
+  writeStderr(`Failed to start server: ${String(err)}`)
   process.exit(1)
 })

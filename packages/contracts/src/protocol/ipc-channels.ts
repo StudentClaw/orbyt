@@ -5,15 +5,27 @@ export const IpcChannel = {
   TRAY_UPDATE_BADGE: "tray:update-badge",
   FILE_OPEN_DIALOG: "file:open-dialog",
   FILE_SAVE_DIALOG: "file:save-dialog",
+  CODEX_AUTH_START: "codex:auth-start",
+  CODEX_AUTH_STATUS: "codex:auth-status",
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
+
+export type CodexAuthResult = {
+  readonly status: "connected" | "failed"
+  readonly error?: string
+}
 
 export type IpcPayloadMap = {
   [IpcChannel.APP_GET_PATH]: { path: string }
   [IpcChannel.APP_GET_BOOTSTRAP]: { wsUrl: string; appVersion: string; platform: string }
   [IpcChannel.NOTIFICATION_SHOW]: { title: string; body: string }
   [IpcChannel.TRAY_UPDATE_BADGE]: { count: number }
-  [IpcChannel.FILE_OPEN_DIALOG]: { filters?: Array<{ name: string; extensions: string[] }> }
+  [IpcChannel.FILE_OPEN_DIALOG]: {
+    filters?: Array<{ name: string; extensions: string[] }>
+    directory?: boolean
+  }
   [IpcChannel.FILE_SAVE_DIALOG]: { defaultPath?: string }
+  [IpcChannel.CODEX_AUTH_START]: CodexAuthResult
+  [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }
 }

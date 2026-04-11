@@ -7,23 +7,26 @@ import { ChatEmptyState } from "./ChatEmptyState"
 import { ErrorBanner } from "./ErrorBanner"
 import { MessageBubble } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
+import type { ChatSelectionInput } from "@/hooks/useChat"
 
 interface ChatContainerProps {
   readonly variant?: "panel" | "page"
+  readonly selection?: ChatSelectionInput
 }
 
-export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
+export function ChatContainer({ variant = "panel", selection }: ChatContainerProps) {
   const {
     messages,
     status,
     error,
     currentThread,
+    currentWorkspace,
     sendMessage,
     interrupt,
-    retry,
-    reauth,
     connectionState,
-  } = useChat()
+    inputDisabled,
+    inputDisabledReason,
+  } = useChat(selection)
   const { closePanel } = useChatUiActions()
 
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -57,10 +60,16 @@ export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
           <h2 className="font-heading text-base font-medium">
-            {currentThread?.title ?? "Chat"}
+            {currentThread?.title ?? currentWorkspace?.name ?? "Chat"}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {currentThread ? currentThread.status : "Start a new conversation"}
+            {currentThread
+              ? currentThread.status
+              : currentWorkspace
+                ? currentWorkspace.kind === "filesystem"
+                  ? currentWorkspace.rootPath
+                  : "Imported legacy chats"
+                : "Add or choose a folder to start chatting"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -86,8 +95,6 @@ export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
           <ErrorBanner
             status={status}
             error={error}
-            onRetry={retry ? () => void retry() : undefined}
-            onReauth={reauth ? () => void reauth() : undefined}
           />
         </div>
       )}
@@ -133,6 +140,8 @@ export function ChatContainer({ variant = "panel" }: ChatContainerProps) {
         onInterrupt={() => void interrupt()}
         status={status}
         connectionState={connectionState}
+        disabled={inputDisabled}
+        disabledReason={inputDisabledReason}
       />
     </div>
   )

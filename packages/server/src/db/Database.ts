@@ -6,6 +6,9 @@ import { homedir } from "node:os"
 import { ConfigService } from "../config/ConfigService.js"
 import { runMigrations } from "./migrations/runner.js"
 
+/**
+ * SQLite access helpers used by the server runtime.
+ */
 export interface DatabaseService {
   readonly db: BunDatabase
   readonly get: <T>(sql: string, params?: SQLQueryBindings[]) => T | null
@@ -15,11 +18,17 @@ export interface DatabaseService {
   readonly close: () => void
 }
 
+/**
+ * Effect service tag for the initialized SQLite database.
+ */
 export class Database extends Context.Tag("Database")<
   Database,
   DatabaseService
 >() {}
 
+/**
+ * Opens the configured SQLite database, applies migrations, and exposes typed helpers.
+ */
 export const DatabaseLive = Layer.effect(
   Database,
   Effect.gen(function* () {

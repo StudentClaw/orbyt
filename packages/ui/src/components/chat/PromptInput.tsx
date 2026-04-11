@@ -9,23 +9,32 @@ interface PromptInputProps {
   readonly onInterrupt: () => void
   readonly status: ChatStatus
   readonly connectionState: WsConnectionPhase
+  readonly disabled?: boolean
+  readonly disabledReason?: string | null
 }
 
-export function PromptInput({ onSend, onInterrupt, status, connectionState }: PromptInputProps) {
+export function PromptInput({
+  onSend,
+  onInterrupt,
+  status,
+  connectionState,
+  disabled = false,
+  disabledReason = null,
+}: PromptInputProps) {
   const [value, setValue] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
-  const canSend = value.trim().length > 0 && !isStreaming && isConnected
+  const canSend = value.trim().length > 0 && !isStreaming && isConnected && !disabled
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim()
-    if (!trimmed || isStreaming || !isConnected) return
+    if (!trimmed || isStreaming || !isConnected || disabled) return
     onSend(trimmed)
     setValue("")
     textareaRef.current?.focus()
-  }, [value, isStreaming, isConnected, onSend])
+  }, [value, isStreaming, isConnected, disabled, onSend])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -49,11 +58,13 @@ export function PromptInput({ onSend, onInterrupt, status, connectionState }: Pr
             ? "Connecting to Student Claw..."
             : !isConnected
             ? "Reconnecting..."
+            : disabled && disabledReason
+              ? disabledReason
             : isStreaming
               ? "Wait for response..."
               : "Ask anything..."
         }
-        disabled={!isConnected}
+        disabled={!isConnected || disabled}
         className="min-h-10 max-h-32 pr-12"
         aria-label="Chat message input"
       />

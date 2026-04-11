@@ -48,6 +48,7 @@ describe("Server integration", () => {
           orchestration: {
             getDesktopBootstrap: async () => ({
               wsUrl: `ws://127.0.0.1:${port}`,
+              wsAuthToken: "a".repeat(64),
               appVersion: "0.1.0",
               platform: "test",
             }),
@@ -62,6 +63,7 @@ describe("Server integration", () => {
               },
             }),
             getSnapshot: async () => ({
+              workspaces: [],
               threads: [],
               turns: [],
               providerStatus: "idle" as const,
@@ -76,14 +78,25 @@ describe("Server integration", () => {
               ready: true,
               lastSequence: 1,
             }),
+            createWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+            relinkWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+            deleteWorkspace: async () => ({ deleted: true }),
             createThread: async () => ({ threadId }),
             sendTurn: async () => ({ turnId }),
             interruptTurn: async () => ({ interrupted: true }),
             startProviderAuth: async () => ({ started: true }),
             retryProviderInitialize: async () => ({ started: true }),
           },
+          database: {
+            db,
+            get: () => null,
+            query: () => [],
+            execute: () => undefined,
+            transaction: <T>(fn: () => T) => fn(),
+            close: () => undefined,
+          },
         })
-        ws.send(response)
+        ws.send(response.response)
       })
     })
 

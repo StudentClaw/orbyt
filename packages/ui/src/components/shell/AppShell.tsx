@@ -1,12 +1,16 @@
 import { useRef, useCallback, useEffect } from "react"
-import { Outlet, useRouterState } from "@tanstack/react-router"
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import {
   useChatUiActions,
+  useIsOnboardingComplete,
+  useIsServerHydrationComplete,
   useRuntimeChatPanelOpen,
   useRuntimeChatPanelWidth,
 } from "@/hooks/useAppRuntime"
+import { useNativeNotification } from "@/hooks/useNativeNotification"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { ChatContainer } from "@/components/chat/ChatContainer"
+import { isChatPath } from "@/lib/chatRoutes"
 import { AppSidebar } from "./AppSidebar"
 
 const CHAT_DEFAULT_WIDTH = 33
@@ -18,10 +22,23 @@ export function AppShell() {
   const chatPanelOpen = useRuntimeChatPanelOpen()
   const chatPanelWidth = useRuntimeChatPanelWidth()
   const { setPanelWidth } = useChatUiActions()
+  const onboardingComplete = useIsOnboardingComplete()
+  const hydrationComplete = useIsServerHydrationComplete()
+  const navigate = useNavigate()
+  const pathname = routerState.location.pathname
+
+  useNativeNotification()
+
+  useEffect(() => {
+    if (!hydrationComplete) return
+    if (!onboardingComplete && pathname !== "/onboarding") {
+      void navigate({ to: "/onboarding" })
+    }
+  }, [hydrationComplete, onboardingComplete, pathname, navigate])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const chatPanelRef = useRef<HTMLDivElement>(null)
-  const showPanel = chatPanelOpen && routerState.location.pathname !== "/chat"
+  const showPanel = chatPanelOpen && !isChatPath(pathname)
 
   useEffect(() => {
     if (showPanel && chatPanelRef.current) {

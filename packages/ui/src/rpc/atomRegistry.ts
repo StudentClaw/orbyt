@@ -1,5 +1,8 @@
-import { useEffect, useRef, useSyncExternalStore } from "react"
+import { useEffect, useEffectEvent, useSyncExternalStore } from "react"
 
+/**
+ * Minimal mutable atom used by the local renderer runtime state stores.
+ */
 export type Atom<Value> = {
   readonly label: string
   value: Value
@@ -10,6 +13,9 @@ type SubscribeOptions = {
   readonly immediate?: boolean
 }
 
+/**
+ * Creates a new in-memory atom with a label for debugging.
+ */
 export function createAtom<Value>(label: string, initialValue: Value): Atom<Value> {
   return {
     label,
@@ -18,6 +24,9 @@ export function createAtom<Value>(label: string, initialValue: Value): Atom<Valu
   }
 }
 
+/**
+ * Shared atom registry used by the renderer runtime state modules.
+ */
 export const appAtomRegistry = {
   get<Value>(atom: Atom<Value>): Value {
     return atom.value
@@ -49,6 +58,9 @@ export const appAtomRegistry = {
   },
 }
 
+/**
+ * Reads an atom through `useSyncExternalStore` with an optional selector.
+ */
 export function useAtomValue<Value, Selected = Value>(
   atom: Atom<Value>,
   selector?: (value: Value) => Selected,
@@ -65,15 +77,24 @@ export function useAtomValue<Value, Selected = Value>(
   )
 }
 
+/**
+ * Subscribes a React effect to atom updates using the latest listener implementation.
+ */
 export function useAtomSubscribe<Value>(
   atom: Atom<Value>,
   listener: (value: Value) => void,
   options?: SubscribeOptions,
 ): void {
-  const listenerRef = useRef(listener)
-  listenerRef.current = listener
+  const immediate = options?.immediate ?? false
+  const notifyListener = useEffectEvent((value: Value) => {
+    listener(value)
+  })
 
   useEffect(() => {
-    return appAtomRegistry.subscribe(atom, (value) => listenerRef.current(value), options)
-  }, [atom, options?.immediate])
+    return appAtomRegistry.subscribe(
+      atom,
+      (value) => notifyListener(value),
+      immediate ? { immediate: true } : undefined,
+    )
+  }, [atom, immediate])
 }

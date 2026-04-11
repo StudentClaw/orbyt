@@ -9,7 +9,7 @@ export const up = `
   CREATE TABLE IF NOT EXISTS canvas_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     instance_url TEXT NOT NULL,
-    api_token TEXT NOT NULL,
+    credential_ref TEXT,
     user_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );

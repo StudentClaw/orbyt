@@ -2,8 +2,12 @@ import { describe, expect, test } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
   DesktopBootstrap,
+  MAX_THREAD_TITLE_LENGTH,
+  MAX_TURN_CONTENT_LENGTH,
   OrchestrationSnapshot,
   ProviderRuntimeEvent,
+  CreateThreadParams,
+  SendTurnParams,
   ServerConfig,
   ServerLifecycleEvent,
   RpcRequestEnvelope,
@@ -24,6 +28,7 @@ describe("@student-claw/contracts", () => {
   test("decodes bootstrap, config, lifecycle, and snapshot payloads", () => {
     const bootstrap = Schema.decodeUnknownSync(DesktopBootstrap)({
       wsUrl: "ws://127.0.0.1:8787",
+      wsAuthToken: "a".repeat(64),
       appVersion: "0.1.0",
       platform: "darwin",
     })
@@ -45,6 +50,7 @@ describe("@student-claw/contracts", () => {
       },
     })
     const snapshot = Schema.decodeUnknownSync(OrchestrationSnapshot)({
+      workspaces: [],
       threads: [],
       turns: [],
       providerStatus: "idle",
@@ -85,5 +91,21 @@ describe("@student-claw/contracts", () => {
 
     expect(event.type).toBe("provider.stateChanged")
     expect(event.state.queuedTurnCount).toBe(2)
+  })
+
+  test("rejects oversized thread titles and turn content", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(CreateThreadParams)({
+        workspaceId: "workspace_1",
+        title: "x".repeat(MAX_THREAD_TITLE_LENGTH + 1),
+      })
+    ).toThrow()
+
+    expect(() =>
+      Schema.decodeUnknownSync(SendTurnParams)({
+        threadId: "thread_1",
+        content: "x".repeat(MAX_TURN_CONTENT_LENGTH + 1),
+      })
+    ).toThrow()
   })
 })

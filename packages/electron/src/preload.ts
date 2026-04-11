@@ -8,6 +8,8 @@ const ALLOWED_CHANNELS = [
   "tray:update-badge",
   "file:open-dialog",
   "file:save-dialog",
+  "codex:auth-start",
+  "codex:auth-status",
 ]
 
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -16,6 +18,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return typeof bootstrap === "object" && bootstrap !== null
       ? bootstrap as DesktopBootstrap
       : null
+  },
+  codexAuthStart: (): Promise<{ status: "connected" | "failed"; error?: string }> => {
+    return ipcRenderer.invoke("codex:auth-start")
   },
   invoke: (channel: string, ...args: unknown[]): Promise<unknown> => {
     if (!ALLOWED_CHANNELS.includes(channel)) {

@@ -16,9 +16,21 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 })
 
-const chatRoute = createRoute({
+const chatIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
+  component: ChatPage,
+})
+
+const chatWorkspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/chat/$workspaceId",
+  component: ChatPage,
+})
+
+const chatThreadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/chat/$workspaceId/$threadId",
   component: ChatPage,
 })
 
@@ -42,7 +54,9 @@ const activityRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
-  chatRoute,
+  chatIndexRoute,
+  chatWorkspaceRoute,
+  chatThreadRoute,
   onboardingRoute,
   settingsRoute,
   activityRoute,

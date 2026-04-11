@@ -5,6 +5,7 @@ import type { WsConnectionStatus } from "../rpc/wsConnectionState"
 
 const hookMocks = vi.hoisted(() => ({
   snapshot: null as OrchestrationSnapshot | null,
+  selectedWorkspaceId: null as string | null,
   selectedThreadId: null as string | null,
   connectionStatus: {
     phase: "connected" as const,
@@ -15,11 +16,12 @@ const hookMocks = vi.hoisted(() => ({
   createThread: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
-  selectThread: vi.fn(),
+  selectChatTarget: vi.fn(),
 }))
 
 vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeOrchestrationSnapshot: () => hookMocks.snapshot,
+  useRuntimeSelectedWorkspaceId: () => hookMocks.selectedWorkspaceId,
   useRuntimeSelectedThreadId: () => hookMocks.selectedThreadId,
   useRuntimeConnectionStatus: () => hookMocks.connectionStatus,
   useOrchestrationActions: () => ({
@@ -28,7 +30,9 @@ vi.mock("../hooks/useAppRuntime", () => ({
     interruptTurn: hookMocks.interruptTurn,
   }),
   useChatUiActions: () => ({
-    selectThread: hookMocks.selectThread,
+    selectChatTarget: hookMocks.selectChatTarget,
+    selectWorkspace: vi.fn(),
+    clearSelection: vi.fn(),
     openPanel: vi.fn(),
     closePanel: vi.fn(),
     setPanelWidth: vi.fn(),
@@ -38,9 +42,21 @@ vi.mock("../hooks/useAppRuntime", () => ({
 import { useChat } from "../hooks/useChat"
 
 const baseSnapshot: OrchestrationSnapshot = {
+  workspaces: [
+    {
+      id: "workspace-1" as never,
+      kind: "filesystem",
+      name: "Repo",
+      rootPath: "/repo",
+      availability: "ready",
+      createdAt: "2026-04-09T00:00:00.000Z",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+    },
+  ],
   threads: [
     {
       id: "thread-1" as never,
+      workspaceId: "workspace-1" as never,
       title: "Weekly plan",
       status: "streaming",
       createdAt: "2026-04-09T00:00:00.000Z",
@@ -74,6 +90,7 @@ const baseSnapshot: OrchestrationSnapshot = {
 describe("useChat", () => {
   beforeEach(() => {
     hookMocks.snapshot = baseSnapshot
+    hookMocks.selectedWorkspaceId = "workspace-1"
     hookMocks.selectedThreadId = "thread-1"
     hookMocks.connectionStatus = {
       phase: "connected",
@@ -84,7 +101,7 @@ describe("useChat", () => {
     hookMocks.createThread.mockReset()
     hookMocks.sendTurn.mockReset()
     hookMocks.interruptTurn.mockReset()
-    hookMocks.selectThread.mockReset()
+    hookMocks.selectChatTarget.mockReset()
   })
 
   test("maps the current thread to user and assistant messages", () => {
@@ -115,8 +132,8 @@ describe("useChat", () => {
       await result.current.sendMessage("  New thread title  ")
     })
 
-    expect(hookMocks.createThread).toHaveBeenCalledWith("New thread title")
-    expect(hookMocks.selectThread).toHaveBeenCalledWith("thread-new")
+    expect(hookMocks.createThread).toHaveBeenCalledWith("workspace-1", "New thread title")
+    expect(hookMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
     expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title")
   })
 

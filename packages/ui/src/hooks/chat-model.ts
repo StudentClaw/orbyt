@@ -2,7 +2,7 @@ import type {
   OrchestrationSnapshot,
   OrchestrationThread,
   OrchestrationTurn,
-  ProviderRuntimeEvent,
+  OrchestrationWorkspace,
 } from "@student-claw/contracts"
 import type { WsConnectionStatus } from "@/rpc/wsConnectionState"
 
@@ -31,11 +31,27 @@ export interface ChatMessage {
   readonly reasoning?: string
 }
 
-export interface ProviderGuidance {
-  readonly title: string
-  readonly detail: string | null
-  readonly showRetry: boolean
-  readonly showAuth: boolean
+export function resolveCurrentWorkspace(
+  snapshot: OrchestrationSnapshot | null,
+  selectedWorkspaceId: string | null,
+  selectedThreadId: string | null,
+): OrchestrationWorkspace | null {
+  if (!snapshot) {
+    return null
+  }
+
+  if (selectedThreadId) {
+    const threadWorkspaceId = snapshot.threads.find((entry) => entry.id === selectedThreadId)?.workspaceId ?? null
+    if (threadWorkspaceId) {
+      return snapshot.workspaces.find((entry) => entry.id === threadWorkspaceId) ?? null
+    }
+  }
+
+  if (!selectedWorkspaceId) {
+    return null
+  }
+
+  return snapshot.workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null
 }
 
 export function resolveCurrentThread(
@@ -46,7 +62,11 @@ export function resolveCurrentThread(
     return null
   }
 
-  return snapshot.threads.find((entry) => entry.id === selectedThreadId) ?? snapshot.threads.at(-1) ?? null
+  if (!selectedThreadId) {
+    return null
+  }
+
+  return snapshot.threads.find((entry) => entry.id === selectedThreadId) ?? null
 }
 
 export function sortThreadsByRecency(

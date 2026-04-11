@@ -1,22 +1,35 @@
+import type { IncomingMessage } from "node:http"
 import { Context, Layer, Effect } from "effect"
 import { WebSocketServer as WsServer } from "ws"
 import type { WebSocket } from "ws"
 import { ConfigService } from "../config/ConfigService.js"
-import { OrchestrationService } from "../orchestration/OrchestrationService.js"
-import { ServerReadiness } from "../runtime/ServerReadiness.js"
-import { PushBus } from "./PushBus.js"
-import { routeMessage } from "./Router.js"
+import type { AppConfig } from "../config/defaults.js"
+import { OrchestrationService, type OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
+import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerReadiness.js"
+import { PushBus, type PushBusService } from "./PushBus.js"
+import { Database, type DatabaseService } from "../db/Database.js"
+import { selectWebSocketProtocol, validateWebSocketHandshake } from "./handshake.js"
+import { routeMessage, type RouteMessageResult } from "./Router.js"
 
+/**
+ * Live WebSocket server handle exposed to the server runtime.
+ */
 export interface WebSocketService {
   readonly wss: WsServer
   readonly close: () => Promise<void>
 }
 
+/**
+ * Effect service tag for the authenticated local WebSocket server.
+ */
 export class WebSocketServerService extends Context.Tag("WebSocketServer")<
   WebSocketServerService,
   WebSocketService
 >() {}
 
+/**
+ * Starts the authenticated local WebSocket server and wires it to the RPC router.
+ */
 export const WebSocketServerLive = Layer.effect(
   WebSocketServerService,
   Effect.gen(function* () {
@@ -24,37 +37,79 @@ export const WebSocketServerLive = Layer.effect(
     const readiness = yield* ServerReadiness
     const pushBus = yield* PushBus
     const orchestration = yield* OrchestrationService
+    const database = yield* Database
 
-    const wss = new WsServer({ port: config.port })
-
-    wss.on("connection", (ws) => {
-      pushBus.registerClient(ws)
-
-      ws.on("message", async (data) => {
-        const raw = data.toString()
-        const response = await routeMessage(raw, ws as WebSocket, {
-          orchestration,
-          pushBus,
-          readiness,
-        })
-        ws.send(response)
-      })
-
-      ws.on("close", () => {
-        pushBus.removeClient(ws)
-      })
-
-      ws.on("error", () => {
-        pushBus.removeClient(ws)
-      })
-    })
-
-    return {
-      wss,
-      close: () =>
-        new Promise<void>((resolve) => {
-          wss.close(() => resolve())
-        }),
-    }
+    return createWebSocketService(config, readiness, pushBus, orchestration, database)
   }),
 )
+
+function sendRouteResponse(ws: WebSocket, result: RouteMessageResult): void {
+  ws.send(result.response)
+  if (result.close) {
+    ws.close(result.close.code, result.close.reason)
+  }
+}
+
+function createWebSocketService(
+  config: AppConfig,
+  readiness: ServerReadinessService,
+  pushBus: PushBusService,
+  orchestration: OrchestrationServiceShape,
+  database: DatabaseService,
+): WebSocketService {
+  const wss = new WsServer({
+    port: config.port,
+    host: config.wsHost,
+    maxPayload: config.wsMaxPayloadBytes,
+    verifyClient: ({ req }: { req: IncomingMessage }) => validateWebSocketHandshake(req, {
+      allowedOrigins: config.allowedOrigins,
+      expectedAuthToken: config.wsAuthToken,
+    }).ok,
+    handleProtocols: (protocols) => selectWebSocketProtocol(protocols),
+  })
+
+  wss.on("connection", (ws) => {
+    registerSocketHandlers(ws as WebSocket, readiness, pushBus, orchestration, database)
+  })
+
+  return {
+    wss,
+    close: () =>
+      new Promise<void>((resolve) => {
+        wss.close(() => resolve())
+      }),
+  }
+}
+
+function registerSocketHandlers(
+  ws: WebSocket,
+  readiness: ServerReadinessService,
+  pushBus: PushBusService,
+  orchestration: OrchestrationServiceShape,
+  database: DatabaseService,
+): void {
+  pushBus.registerClient(ws)
+
+  ws.on("message", async (data, isBinary) => {
+    if (isBinary) {
+      ws.close(1003, "Binary messages are not supported")
+      return
+    }
+
+    const result = await routeMessage(data.toString(), ws, {
+      orchestration,
+      pushBus,
+      readiness,
+      database,
+    })
+    sendRouteResponse(ws, result)
+  })
+
+  ws.on("close", () => {
+    pushBus.removeClient(ws)
+  })
+
+  ws.on("error", () => {
+    pushBus.removeClient(ws)
+  })
+}

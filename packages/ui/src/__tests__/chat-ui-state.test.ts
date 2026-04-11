@@ -5,7 +5,8 @@ import {
   openChatPanel,
   resetOrchestrationStateForTests,
   setChatPanelWidth,
-  setSelectedChatThread,
+  selectChatTarget,
+  selectChatWorkspace,
 } from "../rpc/orchestrationState"
 
 describe("chat UI state", () => {
@@ -13,8 +14,10 @@ describe("chat UI state", () => {
     resetOrchestrationStateForTests()
   })
 
-  test("tracks selected thread id", () => {
-    setSelectedChatThread("thread-123")
+  test("tracks selected workspace and thread ids", () => {
+    selectChatWorkspace("workspace-123")
+    selectChatTarget("workspace-123", "thread-123")
+    expect(getChatUiState().selectedWorkspaceId).toBe("workspace-123")
     expect(getChatUiState().selectedThreadId).toBe("thread-123")
   })
 
