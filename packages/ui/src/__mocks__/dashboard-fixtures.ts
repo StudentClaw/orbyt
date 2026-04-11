@@ -5,6 +5,8 @@ import type {
   PlannedSession,
   ActivityFeedEntry,
 } from "@student-claw/contracts"
+import type { PrioritizedItem } from "@/components/dashboard/priority-model"
+import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
 
 // --- Helper factories ---
 
@@ -485,5 +487,276 @@ export const MOCK_INSIGHTS: ReadonlyArray<InsightData> = [
     body: "Your chemistry grades have been declining. Consider scheduling extra study time.",
     actionLabel: "Help me study",
     actionContext: "help me study for CHEM 202",
+  },
+]
+
+// --- Mock Priority Items (pre-computed for PriorityQueue) ---
+
+export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
+  {
+    id: itemId(2) as string,
+    title: "Lab Report: Synthesis of Aspirin",
+    courseCode: "CHEM 202",
+    effectiveDueAt: daysFromNow(1),
+    estimatedMinutes: 120,
+    impactScore: 0.75,
+    coursePriority: 2,
+  },
+  {
+    id: itemId(7) as string,
+    title: "Pre-lab Quiz: Distillation",
+    courseCode: "CHEM 202",
+    effectiveDueAt: daysFromNow(1),
+    estimatedMinutes: 20,
+    impactScore: 0.3,
+    coursePriority: 2,
+  },
+  {
+    id: itemId(15) as string,
+    title: "Reading: Chapter 12",
+    courseCode: "CS 101",
+    effectiveDueAt: daysFromNow(1),
+    estimatedMinutes: 45,
+    impactScore: 0.2,
+    coursePriority: 3,
+  },
+  {
+    id: itemId(1) as string,
+    title: "Problem Set 5: Recursion",
+    courseCode: "CS 101",
+    effectiveDueAt: daysFromNow(2),
+    estimatedMinutes: 180,
+    impactScore: 0.85,
+    coursePriority: 3,
+  },
+  {
+    id: itemId(9) as string,
+    title: "Quiz 4: Vector Spaces",
+    courseCode: "MATH 240",
+    effectiveDueAt: daysFromNow(2),
+    estimatedMinutes: 60,
+    impactScore: 0.65,
+    coursePriority: 2,
+  },
+  {
+    id: itemId(4) as string,
+    title: "Homework 7: Eigenvalues",
+    courseCode: "MATH 240",
+    effectiveDueAt: daysFromNow(3),
+    estimatedMinutes: 90,
+    impactScore: 0.6,
+    coursePriority: 2,
+  },
+  {
+    id: itemId(6) as string,
+    title: "Chapter 8 Reading Response",
+    courseCode: "PSYCH 100",
+    effectiveDueAt: daysFromNow(4),
+    estimatedMinutes: 30,
+    impactScore: 0.25,
+    coursePriority: 1,
+  },
+]
+
+// --- Canvas MCP Activity Feed (rich realistic notification log) ---
+
+function hoursAgo(hours: number): string {
+  const d = new Date()
+  d.setHours(d.getHours() - hours)
+  return d.toISOString()
+}
+
+export const MOCK_CANVAS_ACTIVITY_FEED: ReadonlyArray<ActivityFeedEntryWithMeta> = [
+  // --- Today ---
+  {
+    id: "feed-001" as any,
+    category: "insight",
+    type: "grade_trend",
+    title: "CS 101 trending up — +13% this month",
+    body: "Your last 4 assignments averaged 93.5%. You're on track for an A.",
+    priority: 2,
+    receivedAt: hoursAgo(1),
+  },
+  {
+    id: "feed-002" as any,
+    category: "canvas",
+    type: "grade_posted",
+    title: "Grade posted: CS 101 — Problem Set 4",
+    body: "Score: 95/100 (A) · Posted by Dr. Martinez",
+    priority: 2,
+    deepLink: "/",
+    receivedAt: hoursAgo(2),
+  },
+  {
+    id: "feed-003" as any,
+    category: "canvas",
+    type: "due_soon",
+    title: "Due tomorrow: Lab Report — CHEM 202",
+    body: "Synthesis of Aspirin lab report is due tomorrow at 11:59 PM.",
+    priority: 3,
+    receivedAt: hoursAgo(3),
+  },
+  {
+    id: "feed-004" as any,
+    category: "planner",
+    type: "session_reminder",
+    title: "Study session in 15 min — CS 101",
+    body: "Problem Set 5: Recursion · Part 1 of 2 · 90 min block",
+    priority: 3,
+    receivedAt: hoursAgo(4),
+  },
+  {
+    id: "feed-005" as any,
+    category: "insight",
+    type: "grade_risk",
+    title: "CHEM 202 needs attention",
+    body: "Your chemistry grades have dropped 16% over the last 4 weeks. Consider extra study time.",
+    priority: 2,
+    receivedAt: hoursAgo(5),
+    deepLink: "/chat",
+  },
+  // --- Yesterday ---
+  {
+    id: "feed-006" as any,
+    category: "canvas",
+    type: "announcement_posted",
+    title: "Announcement: ENGL 310 — Essay Rubric Update",
+    body: "Prof. Johnson updated the Gatsby essay rubric. Thesis now worth 20% (was 15%). Review before submitting.",
+    priority: 2,
+    receivedAt: hoursAgo(26),
+  },
+  {
+    id: "feed-007" as any,
+    category: "canvas",
+    type: "submission_confirmed",
+    title: "Submission confirmed: Problem Set 3 — CS 101",
+    body: "Your submission was received on time. Grading usually takes 3–5 days.",
+    priority: 1,
+    receivedAt: hoursAgo(28),
+  },
+  {
+    id: "feed-008" as any,
+    category: "canvas",
+    type: "grade_posted",
+    title: "Grade posted: MATH 240 — Quiz 3",
+    body: "Score: 68/80 (B+) · Posted by Dr. Chen",
+    priority: 2,
+    deepLink: "/",
+    receivedAt: hoursAgo(30),
+  },
+  {
+    id: "feed-009" as any,
+    category: "workflow",
+    type: "plan_generated",
+    title: "Weekly plan generated — 12 sessions scheduled",
+    body: "StudentClaw scheduled study blocks across CS 101, CHEM 202, and MATH 240 for the week.",
+    priority: 1,
+    receivedAt: hoursAgo(34),
+  },
+  {
+    id: "feed-010" as any,
+    category: "canvas",
+    type: "assignment_added",
+    title: "New assignment: CHEM 202 — Pre-lab Quiz: Distillation",
+    body: "Due tomorrow at 11:59 PM · 10 pts · Added by Dr. Patel",
+    priority: 3,
+    receivedAt: hoursAgo(36),
+  },
+  // --- 2 days ago ---
+  {
+    id: "feed-011" as any,
+    category: "canvas",
+    type: "grade_posted",
+    title: "Grade posted: CHEM 202 — Lab Report 5",
+    body: "Score: 38/50 (B-) · Feedback available in Canvas",
+    priority: 2,
+    deepLink: "/",
+    receivedAt: hoursAgo(50),
+  },
+  {
+    id: "feed-012" as any,
+    category: "canvas",
+    type: "announcement_posted",
+    title: "Announcement: CS 101 — Office Hours Change",
+    body: "Dr. Martinez: Thursday office hours moved to Friday 2–4 PM this week only.",
+    priority: 1,
+    receivedAt: hoursAgo(52),
+  },
+  {
+    id: "feed-013" as any,
+    category: "planner",
+    type: "session_completed",
+    title: "Session completed: Essay Outline — ENGL 310",
+    body: "2 hr block marked done. Great work staying on track!",
+    priority: 1,
+    receivedAt: hoursAgo(56),
+  },
+  // --- 3 days ago ---
+  {
+    id: "feed-014" as any,
+    category: "canvas",
+    type: "assignment_added",
+    title: "New assignment: CS 101 — Problem Set 5: Recursion",
+    body: "Due in 5 days · 100 pts · Added by Dr. Martinez",
+    priority: 2,
+    receivedAt: hoursAgo(72),
+  },
+  {
+    id: "feed-015" as any,
+    category: "insight",
+    type: "deadline_cluster",
+    title: "3 deadlines cluster next week",
+    body: "Lab Report, Problem Set 5, and Quiz 4 all land within 48 hours. Want to plan ahead?",
+    priority: 2,
+    deepLink: "/chat",
+    receivedAt: hoursAgo(75),
+  },
+  // --- 4 days ago ---
+  {
+    id: "feed-016" as any,
+    category: "canvas",
+    type: "grade_posted",
+    title: "Grade posted: MATH 240 — Homework 6",
+    body: "Score: 72/80 (A-) · Posted by Dr. Chen",
+    priority: 2,
+    deepLink: "/",
+    receivedAt: hoursAgo(96),
+  },
+  {
+    id: "feed-017" as any,
+    category: "canvas",
+    type: "announcement_posted",
+    title: "Announcement: CHEM 202 — Lab Safety Reminder",
+    body: "Dr. Patel: Bring safety goggles and lab coat to all sessions. Students without PPE cannot participate.",
+    priority: 2,
+    receivedAt: hoursAgo(98),
+  },
+  {
+    id: "feed-018" as any,
+    category: "canvas",
+    type: "due_soon",
+    title: "Reminder: Discussion Board — ENGL 310 due in 2 days",
+    body: "Week 10 Discussion Board Post · 15 pts · Due Friday at 11:59 PM",
+    priority: 2,
+    receivedAt: hoursAgo(100),
+  },
+  {
+    id: "feed-019" as any,
+    category: "canvas",
+    type: "grade_posted",
+    title: "Grade posted: PSYCH 100 — Chapter 7 Reading Response",
+    body: "Score: 14/20 (C+) · Posted by Dr. Williams",
+    priority: 2,
+    deepLink: "/",
+    receivedAt: hoursAgo(103),
+  },
+  {
+    id: "feed-020" as any,
+    category: "insight",
+    type: "weekly_summary",
+    title: "Last week: 8 of 10 sessions completed",
+    body: "80% completion rate — above your 75% weekly goal. CS 101 and MATH 240 fully covered.",
+    priority: 1,
+    receivedAt: hoursAgo(108),
   },
 ]

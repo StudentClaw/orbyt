@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { DesktopBootstrap } from "@student-claw/contracts"
 
+vi.mock("./onboardingState", () => ({
+  setOnboardingRpcClient: vi.fn(),
+  hydrateOnboardingStateFromServer: vi.fn().mockResolvedValue(undefined),
+}))
+
 class MockWebSocket {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
@@ -68,6 +73,7 @@ describe("startAppRuntime", () => {
   test("uses the authenticated bootstrap data when opening the transport", async () => {
     window.electronAPI = {
       getBootstrap: vi.fn().mockResolvedValue(bootstrap),
+      codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
       invoke: vi.fn(),
       send: vi.fn(),
       on: vi.fn(),

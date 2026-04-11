@@ -1,18 +1,24 @@
 import { useMemo } from "react"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import {
+  clearChatSelection,
   closeChatPanel,
+  createOrchestrationWorkspace,
   createOrchestrationThread,
+  deleteOrchestrationWorkspace,
   interruptOrchestrationTurn,
   openChatPanel,
+  relinkOrchestrationWorkspace,
+  selectChatTarget,
+  selectChatWorkspace,
   setChatPanelWidth,
-  setSelectedChatThread,
   useChatPanelOpen,
   useChatPanelWidth,
   sendOrchestrationTurn,
   useChatUiState,
   useOrchestrationSnapshot,
   useSelectedChatThreadId,
+  useSelectedChatWorkspaceId,
   useProviderRuntimeEvents,
 } from "@/rpc/orchestrationState"
 import {
@@ -28,7 +34,10 @@ import {
   usePendingCheckIns,
 } from "@/rpc/plannerState"
 import { useActivityEntries, useActivityUnreadCount, useActivityFilter } from "@/rpc/activityState"
-import { useIsOnboardingComplete as useOnboardingComplete } from "@/rpc/onboardingState"
+import {
+  useIsOnboardingComplete as useOnboardingComplete,
+  useIsHydrationComplete,
+} from "@/rpc/onboardingState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
 
@@ -104,12 +113,20 @@ export function useIsOnboardingComplete() {
   return useOnboardingComplete()
 }
 
+export function useIsServerHydrationComplete() {
+  return useIsHydrationComplete()
+}
+
 export function useRuntimeChatUiState() {
   return useChatUiState()
 }
 
 export function useRuntimeSelectedThreadId() {
   return useSelectedChatThreadId()
+}
+
+export function useRuntimeSelectedWorkspaceId() {
+  return useSelectedChatWorkspaceId()
 }
 
 export function useRuntimeChatPanelOpen() {
@@ -123,7 +140,14 @@ export function useRuntimeChatPanelWidth() {
 export function useOrchestrationActions() {
   return useMemo(() => {
     return {
-      createThread: (title?: string) => createOrchestrationThread(getPrimaryWsRpcClient(), title),
+      createWorkspace: (rootPath: string) =>
+        createOrchestrationWorkspace(getPrimaryWsRpcClient(), rootPath),
+      relinkWorkspace: (workspaceId: string, rootPath: string) =>
+        relinkOrchestrationWorkspace(getPrimaryWsRpcClient(), workspaceId, rootPath),
+      deleteWorkspace: (workspaceId: string) =>
+        deleteOrchestrationWorkspace(getPrimaryWsRpcClient(), workspaceId),
+      createThread: (workspaceId: string, title?: string) =>
+        createOrchestrationThread(getPrimaryWsRpcClient(), workspaceId, title),
       sendTurn: (threadId: string, content: string) =>
         sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
@@ -134,7 +158,10 @@ export function useOrchestrationActions() {
 export function useChatUiActions() {
   return useMemo(() => {
     return {
-      selectThread: (threadId: string | null) => setSelectedChatThread(threadId),
+      selectWorkspace: (workspaceId: string | null) => selectChatWorkspace(workspaceId),
+      selectChatTarget: (workspaceId: string | null, threadId: string | null) =>
+        selectChatTarget(workspaceId, threadId),
+      clearSelection: () => clearChatSelection(),
       openPanel: () => openChatPanel(),
       closePanel: () => closeChatPanel(),
       setPanelWidth: (width: number) => setChatPanelWidth(width),

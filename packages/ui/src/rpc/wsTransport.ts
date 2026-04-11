@@ -60,6 +60,7 @@ export class WsTransport {
   private shouldReconnect = true
   private connectPromise: Promise<void> | null = null
   private hasConnectedOnce = false
+  private bootstrapRefresher: (() => Promise<TransportBootstrap | null>) | null = null
 
   constructor(bootstrap: TransportBootstrap) {
     this.url = bootstrap.wsUrl
@@ -79,6 +80,14 @@ export class WsTransport {
       ...current,
       wsUrl: bootstrap.wsUrl,
     }))
+  }
+
+  /**
+   * Registers a callback that is invoked before each connection attempt.
+   * Use this to refresh the auth token when the server may have restarted.
+   */
+  registerBootstrapRefresher(fn: () => Promise<TransportBootstrap | null>): void {
+    this.bootstrapRefresher = fn
   }
 
   getStatus(): TransportStatus {
@@ -264,7 +273,14 @@ export class WsTransport {
     await this.request(subscription.method, {})
   }
 
-  private startConnectionAttempt(): Promise<void> {
+  private async startConnectionAttempt(): Promise<void> {
+    if (this.bootstrapRefresher) {
+      const fresh = await this.bootstrapRefresher().catch(() => null)
+      if (fresh) {
+        this.url = fresh.wsUrl
+        this.authToken = fresh.wsAuthToken
+      }
+    }
     return new Promise<void>((resolve, reject) => {
       const ws = this.createSocket()
       this.attachSocketHandlers(ws, resolve, reject)

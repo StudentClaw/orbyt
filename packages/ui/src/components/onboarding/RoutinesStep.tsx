@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { OnboardingStepProps } from "./OnboardingWizard"
+import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
@@ -12,6 +13,19 @@ function formatHour(hour: number): string {
 
 export function RoutinesStep(_props: OnboardingStepProps) {
   const [activeCells, setActiveCells] = useState<ReadonlySet<string>>(new Set())
+
+  // Fire-and-forget sync to server whenever the grid changes
+  useEffect(() => {
+    const cells = Array.from(activeCells).map((key) => {
+      const [day, hour] = key.split("-").map(Number)
+      return { dayOfWeek: day, hourOfDay: hour }
+    })
+    try {
+      void getPrimaryWsRpcClient().onboarding.setRoutines({ cells }).catch(() => undefined)
+    } catch {
+      // Runtime not yet initialised — skip sync, server will hydrate on connect
+    }
+  }, [activeCells])
 
   const toggleCell = (day: number, hour: number) => {
     const key = `${day}-${hour}`

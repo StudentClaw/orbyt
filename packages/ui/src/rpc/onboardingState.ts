@@ -1,4 +1,6 @@
+import type { OnboardingStepName, OnboardingStepStatus } from "@student-claw/contracts"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
+import type { WsRpcClient } from "./wsRpcClient"
 
 export interface OnboardingStepDefinition {
   readonly id: string
@@ -8,8 +10,7 @@ export interface OnboardingStepDefinition {
 
 export const ONBOARDING_STEPS: ReadonlyArray<OnboardingStepDefinition> = [
   { id: "welcome", label: "Welcome", required: false },
-  { id: "canvas-credential", label: "Canvas Setup", required: true },
-  { id: "ai-auth", label: "AI Connection", required: true },
+  { id: "ai-auth", label: "AI Connection", required: false },
   { id: "preferences", label: "Preferences", required: false },
   { id: "routines", label: "Routines", required: false },
   { id: "first-sync", label: "First Sync", required: false },
@@ -27,7 +28,6 @@ export interface OnboardingWizardState {
   readonly currentStep: number
   readonly steps: ReadonlyArray<OnboardingStepState>
   readonly overallStatus: "in_progress" | "completed"
-  readonly canvasTokenValidated: boolean
   readonly aiAuthStatus: AiAuthStatus
 }
 
@@ -45,7 +45,6 @@ function createInitialState(): OnboardingWizardState {
     currentStep: 0,
     steps: createInitialSteps(),
     overallStatus: "in_progress",
-    canvasTokenValidated: false,
     aiAuthStatus: "pending",
   }
 }
@@ -53,6 +52,13 @@ function createInitialState(): OnboardingWizardState {
 const onboardingWizardAtom = createAtom<OnboardingWizardState>(
   "onboarding-wizard",
   createInitialState(),
+)
+
+// Tracks whether the server hydration round-trip has completed (success or failure).
+// Used by the onboarding guard to avoid premature redirects.
+export const serverHydrationCompleteAtom = createAtom<boolean>(
+  "onboarding-server-hydration-complete",
+  false,
 )
 
 // --- Imperative getters ---
@@ -84,6 +90,9 @@ export function advanceOnboardingStep(): void {
     currentStep: Math.min(state.currentStep + 1, maxStep),
     steps: updatedSteps,
   })
+
+  const stepName = ONBOARDING_STEPS[state.currentStep].id
+  syncStepToServer(stepName as OnboardingStepName, "completed")
 }
 
 export function skipOnboardingStep(): void {
@@ -103,6 +112,9 @@ export function skipOnboardingStep(): void {
     currentStep: Math.min(state.currentStep + 1, maxStep),
     steps: updatedSteps,
   })
+
+  const stepName = ONBOARDING_STEPS[state.currentStep].id
+  syncStepToServer(stepName as OnboardingStepName, "skipped")
 }
 
 export function goToOnboardingStep(index: number): void {
@@ -117,20 +129,16 @@ export function goToOnboardingStep(index: number): void {
 
 // --- Validation flags ---
 
-export function setCanvasTokenValidated(valid: boolean): void {
-  const state = appAtomRegistry.get(onboardingWizardAtom)
-  appAtomRegistry.set(onboardingWizardAtom, {
-    ...state,
-    canvasTokenValidated: valid,
-  })
-}
-
 export function setAiAuthStatus(status: AiAuthStatus): void {
   const state = appAtomRegistry.get(onboardingWizardAtom)
   appAtomRegistry.set(onboardingWizardAtom, {
     ...state,
     aiAuthStatus: status,
   })
+}
+
+export function setCanvasTokenValidated(_validated: boolean): void {
+  // Backward-compatible no-op for older onboarding step components/tests.
 }
 
 // --- Completion ---
@@ -141,6 +149,7 @@ export function completeOnboarding(): void {
     ...state,
     overallStatus: "completed" as const,
   })
+  void syncOverallStatusToServer("completed")
 }
 
 // --- localStorage persistence ---
@@ -174,6 +183,109 @@ export function hydrateOnboardingState(): void {
   }
 }
 
+// --- Server sync ---
+
+let _primaryClient: WsRpcClient | null = null
+
+/**
+ * Called once by appRuntime to provide the RPC client for fire-and-forget syncs.
+ */
+export function setOnboardingRpcClient(client: WsRpcClient): void {
+  _primaryClient = client
+}
+
+function syncStepToServer(stepName: OnboardingStepName, status: OnboardingStepStatus): void {
+  if (!_primaryClient) return
+  void _primaryClient.onboarding
+    .setStepStatus({ stepName, status })
+    .catch(() => {
+      // Server sync failure is non-fatal — localStorage is the fallback
+    })
+}
+
+function syncOverallStatusToServer(status: "in_progress" | "completed"): Promise<void> {
+  if (!_primaryClient) return Promise.resolve()
+  return _primaryClient.onboarding
+    .setOverallStatus({ status })
+    .then(() => undefined)
+    .catch(() => undefined)
+}
+
+/**
+ * Hydrates onboarding state from the server after the WebSocket connects.
+ * Falls back to localStorage on any failure.
+ */
+export async function hydrateOnboardingStateFromServer(client: WsRpcClient): Promise<void> {
+  try {
+    const [snapshot, aiAuth] = await Promise.all([
+      client.onboarding.getSnapshot(),
+      client.onboarding.getAiAuth(),
+    ])
+
+    // Map server steps to wizard step states, aligned to ONBOARDING_STEPS order
+    const steps: ReadonlyArray<OnboardingStepState> = ONBOARDING_STEPS.map((def) => {
+      const record = snapshot.steps.find((s) => s.stepName === def.id)
+      if (!record) return { status: "pending" as const, completedAt: null }
+      return {
+        status: record.status,
+        completedAt: record.completedAt,
+      }
+    })
+
+    // Derive currentStep as index of first non-completed step
+    const firstPending = steps.findIndex((s) => s.status !== "completed")
+    const currentStep = firstPending === -1 ? ONBOARDING_STEPS.length - 1 : firstPending
+
+    // Derive flags from step state + ai auth
+    const aiAuthStatus: AiAuthStatus =
+      aiAuth.status === "connected" ? "connected"
+        : aiAuth.status === "skipped" ? "skipped"
+          : "pending"
+
+    appAtomRegistry.set(onboardingWizardAtom, {
+      currentStep,
+      steps,
+      overallStatus: snapshot.overallStatus,
+      aiAuthStatus,
+    })
+  } catch {
+    // Server unreachable or method not yet implemented — fall back to localStorage
+    hydrateOnboardingState()
+  } finally {
+    appAtomRegistry.set(serverHydrationCompleteAtom, true)
+  }
+}
+
+// --- Dev reset ---
+
+/**
+ * Soft reset: clears wizard step state, keeps Canvas token + AI auth.
+ */
+export async function resetOnboardingWizardState(client: WsRpcClient): Promise<void> {
+  await client.dev.resetSoft().catch(() => undefined)
+  appAtomRegistry.set(onboardingWizardAtom, createInitialState())
+  appAtomRegistry.set(serverHydrationCompleteAtom, false)
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Hard reset: clears everything including Canvas token and AI auth.
+ */
+export async function resetAllOnboardingState(client: WsRpcClient): Promise<void> {
+  await client.dev.resetHard().catch(() => undefined)
+  appAtomRegistry.set(onboardingWizardAtom, createInitialState())
+  appAtomRegistry.set(serverHydrationCompleteAtom, false)
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 // --- React hooks ---
 
 export function useOnboardingState(): OnboardingWizardState {
@@ -186,6 +298,10 @@ export function useOnboardingStep(): number {
 
 export function useIsOnboardingComplete(): boolean {
   return useAtomValue(onboardingWizardAtom, (s) => s.overallStatus === "completed")
+}
+
+export function useIsHydrationComplete(): boolean {
+  return useAtomValue(serverHydrationCompleteAtom)
 }
 
 // --- Test reset ---

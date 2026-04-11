@@ -37,6 +37,7 @@ describe("Database migrations", () => {
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("orchestration_turns")
     expect(tables).toContain("provider_runtime_sessions")
+    expect(tables).toContain("chat_workspaces")
 
     db.close()
   })
@@ -49,7 +50,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(3)
+    expect(version?.version).toBe(5)
 
     db.close()
   })
@@ -61,8 +62,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(3)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3])
+    expect(rows.length).toBe(5)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -106,9 +107,10 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(3)
+    expect(version?.version).toBe(5)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
+    expect(tables).toContain("chat_workspaces")
     expect(tables).toContain("canvas_accounts")
 
     const columns = db
@@ -137,6 +139,36 @@ describe("Database migrations", () => {
     db.close()
   })
 
+  test("migration adds workspace ownership and imports legacy chats", () => {
+    const db = new BunDatabase(":memory:")
+    runMigrations(db)
+
+    const legacyWorkspace = db
+      .query<{
+        id: string
+        kind: string
+        name: string
+        root_path: string | null
+      }, []>(
+        "SELECT id, kind, name, root_path FROM chat_workspaces WHERE id = 'workspace_legacy'",
+      )
+      .get()
+    const threadColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(orchestration_threads)")
+      .all()
+      .map((column) => column.name)
+
+    expect(legacyWorkspace).toEqual({
+      id: "workspace_legacy",
+      kind: "legacy",
+      name: "Legacy chats",
+      root_path: null,
+    })
+    expect(threadColumns).toContain("workspace_id")
+
+    db.close()
+  })
+
   test("migration preserves canvas account metadata while clearing plaintext credentials", () => {
     const db = new BunDatabase(":memory:")
     db.run(`
@@ -152,6 +184,17 @@ describe("Database migrations", () => {
         api_token TEXT NOT NULL,
         user_id TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    // Migration 5 alters orchestration_threads, so we need the table from migration 2
+    db.run(`
+      CREATE TABLE IF NOT EXISTS orchestration_threads (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_turn_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )
     `)
     db.run(

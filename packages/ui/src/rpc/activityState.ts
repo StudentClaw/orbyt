@@ -4,7 +4,11 @@ import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 
 export type ActivityFilterCategory = "all" | ActivityCategory
 
-const activityEntriesAtom = createAtom<ReadonlyArray<ActivityFeedEntry>>(
+export interface ActivityFeedEntryWithMeta extends ActivityFeedEntry {
+  readonly receivedAt: string // ISO timestamp, client-side only
+}
+
+const activityEntriesAtom = createAtom<ReadonlyArray<ActivityFeedEntryWithMeta>>(
   "activity-entries",
   [],
 )
@@ -21,7 +25,7 @@ const activityFilterAtom = createAtom<ActivityFilterCategory>(
 
 // --- Imperative getters/setters ---
 
-export function getActivityEntries(): ReadonlyArray<ActivityFeedEntry> {
+export function getActivityEntries(): ReadonlyArray<ActivityFeedEntryWithMeta> {
   return appAtomRegistry.get(activityEntriesAtom)
 }
 
@@ -39,6 +43,11 @@ export function setActivityFilter(filter: ActivityFilterCategory): void {
 
 export function markAllActivityRead(): void {
   appAtomRegistry.set(activityUnreadCountAtom, 0)
+}
+
+export function setActivityEntries(entries: ReadonlyArray<ActivityFeedEntryWithMeta>): void {
+  appAtomRegistry.set(activityEntriesAtom, entries)
+  appAtomRegistry.set(activityUnreadCountAtom, entries.length)
 }
 
 // --- Event application ---
@@ -59,11 +68,12 @@ export function applyActivityFeedUpsertEvent(data: {
     )
     appAtomRegistry.set(activityEntriesAtom, updated)
   } else {
-    const newEntry: ActivityFeedEntry = {
+    const newEntry: ActivityFeedEntryWithMeta = {
       id: data.entryId as ActivityFeedEntry["id"],
       category: data.category as ActivityCategory,
       type: data.category,
       title: data.title,
+      receivedAt: new Date().toISOString(),
     }
     appAtomRegistry.set(activityEntriesAtom, [newEntry, ...current])
     appAtomRegistry.set(
@@ -76,9 +86,9 @@ export function applyActivityFeedUpsertEvent(data: {
 // --- Pure derivation functions ---
 
 export function filterActivityEntries(
-  entries: ReadonlyArray<ActivityFeedEntry>,
+  entries: ReadonlyArray<ActivityFeedEntryWithMeta>,
   filter: ActivityFilterCategory,
-): ReadonlyArray<ActivityFeedEntry> {
+): ReadonlyArray<ActivityFeedEntryWithMeta> {
   if (filter === "all") return entries
   return entries.filter((e) => e.category === filter)
 }
@@ -106,7 +116,7 @@ export function startActivityStateSync(client: WsRpcClient): () => void {
 
 // --- React hooks ---
 
-export function useActivityEntries(): ReadonlyArray<ActivityFeedEntry> {
+export function useActivityEntries(): ReadonlyArray<ActivityFeedEntryWithMeta> {
   return useAtomValue(activityEntriesAtom)
 }
 
@@ -118,7 +128,7 @@ export function useActivityFilter(): ActivityFilterCategory {
   return useAtomValue(activityFilterAtom)
 }
 
-export function useFilteredActivityEntries(): ReadonlyArray<ActivityFeedEntry> {
+export function useFilteredActivityEntries(): ReadonlyArray<ActivityFeedEntryWithMeta> {
   return useAtomValue(activityEntriesAtom, (entries) =>
     filterActivityEntries(entries, appAtomRegistry.get(activityFilterAtom)),
   )

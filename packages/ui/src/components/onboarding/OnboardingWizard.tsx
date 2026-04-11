@@ -7,11 +7,11 @@ import {
   goToOnboardingStep,
   completeOnboarding,
   persistOnboardingState,
+  setAiAuthStatus,
 } from "@/rpc/onboardingState"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { WelcomeStep } from "./WelcomeStep"
-import { CanvasCredentialStep } from "./CanvasCredentialStep"
 import { AiAuthStep } from "./AiAuthStep"
 import { PreferencesStep } from "./PreferencesStep"
 import { RoutinesStep } from "./RoutinesStep"
@@ -26,7 +26,6 @@ interface OnboardingStepProps {
 
 const STEP_COMPONENTS: ReadonlyArray<(props: OnboardingStepProps) => React.ReactNode> = [
   WelcomeStep,
-  CanvasCredentialStep,
   AiAuthStep,
   PreferencesStep,
   RoutinesStep,
@@ -42,6 +41,8 @@ export function OnboardingWizard() {
   const stepDef = ONBOARDING_STEPS[currentStep]
   const isLastStep = currentStep === ONBOARDING_STEPS.length - 1
   const isFirstStep = currentStep === 0
+  const isAiAuthStep = stepDef.id === "ai-auth"
+  const isAiConnected = state.aiAuthStatus === "connected"
   const progressPercent = ((currentStep + 1) / ONBOARDING_STEPS.length) * 100
   const navigate = useNavigate()
 
@@ -50,6 +51,10 @@ export function OnboardingWizard() {
       completeOnboarding()
       persistOnboardingState()
       navigate({ to: "/" })
+    } else if (isAiAuthStep && !isAiConnected) {
+      setAiAuthStatus("skipped")
+      skipOnboardingStep()
+      persistOnboardingState()
     } else {
       advanceOnboardingStep()
       persistOnboardingState()
@@ -103,23 +108,25 @@ export function OnboardingWizard() {
             </Button>
           )}
         </div>
-        <div className="flex gap-2">
-          {!stepDef.required && !isLastStep && (
+        {!isFirstStep && (
+          <div className="flex gap-2">
+            {!stepDef.required && !isLastStep && !isAiAuthStep && (
+              <Button
+                variant="outline"
+                onClick={handleSkip}
+                data-testid="onboarding-skip"
+              >
+                Skip
+              </Button>
+            )}
             <Button
-              variant="outline"
-              onClick={handleSkip}
-              data-testid="onboarding-skip"
+              onClick={handleNext}
+              data-testid="onboarding-next"
             >
-              Skip
+              {isLastStep ? "Finish" : isAiAuthStep && !isAiConnected ? "Skip" : "Next"}
             </Button>
-          )}
-          <Button
-            onClick={handleNext}
-            data-testid="onboarding-next"
-          >
-            {isLastStep ? "Finish" : "Next"}
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

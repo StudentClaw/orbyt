@@ -1,4 +1,5 @@
 import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRuntime"
+import { DevOnboardingControls } from "@/components/dev/DevOnboardingControls"
 
 export function SettingsPage() {
   const bootstrap = useRuntimeBootstrap()
@@ -13,6 +14,8 @@ export function SettingsPage() {
           ? `${bootstrap.platform} · ${serverConfig.appVersion}`
           : "Waiting for runtime metadata"}
       </p>
+
+      {import.meta.env.DEV && <DevOnboardingControls />}
     </div>
   )
 }

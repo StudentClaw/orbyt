@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, nativeImage } from "electron"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
@@ -14,7 +14,19 @@ function resolvePreloadPath(): string {
   return path.join(currentDir, "../preload/preload.js")
 }
 
+function resolveIconPath(): string {
+  // In production, resources are next to the app; in dev, relative to project root
+  const primaryCandidate = path.join(currentDir, "../../resources/icon.png")
+  const candidates = [
+    primaryCandidate,
+    path.join(currentDir, "../../../resources/icon.png"),
+  ]
+  return candidates.find(existsSync) ?? primaryCandidate
+}
+
 export function createWindow(): BrowserWindow {
+  const icon = nativeImage.createFromPath(resolveIconPath())
+
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -22,10 +34,13 @@ export function createWindow(): BrowserWindow {
     minHeight: 600,
     backgroundColor: "#09090b",
     show: false,
+    icon,
+    title: "Student Claw",
     webPreferences: {
       preload: resolvePreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
   })
 

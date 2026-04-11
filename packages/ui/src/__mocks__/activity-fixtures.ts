@@ -1,6 +1,8 @@
-import type { ActivityFeedEntry } from "@student-claw/contracts"
+import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
 
-export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
+const NOW = new Date().toISOString()
+
+export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntryWithMeta> = [
   {
     id: "a1" as any,
     category: "canvas",
@@ -9,6 +11,7 @@ export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
     body: "You received 92/100 on Homework 3 in CS 101",
     priority: 2,
     deepLink: "/",
+    receivedAt: NOW,
   },
   {
     id: "a2" as any,
@@ -17,6 +20,7 @@ export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
     title: "Study session starting soon",
     body: "Your CS 101 study session starts in 15 minutes",
     priority: 3,
+    receivedAt: NOW,
   },
   {
     id: "a3" as any,
@@ -26,6 +30,7 @@ export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
     body: "Due April 18 in MATH 240",
     priority: 2,
     deepLink: "/",
+    receivedAt: NOW,
   },
   {
     id: "a4" as any,
@@ -34,6 +39,7 @@ export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
     title: "Weekly insight",
     body: "You completed 80% of planned sessions this week",
     priority: 1,
+    receivedAt: NOW,
   },
   {
     id: "a5" as any,
@@ -42,5 +48,6 @@ export const MOCK_ACTIVITY_ENTRIES: ReadonlyArray<ActivityFeedEntry> = [
     title: "Plan generated for next week",
     body: "12 study sessions scheduled",
     priority: 1,
+    receivedAt: NOW,
   },
 ]

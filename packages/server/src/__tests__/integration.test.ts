@@ -63,15 +63,27 @@ describe("Server integration", () => {
               },
             }),
             getSnapshot: async () => ({
+              workspaces: [],
               threads: [],
               turns: [],
               providerStatus: "idle" as const,
               ready: true,
               lastSequence: 1,
             }),
+            createWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+            relinkWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+            deleteWorkspace: async () => ({ deleted: true }),
             createThread: async () => ({ threadId }),
             sendTurn: async () => ({ turnId }),
             interruptTurn: async () => ({ interrupted: true }),
+          },
+          database: {
+            db,
+            get: () => null,
+            query: () => [],
+            execute: () => undefined,
+            transaction: <T>(fn: () => T) => fn(),
+            close: () => undefined,
           },
         })
         ws.send(response.response)

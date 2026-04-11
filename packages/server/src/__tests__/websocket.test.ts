@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test"
+import { Database as BunDatabase } from "bun:sqlite"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
 import { routeMessage } from "../ws/Router.js"
 
@@ -7,6 +8,7 @@ const mockWs = { readyState: 1, send: () => undefined } as never
 function makeDependencies() {
   const threadId = "thread_1" as ThreadId
   const turnId = "turn_1" as TurnId
+  const db = new BunDatabase(":memory:")
   return {
     readiness: {
       awaitReady: async () => undefined,
@@ -39,15 +41,27 @@ function makeDependencies() {
         },
       }),
       getSnapshot: async () => ({
+        workspaces: [],
         threads: [],
         turns: [],
         providerStatus: "idle" as const,
         ready: true,
         lastSequence: 1,
       }),
+      createWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+      relinkWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
+      deleteWorkspace: async () => ({ deleted: true }),
       createThread: async () => ({ threadId }),
       sendTurn: async () => ({ turnId }),
       interruptTurn: async () => ({ interrupted: true }),
+    },
+    database: {
+      db,
+      get: () => null,
+      query: () => [],
+      execute: () => undefined,
+      transaction: <T>(fn: () => T) => fn(),
+      close: () => db.close(),
     },
   }
 }

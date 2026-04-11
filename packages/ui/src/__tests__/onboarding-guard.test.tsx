@@ -3,6 +3,7 @@ import { render } from "@testing-library/react"
 
 const hookMocks = vi.hoisted(() => ({
   onboardingComplete: false,
+  hydrationComplete: true,
   chatPanelOpen: false,
   chatPanelWidth: 33,
   pathname: "/",
@@ -25,6 +26,7 @@ vi.mock("@/hooks/useAppRuntime", () => ({
     setPanelWidth: hookMocks.setPanelWidth,
   }),
   useIsOnboardingComplete: () => hookMocks.onboardingComplete,
+  useIsServerHydrationComplete: () => hookMocks.hydrationComplete,
 }))
 
 vi.mock("@/components/ui/sidebar", () => ({
@@ -48,12 +50,23 @@ import { AppShell } from "../components/shell/AppShell"
 describe("onboarding guard", () => {
   beforeEach(() => {
     hookMocks.onboardingComplete = false
+    hookMocks.hydrationComplete = true
     hookMocks.pathname = "/"
     hookMocks.navigateFn.mockClear()
   })
 
-  test("does not redirect when onboarding is incomplete while the guard is disabled", () => {
+  test("redirects to /onboarding when hydration complete and onboarding incomplete", () => {
     hookMocks.onboardingComplete = false
+    hookMocks.pathname = "/"
+
+    render(<AppShell />)
+
+    expect(hookMocks.navigateFn).toHaveBeenCalledWith({ to: "/onboarding" })
+  })
+
+  test("does not redirect when hydration is not yet complete", () => {
+    hookMocks.onboardingComplete = false
+    hookMocks.hydrationComplete = false
     hookMocks.pathname = "/"
 
     render(<AppShell />)

@@ -10,7 +10,6 @@ import {
   persistOnboardingState,
   resetOnboardingStateForTests,
   setAiAuthStatus,
-  setCanvasTokenValidated,
   skipOnboardingStep,
 } from "./onboardingState"
 
@@ -54,15 +53,13 @@ describe("onboardingState", () => {
   })
 
   describe("ONBOARDING_STEPS", () => {
-    test("has 7 steps", () => {
-      expect(ONBOARDING_STEPS).toHaveLength(7)
+    test("has 6 steps", () => {
+      expect(ONBOARDING_STEPS).toHaveLength(6)
     })
 
-    test("canvas-credential and ai-auth are required", () => {
-      const canvasStep = ONBOARDING_STEPS.find((s) => s.id === "canvas-credential")
+    test("ai-auth is not required", () => {
       const aiStep = ONBOARDING_STEPS.find((s) => s.id === "ai-auth")
-      expect(canvasStep?.required).toBe(true)
-      expect(aiStep?.required).toBe(true)
+      expect(aiStep?.required).toBe(false)
     })
 
     test("welcome is not required", () => {
@@ -126,12 +123,12 @@ describe("onboardingState", () => {
       expect(state.steps[0].status).toBe("skipped")
     })
 
-    test("does not skip required steps", () => {
-      goToOnboardingStep(1) // canvas-credential (required)
+    test("marks step as skipped on non-required steps", () => {
+      goToOnboardingStep(1) // ai-auth (not required)
       skipOnboardingStep()
       const state = getOnboardingState()
-      expect(state.currentStep).toBe(1) // should not have advanced
-      expect(state.steps[1].status).toBe("pending")
+      expect(state.currentStep).toBe(2) // should have advanced
+      expect(state.steps[1].status).toBe("skipped")
     })
   })
 
@@ -149,19 +146,6 @@ describe("onboardingState", () => {
 
       goToOnboardingStep(100)
       expect(getOnboardingState().currentStep).toBe(ONBOARDING_STEPS.length - 1)
-    })
-  })
-
-  describe("setCanvasTokenValidated", () => {
-    test("sets canvas token validated flag", () => {
-      setCanvasTokenValidated(true)
-      expect(getOnboardingState().canvasTokenValidated).toBe(true)
-    })
-
-    test("can be toggled back to false", () => {
-      setCanvasTokenValidated(true)
-      setCanvasTokenValidated(false)
-      expect(getOnboardingState().canvasTokenValidated).toBe(false)
     })
   })
 
@@ -215,7 +199,6 @@ describe("onboardingState", () => {
     test("hydrateOnboardingState restores from localStorage", () => {
       advanceOnboardingStep()
       advanceOnboardingStep()
-      setCanvasTokenValidated(true)
       persistOnboardingState()
 
       resetOnboardingStateForTests()
@@ -226,7 +209,6 @@ describe("onboardingState", () => {
       expect(state.currentStep).toBe(2)
       expect(state.steps[0].status).toBe("completed")
       expect(state.steps[1].status).toBe("completed")
-      expect(state.canvasTokenValidated).toBe(true)
     })
 
     test("hydrateOnboardingState handles missing localStorage gracefully", () => {
@@ -254,7 +236,6 @@ describe("onboardingState", () => {
   describe("resetOnboardingStateForTests", () => {
     test("resets all state to initial values", () => {
       advanceOnboardingStep()
-      setCanvasTokenValidated(true)
       setAiAuthStatus("connected")
       completeOnboarding()
 
@@ -263,7 +244,6 @@ describe("onboardingState", () => {
       const state = getOnboardingState()
       expect(state.currentStep).toBe(0)
       expect(state.overallStatus).toBe("in_progress")
-      expect(state.canvasTokenValidated).toBe(false)
       expect(state.aiAuthStatus).toBe("pending")
       expect(state.steps.every((s) => s.status === "pending")).toBe(true)
     })

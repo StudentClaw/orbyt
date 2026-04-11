@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "vitest"
-import type { ActivityFeedEntry } from "@student-claw/contracts"
 import {
   applyActivityFeedUpsertEvent,
   filterActivityEntries,
@@ -9,18 +8,20 @@ import {
   markAllActivityRead,
   resetActivityStateForTests,
   setActivityFilter,
+  type ActivityFeedEntryWithMeta,
 } from "./activityState"
 
 function makeEntry(
   id: string,
   category: "canvas" | "planner" | "workflow" | "insight",
-  overrides?: Partial<ActivityFeedEntry>,
-): ActivityFeedEntry {
+  overrides?: Partial<ActivityFeedEntryWithMeta>,
+): ActivityFeedEntryWithMeta {
   return {
     id: id as any,
     category,
     type: "test_type",
     title: `Entry ${id}`,
+    receivedAt: new Date().toISOString(),
     ...overrides,
   }
 }
@@ -136,7 +137,7 @@ describe("activityState", () => {
   })
 
   describe("filterActivityEntries", () => {
-    const entries: ReadonlyArray<ActivityFeedEntry> = [
+    const entries: ReadonlyArray<ActivityFeedEntryWithMeta> = [
       makeEntry("e1", "canvas"),
       makeEntry("e2", "planner"),
       makeEntry("e3", "workflow"),

@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { WeeklyCalendar } from "../components/dashboard/WeeklyCalendar"
 import type { CalendarSession } from "../components/dashboard/calendar-model"
+import type { PrioritizedItem } from "../components/dashboard/priority-model"
 
 function makeSession(
   id: string,
@@ -21,13 +22,30 @@ function makeSession(
   }
 }
 
+function makeDeadline(
+  id: string,
+  effectiveDueAt: string,
+  overrides: Partial<PrioritizedItem> = {},
+): PrioritizedItem {
+  return {
+    id,
+    title: `Deadline ${id}`,
+    courseCode: "CS 101",
+    effectiveDueAt,
+    estimatedMinutes: 60,
+    impactScore: 0.5,
+    coursePriority: 1,
+    ...overrides,
+  }
+}
+
 describe("WeeklyCalendar", () => {
   const weekStart = "2026-04-06"
 
-  test("shows 'No sessions this week' when empty", () => {
+  test("shows empty message when no sessions or deadlines", () => {
     render(<WeeklyCalendar sessions={[]} weekStart={weekStart} />)
     expect(screen.getByTestId("no-sessions")).toBeDefined()
-    expect(screen.getByText("No sessions this week")).toBeDefined()
+    expect(screen.getByText("No events this week")).toBeDefined()
   })
 
   test("renders calendar grid with sessions", () => {
@@ -80,5 +98,35 @@ describe("WeeklyCalendar", () => {
 
     expect(screen.getByTestId("calendar-session-in")).toBeDefined()
     expect(screen.queryByTestId("calendar-session-out")).toBeNull()
+  })
+
+  test("clicking a session block opens a popover with time details", async () => {
+    const sessions = [
+      makeSession("s1", "2026-04-07T09:00:00Z", "2026-04-07T10:00:00Z"),
+    ]
+
+    render(<WeeklyCalendar sessions={sessions} weekStart={weekStart} />)
+
+    const block = screen.getByTestId("calendar-session-s1")
+    // Duration label only exists in the popover, not the trigger
+    expect(screen.queryByText(/1\.0h/)).toBeNull()
+    await userEvent.click(block)
+    expect(screen.getByText(/1\.0h/)).toBeDefined()
+  })
+
+  test("clicking a deadline block opens a popover with effort details", async () => {
+    const deadlines = [
+      makeDeadline("d1", "2026-04-07T14:00:00Z"),
+    ]
+
+    render(
+      <WeeklyCalendar sessions={[]} weekStart={weekStart} deadlines={deadlines} />,
+    )
+
+    const block = screen.getByTestId("calendar-deadline-d1")
+    // Effort estimate only exists in the popover, not the trigger
+    expect(screen.queryByText(/Est\. effort/)).toBeNull()
+    await userEvent.click(block)
+    expect(screen.getByText(/Est\. effort: 60 min/)).toBeDefined()
   })
 })

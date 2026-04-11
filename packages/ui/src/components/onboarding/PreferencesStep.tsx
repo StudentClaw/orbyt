@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { OnboardingStepProps } from "./OnboardingWizard"
+import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -24,6 +25,22 @@ export function PreferencesStep(_props: OnboardingStepProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [quietStart, setQuietStart] = useState("22:00")
   const [quietEnd, setQuietEnd] = useState("08:00")
+
+  // Fire-and-forget sync to server whenever preferences change
+  useEffect(() => {
+    try {
+      void getPrimaryWsRpcClient().onboarding.setPreferences({
+        studyTimes: Array.from(studyTimes).map((t) => t.toLowerCase()),
+        maxSessionMins: maxDuration,
+        offLimitDays: Array.from(offDays),
+        notificationEnabled: notificationsEnabled,
+        quietHoursStart: quietStart,
+        quietHoursEnd: quietEnd,
+      }).catch(() => undefined)
+    } catch {
+      // Runtime not yet initialised — skip sync, server will hydrate on connect
+    }
+  }, [studyTimes, maxDuration, offDays, notificationsEnabled, quietStart, quietEnd])
 
   const toggleStudyTime = (time: string) => {
     const next = new Set(studyTimes)

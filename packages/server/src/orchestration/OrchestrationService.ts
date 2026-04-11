@@ -1,16 +1,23 @@
+import { existsSync, statSync } from "node:fs"
+import path from "node:path"
 import { Context, Effect, Layer } from "effect"
 import {
   PUSH_CHANNELS,
   type CreateThreadResult,
+  type CreateWorkspaceResult,
+  type DeleteWorkspaceResult,
   type DesktopBootstrap,
   type InterruptTurnResult,
   type OrchestrationDomainEvent,
   type OrchestrationSnapshot,
   type OrchestrationThread,
   type OrchestrationTurn,
+  type OrchestrationWorkspace,
   type ProviderRuntimeEvent,
+  type RelinkWorkspaceResult,
   type SendTurnResult,
   type ServerConfig,
+  type WorkspaceId,
 } from "@student-claw/contracts"
 import { createId, sleepMs } from "@student-claw/shared-runtime"
 import { ConfigService } from "../config/ConfigService.js"
@@ -21,8 +28,21 @@ import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
 import { tokenizeStubResponse } from "./StubProvider.js"
 
+const LEGACY_WORKSPACE_ID = "workspace_legacy" as WorkspaceId
+
+type WorkspaceRow = {
+  id: string
+  kind: OrchestrationWorkspace["kind"]
+  name: string
+  root_path: string | null
+  availability: Extract<OrchestrationWorkspace, { kind: "filesystem" }>["availability"] | null
+  created_at: string
+  updated_at: string
+}
+
 type ThreadRow = {
   id: string
+  workspace_id: string
   title: string
   status: OrchestrationThread["status"]
   current_turn_id: string | null
@@ -37,6 +57,11 @@ type TurnRow = {
   status: OrchestrationTurn["status"]
   started_at: string
   completed_at: string | null
+}
+
+type WorkspaceThreadRow = {
+  id: string
+  current_turn_id: string | null
 }
 
 type TurnWorkRef = {
@@ -75,7 +100,10 @@ export interface OrchestrationServiceShape {
   readonly getDesktopBootstrap: () => Promise<DesktopBootstrap>
   readonly getServerConfig: () => Promise<ServerConfig>
   readonly getSnapshot: () => Promise<OrchestrationSnapshot>
-  readonly createThread: (commandId: string, title?: string) => Promise<CreateThreadResult>
+  readonly createWorkspace: (commandId: string, rootPath: string) => Promise<CreateWorkspaceResult>
+  readonly relinkWorkspace: (commandId: string, workspaceId: string, rootPath: string) => Promise<RelinkWorkspaceResult>
+  readonly deleteWorkspace: (commandId: string, workspaceId: string) => Promise<DeleteWorkspaceResult>
+  readonly createThread: (commandId: string, workspaceId: string, title?: string) => Promise<CreateThreadResult>
   readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
 }
@@ -96,9 +124,68 @@ function createRuntimeState(): OrchestrationRuntimeState {
   }
 }
 
+function normalizeRootPath(rawRootPath: string): string {
+  const trimmed = rawRootPath.trim()
+  if (trimmed.length === 0) {
+    throw new Error("Workspace root path is required")
+  }
+
+  const normalized = path.normalize(path.resolve(trimmed))
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized
+}
+
+function isDirectoryPath(rootPath: string): boolean {
+  if (!existsSync(rootPath)) {
+    return false
+  }
+
+  try {
+    return statSync(rootPath).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function deriveWorkspaceName(rootPath: string): string {
+  const name = path.basename(rootPath)
+  return name.length > 0 ? name : rootPath
+}
+
+function resolveWorkspaceAvailability(rootPath: string): Extract<
+  OrchestrationWorkspace,
+  { kind: "filesystem" }
+>["availability"] {
+  return isDirectoryPath(rootPath) ? "ready" : "missing"
+}
+
+function mapWorkspaceRow(row: WorkspaceRow): OrchestrationWorkspace {
+  if (row.kind === "filesystem") {
+    return {
+      id: row.id as WorkspaceId,
+      kind: "filesystem",
+      name: row.name,
+      rootPath: row.root_path ?? "",
+      availability: row.availability ?? "missing",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  return {
+    id: row.id as WorkspaceId,
+    kind: "legacy",
+    name: row.name,
+    rootPath: null,
+    availability: null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
 function mapThreadRow(row: ThreadRow): OrchestrationThread {
   return {
     id: row.id as OrchestrationThread["id"],
+    workspaceId: row.workspace_id as WorkspaceId,
     title: row.title,
     status: row.status,
     createdAt: row.created_at,
@@ -154,9 +241,36 @@ function recordReceipt(
   )
 }
 
+function readWorkspaceRow(database: DatabaseService, workspaceId: string): WorkspaceRow | null {
+  return database.get<WorkspaceRow>(
+    `SELECT id, kind, name, root_path, availability, created_at, updated_at
+     FROM chat_workspaces
+     WHERE id = ?`,
+    [workspaceId],
+  )
+}
+
+function readWorkspace(database: DatabaseService, workspaceId: string): OrchestrationWorkspace | null {
+  const row = readWorkspaceRow(database, workspaceId)
+  return row ? mapWorkspaceRow(row) : null
+}
+
+function readFilesystemWorkspaceByRootPath(
+  database: DatabaseService,
+  rootPath: string,
+): OrchestrationWorkspace | null {
+  const row = database.get<WorkspaceRow>(
+    `SELECT id, kind, name, root_path, availability, created_at, updated_at
+     FROM chat_workspaces
+     WHERE kind = 'filesystem' AND root_path = ?`,
+    [rootPath],
+  )
+  return row ? mapWorkspaceRow(row) : null
+}
+
 function readThread(database: DatabaseService, threadId: string): OrchestrationThread | null {
   const row = database.get<ThreadRow>(
-    `SELECT id, title, status, current_turn_id, created_at
+    `SELECT id, workspace_id, title, status, current_turn_id, created_at
      FROM orchestration_threads
      WHERE id = ?`,
     [threadId],
@@ -172,6 +286,59 @@ function readTurn(database: DatabaseService, turnId: string): OrchestrationTurn 
     [turnId],
   )
   return row ? mapTurnRow(row) : null
+}
+
+function readWorkspaceThreadRows(database: DatabaseService, workspaceId: string): readonly WorkspaceThreadRow[] {
+  return database.query<WorkspaceThreadRow>(
+    `SELECT id, current_turn_id
+     FROM orchestration_threads
+     WHERE workspace_id = ?`,
+    [workspaceId],
+  )
+}
+
+function updateWorkspaceAvailability(
+  database: DatabaseService,
+  workspaceId: string,
+  availability: Extract<OrchestrationWorkspace, { kind: "filesystem" }>["availability"],
+): void {
+  database.execute(
+    `UPDATE chat_workspaces
+     SET availability = ?, updated_at = ?
+     WHERE id = ?`,
+    [availability, new Date().toISOString(), workspaceId],
+  )
+}
+
+function refreshFilesystemWorkspaceAvailability(database: DatabaseService): void {
+  const rows = database.query<WorkspaceRow>(
+    `SELECT id, kind, name, root_path, availability, created_at, updated_at
+     FROM chat_workspaces
+     WHERE kind = 'filesystem'`,
+  )
+
+  if (rows.length === 0) {
+    return
+  }
+
+  database.transaction(() => {
+    for (const row of rows) {
+      if (!row.root_path) {
+        continue
+      }
+
+      const nextAvailability = resolveWorkspaceAvailability(row.root_path)
+      if (row.availability !== nextAvailability) {
+        updateWorkspaceAvailability(database, row.id, nextAvailability)
+      }
+    }
+  })
+}
+
+function assertWorkspaceAcceptsChat(workspace: OrchestrationWorkspace): void {
+  if (workspace.kind === "filesystem" && workspace.availability !== "ready") {
+    throw new Error(`Workspace is unavailable: ${workspace.name}`)
+  }
 }
 
 async function publishDomainEvent(
@@ -446,8 +613,16 @@ function buildServerConfig(): ServerConfig {
 }
 
 async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<OrchestrationSnapshot> {
+  refreshFilesystemWorkspaceAvailability(deps.database)
+
+  const workspaces = deps.database.query<WorkspaceRow>(
+    `SELECT id, kind, name, root_path, availability, created_at, updated_at
+     FROM chat_workspaces
+     ORDER BY created_at ASC`,
+  ).map(mapWorkspaceRow)
+
   const threads = deps.database.query<ThreadRow>(
-    `SELECT id, title, status, current_turn_id, created_at
+    `SELECT id, workspace_id, title, status, current_turn_id, created_at
      FROM orchestration_threads
      ORDER BY created_at ASC`,
   ).map(mapThreadRow)
@@ -463,6 +638,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   )
 
   return {
+    workspaces,
     threads,
     turns,
     providerStatus: provider?.status ?? "offline",
@@ -471,10 +647,11 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   }
 }
 
-function buildThread(title?: string): OrchestrationThread {
+function buildThread(workspaceId: string, title?: string): OrchestrationThread {
   const now = new Date().toISOString()
   return {
     id: createId("thread") as OrchestrationThread["id"],
+    workspaceId: workspaceId as WorkspaceId,
     title: title?.trim() || `Session ${new Date().toLocaleTimeString()}`,
     status: "idle",
     createdAt: now,
@@ -482,19 +659,204 @@ function buildThread(title?: string): OrchestrationThread {
   }
 }
 
+function buildFilesystemWorkspace(rootPath: string): Extract<OrchestrationWorkspace, { kind: "filesystem" }> {
+  const now = new Date().toISOString()
+  return {
+    id: createId("workspace") as WorkspaceId,
+    kind: "filesystem",
+    name: deriveWorkspaceName(rootPath),
+    rootPath,
+    availability: resolveWorkspaceAvailability(rootPath),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+async function createWorkspace(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  rawRootPath: string,
+): Promise<CreateWorkspaceResult> {
+  const rootPath = normalizeRootPath(rawRootPath)
+  if (!isDirectoryPath(rootPath)) {
+    throw new Error(`Workspace folder not found: ${rootPath}`)
+  }
+
+  const existing = readFilesystemWorkspaceByRootPath(deps.database, rootPath)
+  if (existing) {
+    if (existing.kind === "filesystem" && existing.availability !== "ready") {
+      updateWorkspaceAvailability(deps.database, existing.id, "ready")
+      const refreshed = readWorkspace(deps.database, existing.id)
+      if (refreshed) {
+        appendEvent(deps, "workspace.updated", { workspace: refreshed }, { commandId })
+        await publishDomainEvent(deps.pushBus, { type: "workspace.updated", workspace: refreshed })
+      }
+    }
+    recordReceipt(deps, commandId, "completed", { workspaceId: existing.id })
+    await deps.receiptBus.resolve(commandId, { workspaceId: existing.id })
+    return { workspaceId: existing.id }
+  }
+
+  const workspace = buildFilesystemWorkspace(rootPath)
+  deps.database.execute(
+    `INSERT INTO chat_workspaces (id, kind, name, root_path, availability, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      workspace.id,
+      workspace.kind,
+      workspace.name,
+      workspace.rootPath,
+      workspace.availability,
+      workspace.createdAt,
+      workspace.updatedAt,
+    ],
+  )
+
+  appendEvent(deps, "workspace.created", { workspace }, { commandId })
+  recordReceipt(deps, commandId, "completed", { workspaceId: workspace.id })
+  await publishDomainEvent(deps.pushBus, { type: "workspace.created", workspace })
+  await deps.receiptBus.resolve(commandId, { workspaceId: workspace.id })
+  return { workspaceId: workspace.id }
+}
+
+async function relinkWorkspace(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  workspaceId: string,
+  rawRootPath: string,
+): Promise<RelinkWorkspaceResult> {
+  const workspace = readWorkspace(deps.database, workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${workspaceId}`)
+  }
+  if (workspace.kind !== "filesystem") {
+    throw new Error("Only filesystem workspaces can be relinked")
+  }
+
+  const rootPath = normalizeRootPath(rawRootPath)
+  if (!isDirectoryPath(rootPath)) {
+    throw new Error(`Workspace folder not found: ${rootPath}`)
+  }
+
+  const duplicate = readFilesystemWorkspaceByRootPath(deps.database, rootPath)
+  if (duplicate && duplicate.id !== workspace.id) {
+    throw new Error(`Workspace already exists for folder: ${rootPath}`)
+  }
+
+  const now = new Date().toISOString()
+  deps.database.execute(
+    `UPDATE chat_workspaces
+     SET name = ?, root_path = ?, availability = ?, updated_at = ?
+     WHERE id = ?`,
+    [deriveWorkspaceName(rootPath), rootPath, "ready", now, workspaceId],
+  )
+
+  const updatedWorkspace = readWorkspace(deps.database, workspaceId)
+  if (!updatedWorkspace) {
+    throw new Error(`Workspace not found after relink: ${workspaceId}`)
+  }
+
+  appendEvent(deps, "workspace.updated", { workspace: updatedWorkspace }, { commandId })
+  recordReceipt(deps, commandId, "completed", { workspaceId: updatedWorkspace.id })
+  await publishDomainEvent(deps.pushBus, { type: "workspace.updated", workspace: updatedWorkspace })
+  await deps.receiptBus.resolve(commandId, { workspaceId: updatedWorkspace.id })
+  return { workspaceId: updatedWorkspace.id }
+}
+
+function buildDeletePlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ")
+}
+
+async function deleteWorkspace(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  workspaceId: string,
+): Promise<DeleteWorkspaceResult> {
+  const workspace = readWorkspace(deps.database, workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${workspaceId}`)
+  }
+
+  const threadRows = readWorkspaceThreadRows(deps.database, workspaceId)
+  const deletedThreadIds = threadRows.map((row) => row.id as OrchestrationThread["id"])
+  const deletedThreadIdSet = new Set(threadRows.map((row) => row.id))
+  const activeTurnIds = threadRows.flatMap((row) => row.current_turn_id ? [row.current_turn_id] : [])
+
+  for (const turnId of activeTurnIds) {
+    deps.state.activeTurns.delete(turnId)
+  }
+
+  const remainingQueue = deps.state.workQueue.filter((item) => !deletedThreadIdSet.has(item.threadId))
+  deps.state.workQueue.splice(0, deps.state.workQueue.length, ...remainingQueue)
+
+  deps.database.transaction(() => {
+    if (deletedThreadIds.length > 0) {
+      const placeholders = buildDeletePlaceholders(deletedThreadIds.length)
+      deps.database.execute(
+        `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
+        deletedThreadIds,
+      )
+      deps.database.execute(
+        `DELETE FROM provider_runtime_sessions WHERE thread_id IN (${placeholders})`,
+        deletedThreadIds,
+      )
+      deps.database.execute(
+        `DELETE FROM orchestration_threads WHERE id IN (${placeholders})`,
+        deletedThreadIds,
+      )
+    }
+
+    deps.database.execute(`DELETE FROM chat_workspaces WHERE id = ?`, [workspaceId])
+  })
+
+  appendEvent(
+    deps,
+    "workspace.deleted",
+    { workspaceId, deletedThreadIds },
+    { commandId },
+  )
+  recordReceipt(deps, commandId, "completed", {
+    deleted: true,
+    workspaceId,
+    deletedThreadIds,
+  })
+  await publishDomainEvent(deps.pushBus, {
+    type: "workspace.deleted",
+    workspaceId: workspace.id,
+    deletedThreadIds,
+  })
+  await deps.receiptBus.resolve(commandId, { deleted: true })
+  return { deleted: true }
+}
+
 async function createThread(
   deps: OrchestrationRuntimeDeps,
   commandId: string,
+  workspaceId: string,
   title?: string,
 ): Promise<CreateThreadResult> {
-  const thread = buildThread(title)
+  const workspace = readWorkspace(deps.database, workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${workspaceId}`)
+  }
+  assertWorkspaceAcceptsChat(workspace)
+
+  const thread = buildThread(workspaceId, title)
   const now = new Date().toISOString()
 
   deps.database.transaction(() => {
     deps.database.execute(
-      `INSERT INTO orchestration_threads (id, title, status, current_turn_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [thread.id, thread.title, thread.status, thread.currentTurnId, thread.createdAt, now],
+      `INSERT INTO orchestration_threads (id, workspace_id, title, status, current_turn_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        thread.id,
+        thread.workspaceId,
+        thread.title,
+        thread.status,
+        thread.currentTurnId,
+        thread.createdAt,
+        now,
+      ],
     )
     deps.database.execute(
       `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
@@ -504,7 +866,7 @@ async function createThread(
   })
 
   appendEvent(deps, "thread.created", { thread }, { threadId: thread.id, commandId })
-  recordReceipt(deps, commandId, "completed", { threadId: thread.id })
+  recordReceipt(deps, commandId, "completed", { threadId: thread.id, workspaceId })
   await publishDomainEvent(deps.pushBus, { type: "thread.created", thread })
   await deps.receiptBus.resolve(commandId, { threadId: thread.id })
   return { threadId: thread.id }
@@ -529,9 +891,16 @@ async function sendTurn(
   threadId: string,
   content: string,
 ): Promise<SendTurnResult> {
-  if (!readThread(deps.database, threadId)) {
+  const thread = readThread(deps.database, threadId)
+  if (!thread) {
     throw new Error(`Thread not found: ${threadId}`)
   }
+
+  const workspace = readWorkspace(deps.database, thread.workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${thread.workspaceId}`)
+  }
+  assertWorkspaceAcceptsChat(workspace)
 
   const turn = buildStreamingTurn(threadId, content)
   const now = new Date().toISOString()
@@ -597,12 +966,18 @@ async function interruptTurn(
 
 function createOrchestrationService(deps: OrchestrationRuntimeDeps): OrchestrationServiceShape {
   reconcileStaleStreamingState(deps.database)
+  refreshFilesystemWorkspaceAvailability(deps.database)
 
   return {
     getDesktopBootstrap: async () => buildDesktopBootstrap(deps.config),
     getServerConfig: async () => buildServerConfig(),
     getSnapshot: () => getSnapshot(deps),
-    createThread: (commandId, title) => createThread(deps, commandId, title),
+    createWorkspace: (commandId, rootPath) => createWorkspace(deps, commandId, rootPath),
+    relinkWorkspace: (commandId, workspaceId, rootPath) =>
+      relinkWorkspace(deps, commandId, workspaceId, rootPath),
+    deleteWorkspace: (commandId, workspaceId) => deleteWorkspace(deps, commandId, workspaceId),
+    createThread: (commandId, workspaceId, title) =>
+      createThread(deps, commandId, workspaceId, title),
     sendTurn: (commandId, threadId, content) => sendTurn(deps, commandId, threadId, content),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
   }

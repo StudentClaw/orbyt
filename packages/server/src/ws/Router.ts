@@ -1,26 +1,34 @@
 import { Schema } from "@effect/schema"
 import {
+  CreateWorkspaceParams,
   CreateThreadParams,
+  DeleteWorkspaceParams,
   InterruptTurnParams,
   OrchestrationSnapshot,
   PUSH_CHANNELS,
   RPC_METHODS,
+  RelinkWorkspaceParams,
   RpcErrorResponseEnvelope,
   RpcRequestEnvelope,
   RpcSuccessResponseEnvelope,
   SendTurnParams,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
+  SetAiAuthStatusParams,
+  SetStepStatusParams,
+  SetOverallStatusParams,
 } from "@student-claw/contracts"
 import type { WebSocket } from "ws"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
+import type { DatabaseService } from "../db/Database.js"
 
 type RouteDependencies = {
   readonly orchestration: OrchestrationServiceShape
   readonly pushBus: PushBusService
   readonly readiness: ServerReadinessService
+  readonly database: DatabaseService
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -156,6 +164,12 @@ async function handleOrchestrationMethod(
         id,
         Schema.encodeSync(OrchestrationSnapshot)(await dependencies.orchestration.getSnapshot()),
       )
+    case RPC_METHODS.ORCHESTRATION_CREATE_WORKSPACE:
+      return handleCreateWorkspace(id, params, dependencies)
+    case RPC_METHODS.ORCHESTRATION_RELINK_WORKSPACE:
+      return handleRelinkWorkspace(id, params, dependencies)
+    case RPC_METHODS.ORCHESTRATION_DELETE_WORKSPACE:
+      return handleDeleteWorkspace(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_CREATE_THREAD:
       return handleCreateThread(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_SEND_TURN:
@@ -165,6 +179,63 @@ async function handleOrchestrationMethod(
     default:
       return null
   }
+}
+
+async function handleCreateWorkspace(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(
+    CreateWorkspaceParams,
+    params,
+    id,
+    "createWorkspace params are invalid",
+  )
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(id, await dependencies.orchestration.createWorkspace(id, decoded.rootPath))
+}
+
+async function handleRelinkWorkspace(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(
+    RelinkWorkspaceParams,
+    params,
+    id,
+    "relinkWorkspace params are invalid",
+  )
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(
+    id,
+    await dependencies.orchestration.relinkWorkspace(id, decoded.workspaceId, decoded.rootPath),
+  )
+}
+
+async function handleDeleteWorkspace(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(
+    DeleteWorkspaceParams,
+    params,
+    id,
+    "deleteWorkspace params are invalid",
+  )
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(id, await dependencies.orchestration.deleteWorkspace(id, decoded.workspaceId))
 }
 
 async function handleCreateThread(
@@ -177,7 +248,10 @@ async function handleCreateThread(
     return decoded
   }
 
-  return encodeSuccess(id, await dependencies.orchestration.createThread(id, decoded.title))
+  return encodeSuccess(
+    id,
+    await dependencies.orchestration.createThread(id, decoded.workspaceId, decoded.title),
+  )
 }
 
 async function handleSendTurn(
@@ -250,6 +324,81 @@ async function subscribeConfig(
   return encodeSuccess(id, { subscribed: true })
 }
 
+async function handleOnboardingMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method, params } = request
+  const { database } = dependencies
+
+  switch (method) {
+    case RPC_METHODS.ONBOARDING_GET_AI_AUTH: {
+      const row = database.get<{ status: string; provider: string | null; connected_at: string | null }>(
+        "SELECT status, provider, connected_at FROM ai_auth_state WHERE id = 1",
+      )
+      return encodeSuccess(id, {
+        status: row?.status ?? "pending",
+        provider: row?.provider ?? null,
+        connectedAt: row?.connected_at ?? null,
+      })
+    }
+    case RPC_METHODS.ONBOARDING_SET_AI_AUTH: {
+      const decoded = decodeParams(SetAiAuthStatusParams, params, id, "setAiAuth params are invalid")
+      if (typeof decoded === "string") return decoded
+      const now = new Date().toISOString()
+      database.execute(
+        `UPDATE ai_auth_state
+         SET status = ?, provider = ?, connected_at = ?, updated_at = ?
+         WHERE id = 1`,
+        [decoded.status, decoded.provider ?? null, decoded.status === "connected" ? now : null, now],
+      )
+      const row = database.get<{ status: string; provider: string | null; connected_at: string | null }>(
+        "SELECT status, provider, connected_at FROM ai_auth_state WHERE id = 1",
+      )
+      return encodeSuccess(id, {
+        status: row?.status ?? "pending",
+        provider: row?.provider ?? null,
+        connectedAt: row?.connected_at ?? null,
+      })
+    }
+    case RPC_METHODS.ONBOARDING_GET_SNAPSHOT: {
+      const steps = database.query<{ step_name: string; status: string; completed_at: string | null }>(
+        "SELECT step_name, status, completed_at FROM onboarding_state",
+      )
+      const meta = database.get<{ value: string }>(
+        "SELECT value FROM onboarding_meta WHERE key = 'overall_status'",
+      )
+      return encodeSuccess(id, {
+        steps: steps.map((s) => ({ stepName: s.step_name, status: s.status, completedAt: s.completed_at })),
+        overallStatus: meta?.value ?? "in_progress",
+      })
+    }
+    case RPC_METHODS.ONBOARDING_SET_STEP_STATUS: {
+      const decoded = decodeParams(SetStepStatusParams, params, id, "setStepStatus params are invalid")
+      if (typeof decoded === "string") return decoded
+      database.execute(
+        `INSERT INTO onboarding_state (step_name, status, completed_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(step_name) DO UPDATE SET status = excluded.status, completed_at = excluded.completed_at`,
+        [decoded.stepName, decoded.status, decoded.status === "completed" ? new Date().toISOString() : null],
+      )
+      return encodeSuccess(id, { ok: true })
+    }
+    case RPC_METHODS.ONBOARDING_SET_OVERALL_STATUS: {
+      const decoded = decodeParams(SetOverallStatusParams, params, id, "setOverallStatus params are invalid")
+      if (typeof decoded === "string") return decoded
+      database.execute(
+        `INSERT INTO onboarding_meta (key, value, updated_at) VALUES ('overall_status', ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [decoded.status, new Date().toISOString()],
+      )
+      return encodeSuccess(id, { ok: true })
+    }
+    default:
+      return null
+  }
+}
+
 /**
  * Routes a single RPC frame, validating envelopes and params before invoking server handlers.
  */
@@ -267,6 +416,7 @@ export async function routeMessage(
     const response = await handleServerMethod(decoded, ws, dependencies)
       ?? await handleStreamMethod(decoded, ws, dependencies)
       ?? await handleOrchestrationMethod(decoded, dependencies)
+      ?? await handleOnboardingMethod(decoded, dependencies)
 
     if (response) {
       return { response }

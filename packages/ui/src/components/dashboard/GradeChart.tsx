@@ -5,20 +5,20 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 
 interface GradeChartProps {
   readonly courses: ReadonlyArray<Course>
   readonly grades: ReadonlyArray<Grade>
 }
 
+// Use CSS variable colors from the theme (oklch via Tailwind)
 const COURSE_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
 ]
 
 interface ChartDataPoint {
@@ -36,17 +36,18 @@ function buildChartData(
     gradesByCourse.set(grade.courseId, [...existing, grade])
   }
 
-  // Sort each course's grades by postedAt
   for (const [courseId, courseGrades] of gradesByCourse) {
     gradesByCourse.set(
       courseId,
       courseGrades
         .filter((g) => g.postedAt)
-        .sort((a, b) => new Date(a.postedAt!).getTime() - new Date(b.postedAt!).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(a.postedAt!).getTime() - new Date(b.postedAt!).getTime(),
+        ),
     )
   }
 
-  // Find the max number of graded items across courses
   const maxItems = Math.max(
     ...Array.from(gradesByCourse.values()).map((g) => g.length),
     0,
@@ -88,16 +89,24 @@ export function GradeChart({ courses, grades }: GradeChartProps) {
   )
 
   return (
-    <Card data-testid="grade-chart">
-      <CardHeader>
-        <CardTitle className="text-sm font-medium">Grade Trends</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px] w-full">
+    <div data-testid="grade-chart">
+      <ChartContainer config={chartConfig} className="h-[180px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={Array.from(data)}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="label" />
-            <YAxis domain={[0, 100]} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+              axisLine={false}
+              tickLine={false}
+              width={28}
+            />
             <ChartTooltip content={<ChartTooltipContent />} />
             {coursesWithGrades.map((course, i) => (
               <Line
@@ -106,12 +115,13 @@ export function GradeChart({ courses, grades }: GradeChartProps) {
                 dataKey={course.code}
                 stroke={COURSE_COLORS[i % COURSE_COLORS.length]}
                 strokeWidth={2}
-                dot={{ r: 3 }}
+                dot={{ r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
               />
             ))}
           </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+        </ResponsiveContainer>
+      </ChartContainer>
+    </div>
   )
 }

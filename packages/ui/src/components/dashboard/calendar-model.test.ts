@@ -29,7 +29,8 @@ describe("sessionToGridPlacement", () => {
   const weekStart = "2026-04-06" // Monday
 
   test("maps 9:00-10:30 to correct row and span", () => {
-    const session = makeSession("s1", "2026-04-06T09:00:00Z", "2026-04-06T10:30:00Z")
+    // Use local time (no Z) so snapToSlot gives predictable local hours
+    const session = makeSession("s1", "2026-04-06T09:00:00", "2026-04-06T10:30:00")
     const placement = sessionToGridPlacement(session, weekStart)
 
     expect(placement.column).toBe(0) // Monday
@@ -39,7 +40,7 @@ describe("sessionToGridPlacement", () => {
 
   test("snaps to 15-min grid", () => {
     // 9:07 should snap to 9:00 (row 36), 10:22 should snap to 10:15 (row 41)
-    const session = makeSession("s1", "2026-04-06T09:07:00Z", "2026-04-06T10:22:00Z")
+    const session = makeSession("s1", "2026-04-06T09:07:00", "2026-04-06T10:22:00")
     const placement = sessionToGridPlacement(session, weekStart)
 
     expect(placement.rowStart).toBe(36) // snapped to 9:00
@@ -47,8 +48,8 @@ describe("sessionToGridPlacement", () => {
   })
 
   test("places sessions on correct day column", () => {
-    // Wednesday
-    const session = makeSession("s1", "2026-04-08T14:00:00Z", "2026-04-08T15:00:00Z")
+    // Wednesday at 2PM local
+    const session = makeSession("s1", "2026-04-08T14:00:00", "2026-04-08T15:00:00")
     const placement = sessionToGridPlacement(session, weekStart)
 
     expect(placement.column).toBe(2) // Wednesday = day index 2

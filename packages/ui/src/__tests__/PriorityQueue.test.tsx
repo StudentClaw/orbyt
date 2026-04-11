@@ -43,17 +43,18 @@ describe("PriorityQueue", () => {
     expect(cards[1].getAttribute("data-testid")).toBe("priority-card-green")
   })
 
-  test("limits visible items to maxItems", () => {
+  test("shows overflow indicator when items exceed maxItems", () => {
     const items = Array.from({ length: 10 }, (_, i) =>
       makeItem(`item-${i}`, { effectiveDueAt: hoursFromNow(100 + i) }),
     )
 
     render(<PriorityQueue items={items} now={now} maxItems={5} />)
 
+    // All 10 items are rendered in the scroll area (scroll reveals the rest)
     const queue = screen.getByTestId("priority-queue")
-    expect(queue.children).toHaveLength(5)
+    expect(queue.children).toHaveLength(10)
     expect(screen.getByTestId("priority-overflow")).toBeDefined()
-    expect(screen.getByText("+5 more")).toBeDefined()
+    expect(screen.getByText("↓ 5 more")).toBeDefined()
   })
 
   test("renders urgency badge and countdown for each card", () => {

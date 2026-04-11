@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import type { ActivityFeedEntry } from "@student-claw/contracts"
+import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
@@ -8,7 +8,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { ActivityFeedItem } from "../components/notifications/ActivityFeedItem"
 
-function makeEntry(overrides?: Partial<ActivityFeedEntry>): ActivityFeedEntry {
+function makeEntry(overrides?: Partial<ActivityFeedEntryWithMeta>): ActivityFeedEntryWithMeta {
   return {
     id: "test-1" as any,
     category: "canvas",
@@ -16,6 +16,7 @@ function makeEntry(overrides?: Partial<ActivityFeedEntry>): ActivityFeedEntry {
     title: "Test Entry",
     body: "Test body text",
     priority: 2,
+    receivedAt: new Date().toISOString(),
     ...overrides,
   }
 }
@@ -30,7 +31,8 @@ describe("ActivityFeedItem", () => {
 
   test("renders category label", () => {
     render(<ActivityFeedItem entry={makeEntry({ category: "planner" })} />)
-    expect(screen.getByText("planner")).toBeDefined()
+    // Category label is now capitalized "Planner"
+    expect(screen.getByText("Planner")).toBeDefined()
   })
 
   test("renders without body when body is undefined", () => {

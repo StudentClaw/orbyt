@@ -49,6 +49,7 @@ describe("@student-claw/contracts", () => {
       },
     })
     const snapshot = Schema.decodeUnknownSync(OrchestrationSnapshot)({
+      workspaces: [],
       threads: [],
       turns: [],
       providerStatus: "idle",
@@ -65,6 +66,7 @@ describe("@student-claw/contracts", () => {
   test("rejects oversized thread titles and turn content", () => {
     expect(() =>
       Schema.decodeUnknownSync(CreateThreadParams)({
+        workspaceId: "workspace_1",
         title: "x".repeat(MAX_THREAD_TITLE_LENGTH + 1),
       })
     ).toThrow()

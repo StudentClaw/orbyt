@@ -209,7 +209,7 @@ function spawnServerChild(
   dbPath: string,
   auth: WsHandshakeAuth,
 ): ChildProcess {
-  return spawn("bun", ["run", serverPath], {
+  const child = spawn("bun", ["run", serverPath], {
     env: {
       ...process.env,
       PORT: String(port),
@@ -218,6 +218,19 @@ function spawnServerChild(
     },
     stdio: "pipe",
   })
+
+  // Ensure the server child dies when the parent Electron process exits,
+  // including SIGTERM from electron-vite dev restarts.
+  const killChild = () => {
+    if (!child.killed) {
+      child.kill("SIGTERM")
+    }
+  }
+  process.on("exit", killChild)
+  process.on("SIGTERM", killChild)
+  process.on("SIGINT", killChild)
+
+  return child
 }
 
 function pipeChildOutput(child: ChildProcess): void {

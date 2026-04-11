@@ -8,12 +8,23 @@ import {
   ServerConfig,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
+  type AiAuthState,
   type Course,
+  type CreateWorkspaceResult,
   type CreateThreadResult,
+  type DeleteWorkspaceResult,
   type DesktopBootstrap,
   type InterruptTurnResult,
+  type OnboardingSnapshot,
   type PlannedSession,
+  type RelinkWorkspaceResult,
   type SendTurnResult,
+  type SetAiAuthStatusParams,
+  type SetOverallStatusParams,
+  type SetRoutinesParams,
+  type SetStepStatusParams,
+  type StudentPreference,
+  type UpdatePreferencesParams,
 } from "@student-claw/contracts"
 import { WsTransport } from "./wsTransport"
 
@@ -80,7 +91,10 @@ export interface WsRpcClient {
   }
   readonly orchestration: {
     readonly getSnapshot: () => Promise<OrchestrationSnapshot>
-    readonly createThread: (title?: string) => Promise<CreateThreadResult>
+    readonly createWorkspace: (rootPath: string) => Promise<CreateWorkspaceResult>
+    readonly relinkWorkspace: (workspaceId: string, rootPath: string) => Promise<RelinkWorkspaceResult>
+    readonly deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceResult>
+    readonly createThread: (workspaceId: string, title?: string) => Promise<CreateThreadResult>
     readonly sendTurn: (threadId: string, content: string) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
@@ -123,6 +137,20 @@ export interface WsRpcClient {
       options?: StreamSubscriptionOptions,
     ) => () => void
   }
+  readonly onboarding: {
+    readonly getSnapshot: () => Promise<OnboardingSnapshot>
+    readonly setStepStatus: (params: SetStepStatusParams) => Promise<{ ok: boolean }>
+    readonly setOverallStatus: (params: SetOverallStatusParams) => Promise<{ ok: boolean }>
+    readonly getPreferences: () => Promise<StudentPreference>
+    readonly setPreferences: (params: UpdatePreferencesParams) => Promise<StudentPreference>
+    readonly setRoutines: (params: SetRoutinesParams) => Promise<{ count: number }>
+    readonly getAiAuth: () => Promise<AiAuthState>
+    readonly setAiAuth: (params: SetAiAuthStatusParams) => Promise<AiAuthState>
+  }
+  readonly dev: {
+    readonly resetSoft: () => Promise<{ ok: boolean }>
+    readonly resetHard: () => Promise<{ ok: boolean }>
+  }
   readonly reconnect: () => Promise<void>
   readonly dispose: () => Promise<void>
 }
@@ -156,8 +184,20 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
   return {
     getSnapshot: async () =>
       decode(OrchestrationSnapshot, await transport.request(RPC_METHODS.ORCHESTRATION_GET_SNAPSHOT, {})),
-    createThread: async (title) =>
-      transport.request<CreateThreadResult>(RPC_METHODS.ORCHESTRATION_CREATE_THREAD, title ? { title } : {}),
+    createWorkspace: async (rootPath) =>
+      transport.request<CreateWorkspaceResult>(RPC_METHODS.ORCHESTRATION_CREATE_WORKSPACE, { rootPath }),
+    relinkWorkspace: async (workspaceId, rootPath) =>
+      transport.request<RelinkWorkspaceResult>(RPC_METHODS.ORCHESTRATION_RELINK_WORKSPACE, {
+        workspaceId,
+        rootPath,
+      }),
+    deleteWorkspace: async (workspaceId) =>
+      transport.request<DeleteWorkspaceResult>(RPC_METHODS.ORCHESTRATION_DELETE_WORKSPACE, { workspaceId }),
+    createThread: async (workspaceId, title) =>
+      transport.request<CreateThreadResult>(
+        RPC_METHODS.ORCHESTRATION_CREATE_THREAD,
+        title ? { workspaceId, title } : { workspaceId },
+      ),
     sendTurn: async (threadId, content) =>
       transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, { threadId, content }),
     interruptTurn: async (threadId) =>
@@ -250,6 +290,26 @@ function createActivityApi(transport: WsTransport): WsRpcClient["activity"] {
   }
 }
 
+function createOnboardingApi(transport: WsTransport): WsRpcClient["onboarding"] {
+  return {
+    getSnapshot: () => transport.request(RPC_METHODS.ONBOARDING_GET_SNAPSHOT, {}),
+    setStepStatus: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_STEP_STATUS, params),
+    setOverallStatus: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_OVERALL_STATUS, params),
+    getPreferences: () => transport.request(RPC_METHODS.ONBOARDING_GET_PREFERENCES, {}),
+    setPreferences: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_PREFERENCES, params),
+    setRoutines: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_ROUTINES, params),
+    getAiAuth: () => transport.request(RPC_METHODS.ONBOARDING_GET_AI_AUTH, {}),
+    setAiAuth: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_AI_AUTH, params),
+  }
+}
+
+function createDevApi(transport: WsTransport): WsRpcClient["dev"] {
+  return {
+    resetSoft: () => transport.request(RPC_METHODS.DEV_RESET_SOFT, {}),
+    resetHard: () => transport.request(RPC_METHODS.DEV_RESET_HARD, {}),
+  }
+}
+
 /**
  * Creates a typed RPC client over the authenticated WebSocket transport.
  */
@@ -263,6 +323,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
     dashboard: createDashboardApi(transport),
     planner: createPlannerApi(transport),
     activity: createActivityApi(transport),
+    onboarding: createOnboardingApi(transport),
+    dev: createDevApi(transport),
     reconnect: () => transport.reconnect(),
     dispose: () => transport.dispose(),
   }

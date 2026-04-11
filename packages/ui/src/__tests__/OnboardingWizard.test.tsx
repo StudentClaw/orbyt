@@ -4,10 +4,9 @@ import userEvent from "@testing-library/user-event"
 
 const wizardMocks = vi.hoisted(() => ({
   currentStep: 0,
-  steps: Array.from({ length: 7 }, () => ({ status: "pending" as const, completedAt: null })),
+  steps: Array.from({ length: 6 }, () => ({ status: "pending" as const, completedAt: null })),
   overallStatus: "in_progress" as const,
-  canvasTokenValidated: false,
-  aiAuthStatus: "pending" as const,
+  aiAuthStatus: "pending" as "pending" | "connected" | "skipped",
   advanceStep: vi.fn(),
   skipStep: vi.fn(),
   goToStep: vi.fn(),
@@ -18,8 +17,7 @@ const wizardMocks = vi.hoisted(() => ({
 vi.mock("@/rpc/onboardingState", () => ({
   ONBOARDING_STEPS: [
     { id: "welcome", label: "Welcome", required: false },
-    { id: "canvas-credential", label: "Canvas Setup", required: true },
-    { id: "ai-auth", label: "AI Connection", required: true },
+    { id: "ai-auth", label: "AI Connection", required: false },
     { id: "preferences", label: "Preferences", required: false },
     { id: "routines", label: "Routines", required: false },
     { id: "first-sync", label: "First Sync", required: false },
@@ -29,7 +27,6 @@ vi.mock("@/rpc/onboardingState", () => ({
     currentStep: wizardMocks.currentStep,
     steps: wizardMocks.steps,
     overallStatus: wizardMocks.overallStatus,
-    canvasTokenValidated: wizardMocks.canvasTokenValidated,
     aiAuthStatus: wizardMocks.aiAuthStatus,
   }),
   advanceOnboardingStep: (...args: unknown[]) => wizardMocks.advanceStep(...args),
@@ -37,7 +34,6 @@ vi.mock("@/rpc/onboardingState", () => ({
   goToOnboardingStep: (...args: unknown[]) => wizardMocks.goToStep(...args),
   completeOnboarding: (...args: unknown[]) => wizardMocks.completeOnboarding(...args),
   persistOnboardingState: (...args: unknown[]) => wizardMocks.persistState(...args),
-  setCanvasTokenValidated: vi.fn(),
   setAiAuthStatus: vi.fn(),
 }))
 
@@ -56,7 +52,7 @@ import { OnboardingWizard } from "../components/onboarding/OnboardingWizard"
 describe("OnboardingWizard", () => {
   beforeEach(() => {
     wizardMocks.currentStep = 0
-    wizardMocks.steps = Array.from({ length: 7 }, () => ({ status: "pending" as const, completedAt: null }))
+    wizardMocks.steps = Array.from({ length: 6 }, () => ({ status: "pending" as const, completedAt: null }))
     wizardMocks.overallStatus = "in_progress"
     wizardMocks.advanceStep.mockClear()
     wizardMocks.skipStep.mockClear()
@@ -82,7 +78,7 @@ describe("OnboardingWizard", () => {
 
   test("shows step counter", () => {
     render(<OnboardingWizard />)
-    expect(screen.getByText("Step 1 of 7")).toBeDefined()
+    expect(screen.getByText("Step 1 of 6")).toBeDefined()
   })
 
   test("hides Back button on first step", () => {
@@ -105,25 +101,39 @@ describe("OnboardingWizard", () => {
   })
 
   test("shows Skip button on non-required steps", () => {
-    wizardMocks.currentStep = 0 // "welcome" is not required
+    wizardMocks.currentStep = 2 // "preferences" is not required
     render(<OnboardingWizard />)
     expect(screen.getByTestId("onboarding-skip")).toBeDefined()
   })
 
-  test("hides Skip button on required steps", () => {
-    wizardMocks.currentStep = 1 // "canvas-credential" is required
+  test("hides separate Skip button on ai-auth step", () => {
+    wizardMocks.currentStep = 1 // "ai-auth" uses footer Next as Skip
     render(<OnboardingWizard />)
     expect(screen.queryByTestId("onboarding-skip")).toBeNull()
   })
 
+  test("footer Next button says Skip on ai-auth when not connected", () => {
+    wizardMocks.currentStep = 1
+    wizardMocks.aiAuthStatus = "pending"
+    render(<OnboardingWizard />)
+    expect(screen.getByTestId("onboarding-next").textContent).toBe("Skip")
+  })
+
+  test("footer Next button says Next on ai-auth when connected", () => {
+    wizardMocks.currentStep = 1
+    wizardMocks.aiAuthStatus = "connected"
+    render(<OnboardingWizard />)
+    expect(screen.getByTestId("onboarding-next").textContent).toBe("Next")
+  })
+
   test("shows Finish on last step", () => {
-    wizardMocks.currentStep = 6
+    wizardMocks.currentStep = 5
     render(<OnboardingWizard />)
     expect(screen.getByTestId("onboarding-next").textContent).toBe("Finish")
   })
 
   test("shows Next on non-last steps", () => {
-    wizardMocks.currentStep = 0
+    wizardMocks.currentStep = 1
     render(<OnboardingWizard />)
     expect(screen.getByTestId("onboarding-next").textContent).toBe("Next")
   })

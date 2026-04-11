@@ -7,6 +7,7 @@ import { startPlannerStateSync } from "./plannerState"
 import { startOrchestrationStateSync } from "./orchestrationState"
 import { startServerStateSync } from "./serverState"
 import { setDesktopBootstrap, setWsConnectionStatus } from "./wsConnectionState"
+import { hydrateOnboardingStateFromServer, setOnboardingRpcClient } from "./onboardingState"
 import { WsTransport } from "./wsTransport"
 
 let primaryTransport: WsTransport | null = null
@@ -94,8 +95,12 @@ export function startAppRuntime(): Promise<void> {
     cacheBootstrap(rendererBootstrap)
     const client = getPrimaryWsRpcClient(rendererBootstrap)
     startWsConnectionStateSync(client.transport)
+    client.transport.registerBootstrapRefresher(getRendererBootstrap)
 
     await client.transport.connect()
+
+    setOnboardingRpcClient(client)
+    await hydrateOnboardingStateFromServer(client)
 
     startServerStateSync(client)
     startOrchestrationStateSync(client)

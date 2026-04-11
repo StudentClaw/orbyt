@@ -29,7 +29,7 @@ describe("GradeOverview", () => {
     makeCourse("c2", "MATH 240", "Linear Algebra"),
   ]
 
-  test("renders a card for each course with grades", () => {
+  test("renders a pill for each course with grades", () => {
     const grades = [
       makeGrade("c1", "a1", 90, 100),
       makeGrade("c2", "a1", 80, 100),
@@ -43,15 +43,16 @@ describe("GradeOverview", () => {
     expect(screen.getByText("MATH 240")).toBeDefined()
   })
 
-  test("shows grade percentage", () => {
+  test("shows letter grade for course (90% → A−)", () => {
     const grades = [makeGrade("c1", "a1", 90, 100)]
 
     render(<GradeOverview courses={courses} grades={grades} />)
 
-    expect(screen.getByText("90.0%")).toBeDefined()
+    // 90% maps to A− in the letter grade scale
+    expect(screen.getByText("A−")).toBeDefined()
   })
 
-  test("shows trend arrow for improving grades", () => {
+  test("shows up trend arrow for improving grades", () => {
     const grades = [
       makeGrade("c1", "a1", 70, 100, daysAgo(14)),
       makeGrade("c1", "a2", 90, 100, daysAgo(7)),
@@ -59,7 +60,8 @@ describe("GradeOverview", () => {
 
     render(<GradeOverview courses={courses} grades={grades} />)
 
-    expect(screen.getByText("Improving")).toBeDefined()
+    // Trend arrow for improving grades is "↑"
+    expect(screen.getByText("↑")).toBeDefined()
   })
 
   test("shows 'No grades yet' when empty", () => {
@@ -69,12 +71,20 @@ describe("GradeOverview", () => {
     expect(screen.getByText("No grades yet")).toBeDefined()
   })
 
-  test("does not render a card for courses with no grades", () => {
+  test("does not render a pill for courses with no grades", () => {
     const grades = [makeGrade("c1", "a1", 90, 100)]
 
     render(<GradeOverview courses={courses} grades={grades} />)
 
     expect(screen.getByTestId("grade-card-c1")).toBeDefined()
     expect(screen.queryByTestId("grade-card-c2")).toBeNull()
+  })
+
+  test("shows GPA projection row", () => {
+    const grades = [makeGrade("c1", "a1", 90, 100)]
+
+    render(<GradeOverview courses={courses} grades={grades} />)
+
+    expect(screen.getByText("Projected GPA")).toBeDefined()
   })
 })

@@ -21,6 +21,7 @@ vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeChatPanelWidth: () => shellMocks.chatPanelWidth,
   useChatUiActions: () => ({ setPanelWidth: shellMocks.setPanelWidth }),
   useIsOnboardingComplete: () => shellMocks.onboardingComplete,
+  useIsServerHydrationComplete: () => true,
 }))
 
 vi.mock("../components/shell/AppSidebar", () => ({

@@ -7,6 +7,7 @@ import type { AppConfig } from "../config/defaults.js"
 import { OrchestrationService, type OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerReadiness.js"
 import { PushBus, type PushBusService } from "./PushBus.js"
+import { Database, type DatabaseService } from "../db/Database.js"
 import { selectWebSocketProtocol, validateWebSocketHandshake } from "./handshake.js"
 import { routeMessage, type RouteMessageResult } from "./Router.js"
 
@@ -36,8 +37,9 @@ export const WebSocketServerLive = Layer.effect(
     const readiness = yield* ServerReadiness
     const pushBus = yield* PushBus
     const orchestration = yield* OrchestrationService
+    const database = yield* Database
 
-    return createWebSocketService(config, readiness, pushBus, orchestration)
+    return createWebSocketService(config, readiness, pushBus, orchestration, database)
   }),
 )
 
@@ -53,6 +55,7 @@ function createWebSocketService(
   readiness: ServerReadinessService,
   pushBus: PushBusService,
   orchestration: OrchestrationServiceShape,
+  database: DatabaseService,
 ): WebSocketService {
   const wss = new WsServer({
     port: config.port,
@@ -66,7 +69,7 @@ function createWebSocketService(
   })
 
   wss.on("connection", (ws) => {
-    registerSocketHandlers(ws as WebSocket, readiness, pushBus, orchestration)
+    registerSocketHandlers(ws as WebSocket, readiness, pushBus, orchestration, database)
   })
 
   return {
@@ -83,6 +86,7 @@ function registerSocketHandlers(
   readiness: ServerReadinessService,
   pushBus: PushBusService,
   orchestration: OrchestrationServiceShape,
+  database: DatabaseService,
 ): void {
   pushBus.registerClient(ws)
 
@@ -96,6 +100,7 @@ function registerSocketHandlers(
       orchestration,
       pushBus,
       readiness,
+      database,
     })
     sendRouteResponse(ws, result)
   })

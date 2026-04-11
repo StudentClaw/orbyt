@@ -9,7 +9,12 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Moon02Icon, Sun01Icon } from "@hugeicons/core-free-icons"
 import { useRuntimeActivityUnreadCount } from "@/hooks/useAppRuntime"
+import { useTheme } from "@/hooks/useTheme"
+import { isChatPath } from "@/lib/chatRoutes"
 import { ChatHistory } from "./ChatHistory"
 import { ConnectionStatus } from "./ConnectionStatus"
 
@@ -24,6 +29,7 @@ export function AppSidebar() {
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
   const activityUnreadCount = useRuntimeActivityUnreadCount()
+  const { theme, toggleTheme } = useTheme()
 
   return (
     <Sidebar>
@@ -34,7 +40,10 @@ export function AppSidebar() {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.path}>
-              <SidebarMenuButton asChild isActive={currentPath === item.path}>
+              <SidebarMenuButton
+                asChild
+                isActive={item.path === "/chat" ? isChatPath(currentPath) : currentPath === item.path}
+              >
                 <Link to={item.path}>
                   {item.label}
                   {item.path === "/activity" && activityUnreadCount > 0 && (
@@ -53,8 +62,20 @@ export function AppSidebar() {
         <SidebarSeparator />
         <ChatHistory />
       </SidebarContent>
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 flex flex-row items-center justify-between">
         <ConnectionStatus />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          className="h-8 w-8 shrink-0"
+        >
+          <HugeiconsIcon
+            icon={theme === "dark" ? Sun01Icon : Moon02Icon}
+            size={16}
+          />
+        </Button>
       </SidebarFooter>
     </Sidebar>
   )

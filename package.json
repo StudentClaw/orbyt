@@ -8,7 +8,7 @@
     "packages/extensions/*"
   ],
   "scripts": {
-    "dev": "bun run dev:electron",
+    "dev": "node scripts/patch-electron-name.mjs && bun run dev:electron",
     "dev:ui": "bun run build:shared && bun --cwd packages/ui dev",
     "dev:server": "bun run build:shared && bun --cwd packages/server dev",
     "dev:electron": "bun run build:shared && bun --cwd packages/electron dev",
