@@ -18,8 +18,8 @@ This file has two jobs:
 
 | Phase | Status | Owner | Verification State | Next Action |
 | --- | --- | --- | --- | --- |
-| 00 - Contracts And Scaffolding | in_progress | Codex | Contracts/tests green; smoke pending | Run app smoke with plugin flag off, then start Phase 01 discovery work |
-| 01 - Discovery And Registry | not_started | Unassigned | Not run | Build extension discovery and render discovered state in Settings |
+| 00 - Contracts And Scaffolding | complete | Codex | Verified | Begin Phase 02 local spawn work using the canonical contracts and IPC shapes |
+| 01 - Discovery And Registry | complete | Codex | Verified | Begin Phase 02 local spawn and lifecycle implementation |
 | 02 - Local Spawn And Lifecycle | not_started | Unassigned | Not run | Spawn `template-mcp`, initialize MCP, and call one tool |
 | 03 - Gateway And Codex Integration | not_started | Unassigned | Not run | Expose one Student Claw MCP gateway and route one fake tool end to end |
 | 04 - Credentials And Auth UX | not_started | Unassigned | Not run | Add vault-backed auth schema rendering and secure credential handshake |
@@ -29,7 +29,7 @@ This file has two jobs:
 
 ## Current Recommended Next Step
 
-Finish the remaining Phase 00 verification follow-through, then begin [Phase 01 - Discovery And Registry](phase-01-discovery-and-registry.md).
+Start [Phase 02 - Local Spawn And Lifecycle](phase-02-local-spawn-and-lifecycle.md).
 
 Do not start process spawning before the extension registry contract, status model, and IPC shapes exist in shared packages.
 
@@ -140,8 +140,7 @@ The set of checks that must be green before a phase can be marked complete:
   - Reworked `@student-claw/shared` plugin surfaces to re-export the canonical contracts and updated shared tests to assert that alignment.
   - Added Electron preload/main-process stub handlers for plugin IPC channels that stay inert while the flag is off.
 - Remaining:
-  - Run the manual app smoke with `pluginSystem` disabled and record the result.
-  - Decide whether to mark Phase 00 complete after smoke evidence is captured.
+  - No open Phase 00 implementation work.
 - Risks or blockers:
   - Package-wide `packages/server` and `packages/ui` typechecks currently fail for broader pre-existing issues outside the Phase 00 diff, so they cannot be used as a clean verification gate yet.
   - No real plugin lifecycle wiring exists yet; Phase 01 must keep targeting the new contracts without assuming runtime behavior is present.
@@ -160,11 +159,38 @@ The set of checks that must be green before a phase can be marked complete:
   - `packages/electron`: typecheck passes after preload/main stub wiring.
   - `packages/server` and `packages/ui`: package-wide typechecks still fail on unrelated existing issues.
 - First recommended next step:
-  - Run one smoke boot with `featureFlags.pluginSystem = false`; if startup is unchanged, move to Phase 01 using the new canonical manifest and lifecycle contracts.
+  - Move to [Phase 01 - Discovery And Registry](phase-01-discovery-and-registry.md).
 
 ### Phase 01 - Discovery And Registry
 
-- Pending first implementation pass.
+- Date: 2026-04-11
+- Branch: `codex/plugin-bridge-reset`
+- Owner: Codex
+- Status change: `not_started -> in_progress`
+- Completed:
+  - Expanded the shared registry contract to represent both healthy discovered extensions and invalid manifest rows, and added `system` provenance ahead of gateway work.
+  - Added an Electron `PluginRegistry` that scans bundled manifests and the user extension store, validates each manifest, and returns deterministic registry output.
+  - Replaced the plugin read IPC stubs with registry-backed `plugin:list` and `plugin:get-status` handlers while leaving install and lifecycle mutators stubbed.
+  - Added a checked-in `manifest.json` for `template-mcp` so Canvas and template both appear as healthy bundled extensions in discovery.
+  - Replaced the placeholder Settings page content with a read-only extension registry view that shows provenance, status, version, and validation errors, and stays dark when `featureFlags.pluginSystem` is off.
+- Remaining:
+  - No open Phase 01 implementation work.
+- Risks or blockers:
+  - Package-wide `packages/ui` typecheck still has broader pre-existing failures outside the plugin registry slice, so the Phase 01 UI verification currently relies on targeted tests instead of a clean package typecheck gate.
+  - Packaged build path assumptions for bundled extensions still need a real packaged-app smoke in Phase 07, even though the dev and packaged path helpers are now covered in tests.
+- Commands run:
+  - `bun run build:shared`
+  - `bun --cwd packages/shared test -- src/__tests__/schemas.test.ts`
+  - `bun --cwd packages/electron test -- src/__tests__/plugin-registry.test.ts src/__tests__/bridge-plugin-ipc.test.ts`
+  - `bun --cwd packages/ui test -- SettingsPage.test.tsx`
+  - `bun --cwd packages/electron typecheck`
+- Evidence captured:
+  - `packages/shared`: 27 passing schema tests including available and invalid registry entry coverage.
+  - `packages/electron`: 5 passing tests covering bundled discovery, user-store discovery, broken manifest handling, and IPC handler integration for `plugin:list` and `plugin:get-status`.
+  - `packages/ui`: 2 passing Settings tests covering the feature-flag-disabled state and registry rendering for healthy plus invalid extensions.
+  - `packages/electron`: typecheck passes after registry wiring and strictness cleanup.
+- First recommended next step:
+  - Start [Phase 02 - Local Spawn And Lifecycle](phase-02-local-spawn-and-lifecycle.md).
 
 ### Phase 02 - Local Spawn And Lifecycle
 

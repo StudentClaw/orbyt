@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
   ExtensionAuthSchema,
+  ExtensionInstallSource,
   ExtensionLifecycleStatus,
   ExtensionManifest,
+  ExtensionRegistryEntry,
   ExtensionManifestValidationError,
   ExtensionTransport,
   parseExtensionManifestSync,
@@ -52,6 +54,11 @@ describe("Extension contracts", () => {
     expect(() => Schema.decodeUnknownSync(ExtensionLifecycleStatus)("inactive")).toThrow()
   })
 
+  test("install source accepts system provenance", () => {
+    const parsed = Schema.decodeUnknownSync(ExtensionInstallSource)("system")
+    expect(parsed).toBe("system")
+  })
+
   test("auth schema rejects invalid payloads", () => {
     expect(() =>
       Schema.decodeUnknownSync(ExtensionAuthSchema)({
@@ -71,5 +78,30 @@ describe("Extension contracts", () => {
         },
       })
     ).toThrow(ExtensionManifestValidationError)
+  })
+
+  test("registry entries support available and invalid rows", () => {
+    const decode = Schema.decodeUnknownSync(ExtensionRegistryEntry)
+
+    const available = decode({
+      kind: "available",
+      manifest: validManifest,
+      installSource: "bundled",
+      status: "discovered",
+      enabled: true,
+    })
+    expect(available.kind).toBe("available")
+
+    const invalid = decode({
+      kind: "invalid",
+      pluginId: "broken-plugin",
+      displayName: "Broken Plugin",
+      installSource: "user",
+      status: "error",
+      enabled: false,
+      lastError: "manifest invalid",
+      manifestPath: "/tmp/broken/manifest.json",
+    })
+    expect(invalid.kind).toBe("invalid")
   })
 })

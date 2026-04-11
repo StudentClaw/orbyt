@@ -4,11 +4,20 @@ import {
   Extension as ContractsExtension,
   ExtensionManifest as ContractsExtensionManifest,
   ExtensionLifecycleStatus as ContractsExtensionLifecycleStatus,
+  ExtensionRegistryAvailableEntry as ContractsExtensionRegistryAvailableEntry,
+  ExtensionRegistryInvalidEntry as ContractsExtensionRegistryInvalidEntry,
 } from "@student-claw/contracts"
 import {
   CourseId, CourseWorkItemId, SkillId, TaskId, SessionId, ActivityEntryId,
   Course, CourseWorkItem, Grade, PlannedSession, ActivityFeedEntry,
-  MemoryEntry, Extension, ExtensionManifest, ExtensionLifecycleStatus, StudentPreference, OnboardingState,
+  MemoryEntry,
+  Extension,
+  ExtensionManifest,
+  ExtensionLifecycleStatus,
+  ExtensionRegistryAvailableEntry,
+  ExtensionRegistryInvalidEntry,
+  StudentPreference,
+  OnboardingState,
 } from "../schemas/index.js"
 
 describe("Branded IDs", () => {
@@ -184,11 +193,14 @@ describe("Extension schema", () => {
     expect(Extension).toBe(ContractsExtension)
     expect(ExtensionManifest).toBe(ContractsExtensionManifest)
     expect(ExtensionLifecycleStatus).toBe(ContractsExtensionLifecycleStatus)
+    expect(ExtensionRegistryAvailableEntry).toBe(ContractsExtensionRegistryAvailableEntry)
+    expect(ExtensionRegistryInvalidEntry).toBe(ContractsExtensionRegistryInvalidEntry)
   })
 
   test("decodes valid extension registry entry", () => {
     const decode = Schema.decodeUnknownSync(Extension)
     const result = decode({
+      kind: "available",
       manifest: {
         id: "canvas-mcp",
         name: "Canvas Assistant",
@@ -215,9 +227,25 @@ describe("Extension schema", () => {
     expect(result.status).toBe("active")
   })
 
+  test("decodes invalid extension registry entry", () => {
+    const decode = Schema.decodeUnknownSync(Extension)
+    const result = decode({
+      kind: "invalid",
+      pluginId: "broken-plugin",
+      displayName: "Broken Plugin",
+      installSource: "user",
+      enabled: false,
+      status: "error",
+      lastError: "manifest invalid",
+      manifestPath: "/tmp/broken/manifest.json",
+    })
+    expect(result.kind).toBe("invalid")
+  })
+
   test("rejects invalid status", () => {
     const decode = Schema.decodeUnknownSync(Extension)
     expect(() => decode({
+      kind: "available",
       manifest: {
         id: "canvas-mcp",
         name: "Canvas",

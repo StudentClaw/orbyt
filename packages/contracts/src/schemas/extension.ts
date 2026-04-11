@@ -13,7 +13,7 @@ export const ExtensionLifecycleStatus = Schema.Literal(
 )
 export type ExtensionLifecycleStatus = Schema.Schema.Type<typeof ExtensionLifecycleStatus>
 
-export const ExtensionInstallSource = Schema.Literal("bundled", "user")
+export const ExtensionInstallSource = Schema.Literal("system", "bundled", "user")
 export type ExtensionInstallSource = Schema.Schema.Type<typeof ExtensionInstallSource>
 
 export const ExtensionToolSummary = Schema.Struct({
@@ -60,13 +60,32 @@ export const ExtensionManifest = Schema.Struct({
 })
 export type ExtensionManifest = Schema.Schema.Type<typeof ExtensionManifest>
 
-export const ExtensionRegistryEntry = Schema.Struct({
+export const ExtensionRegistryAvailableEntry = Schema.Struct({
+  kind: Schema.Literal("available"),
   manifest: ExtensionManifest,
   installSource: ExtensionInstallSource,
   status: ExtensionLifecycleStatus,
   enabled: Schema.Boolean,
   lastError: Schema.optional(Schema.String),
 })
+export type ExtensionRegistryAvailableEntry = Schema.Schema.Type<typeof ExtensionRegistryAvailableEntry>
+
+export const ExtensionRegistryInvalidEntry = Schema.Struct({
+  kind: Schema.Literal("invalid"),
+  pluginId: Schema.String,
+  displayName: Schema.String,
+  installSource: ExtensionInstallSource,
+  status: Schema.Literal("error"),
+  enabled: Schema.Literal(false),
+  lastError: Schema.String,
+  manifestPath: Schema.String,
+})
+export type ExtensionRegistryInvalidEntry = Schema.Schema.Type<typeof ExtensionRegistryInvalidEntry>
+
+export const ExtensionRegistryEntry = Schema.Union(
+  ExtensionRegistryAvailableEntry,
+  ExtensionRegistryInvalidEntry,
+)
 export type ExtensionRegistryEntry = Schema.Schema.Type<typeof ExtensionRegistryEntry>
 
 // Backward-compatible alias for consumers that still import `Extension`.

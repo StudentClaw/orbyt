@@ -23,6 +23,11 @@ import {
   type PluginUninstallParams,
 } from "@student-claw/contracts"
 import { IPC_CHANNELS } from "./channels.js"
+import {
+  PluginRegistry,
+  resolveBundledCatalogDir,
+  resolveUserExtensionStoreDir,
+} from "../plugins/plugin-registry.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -151,8 +156,13 @@ function buildPluginActionResult(
 }
 
 function registerPluginIpcStubHandlers(bootstrap: DesktopBootstrap): void {
+  const pluginRegistry = new PluginRegistry({
+    bundledCatalogDir: resolveBundledCatalogDir(currentDir, app.isPackaged),
+    userExtensionStoreDir: resolveUserExtensionStoreDir(app.getPath("userData")),
+  })
+
   ipcMain.handle(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
-    return []
+    return pluginRegistry.list()
   })
 
   ipcMain.handle(
@@ -178,8 +188,8 @@ function registerPluginIpcStubHandlers(bootstrap: DesktopBootstrap): void {
 
   ipcMain.handle(
     IpcChannel.PLUGIN_GET_STATUS,
-    (_event, _params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
-      return null
+    (_event, params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
+      return pluginRegistry.getStatus(params.pluginId)
     },
   )
 }
