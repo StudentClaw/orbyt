@@ -11,7 +11,17 @@ import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
-import type { DesktopBootstrap, CodexAuthResult } from "@student-claw/contracts"
+import {
+  IpcChannel,
+  type CodexAuthResult,
+  type DesktopBootstrap,
+  type ExtensionRegistryEntry,
+  type PluginGetStatusParams,
+  type PluginInstallBundledParams,
+  type PluginManagementActionResult,
+  type PluginSetEnabledParams,
+  type PluginUninstallParams,
+} from "@student-claw/contracts"
 import { IPC_CHANNELS } from "./channels.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
@@ -125,4 +135,51 @@ export function registerIpcHandlers(bootstrap: DesktopBootstrap): void {
       })
     })
   })
+
+  registerPluginIpcStubHandlers(bootstrap)
+}
+
+function buildPluginActionResult(
+  bootstrap: DesktopBootstrap,
+  pluginId: string,
+): PluginManagementActionResult {
+  return {
+    ok: false,
+    pluginId,
+    reason: bootstrap.featureFlags.pluginSystem ? "not_implemented" : "plugin_system_disabled",
+  }
+}
+
+function registerPluginIpcStubHandlers(bootstrap: DesktopBootstrap): void {
+  ipcMain.handle(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
+    return []
+  })
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_INSTALL_BUNDLED,
+    (_event, params: PluginInstallBundledParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_SET_ENABLED,
+    (_event, params: PluginSetEnabledParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_UNINSTALL,
+    (_event, params: PluginUninstallParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_GET_STATUS,
+    (_event, _params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
+      return null
+    },
+  )
 }

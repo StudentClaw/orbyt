@@ -1,3 +1,9 @@
+import type { DesktopBootstrap } from "./desktop.js"
+import type {
+  ExtensionLifecycleStatus,
+  ExtensionRegistryEntry,
+} from "../schemas/extension.js"
+
 export const IpcChannel = {
   APP_GET_PATH: "app:get-path",
   APP_GET_BOOTSTRAP: "app:get-bootstrap",
@@ -7,6 +13,12 @@ export const IpcChannel = {
   FILE_SAVE_DIALOG: "file:save-dialog",
   CODEX_AUTH_START: "codex:auth-start",
   CODEX_AUTH_STATUS: "codex:auth-status",
+  PLUGIN_LIST: "plugin:list",
+  PLUGIN_INSTALL_BUNDLED: "plugin:install-bundled",
+  PLUGIN_SET_ENABLED: "plugin:set-enabled",
+  PLUGIN_UNINSTALL: "plugin:uninstall",
+  PLUGIN_GET_STATUS: "plugin:get-status",
+  PLUGIN_LIFECYCLE: "plugin:lifecycle",
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -16,16 +28,78 @@ export type CodexAuthResult = {
   readonly error?: string
 }
 
-export type IpcPayloadMap = {
-  [IpcChannel.APP_GET_PATH]: { path: string }
-  [IpcChannel.APP_GET_BOOTSTRAP]: { wsUrl: string; appVersion: string; platform: string }
-  [IpcChannel.NOTIFICATION_SHOW]: { title: string; body: string }
-  [IpcChannel.TRAY_UPDATE_BADGE]: { count: number }
-  [IpcChannel.FILE_OPEN_DIALOG]: {
+export type PluginInstallBundledParams = {
+  readonly pluginId: string
+}
+
+export type PluginSetEnabledParams = {
+  readonly pluginId: string
+  readonly enabled: boolean
+}
+
+export type PluginUninstallParams = {
+  readonly pluginId: string
+}
+
+export type PluginGetStatusParams = {
+  readonly pluginId: string
+}
+
+export type PluginManagementFailureReason = "plugin_system_disabled" | "not_implemented"
+
+export type PluginManagementActionResult =
+  | {
+    readonly ok: true
+    readonly pluginId: string
+    readonly status: ExtensionLifecycleStatus
+  }
+  | {
+    readonly ok: false
+    readonly pluginId: string
+    readonly reason: PluginManagementFailureReason
+  }
+
+export type PluginLifecycleEvent = {
+  readonly pluginId: string
+  readonly status: ExtensionLifecycleStatus
+  readonly emittedAt: string
+}
+
+export type IpcInvokeArgsMap = {
+  [IpcChannel.APP_GET_PATH]: [name: string]
+  [IpcChannel.APP_GET_BOOTSTRAP]: []
+  [IpcChannel.NOTIFICATION_SHOW]: [options: { title: string; body: string }]
+  [IpcChannel.TRAY_UPDATE_BADGE]: [options: { count: number }]
+  [IpcChannel.FILE_OPEN_DIALOG]: [options?: {
     filters?: Array<{ name: string; extensions: string[] }>
     directory?: boolean
-  }
-  [IpcChannel.FILE_SAVE_DIALOG]: { defaultPath?: string }
+  }]
+  [IpcChannel.FILE_SAVE_DIALOG]: [options?: { defaultPath?: string }]
+  [IpcChannel.CODEX_AUTH_START]: []
+  [IpcChannel.CODEX_AUTH_STATUS]: []
+  [IpcChannel.PLUGIN_LIST]: []
+  [IpcChannel.PLUGIN_INSTALL_BUNDLED]: [params: PluginInstallBundledParams]
+  [IpcChannel.PLUGIN_SET_ENABLED]: [params: PluginSetEnabledParams]
+  [IpcChannel.PLUGIN_UNINSTALL]: [params: PluginUninstallParams]
+  [IpcChannel.PLUGIN_GET_STATUS]: [params: PluginGetStatusParams]
+}
+
+export type IpcInvokeResultMap = {
+  [IpcChannel.APP_GET_PATH]: string
+  [IpcChannel.APP_GET_BOOTSTRAP]: DesktopBootstrap
+  [IpcChannel.NOTIFICATION_SHOW]: void
+  [IpcChannel.TRAY_UPDATE_BADGE]: void
+  [IpcChannel.FILE_OPEN_DIALOG]: string | null
+  [IpcChannel.FILE_SAVE_DIALOG]: string | null
   [IpcChannel.CODEX_AUTH_START]: CodexAuthResult
   [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }
+  [IpcChannel.PLUGIN_LIST]: ExtensionRegistryEntry[]
+  [IpcChannel.PLUGIN_INSTALL_BUNDLED]: PluginManagementActionResult
+  [IpcChannel.PLUGIN_SET_ENABLED]: PluginManagementActionResult
+  [IpcChannel.PLUGIN_UNINSTALL]: PluginManagementActionResult
+  [IpcChannel.PLUGIN_GET_STATUS]: ExtensionRegistryEntry | null
+}
+
+export type IpcEventPayloadMap = {
+  [IpcChannel.PLUGIN_LIFECYCLE]: PluginLifecycleEvent
 }

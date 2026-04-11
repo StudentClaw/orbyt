@@ -1,6 +1,9 @@
 import { describe, test, expect } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
+  IpcChannel as ContractsIpcChannel,
+} from "@student-claw/contracts"
+import {
   ClientMessage,
   ChatSendMessage,
   HealthPing,
@@ -181,11 +184,14 @@ describe("JSON-RPC", () => {
 
 describe("IPC channels", () => {
   test("channel values are correct", () => {
+    expect(IpcChannel).toBe(ContractsIpcChannel)
     expect(IpcChannel.APP_GET_PATH).toBe("app:get-path")
-    expect(IpcChannel.APP_GET_SERVER_PORT).toBe("app:get-server-port")
+    expect(IpcChannel.APP_GET_BOOTSTRAP).toBe("app:get-bootstrap")
     expect(IpcChannel.NOTIFICATION_SHOW).toBe("notification:show")
     expect(IpcChannel.TRAY_UPDATE_BADGE).toBe("tray:update-badge")
     expect(IpcChannel.FILE_OPEN_DIALOG).toBe("file:open-dialog")
     expect(IpcChannel.FILE_SAVE_DIALOG).toBe("file:save-dialog")
+    expect(IpcChannel.PLUGIN_LIST).toBe("plugin:list")
+    expect(IpcChannel.PLUGIN_LIFECYCLE).toBe("plugin:lifecycle")
   })
 })

@@ -1,3 +1,4 @@
+import { Schema } from "@effect/schema"
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -7,7 +8,7 @@ describe("canvas manifest", () => {
   test("matches the checked-in manifest.json", () => {
     const manifestPath = resolve(import.meta.dir, "..", "manifest.json")
     const rawManifest = JSON.parse(readFileSync(manifestPath, "utf8"))
-    const parsed = CanvasManifestSchema.parse(rawManifest)
+    const parsed = Schema.decodeUnknownSync(CanvasManifestSchema)(rawManifest)
 
     expect(parsed).toEqual(canvasManifest)
   })

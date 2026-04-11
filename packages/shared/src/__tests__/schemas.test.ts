@@ -1,9 +1,14 @@
 import { describe, test, expect } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
+  Extension as ContractsExtension,
+  ExtensionManifest as ContractsExtensionManifest,
+  ExtensionLifecycleStatus as ContractsExtensionLifecycleStatus,
+} from "@student-claw/contracts"
+import {
   CourseId, CourseWorkItemId, SkillId, TaskId, SessionId, ActivityEntryId,
   Course, CourseWorkItem, Grade, PlannedSession, ActivityFeedEntry,
-  MemoryEntry, Extension, StudentPreference, OnboardingState,
+  MemoryEntry, Extension, ExtensionManifest, ExtensionLifecycleStatus, StudentPreference, OnboardingState,
 } from "../schemas/index.js"
 
 describe("Branded IDs", () => {
@@ -175,14 +180,37 @@ describe("MemoryEntry schema", () => {
 })
 
 describe("Extension schema", () => {
-  test("decodes valid extension", () => {
+  test("re-exports the canonical extension contracts", () => {
+    expect(Extension).toBe(ContractsExtension)
+    expect(ExtensionManifest).toBe(ContractsExtensionManifest)
+    expect(ExtensionLifecycleStatus).toBe(ContractsExtensionLifecycleStatus)
+  })
+
+  test("decodes valid extension registry entry", () => {
     const decode = Schema.decodeUnknownSync(Extension)
     const result = decode({
-      id: "ext-1",
-      name: "Canvas MCP",
-      version: "1.0.0",
+      manifest: {
+        id: "canvas-mcp",
+        name: "Canvas Assistant",
+        description: "Canvas integration",
+        version: "1.0.0",
+        transport: {
+          type: "local_stdio",
+          entry: "dist/index.js",
+        },
+        permissions: ["read"],
+        auth: {
+          type: "none",
+        },
+        tools: [
+          { name: "get_courses", description: "List courses" },
+        ],
+        author: "student-claw",
+        homepage: "https://github.com/StudentClaw/student-claw",
+      },
+      installSource: "bundled",
+      enabled: true,
       status: "active",
-      permissions: ["read", "write"],
     })
     expect(result.status).toBe("active")
   })
@@ -190,11 +218,26 @@ describe("Extension schema", () => {
   test("rejects invalid status", () => {
     const decode = Schema.decodeUnknownSync(Extension)
     expect(() => decode({
-      id: "ext-1",
-      name: "Canvas",
-      version: "1.0.0",
+      manifest: {
+        id: "canvas-mcp",
+        name: "Canvas",
+        description: "Canvas integration",
+        version: "1.0.0",
+        transport: {
+          type: "local_stdio",
+          entry: "dist/index.js",
+        },
+        permissions: [],
+        auth: {
+          type: "none",
+        },
+        tools: [],
+        author: "student-claw",
+        homepage: "https://github.com/StudentClaw/student-claw",
+      },
+      installSource: "bundled",
+      enabled: true,
       status: "broken",
-      permissions: [],
     })).toThrow()
   })
 })

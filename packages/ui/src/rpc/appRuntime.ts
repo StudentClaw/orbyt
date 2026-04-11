@@ -28,6 +28,9 @@ function getStandaloneDevBootstrap(): DesktopBootstrap | null {
     wsAuthToken,
     appVersion: import.meta.env.VITE_STANDALONE_APP_VERSION ?? "0.1.0",
     platform: import.meta.env.VITE_STANDALONE_PLATFORM ?? "web",
+    featureFlags: {
+      pluginSystem: false,
+    },
   }
 }
 

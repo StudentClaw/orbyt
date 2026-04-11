@@ -29,6 +29,9 @@ function makeDependencies() {
         wsAuthToken: "a".repeat(64),
         appVersion: "0.1.0",
         platform: "test",
+        featureFlags: {
+          pluginSystem: false,
+        },
       }),
       getServerConfig: async () => ({
         appVersion: "0.1.0",
@@ -38,6 +41,9 @@ function makeDependencies() {
           orchestration: true,
           providerRuntime: true,
           desktopBootstrap: true,
+        },
+        featureFlags: {
+          pluginSystem: false,
         },
       }),
       getSnapshot: async () => ({

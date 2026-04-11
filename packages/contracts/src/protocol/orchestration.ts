@@ -1,5 +1,6 @@
 import { Schema } from "@effect/schema"
 import { DesktopBootstrap } from "./desktop.js"
+import { FeatureFlags } from "./feature-flags.js"
 
 /**
  * Maximum number of characters allowed in a user-provided thread title.
@@ -124,6 +125,7 @@ export const ServerConfig = Schema.Struct({
   platform: Schema.String,
   protocolVersion: Schema.String,
   capabilities: ServerCapabilities,
+  featureFlags: FeatureFlags,
 })
 
 /**

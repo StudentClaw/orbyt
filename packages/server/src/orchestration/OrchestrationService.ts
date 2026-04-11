@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs"
 import path from "node:path"
 import { Context, Effect, Layer } from "effect"
 import {
+  type FeatureFlags,
   PUSH_CHANNELS,
   type CreateThreadResult,
   type CreateWorkspaceResult,
@@ -17,6 +18,7 @@ import {
   type RelinkWorkspaceResult,
   type SendTurnResult,
   type RetryProviderInitializeResult,
+  type ServerConfig,
   type StartProviderAuthResult,
 } from "@student-claw/contracts"
 import { createId } from "@student-claw/shared-runtime"
@@ -123,6 +125,12 @@ export function createRuntimeState(): OrchestrationRuntimeState {
     activeTurns: new Map(),
     workQueue: [],
     drainingQueue: false,
+  }
+}
+
+function getFeatureFlags(): FeatureFlags {
+  return {
+    pluginSystem: false,
   }
 }
 
@@ -598,6 +606,7 @@ function buildDesktopBootstrap(config: AppConfig): DesktopBootstrap {
     wsAuthToken: config.wsAuthToken,
     appVersion: "0.1.0",
     platform: process.platform,
+    featureFlags: getFeatureFlags(),
   }
 }
 
@@ -611,6 +620,7 @@ function buildServerConfig(): ServerConfig {
       providerRuntime: true,
       desktopBootstrap: true,
     },
+    featureFlags: getFeatureFlags(),
   }
 }
 
@@ -1382,6 +1392,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         wsAuthToken: config.wsAuthToken,
         appVersion: "0.1.0",
         platform: process.platform,
+        featureFlags: getFeatureFlags(),
       }),
       getServerConfig: async () => ({
         appVersion: "0.1.0",
@@ -1392,6 +1403,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           providerRuntime: true,
           desktopBootstrap: true,
         },
+        featureFlags: getFeatureFlags(),
       }),
       getSnapshot: async () => {
         refreshFilesystemWorkspaceAvailability(database)

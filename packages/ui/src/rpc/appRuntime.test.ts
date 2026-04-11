@@ -47,6 +47,9 @@ const bootstrap: DesktopBootstrap = {
   wsAuthToken: "a".repeat(64),
   appVersion: "0.1.0",
   platform: "test",
+  featureFlags: {
+    pluginSystem: false,
+  },
 }
 
 describe("startAppRuntime", () => {

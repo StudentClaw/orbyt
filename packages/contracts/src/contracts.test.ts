@@ -31,6 +31,9 @@ describe("@student-claw/contracts", () => {
       wsAuthToken: "a".repeat(64),
       appVersion: "0.1.0",
       platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
     })
     const config = Schema.decodeUnknownSync(ServerConfig)({
       appVersion: "0.1.0",
@@ -40,6 +43,9 @@ describe("@student-claw/contracts", () => {
         orchestration: true,
         providerRuntime: true,
         desktopBootstrap: true,
+      },
+      featureFlags: {
+        pluginSystem: false,
       },
     })
     const lifecycle = Schema.decodeUnknownSync(ServerLifecycleEvent)({
@@ -67,7 +73,9 @@ describe("@student-claw/contracts", () => {
     })
 
     expect(bootstrap.wsUrl).toContain("127.0.0.1")
+    expect(bootstrap.featureFlags.pluginSystem).toBe(false)
     expect(config.protocolVersion).toBe("rpc-v1")
+    expect(config.featureFlags.pluginSystem).toBe(false)
     expect(lifecycle.payload.bootstrap.platform).toBe("darwin")
     expect(snapshot.ready).toBe(true)
     expect(snapshot.providerRuntime.adapter).toBe("codex")

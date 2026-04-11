@@ -1,32 +1,37 @@
-import { z } from "zod/v4"
+import {
+  ExtensionManifest,
+  parseExtensionManifestSync,
+  type ExtensionManifest as CanvasManifest,
+} from "@student-claw/contracts"
 
-export const CanvasManifestSchema = z.object({
-  id: z.literal("canvas-mcp"),
-  name: z.string().min(1),
-  description: z.string().min(1),
-  version: z.string().min(1),
-  entry: z.string().min(1),
-  permissions: z.array(z.enum(["assignments", "grades", "announcements", "modules", "pages"])).min(1),
-  authType: z.literal("manual_token"),
-  authInstructions: z.string().min(1),
-  requiredCredentials: z.tuple([z.literal("CANVAS_TOKEN"), z.literal("CANVAS_BASE_URL")]),
-  author: z.string().min(1),
-  homepage: z.string().url(),
-})
+export const CanvasManifestSchema = ExtensionManifest
 
-export type CanvasManifest = z.infer<typeof CanvasManifestSchema>
+export type { CanvasManifest }
 
-export const canvasManifest: CanvasManifest = {
+export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
   id: "canvas-mcp",
   name: "Canvas Assistant",
   description: "Connects to Canvas coursework, grades, announcements, modules, and pages",
   version: "0.1.0",
-  entry: "dist/index.js",
+  transport: {
+    type: "local_stdio",
+    entry: "dist/index.js",
+  },
   permissions: ["assignments", "grades", "announcements", "modules", "pages"],
-  authType: "manual_token",
-  authInstructions:
-    "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
-  requiredCredentials: ["CANVAS_TOKEN", "CANVAS_BASE_URL"],
+  auth: {
+    type: "manual_token",
+    instructions:
+      "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
+    requiredKeys: ["CANVAS_TOKEN", "CANVAS_BASE_URL"],
+  },
+  tools: [
+    { name: "get_courses", description: "List Canvas courses available to the student." },
+    { name: "get_coursework", description: "List coursework items across Canvas courses." },
+    { name: "get_coursework_detail", description: "Fetch detailed information for a single coursework item." },
+    { name: "get_grades", description: "Fetch current Canvas grade information." },
+    { name: "get_announcements", description: "List recent Canvas announcements." },
+    { name: "sync_now", description: "Trigger an immediate Canvas refresh read." },
+  ],
   author: "student-claw",
   homepage: "https://github.com/StudentClaw/student-claw",
-}
+})
