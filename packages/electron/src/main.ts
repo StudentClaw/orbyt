@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { registerIpcHandlers } from "./ipc/bridge.js"
+import { PluginManager } from "./plugins/plugin-manager.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
 import { createWindow } from "./window/window-manager.js"
@@ -22,13 +23,32 @@ function resolveIconPath(): string {
 
 let mainWindow: BrowserWindow | null = null
 let serverProcess: ServerProcess | null = null
+let serverProcessPromise: Promise<ServerProcess> | null = null
+let pluginManager: PluginManager | null = null
 let isQuitting = false
 
-async function createAppWindow(): Promise<BrowserWindow> {
-  if (!serverProcess) {
-    serverProcess = await spawnServer()
-    registerIpcHandlers(serverProcess.bootstrap)
+async function ensureServerProcess(): Promise<ServerProcess> {
+  if (serverProcess) {
+    return serverProcess
   }
+
+  if (!serverProcessPromise) {
+    serverProcessPromise = spawnServer()
+      .then((nextServerProcess) => {
+        serverProcess = nextServerProcess
+        pluginManager = registerIpcHandlers(nextServerProcess.bootstrap).pluginManager
+        return nextServerProcess
+      })
+      .finally(() => {
+        serverProcessPromise = null
+      })
+  }
+
+  return serverProcessPromise
+}
+
+async function createAppWindow(): Promise<BrowserWindow> {
+  await ensureServerProcess()
 
   const window = createWindow()
   createTray(window)
@@ -75,8 +95,11 @@ app.whenReady()
 
 app.on("before-quit", () => {
   isQuitting = true
+  void pluginManager?.dispose()
+  pluginManager = null
   serverProcess?.kill()
   serverProcess = null
+  serverProcessPromise = null
 })
 
 app.on("window-all-closed", () => {

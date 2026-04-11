@@ -18,7 +18,11 @@ import {
   type ExtensionRegistryEntry,
   type PluginGetStatusParams,
   type PluginInstallBundledParams,
+  type PluginLifecycleActionResult,
   type PluginManagementActionResult,
+  type PluginRetryParams,
+  type PluginStartParams,
+  type PluginStopParams,
   type PluginSetEnabledParams,
   type PluginUninstallParams,
 } from "@student-claw/contracts"
@@ -28,6 +32,7 @@ import {
   resolveBundledCatalogDir,
   resolveUserExtensionStoreDir,
 } from "../plugins/plugin-registry.js"
+import { PluginManager } from "../plugins/plugin-manager.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -47,7 +52,7 @@ function resolveCodexPath(): string {
 /**
  * Registers the Electron main-process IPC handlers needed by the renderer runtime.
  */
-export function registerIpcHandlers(bootstrap: DesktopBootstrap): void {
+export function registerIpcHandlers(bootstrap: DesktopBootstrap): { pluginManager: PluginManager } {
   ipcMain.handle(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
   })
@@ -141,7 +146,7 @@ export function registerIpcHandlers(bootstrap: DesktopBootstrap): void {
     })
   })
 
-  registerPluginIpcStubHandlers(bootstrap)
+  return registerPluginIpcHandlers(bootstrap)
 }
 
 function buildPluginActionResult(
@@ -155,15 +160,70 @@ function buildPluginActionResult(
   }
 }
 
-function registerPluginIpcStubHandlers(bootstrap: DesktopBootstrap): void {
+function buildPluginLifecycleActionResult(
+  bootstrap: DesktopBootstrap,
+  pluginId: string,
+): PluginLifecycleActionResult {
+  return {
+    ok: false,
+    pluginId,
+    reason: bootstrap.featureFlags.pluginSystem ? "start_failed" : "plugin_system_disabled",
+  }
+}
+
+function emitPluginLifecycle(payload: { pluginId: string; status: ExtensionRegistryEntry["status"]; emittedAt: string }): void {
+  const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+  for (const window of windows) {
+    window.webContents.send(IpcChannel.PLUGIN_LIFECYCLE, payload)
+  }
+}
+
+function registerPluginIpcHandlers(bootstrap: DesktopBootstrap): { pluginManager: PluginManager } {
   const pluginRegistry = new PluginRegistry({
     bundledCatalogDir: resolveBundledCatalogDir(currentDir, app.isPackaged),
     userExtensionStoreDir: resolveUserExtensionStoreDir(app.getPath("userData")),
   })
+  const pluginManager = new PluginManager({
+    registry: pluginRegistry,
+    emitLifecycleEvent: emitPluginLifecycle,
+  })
 
   ipcMain.handle(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
-    return pluginRegistry.list()
+    return pluginManager.list()
   })
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_START,
+    (_event, params: PluginStartParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.start(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_STOP,
+    (_event, params: PluginStopParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.stop(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_RETRY,
+    (_event, params: PluginRetryParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.retry(params.pluginId)
+    },
+  )
 
   ipcMain.handle(
     IpcChannel.PLUGIN_INSTALL_BUNDLED,
@@ -189,7 +249,11 @@ function registerPluginIpcStubHandlers(bootstrap: DesktopBootstrap): void {
   ipcMain.handle(
     IpcChannel.PLUGIN_GET_STATUS,
     (_event, params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
-      return pluginRegistry.getStatus(params.pluginId)
+      return pluginManager.getStatus(params.pluginId)
     },
   )
+
+  return {
+    pluginManager,
+  }
 }

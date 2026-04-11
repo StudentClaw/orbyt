@@ -3,6 +3,7 @@ import path from "node:path"
 import {
   ExtensionManifestValidationError,
   parseExtensionManifestSync,
+  type ExtensionRegistryAvailableEntry,
   type ExtensionInstallSource,
   type ExtensionRegistryEntry,
 } from "@student-claw/contracts"
@@ -16,6 +17,16 @@ const INSTALL_SOURCE_ORDER: Record<ExtensionInstallSource, number> = {
   system: 0,
   bundled: 1,
   user: 2,
+}
+
+export type PluginRegistryRecord = {
+  entry: ExtensionRegistryEntry
+  manifestPath: string
+}
+
+export type AvailablePluginRegistryRecord = {
+  entry: ExtensionRegistryAvailableEntry
+  manifestPath: string
 }
 
 function isManifestValidationError(error: unknown): error is ExtensionManifestValidationError {
@@ -57,10 +68,10 @@ function discoverManifestPaths(rootDir: string): string[] {
     .filter((manifestPath) => existsSync(manifestPath))
 }
 
-function parseRegistryEntry(
+function parseRegistryRecord(
   manifestPath: string,
   installSource: ExtensionInstallSource,
-): ExtensionRegistryEntry {
+): PluginRegistryRecord {
   const fallbackId = path.basename(path.dirname(manifestPath))
   const fallbackName = fallbackId
 
@@ -70,11 +81,14 @@ function parseRegistryEntry(
     const manifest = parseExtensionManifestSync(decoded)
 
     return {
-      kind: "available",
-      manifest,
-      installSource,
-      status: "discovered",
-      enabled: true,
+      entry: {
+        kind: "available",
+        manifest,
+        installSource,
+        status: "discovered",
+        enabled: true,
+      },
+      manifestPath,
     }
   } catch (error) {
     let pluginId = fallbackId
@@ -94,31 +108,34 @@ function parseRegistryEntry(
     }
 
     return {
-      kind: "invalid",
-      pluginId,
-      displayName,
-      installSource,
-      status: "error",
-      enabled: false,
-      lastError: buildManifestErrorMessage(error),
+      entry: {
+        kind: "invalid",
+        pluginId,
+        displayName,
+        installSource,
+        status: "error",
+        enabled: false,
+        lastError: buildManifestErrorMessage(error),
+        manifestPath,
+      },
       manifestPath,
     }
   }
 }
 
-function sortRegistryEntries(entries: ExtensionRegistryEntry[]): ExtensionRegistryEntry[] {
-  return [...entries].sort((left, right) => {
-    const sourceDelta = getInstallSourceOrder(left.installSource) - getInstallSourceOrder(right.installSource)
+function sortRegistryRecords(records: PluginRegistryRecord[]): PluginRegistryRecord[] {
+  return [...records].sort((left, right) => {
+    const sourceDelta = getInstallSourceOrder(left.entry.installSource) - getInstallSourceOrder(right.entry.installSource)
     if (sourceDelta !== 0) {
       return sourceDelta
     }
 
-    const labelDelta = getEntryLabel(left).localeCompare(getEntryLabel(right))
+    const labelDelta = getEntryLabel(left.entry).localeCompare(getEntryLabel(right.entry))
     if (labelDelta !== 0) {
       return labelDelta
     }
 
-    return getEntryPluginId(left).localeCompare(getEntryPluginId(right))
+    return getEntryPluginId(left.entry).localeCompare(getEntryPluginId(right.entry))
   })
 }
 
@@ -129,17 +146,37 @@ function getInstallSourceOrder(installSource: ExtensionInstallSource): number {
 export class PluginRegistry {
   constructor(private readonly paths: PluginRegistryPaths) {}
 
-  list(): ExtensionRegistryEntry[] {
+  private listRecords(): PluginRegistryRecord[] {
     const bundledEntries = discoverManifestPaths(this.paths.bundledCatalogDir)
-      .map((manifestPath) => parseRegistryEntry(manifestPath, "bundled"))
+      .map((manifestPath) => parseRegistryRecord(manifestPath, "bundled"))
     const userEntries = discoverManifestPaths(this.paths.userExtensionStoreDir)
-      .map((manifestPath) => parseRegistryEntry(manifestPath, "user"))
+      .map((manifestPath) => parseRegistryRecord(manifestPath, "user"))
 
-    return sortRegistryEntries([...bundledEntries, ...userEntries])
+    return sortRegistryRecords([...bundledEntries, ...userEntries])
+  }
+
+  list(): ExtensionRegistryEntry[] {
+    return this.listRecords().map((record) => record.entry)
   }
 
   getStatus(pluginId: string): ExtensionRegistryEntry | null {
-    return this.list().find((entry) => getEntryPluginId(entry) === pluginId) ?? null
+    return this.getRecord(pluginId)?.entry ?? null
+  }
+
+  getRecord(pluginId: string): PluginRegistryRecord | null {
+    return this.listRecords().find((record) => getEntryPluginId(record.entry) === pluginId) ?? null
+  }
+
+  getAvailableRecord(pluginId: string): AvailablePluginRegistryRecord | null {
+    const record = this.getRecord(pluginId)
+    if (!record || record.entry.kind !== "available") {
+      return null
+    }
+
+    return {
+      entry: record.entry,
+      manifestPath: record.manifestPath,
+    }
   }
 }
 

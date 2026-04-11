@@ -8,9 +8,10 @@
     "dev": "electron-vite dev --config electron-vite.config.ts",
     "build": "electron-vite build --config electron-vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "bun test"
+    "test": "bun test src"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex": "^0.120.0",
     "@student-claw/contracts": "workspace:*",
     "electron": "^41.1.1",

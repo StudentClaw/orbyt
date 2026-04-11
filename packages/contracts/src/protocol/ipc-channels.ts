@@ -14,6 +14,9 @@ export const IpcChannel = {
   CODEX_AUTH_START: "codex:auth-start",
   CODEX_AUTH_STATUS: "codex:auth-status",
   PLUGIN_LIST: "plugin:list",
+  PLUGIN_START: "plugin:start",
+  PLUGIN_STOP: "plugin:stop",
+  PLUGIN_RETRY: "plugin:retry",
   PLUGIN_INSTALL_BUNDLED: "plugin:install-bundled",
   PLUGIN_SET_ENABLED: "plugin:set-enabled",
   PLUGIN_UNINSTALL: "plugin:uninstall",
@@ -45,6 +48,18 @@ export type PluginGetStatusParams = {
   readonly pluginId: string
 }
 
+export type PluginStartParams = {
+  readonly pluginId: string
+}
+
+export type PluginStopParams = {
+  readonly pluginId: string
+}
+
+export type PluginRetryParams = {
+  readonly pluginId: string
+}
+
 export type PluginManagementFailureReason = "plugin_system_disabled" | "not_implemented"
 
 export type PluginManagementActionResult =
@@ -57,6 +72,27 @@ export type PluginManagementActionResult =
     readonly ok: false
     readonly pluginId: string
     readonly reason: PluginManagementFailureReason
+  }
+
+export type PluginLifecycleFailureReason =
+  | "plugin_system_disabled"
+  | "plugin_not_found"
+  | "invalid_plugin"
+  | "unsupported_transport"
+  | "already_running"
+  | "not_running"
+  | "start_failed"
+
+export type PluginLifecycleActionResult =
+  | {
+    readonly ok: true
+    readonly pluginId: string
+    readonly status: ExtensionLifecycleStatus
+  }
+  | {
+    readonly ok: false
+    readonly pluginId: string
+    readonly reason: PluginLifecycleFailureReason
   }
 
 export type PluginLifecycleEvent = {
@@ -78,6 +114,9 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.CODEX_AUTH_START]: []
   [IpcChannel.CODEX_AUTH_STATUS]: []
   [IpcChannel.PLUGIN_LIST]: []
+  [IpcChannel.PLUGIN_START]: [params: PluginStartParams]
+  [IpcChannel.PLUGIN_STOP]: [params: PluginStopParams]
+  [IpcChannel.PLUGIN_RETRY]: [params: PluginRetryParams]
   [IpcChannel.PLUGIN_INSTALL_BUNDLED]: [params: PluginInstallBundledParams]
   [IpcChannel.PLUGIN_SET_ENABLED]: [params: PluginSetEnabledParams]
   [IpcChannel.PLUGIN_UNINSTALL]: [params: PluginUninstallParams]
@@ -94,6 +133,9 @@ export type IpcInvokeResultMap = {
   [IpcChannel.CODEX_AUTH_START]: CodexAuthResult
   [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }
   [IpcChannel.PLUGIN_LIST]: ExtensionRegistryEntry[]
+  [IpcChannel.PLUGIN_START]: PluginLifecycleActionResult
+  [IpcChannel.PLUGIN_STOP]: PluginLifecycleActionResult
+  [IpcChannel.PLUGIN_RETRY]: PluginLifecycleActionResult
   [IpcChannel.PLUGIN_INSTALL_BUNDLED]: PluginManagementActionResult
   [IpcChannel.PLUGIN_SET_ENABLED]: PluginManagementActionResult
   [IpcChannel.PLUGIN_UNINSTALL]: PluginManagementActionResult

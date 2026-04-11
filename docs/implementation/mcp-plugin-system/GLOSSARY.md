@@ -14,13 +14,24 @@ This file has two jobs:
 - `blocked`: implementation paused by a dependency or failure
 - `complete`: acceptance criteria and verification gates are satisfied
 
+## Verification State Legend
+
+- `Not run`: the phase verification gate has not been exercised yet
+- `In progress`: some verification work has started, but the full gate is not yet green
+- `Failed`: at least one required verification check is currently failing
+- `Verified`: the full verification gate is green for the current phase state
+
+Verification state tracks the health of the evidence for a phase. Phase `Status`
+tracks delivery progress. A phase should not be marked `complete` unless its
+verification state is `Verified`.
+
 ## Phase Tracker
 
 | Phase | Status | Owner | Verification State | Next Action |
 | --- | --- | --- | --- | --- |
 | 00 - Contracts And Scaffolding | complete | Codex | Verified | Begin Phase 02 local spawn work using the canonical contracts and IPC shapes |
 | 01 - Discovery And Registry | complete | Codex | Verified | Begin Phase 02 local spawn and lifecycle implementation |
-| 02 - Local Spawn And Lifecycle | not_started | Unassigned | Not run | Spawn `template-mcp`, initialize MCP, and call one tool |
+| 02 - Local Spawn And Lifecycle | complete | Codex | Verified | Start Phase 03 gateway wiring using the live `template-mcp` lifecycle path as the routed canary |
 | 03 - Gateway And Codex Integration | not_started | Unassigned | Not run | Expose one Student Claw MCP gateway and route one fake tool end to end |
 | 04 - Credentials And Auth UX | not_started | Unassigned | Not run | Add vault-backed auth schema rendering and secure credential handshake |
 | 05 - Installation And Extension Management | not_started | Unassigned | Not run | Add bundled install, enable/disable, uninstall, and live inventory refresh |
@@ -29,7 +40,7 @@ This file has two jobs:
 
 ## Current Recommended Next Step
 
-Start [Phase 02 - Local Spawn And Lifecycle](phase-02-local-spawn-and-lifecycle.md).
+Start [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md).
 
 Do not start process spawning before the extension registry contract, status model, and IPC shapes exist in shared packages.
 
@@ -194,7 +205,68 @@ The set of checks that must be green before a phase can be marked complete:
 
 ### Phase 02 - Local Spawn And Lifecycle
 
-- Pending first implementation pass.
+- Date: 2026-04-11
+- Branch: `codex/plugin-bridge-reset`
+- Owner: Codex
+- Status change: `not_started -> in_progress`
+- Completed:
+  - Upgraded `template-mcp` from a placeholder script into a real MCP stdio server with the deterministic `template_ping` canary tool and package-level server tests.
+  - Added explicit lifecycle IPC contracts for `plugin:start`, `plugin:stop`, and `plugin:retry` plus lifecycle action result typing.
+  - Added Electron `PluginSandbox` and `PluginManager` runtime ownership so bundled plugins can spawn, initialize, list tools, call the canary tool, stop cleanly, idle-stop, and recover from unexpected exits.
+  - Switched plugin registry reads in Electron Main to overlay live runtime status on top of discovery output and emit `plugin:lifecycle` events to renderer subscribers.
+  - Added dev-only lifecycle controls in Settings so bundled plugins can be started, stopped, retried, and refreshed from live lifecycle events.
+  - Updated workspace scripts so `template-mcp` participates in extension builds and test runs.
+- Remaining:
+  - Run the manual dev smoke in Settings and capture the requested logs/screenshots for the phase evidence set.
+  - Decide whether Phase 02 should be marked `complete` after the manual smoke passes and the handoff entry is amended with that evidence.
+- Risks or blockers:
+  - Manual smoke is still outstanding, so Phase 02 should not be marked `complete` yet even though automated verification is green.
+  - The lifecycle event payload stays intentionally minimal in this phase, so row-level refresh remains dependent on follow-up `plugin:get-status` reads.
+- Commands run:
+  - `bun install`
+  - `bun --cwd packages/extensions/template-mcp build`
+  - `bun --cwd packages/extensions/template-mcp test`
+  - `bun --cwd packages/electron test`
+  - `bun --cwd packages/contracts typecheck`
+  - `bun --cwd packages/electron typecheck`
+  - `bun --cwd packages/extensions/template-mcp typecheck`
+  - `bun --cwd packages/ui vitest run src/__tests__/SettingsPage.test.tsx`
+  - `bun run test:shared`
+- Evidence captured:
+  - `packages/extensions/template-mcp`: 2 passing server tests covering `listTools()` and `template_ping`.
+  - `packages/electron`: 14 passing source tests covering registry overlay, lifecycle state handling, explicit IPC reads, real `template-mcp` spawn, crash-to-error, retry, and stop.
+  - `packages/ui`: 5 passing Settings tests covering lifecycle controls, start action wiring, lifecycle-event row refresh, and retry visibility.
+  - `packages/contracts` / `packages/electron` / `packages/extensions/template-mcp`: targeted typechecks pass after the lifecycle implementation.
+- First recommended next step:
+  - Run the dev Settings manual smoke, capture the successful lifecycle and crash-retry evidence, then move to [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md).
+
+- Date: 2026-04-11
+- Branch: `codex/plugin-bridge-reset`
+- Owner: Codex
+- Status change: `in_progress -> complete`
+- Completed:
+  - Verified the full Phase 02 checklist, including automated coverage and the dev Settings smoke for start, stop, idle timeout, crash-to-error, and retry recovery.
+  - Confirmed `template-mcp` can spawn on demand, initialize, list tools, serve the `template_ping` canary, stop cleanly, and recover from a killed child process without restarting the app.
+  - Confirmed the Settings lifecycle controls and `plugin:lifecycle` refresh path are sufficient for manual verification in dev.
+- Remaining:
+  - No open Phase 02 implementation work.
+- Risks or blockers:
+  - No blocking issues remain for Phase 02.
+  - Phase 03 should avoid expanding lifecycle responsibilities in Main beyond routing and gateway concerns.
+- Commands run:
+  - `bun --cwd packages/extensions/template-mcp build`
+  - `bun --cwd packages/extensions/template-mcp test`
+  - `bun --cwd packages/electron test`
+  - `bun --cwd packages/contracts typecheck`
+  - `bun --cwd packages/electron typecheck`
+  - `bun --cwd packages/extensions/template-mcp typecheck`
+  - `bun --cwd packages/ui vitest run src/__tests__/SettingsPage.test.tsx`
+  - `bun run test:shared`
+- Evidence captured:
+  - Automated checks from the Phase 02 verification checklist passed.
+  - Manual dev smoke passed for start, stop, idle timeout, forced crash to `error`, and successful retry recovery from Settings.
+- First recommended next step:
+  - Start [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md).
 
 ### Phase 03 - Gateway And Codex Integration
 

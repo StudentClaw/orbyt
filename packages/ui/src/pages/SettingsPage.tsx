@@ -4,6 +4,7 @@ import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRunti
 import { DevOnboardingControls } from "@/components/dev/DevOnboardingControls"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -52,12 +53,77 @@ function getStatusBadgeVariant(entry: ExtensionRegistryEntry): "default" | "seco
   return "outline"
 }
 
+function canStart(entry: ExtensionRegistryEntry): boolean {
+  return entry.kind === "available"
+    && (entry.status === "discovered" || entry.status === "stopped" || entry.status === "error")
+}
+
+function canStop(entry: ExtensionRegistryEntry): boolean {
+  return entry.kind === "available"
+    && (entry.status === "starting" || entry.status === "ready" || entry.status === "active")
+}
+
+function canRetry(entry: ExtensionRegistryEntry): boolean {
+  return entry.kind === "available" && entry.status === "error"
+}
+
 export function SettingsPage() {
   const bootstrap = useRuntimeBootstrap()
   const serverConfig = useRuntimeServerConfig()
   const [registryEntries, setRegistryEntries] = useState<ExtensionRegistryEntry[]>([])
   const [registryState, setRegistryState] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const [registryError, setRegistryError] = useState<string | null>(null)
+  const [pendingPluginId, setPendingPluginId] = useState<string | null>(null)
+
+  function upsertRegistryEntry(nextEntry: ExtensionRegistryEntry): void {
+    setRegistryEntries((current) => {
+      const index = current.findIndex((entry) => getEntryPluginId(entry) === getEntryPluginId(nextEntry))
+      if (index === -1) {
+        return [...current, nextEntry]
+      }
+
+      const updated = [...current]
+      updated[index] = nextEntry
+      return updated
+    })
+  }
+
+  async function refreshPlugin(pluginId: string): Promise<void> {
+    if (!window.electronAPI?.invoke) {
+      return
+    }
+
+    const nextEntry = await window.electronAPI.invoke(IpcChannel.PLUGIN_GET_STATUS, { pluginId })
+    if (nextEntry) {
+      upsertRegistryEntry(nextEntry)
+    }
+  }
+
+  async function runLifecycleAction(
+    channel: typeof IpcChannel.PLUGIN_START | typeof IpcChannel.PLUGIN_STOP | typeof IpcChannel.PLUGIN_RETRY,
+    pluginId: string,
+  ): Promise<void> {
+    if (!window.electronAPI?.invoke) {
+      setRegistryError("Desktop bridge unavailable for plugin lifecycle actions.")
+      return
+    }
+
+    setPendingPluginId(pluginId)
+    setRegistryError(null)
+
+    try {
+      const result = await window.electronAPI.invoke(channel, { pluginId })
+      await refreshPlugin(pluginId)
+
+      if (!result.ok) {
+        setRegistryError(`Plugin action failed for ${pluginId}: ${result.reason}`)
+      }
+    } catch (error) {
+      setRegistryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPendingPluginId((current) => (current === pluginId ? null : current))
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -107,6 +173,18 @@ export function SettingsPage() {
     }
   }, [bootstrap])
 
+  useEffect(() => {
+    if (!bootstrap?.featureFlags.pluginSystem || !window.electronAPI?.on) {
+      return
+    }
+
+    return window.electronAPI.on(IpcChannel.PLUGIN_LIFECYCLE, (payload) => {
+      void refreshPlugin(payload.pluginId).catch((error: unknown) => {
+        setRegistryError(error instanceof Error ? error.message : String(error))
+      })
+    })
+  }, [bootstrap])
+
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-bold">Settings</h1>
@@ -121,7 +199,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle>Extension Registry</CardTitle>
           <CardDescription>
-            Phase 01 shows discovered bundled and user extensions before install, auth, and lifecycle controls land.
+            Phase 02 validates the local plugin lifecycle for bundled extensions before gateway routing and auth arrive.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -164,6 +242,7 @@ export function SettingsPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Version</TableHead>
                     <TableHead>Validation</TableHead>
+                    {import.meta.env.DEV && <TableHead>Lifecycle</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -185,6 +264,50 @@ export function SettingsPage() {
                       <TableCell className="max-w-sm whitespace-normal text-sm text-muted-foreground">
                         {getEntryError(entry) ?? "Valid manifest"}
                       </TableCell>
+                      {import.meta.env.DEV && (
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            {canStart(entry) && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={pendingPluginId === getEntryPluginId(entry)}
+                                onClick={() => {
+                                  void runLifecycleAction(IpcChannel.PLUGIN_START, getEntryPluginId(entry))
+                                }}
+                              >
+                                Start
+                              </Button>
+                            )}
+                            {canStop(entry) && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={pendingPluginId === getEntryPluginId(entry)}
+                                onClick={() => {
+                                  void runLifecycleAction(IpcChannel.PLUGIN_STOP, getEntryPluginId(entry))
+                                }}
+                              >
+                                Stop
+                              </Button>
+                            )}
+                            {canRetry(entry) && (
+                              <Button
+                                size="xs"
+                                disabled={pendingPluginId === getEntryPluginId(entry)}
+                                onClick={() => {
+                                  void runLifecycleAction(IpcChannel.PLUGIN_RETRY, getEntryPluginId(entry))
+                                }}
+                              >
+                                Retry
+                              </Button>
+                            )}
+                            {entry.kind === "invalid" && (
+                              <span className="text-xs text-muted-foreground">Manifest invalid</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
