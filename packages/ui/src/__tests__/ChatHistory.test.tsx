@@ -112,6 +112,13 @@ describe("ChatHistory", () => {
     historyMocks.selectChatTarget.mockReset()
     historyMocks.clearSelection.mockReset()
     historyMocks.navigate.mockReset()
+    window.electronAPI = {
+      getBootstrap: vi.fn().mockResolvedValue(null),
+      codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
+      invoke: vi.fn().mockResolvedValue("/repo"),
+      send: vi.fn(),
+      on: vi.fn().mockReturnValue(() => {}),
+    }
   })
 
   test("renders workspaces and runtime threads in recency order", () => {
@@ -150,5 +157,61 @@ describe("ChatHistory", () => {
     expect(historyMocks.createThread).toHaveBeenCalledWith("workspace-1", "New chat")
     expect(historyMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
     expect(historyMocks.openPanel).toHaveBeenCalled()
+  })
+
+  test("adding a folder on /chat opens the folder empty state without creating a chat", async () => {
+    historyMocks.pathname = "/chat"
+    historyMocks.createWorkspace.mockResolvedValue("workspace-2")
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+    await user.click(screen.getByRole("button", { name: "Add folder" }))
+    expect(window.electronAPI?.invoke).toHaveBeenCalledWith("file:open-dialog", { directory: true })
+    expect(historyMocks.createWorkspace).toHaveBeenCalledWith("/repo")
+    expect(historyMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId",
+      params: { workspaceId: "workspace-2" },
+    })
+    expect(historyMocks.createThread).not.toHaveBeenCalled()
+  })
+
+  test("adding an existing folder off-route focuses it without creating a chat", async () => {
+    historyMocks.createWorkspace.mockResolvedValue("workspace-1")
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+    await user.click(screen.getByRole("button", { name: "Add folder" }))
+    expect(historyMocks.selectWorkspace).toHaveBeenCalledWith("workspace-1")
+    expect(historyMocks.openPanel).toHaveBeenCalled()
+    expect(historyMocks.createThread).not.toHaveBeenCalled()
+  })
+
+  test("shows an actionable error when folder picking is unavailable", async () => {
+    Reflect.deleteProperty(window, "electronAPI")
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+    await user.click(screen.getByRole("button", { name: "Add folder" }))
+    expect(screen.getByText("Adding folders is only available in the desktop app.")).toBeTruthy()
+    expect(historyMocks.createWorkspace).not.toHaveBeenCalled()
+  })
+
+  test("workspace removal requires confirmation", async () => {
+    historyMocks.snapshot = {
+      ...snapshot,
+      workspaces: [
+        {
+          ...snapshot.workspaces[0],
+          availability: "missing",
+        },
+      ],
+    }
+    const confirmSpy = vi.fn(() => false)
+    Object.defineProperty(window, "confirm", {
+      value: confirmSpy,
+      configurable: true,
+    })
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+    await user.click(screen.getByRole("button", { name: "Remove" }))
+    expect(confirmSpy).toHaveBeenCalledOnce()
+    expect(historyMocks.deleteWorkspace).not.toHaveBeenCalled()
   })
 })

@@ -26,8 +26,19 @@ function parseRequestedProtocols(request: IncomingMessage): string[] {
     .filter(Boolean) ?? []
 }
 
+function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin)
+    return hostname === "localhost" || hostname === "127.0.0.1"
+  } catch {
+    return false
+  }
+}
+
 function isAllowedOrigin(origin: string | undefined, allowedOrigins: readonly string[]): boolean {
-  return !origin || origin === "null" || allowedOrigins.includes(origin)
+  if (!origin || origin === "null") return true
+  if (allowedOrigins.includes(origin)) return true
+  return isLocalhostOrigin(origin)
 }
 
 /**

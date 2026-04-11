@@ -72,8 +72,7 @@ describe("AiAuthStep", () => {
   })
 
   test("shows error when electronAPI unavailable", async () => {
-    // @ts-expect-error -- simulating browser environment
-    delete window.electronAPI
+    Reflect.deleteProperty(window, "electronAPI")
     const user = userEvent.setup()
     render(<AiAuthStep {...defaultProps} />)
     await user.click(screen.getByTestId("ai-auth-connect-btn"))

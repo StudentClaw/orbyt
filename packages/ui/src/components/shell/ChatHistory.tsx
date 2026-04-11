@@ -3,10 +3,11 @@ import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
+  ArrowDown01Icon,
   FolderAddIcon,
-  Message01Icon,
 } from "@hugeicons/core-free-icons"
 import { IpcChannel } from "@student-claw/contracts"
+import type { OrchestrationThread } from "@student-claw/contracts"
 import {
   useChatUiActions,
   useOrchestrationActions,
@@ -27,8 +28,17 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 
 const COLLAPSED_WORKSPACE_STORAGE_KEY = "student-claw:chat-collapsed-workspaces"
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message
+  }
+
+  return fallback
+}
 
 function readCollapsedWorkspaceIds(): Set<string> {
   if (typeof window === "undefined") {
@@ -63,6 +73,72 @@ function persistCollapsedWorkspaceIds(ids: Set<string>): void {
   }
 }
 
+const SEEN_THREAD_TURNS_STORAGE_KEY = "student-claw:chat-seen-thread-turns"
+
+function readSeenThreadTurns(): Map<string, string | null> {
+  if (typeof window === "undefined") {
+    return new Map()
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SEEN_THREAD_TURNS_STORAGE_KEY)
+    if (!raw) {
+      return new Map()
+    }
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return new Map()
+    }
+
+    return new Map(
+      parsed.filter(
+        (entry): entry is [string, string | null] =>
+          Array.isArray(entry) &&
+          entry.length === 2 &&
+          typeof entry[0] === "string" &&
+          (entry[1] === null || typeof entry[1] === "string"),
+      ),
+    )
+  } catch {
+    return new Map()
+  }
+}
+
+function persistSeenThreadTurns(map: Map<string, string | null>): void {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(SEEN_THREAD_TURNS_STORAGE_KEY, JSON.stringify([...map]))
+  } catch {
+    // Ignore localStorage failures.
+  }
+}
+
+type ThreadIndicator = "spinner" | "green-dot" | "gray-dot"
+
+function getThreadIndicator(
+  thread: OrchestrationThread,
+  isSelected: boolean,
+  seenThreadTurns: Map<string, string | null>,
+): ThreadIndicator {
+  if (thread.status === "streaming") {
+    return "spinner"
+  }
+
+  if (
+    !isSelected &&
+    thread.currentTurnId !== null &&
+    thread.currentTurnId !== seenThreadTurns.get(thread.id)
+  ) {
+    return "green-dot"
+  }
+
+  return "gray-dot"
+}
+
 export function ChatHistory() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const navigate = useNavigate()
@@ -78,8 +154,10 @@ export function ChatHistory() {
   } = useOrchestrationActions()
   const { openPanel, selectWorkspace, selectChatTarget, clearSelection } = useChatUiActions()
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(readCollapsedWorkspaceIds)
+  const [seenThreadTurns, setSeenThreadTurns] = useState<Map<string, string | null>>(readSeenThreadTurns)
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null)
   const [addingFolder, setAddingFolder] = useState(false)
+  const [folderActionError, setFolderActionError] = useState<string | null>(null)
 
   const routeSelection = resolveChatRouteSelection(pathname)
   const isOnChatRoute = isChatPath(pathname)
@@ -127,6 +205,30 @@ export function ChatHistory() {
     setCollapsedWorkspaceIds(next)
   }, [])
 
+  const markThreadSeen = useCallback((threadId: string, currentTurnId: string | null) => {
+    setSeenThreadTurns((prev) => {
+      const next = new Map(prev)
+      next.set(threadId, currentTurnId)
+      persistSeenThreadTurns(next)
+      return next
+    })
+  }, [])
+
+  // Auto-mark the currently selected thread as seen when its currentTurnId changes
+  // (the user is watching it, so any new turn is immediately "seen").
+  useEffect(() => {
+    if (!effectiveSelection.threadId) {
+      return
+    }
+
+    const selectedThread = snapshot?.threads.find((t) => t.id === effectiveSelection.threadId)
+    if (!selectedThread) {
+      return
+    }
+
+    markThreadSeen(selectedThread.id, selectedThread.currentTurnId)
+  }, [effectiveSelection.threadId, snapshot?.threads, markThreadSeen])
+
   const toggleWorkspaceExpanded = useCallback((workspaceId: string) => {
     setCollapsedIds((() => {
       const next = new Set(collapsedWorkspaceIds)
@@ -140,9 +242,13 @@ export function ChatHistory() {
   }, [collapsedWorkspaceIds, setCollapsedIds])
 
   const pickFolder = useCallback(async (): Promise<string | null> => {
-    const result = await window.electronAPI?.invoke(IpcChannel.FILE_OPEN_DIALOG, {
+    if (!window.electronAPI?.invoke) {
+      throw new Error("Adding folders is only available in the desktop app.")
+    }
+
+    const result = await window.electronAPI.invoke(IpcChannel.FILE_OPEN_DIALOG, {
       directory: true,
-    }).catch(() => null)
+    })
 
     return typeof result === "string" ? result : null
   }, [])
@@ -160,7 +266,9 @@ export function ChatHistory() {
     openPanel()
   }, [isOnChatRoute, navigate, openPanel, selectWorkspace])
 
-  const focusThread = useCallback(async (workspaceId: string, threadId: string) => {
+  const focusThread = useCallback(async (workspaceId: string, threadId: string, currentTurnId?: string | null) => {
+    markThreadSeen(threadId, currentTurnId ?? null)
+
     if (isOnChatRoute) {
       await navigate({
         to: "/chat/$workspaceId/$threadId",
@@ -171,15 +279,26 @@ export function ChatHistory() {
 
     selectChatTarget(workspaceId, threadId)
     openPanel()
-  }, [isOnChatRoute, navigate, openPanel, selectChatTarget])
+  }, [isOnChatRoute, markThreadSeen, navigate, openPanel, selectChatTarget])
 
   const handleCreateThread = useCallback(async (workspaceId: string, seedTitle = "New chat") => {
     const threadId = await createThread(workspaceId, seedTitle)
-    await focusThread(workspaceId, threadId)
+    await focusThread(workspaceId, threadId, null)
   }, [createThread, focusThread])
 
   const handleAddFolder = useCallback(async () => {
-    const pickedPath = await pickFolder()
+    setFolderActionError(null)
+
+    let pickedPath: string | null
+    try {
+      pickedPath = await pickFolder()
+    } catch (error) {
+      setFolderActionError(
+        getErrorMessage(error, "Failed to open the folder picker. Restart the desktop app and try again."),
+      )
+      return
+    }
+
     if (!pickedPath) {
       return
     }
@@ -187,21 +306,29 @@ export function ChatHistory() {
     setAddingFolder(true)
     try {
       const workspaceId = await createWorkspace(pickedPath)
-      const existedAlready = snapshot?.workspaces.some((workspace) => workspace.id === workspaceId) ?? false
-
-      if (existedAlready) {
-        await focusWorkspace(workspaceId)
-        return
-      }
-
-      await handleCreateThread(workspaceId, "New chat")
+      await focusWorkspace(workspaceId)
+    } catch (error) {
+      setFolderActionError(
+        getErrorMessage(error, "Failed to add the selected folder. Try again."),
+      )
     } finally {
       setAddingFolder(false)
     }
-  }, [createWorkspace, focusWorkspace, handleCreateThread, pickFolder, snapshot?.workspaces])
+  }, [createWorkspace, focusWorkspace, pickFolder])
 
   const handleRelinkWorkspace = useCallback(async (workspaceId: string) => {
-    const pickedPath = await pickFolder()
+    setFolderActionError(null)
+
+    let pickedPath: string | null
+    try {
+      pickedPath = await pickFolder()
+    } catch (error) {
+      setFolderActionError(
+        getErrorMessage(error, "Failed to open the folder picker. Restart the desktop app and try again."),
+      )
+      return
+    }
+
     if (!pickedPath) {
       return
     }
@@ -219,6 +346,10 @@ export function ChatHistory() {
             : { workspaceId },
         })
       }
+    } catch (error) {
+      setFolderActionError(
+        getErrorMessage(error, "Failed to relink the folder. Try again."),
+      )
     } finally {
       setBusyWorkspaceId(null)
     }
@@ -231,7 +362,19 @@ export function ChatHistory() {
     relinkWorkspace,
   ])
 
-  const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
+  const handleDeleteWorkspace = useCallback(async (
+    workspaceId: string,
+    workspaceName: string,
+    threadCount: number,
+  ) => {
+    const chatLabel = threadCount === 1 ? "chat" : "chats"
+    const confirmed = window.confirm(
+      `Remove "${workspaceName}" and delete ${threadCount} ${chatLabel} from Student Claw? The real folder on disk will not be deleted.`,
+    )
+    if (!confirmed) {
+      return
+    }
+
     setBusyWorkspaceId(workspaceId)
     try {
       await deleteWorkspace(workspaceId)
@@ -266,6 +409,9 @@ export function ChatHistory() {
         <span className="sr-only">Add folder</span>
       </SidebarGroupAction>
       <SidebarGroupContent>
+        {folderActionError && (
+          <p className="px-2 pb-2 text-xs text-destructive">{folderActionError}</p>
+        )}
         {workspaces.length === 0 ? (
           <p className="px-2 py-1 text-xs text-muted-foreground">No folders yet</p>
         ) : (
@@ -285,11 +431,16 @@ export function ChatHistory() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 w-7 shrink-0 px-0 text-xs"
+                      className="h-7 w-7 shrink-0 px-0"
                       onClick={() => toggleWorkspaceExpanded(workspace.id)}
                       aria-label={isCollapsed ? `Expand ${workspace.name}` : `Collapse ${workspace.name}`}
                     >
-                      {isCollapsed ? ">" : "v"}
+                      <HugeiconsIcon
+                        icon={ArrowDown01Icon}
+                        size={14}
+                        strokeWidth={2}
+                        className={`transition-transform duration-200 ${isCollapsed ? "-rotate-90" : "rotate-0"}`}
+                      />
                     </Button>
                     <button
                       type="button"
@@ -300,11 +451,6 @@ export function ChatHistory() {
                       onClick={() => void handleWorkspaceClick(workspace.id)}
                     >
                       <span className="truncate text-sm font-medium">{workspace.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {workspace.kind === "filesystem"
-                          ? workspace.rootPath
-                          : "Imported legacy chats"}
-                      </span>
                       {isWorkspaceMissing && (
                         <span className="text-[11px] text-destructive">Folder missing</span>
                       )}
@@ -336,7 +482,7 @@ export function ChatHistory() {
                         variant="ghost"
                         size="sm"
                         className="h-7 text-destructive hover:text-destructive"
-                        onClick={() => void handleDeleteWorkspace(workspace.id)}
+                        onClick={() => void handleDeleteWorkspace(workspace.id, workspace.name, workspaceThreads.length)}
                         disabled={isWorkspaceBusy}
                       >
                         Remove
@@ -345,26 +491,35 @@ export function ChatHistory() {
                   )}
 
                   {!isCollapsed && (
-                    <div className="pl-10 pr-2 pb-1">
+                    <div className="pl-10 pr-2 pb-1 animate-in fade-in slide-in-from-top-1 duration-150">
                       {workspaceThreads.length === 0 ? (
                         <p className="px-2 py-1 text-xs text-muted-foreground">No chats yet</p>
                       ) : (
                         <SidebarMenu>
-                          {workspaceThreads.map((thread) => (
-                            <SidebarMenuItem key={thread.id}>
-                              <SidebarMenuButton
-                                isActive={effectiveSelection.threadId === thread.id}
-                                onClick={() => void focusThread(workspace.id, thread.id)}
-                                className="flex h-auto items-start gap-2 py-2"
-                              >
-                                <HugeiconsIcon icon={Message01Icon} size={14} className="mt-0.5 shrink-0" />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate">{thread.title}</span>
-                                  <span className="block text-xs text-muted-foreground">{thread.status}</span>
-                                </span>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          ))}
+                          {workspaceThreads.map((thread) => {
+                            const isThreadSelected = effectiveSelection.threadId === thread.id
+                            const indicator = getThreadIndicator(thread, isThreadSelected, seenThreadTurns)
+                            return (
+                              <SidebarMenuItem key={thread.id}>
+                                <SidebarMenuButton
+                                  isActive={isThreadSelected}
+                                  onClick={() => void focusThread(workspace.id, thread.id, thread.currentTurnId)}
+                                  className="flex h-auto items-center gap-2 py-1"
+                                >
+                                  <span className="flex shrink-0 items-center justify-center size-3">
+                                    {indicator === "spinner" && <Spinner className="size-3" />}
+                                    {indicator === "green-dot" && (
+                                      <span className="block size-2 rounded-full bg-green-500" />
+                                    )}
+                                    {indicator === "gray-dot" && (
+                                      <span className="block size-2 rounded-full bg-muted-foreground/40" />
+                                    )}
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )
+                          })}
                         </SidebarMenu>
                       )}
                     </div>
