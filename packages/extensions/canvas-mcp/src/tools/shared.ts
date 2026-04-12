@@ -1,6 +1,6 @@
 import { Schema } from "@effect/schema"
 import { type CallToolResult } from "@modelcontextprotocol/sdk/types.js"
-import type { CanvasCourse, SourceType } from "@student-claw/contracts"
+import { CanvasPermissionError, type CanvasCourse, type SourceType } from "@student-claw/contracts"
 import { decodeCourseId } from "../ids.js"
 import { CanvasClient } from "../canvas-client.js"
 import type { CanvasPluginCredentials } from "../runtime.js"
@@ -52,4 +52,8 @@ export function errorResult(error: unknown): CallToolResult {
 
 export function requestedSources(sources?: SourceType[]): SourceType[] {
   return sources && sources.length > 0 ? sources : ["assignment"]
+}
+
+export function isPermissionError(error: unknown): error is CanvasPermissionError {
+  return error instanceof CanvasPermissionError
 }

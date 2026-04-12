@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { CanvasGetAnnouncementsResult } from "@student-claw/contracts"
 import { normalizeAnnouncement } from "../normalizers/announcements.js"
 import { sortAnnouncements } from "../utils.js"
-import { errorResult, getCanvasClient, resolveCourses, successResult, type CanvasToolDependencies } from "./shared.js"
+import { errorResult, getCanvasClient, isPermissionError, resolveCourses, successResult, type CanvasToolDependencies } from "./shared.js"
 
 export function registerGetAnnouncementsTool(server: McpServer, deps: CanvasToolDependencies): void {
   server.registerTool(
@@ -28,8 +28,14 @@ export function registerGetAnnouncementsTool(server: McpServer, deps: CanvasTool
         const announcements = []
 
         for (const course of courses) {
-          const courseAnnouncements = await client.getAnnouncements(String(course.id))
-          announcements.push(...courseAnnouncements.map((announcement) => normalizeAnnouncement(announcement, course)))
+          try {
+            const courseAnnouncements = await client.getAnnouncements(String(course.id))
+            announcements.push(...courseAnnouncements.map((announcement) => normalizeAnnouncement(announcement, course)))
+          } catch (error) {
+            if (!isPermissionError(error)) {
+              throw error
+            }
+          }
         }
 
         return successResult(CanvasGetAnnouncementsResult, {

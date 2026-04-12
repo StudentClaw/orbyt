@@ -56,6 +56,10 @@ export class CanvasClient {
     return this.paginate(`/api/v1/courses/${courseId}/modules/${moduleId}/items`, CanvasModuleItem, {}, options)
   }
 
+  async getModuleItem(courseId: string, moduleId: string, itemId: string, options?: RequestOptions): Promise<CanvasModuleItem> {
+    return this.request(`/api/v1/courses/${courseId}/modules/${moduleId}/items/${itemId}`, CanvasModuleItem, {}, options)
+  }
+
   async getPages(courseId: string, options?: RequestOptions): Promise<CanvasPage[]> {
     return this.paginate(`/api/v1/courses/${courseId}/pages`, CanvasPage, {
       "include[]": "body",
@@ -101,9 +105,9 @@ export class CanvasClient {
 
     try {
       return Schema.decodeUnknownSync(schema)(payload)
-    } catch {
+    } catch (error) {
       throw new CanvasDecodeError({
-        message: `Canvas response for ${path} did not match the expected schema.`,
+        message: this.formatDecodeError(`Canvas response for ${path} did not match the expected schema.`, error),
         resource: path,
         rawPayload: JSON.stringify(payload),
       })
@@ -134,9 +138,9 @@ export class CanvasClient {
       for (const rawItem of payload) {
         try {
           items.push(Schema.decodeUnknownSync(schema)(rawItem))
-        } catch {
+        } catch (error) {
           throw new CanvasDecodeError({
-            message: `Canvas item in ${path} did not match the expected schema.`,
+            message: this.formatDecodeError(`Canvas item in ${path} did not match the expected schema.`, error),
             resource: path,
             rawPayload: JSON.stringify(rawItem),
           })
@@ -221,5 +225,12 @@ export class CanvasClient {
 
     const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
     return match?.[1] ?? null
+  }
+
+  private formatDecodeError(prefix: string, error: unknown): string {
+    if (error instanceof Error && error.message.length > 0) {
+      return `${prefix} ${error.message}`
+    }
+    return prefix
   }
 }

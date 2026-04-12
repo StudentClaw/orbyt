@@ -10,12 +10,20 @@ import {
 import { encodeCourseId, encodeCourseWorkItemId } from "../ids.js"
 import { stripHtml, validateContract } from "../utils.js"
 
+function teacherName(course: CanvasCourse): string | undefined {
+  return course.teachers?.[0]?.name
+    ?? course.teachers?.[0]?.display_name
+    ?? course.teacher?.name
+    ?? course.teacher?.display_name
+    ?? undefined
+}
+
 export function normalizeCourse(course: CanvasCourse): Course {
   return validateContract(Course, {
     id: encodeCourseId(course.id),
     name: course.name,
-    code: course.course_code,
-    professor: course.teachers?.[0]?.name ?? course.teacher?.name,
+    code: course.course_code ?? course.name,
+    professor: teacherName(course),
     canvasId: String(course.id),
     term: course.term?.name,
     lastSyncAt: course.updated_at ?? undefined,

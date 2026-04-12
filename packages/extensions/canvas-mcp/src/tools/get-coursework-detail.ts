@@ -14,13 +14,15 @@ export function registerGetCourseworkDetailTool(server: McpServer, deps: CanvasT
         courseWorkItemId: z.string().optional(),
         sourceType: z.enum(["assignment", "module", "page", "announcement"]).optional(),
         sourceId: z.string().optional(),
+        courseId: z.string().optional(),
+        moduleId: z.string().optional(),
       },
       annotations: {
         readOnlyHint: true,
         idempotentHint: true,
       },
     },
-    async ({ courseWorkItemId, sourceType, sourceId }) => {
+    async ({ courseWorkItemId, sourceType, sourceId, courseId, moduleId }) => {
       try {
         if (!courseWorkItemId && (!sourceType || !sourceId)) {
           throw new Error("Provide either courseWorkItemId or sourceType + sourceId.")
@@ -31,7 +33,7 @@ export function registerGetCourseworkDetailTool(server: McpServer, deps: CanvasT
         const detail = await getCourseworkDetail(
           client,
           courses,
-          courseWorkItemId ? { courseWorkItemId } : { sourceType: sourceType!, sourceId: sourceId! },
+          courseWorkItemId ? { courseWorkItemId } : { sourceType: sourceType!, sourceId: sourceId!, courseId, moduleId },
         )
 
         return successResult(CanvasGetCourseworkDetailResult, { detail }, "CanvasGetCourseworkDetailResult")

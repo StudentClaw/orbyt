@@ -80,4 +80,28 @@ describe("Canvas normalizers", () => {
     expect(announcement.body).toContain("Friday")
     expect(announcementWork.sourceType).toBe("announcement")
   })
+
+  test("falls back to the course name when Canvas omits course_code", () => {
+    const course = normalizeCourse({
+      id: 7,
+      name: "English Composition",
+      course_code: null,
+      teachers: null,
+      term: null,
+    })
+
+    expect(course.code).toBe("English Composition")
+  })
+
+  test("uses display_name when Canvas teacher payload omits name", () => {
+    const course = normalizeCourse({
+      id: 42,
+      name: "Linear Algebra",
+      course_code: "MATH221",
+      teachers: [{ id: 121, display_name: "Michael Salviani" }],
+      term: null,
+    })
+
+    expect(course.professor).toBe("Michael Salviani")
+  })
 })

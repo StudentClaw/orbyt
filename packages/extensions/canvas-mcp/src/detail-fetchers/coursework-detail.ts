@@ -1,6 +1,6 @@
 import { CanvasApiError, type CanvasCourseworkDetail, type CanvasCourse } from "@student-claw/contracts"
 import { CanvasClient } from "../canvas-client.js"
-import { decodeCourseWorkItemId } from "../ids.js"
+import { decodeCourseId, decodeCourseWorkItemId } from "../ids.js"
 import { normalizeAnnouncementCoursework } from "../normalizers/announcements.js"
 import { normalizeAssignment, normalizeGrade } from "../normalizers/assignments.js"
 import { normalizeModuleItem } from "../normalizers/modules.js"
@@ -8,7 +8,7 @@ import { normalizePage } from "../normalizers/pages.js"
 
 type DetailReference =
   | { courseWorkItemId: string }
-  | { sourceType: "assignment" | "module" | "page" | "announcement"; sourceId: string }
+  | { sourceType: "assignment" | "module" | "page" | "announcement"; sourceId: string; courseId?: string; moduleId?: string }
 
 export async function getCourseworkDetail(
   client: CanvasClient,
@@ -18,14 +18,24 @@ export async function getCourseworkDetail(
   const decoded = "courseWorkItemId" in reference ? decodeCourseWorkItemId(reference.courseWorkItemId) : null
   const sourceType = decoded?.sourceType ?? ("sourceType" in reference ? reference.sourceType : undefined)
   const sourceId = decoded?.sourceId ?? ("sourceId" in reference ? reference.sourceId : undefined)
-  const courseCandidates = decoded
-    ? courses.filter((course) => String(course.id) === decoded.canvasCourseId)
+  const requestedCourseId = decoded?.canvasCourseId
+    ?? ("courseId" in reference && reference.courseId ? decodeCourseId(reference.courseId) : undefined)
+  const requestedModuleId = "moduleId" in reference ? reference.moduleId : undefined
+  const courseCandidates = requestedCourseId
+    ? courses.filter((course) => String(course.id) === requestedCourseId)
     : courses
 
   if (!sourceType || !sourceId) {
     throw new CanvasApiError({
       message: "Canvas coursework detail reference was incomplete.",
       statusCode: 400,
+    })
+  }
+
+  if (requestedCourseId && courseCandidates.length === 0) {
+    throw new CanvasApiError({
+      message: `Canvas course ${requestedCourseId} was not available for coursework detail lookup.`,
+      statusCode: 404,
     })
   }
 
@@ -46,7 +56,7 @@ export async function getCourseworkDetail(
     }
 
     if (sourceType === "module") {
-      const moduleItem = await tryGetModuleItem(client, course, sourceId)
+      const moduleItem = await tryGetModuleItem(client, course, sourceId, requestedModuleId)
       if (!moduleItem) {
         continue
       }
@@ -110,7 +120,18 @@ async function safeGetSubmission(client: CanvasClient, course: CanvasCourse, ass
   }
 }
 
-async function tryGetModuleItem(client: CanvasClient, course: CanvasCourse, sourceId: string) {
+async function tryGetModuleItem(client: CanvasClient, course: CanvasCourse, sourceId: string, moduleId?: string) {
+  if (moduleId) {
+    try {
+      return await client.getModuleItem(String(course.id), moduleId, sourceId)
+    } catch (error) {
+      if (error instanceof CanvasApiError && error.statusCode === 404) {
+        return null
+      }
+      throw error
+    }
+  }
+
   const modules = await client.getModules(String(course.id))
   for (const module of modules) {
     const items = await client.getModuleItems(String(course.id), String(module.id))

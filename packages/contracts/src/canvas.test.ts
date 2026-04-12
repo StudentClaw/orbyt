@@ -144,6 +144,40 @@ describe("canvas contracts", () => {
     expect(enrollment.grades?.current_grade).toBe("A-")
   })
 
+  test("accepts sparse Canvas course payloads", () => {
+    const course = Schema.decodeUnknownSync(CanvasCourse)({
+      id: 7,
+      name: "English Composition",
+      course_code: null,
+      workflow_state: null,
+      account_id: null,
+      enrollment_term_id: null,
+      term: null,
+      teacher: null,
+      teachers: null,
+      uuid: null,
+    })
+
+    expect(course.course_code).toBeNull()
+    expect(course.term).toBeNull()
+    expect(course.teachers).toBeNull()
+  })
+
+  test("accepts teacher payloads that use display_name instead of name", () => {
+    const course = Schema.decodeUnknownSync(CanvasCourse)({
+      id: 42,
+      name: "Biology 101",
+      teachers: [{
+        id: 121,
+        display_name: "Michael Salviani",
+        avatar_image_url: "https://canvas.example.edu/avatar.png",
+      }],
+    })
+
+    expect(course.teachers?.[0]?.display_name).toBe("Michael Salviani")
+    expect(course.teachers?.[0]?.name).toBeUndefined()
+  })
+
   test("decodes normalized Canvas domain types", () => {
     const item = Schema.decodeUnknownSync(CourseWorkItem)({
       id: "cw_101",
@@ -275,6 +309,18 @@ describe("canvas contracts", () => {
       params: {
         sourceType: "assignment",
         sourceId: "101",
+        courseId: "course_42",
+      },
+    })
+
+    const moduleDetail = Schema.decodeUnknownSync(CanvasGetCourseworkDetail)({
+      method: "canvas.getCourseworkDetail",
+      id: "req-5",
+      params: {
+        sourceType: "module",
+        sourceId: "768",
+        courseId: "course_42",
+        moduleId: "123",
       },
     })
 
@@ -292,6 +338,8 @@ describe("canvas contracts", () => {
     expect(grades.params.refresh).toBe("force")
     expect(announcements.params.limit).toBe(10)
     expect("sourceType" in detail.params).toBe(true)
+    expect("courseId" in detail.params && detail.params.courseId).toBe("course_42")
+    expect("moduleId" in moduleDetail.params && moduleDetail.params.moduleId).toBe("123")
     expect(syncProgress.data.progress).toBe(0.75)
   })
 })

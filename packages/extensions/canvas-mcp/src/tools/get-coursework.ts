@@ -6,7 +6,7 @@ import { normalizeAnnouncementCoursework } from "../normalizers/announcements.js
 import { normalizeAssignment } from "../normalizers/assignments.js"
 import { normalizeModuleItem } from "../normalizers/modules.js"
 import { normalizePage } from "../normalizers/pages.js"
-import { errorResult, getCanvasClient, requestedSources, resolveCourses, successResult, type CanvasToolDependencies } from "./shared.js"
+import { errorResult, getCanvasClient, isPermissionError, requestedSources, resolveCourses, successResult, type CanvasToolDependencies } from "./shared.js"
 
 export function registerGetCourseworkTool(server: McpServer, deps: CanvasToolDependencies): void {
   server.registerTool(
@@ -58,26 +58,56 @@ async function collectCoursework(
 
   for (const course of courses) {
     if (sources.includes("assignment")) {
-      const assignments = await client.getAssignments(String(course.id))
-      items.push(...assignments.filter((assignment) => assignment.published !== false).map((assignment) => normalizeAssignment(assignment, course)))
+      try {
+        const assignments = await client.getAssignments(String(course.id))
+        items.push(...assignments.filter((assignment) => assignment.published !== false).map((assignment) => normalizeAssignment(assignment, course)))
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+      }
     }
 
     if (sources.includes("module")) {
-      const modules = await client.getModules(String(course.id))
-      for (const module of modules) {
-        const moduleItems = await client.getModuleItems(String(course.id), String(module.id))
-        items.push(...moduleItems.filter((item) => item.published !== false).map((item) => normalizeModuleItem(item, course)))
+      try {
+        const modules = await client.getModules(String(course.id))
+        for (const module of modules) {
+          try {
+            const moduleItems = await client.getModuleItems(String(course.id), String(module.id))
+            items.push(...moduleItems.filter((item) => item.published !== false).map((item) => normalizeModuleItem(item, course)))
+          } catch (error) {
+            if (!isPermissionError(error)) {
+              throw error
+            }
+          }
+        }
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
       }
     }
 
     if (sources.includes("page")) {
-      const pages = await client.getPages(String(course.id))
-      items.push(...pages.filter((page) => page.published !== false).map((page) => normalizePage(page, course)))
+      try {
+        const pages = await client.getPages(String(course.id))
+        items.push(...pages.filter((page) => page.published !== false).map((page) => normalizePage(page, course)))
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+      }
     }
 
     if (sources.includes("announcement")) {
-      const announcements = await client.getAnnouncements(String(course.id))
-      items.push(...announcements.map((announcement) => normalizeAnnouncementCoursework(announcement, course)))
+      try {
+        const announcements = await client.getAnnouncements(String(course.id))
+        items.push(...announcements.map((announcement) => normalizeAnnouncementCoursework(announcement, course)))
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+      }
     }
   }
 

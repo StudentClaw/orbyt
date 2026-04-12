@@ -37,6 +37,8 @@ export const CanvasGetCourseworkDetailByItem = Schema.Struct({
 export const CanvasGetCourseworkDetailBySource = Schema.Struct({
   sourceType: Schema.Literal("assignment", "module", "page", "announcement"),
   sourceId: Schema.String,
+  courseId: Schema.optional(CourseId),
+  moduleId: Schema.optional(Schema.String),
 })
 
 export const CanvasGetCourseworkDetailParams = Schema.Union(

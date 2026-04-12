@@ -2,10 +2,12 @@ import { Schema } from "@effect/schema"
 
 export const CanvasUser = Schema.Struct({
   id: Schema.Number,
-  name: Schema.String,
-  sortable_name: Schema.optional(Schema.String),
-  short_name: Schema.optional(Schema.String),
-  avatar_url: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.NullOr(Schema.String)),
+  display_name: Schema.optional(Schema.NullOr(Schema.String)),
+  sortable_name: Schema.optional(Schema.NullOr(Schema.String)),
+  short_name: Schema.optional(Schema.NullOr(Schema.String)),
+  avatar_url: Schema.optional(Schema.NullOr(Schema.String)),
+  avatar_image_url: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type CanvasUser = Schema.Schema.Type<typeof CanvasUser>
 
@@ -21,20 +23,20 @@ export type CanvasTerm = Schema.Schema.Type<typeof CanvasTerm>
 export const CanvasCourse = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
-  course_code: Schema.String,
-  workflow_state: Schema.optional(Schema.String),
-  account_id: Schema.optional(Schema.Number),
+  course_code: Schema.optional(Schema.NullOr(Schema.String)),
+  workflow_state: Schema.optional(Schema.NullOr(Schema.String)),
+  account_id: Schema.optional(Schema.NullOr(Schema.Number)),
   sis_course_id: Schema.optional(Schema.NullOr(Schema.String)),
   integration_id: Schema.optional(Schema.NullOr(Schema.String)),
-  enrollment_term_id: Schema.optional(Schema.Number),
+  enrollment_term_id: Schema.optional(Schema.NullOr(Schema.Number)),
   start_at: Schema.optional(Schema.NullOr(Schema.String)),
   end_at: Schema.optional(Schema.NullOr(Schema.String)),
-  term: Schema.optional(CanvasTerm),
-  teacher: Schema.optional(CanvasUser),
-  teachers: Schema.optional(Schema.Array(CanvasUser)),
+  term: Schema.optional(Schema.NullOr(CanvasTerm)),
+  teacher: Schema.optional(Schema.NullOr(CanvasUser)),
+  teachers: Schema.optional(Schema.NullOr(Schema.Array(CanvasUser))),
   created_at: Schema.optional(Schema.NullOr(Schema.String)),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
-  uuid: Schema.optional(Schema.String),
+  uuid: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type CanvasCourse = Schema.Schema.Type<typeof CanvasCourse>
 
