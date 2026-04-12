@@ -358,6 +358,16 @@ export async function interruptOrchestrationTurn(
   return result.interrupted
 }
 
+export async function startOrchestrationProviderAuth(client: WsRpcClient): Promise<boolean> {
+  const result = await client.provider.startAuth()
+  return result.started
+}
+
+export async function retryOrchestrationProviderInitialize(client: WsRpcClient): Promise<boolean> {
+  const result = await client.provider.retryInitialize()
+  return result.started
+}
+
 export function useOrchestrationSnapshot(): OrchestrationSnapshot | null {
   return useAtomValue(orchestrationSnapshotAtom)
 }

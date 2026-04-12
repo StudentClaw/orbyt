@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   ArrowDown01Icon,
+  Delete01Icon,
   FolderAddIcon,
 } from "@hugeicons/core-free-icons"
 import { IpcChannel } from "@student-claw/contracts"
@@ -427,7 +428,7 @@ export function ChatHistory() {
 
               return (
                 <div key={workspace.id} className="rounded-md border border-transparent">
-                  <div className="flex items-start gap-1 px-1">
+                  <div className="flex items-start gap-1 px-1 group/folder">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -464,6 +465,16 @@ export function ChatHistory() {
                       aria-label={`Add chat to ${workspace.name}`}
                     >
                       <HugeiconsIcon icon={Add01Icon} size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 shrink-0 px-0 opacity-0 group-hover/folder:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      onClick={() => void handleDeleteWorkspace(workspace.id, workspace.name, workspaceThreads.length)}
+                      disabled={isWorkspaceBusy}
+                      aria-label={`Delete ${workspace.name}`}
+                    >
+                      <HugeiconsIcon icon={Delete01Icon} size={14} />
                     </Button>
                   </div>
 

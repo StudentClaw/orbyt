@@ -9,9 +9,11 @@ import {
   interruptOrchestrationTurn,
   openChatPanel,
   relinkOrchestrationWorkspace,
+  retryOrchestrationProviderInitialize,
   selectChatTarget,
   selectChatWorkspace,
   setChatPanelWidth,
+  startOrchestrationProviderAuth,
   useChatPanelOpen,
   useChatPanelWidth,
   sendOrchestrationTurn,
@@ -151,6 +153,8 @@ export function useOrchestrationActions() {
       sendTurn: (threadId: string, content: string) =>
         sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
+      startProviderAuth: () => startOrchestrationProviderAuth(getPrimaryWsRpcClient()),
+      retryProviderInitialize: () => retryOrchestrationProviderInitialize(getPrimaryWsRpcClient()),
     }
   }, [])
 }

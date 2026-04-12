@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChat } from "@/hooks/useChat"
 import { useChatUiActions } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
+import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
 import { MessageBubble } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
@@ -23,6 +24,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     currentWorkspace,
     sendMessage,
     interrupt,
+    retry,
+    reauth,
     connectionState,
     inputDisabled,
     inputDisabledReason,
@@ -54,6 +57,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
       bottomRef.current?.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages, userScrolledUp])
+
+  const isAuthRequired = status === "auth-expired"
 
   return (
     <div className={`flex h-full flex-col ${variant === "page" ? "mx-auto max-w-3xl" : ""}`}>
@@ -90,9 +95,14 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         </div>
       </div>
 
-      {status !== "idle" && status !== "streaming" && status !== "interrupted" && (
+      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" && (
         <div className="px-4 pt-3">
-          <ErrorBanner status={status} error={error} />
+          <ErrorBanner
+            status={status}
+            error={error}
+            onRetry={() => void retry()}
+            onReauth={() => void reauth()}
+          />
         </div>
       )}
 
@@ -103,7 +113,11 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
             onScroll={handleScroll}
             className="flex h-full flex-col gap-4 p-4"
           >
-            {messages.length === 0 ? (
+            {isAuthRequired ? (
+              <div className="flex min-h-[300px] flex-1 items-center justify-center">
+                <ChatProviderDisconnected onConnected={() => void reauth()} />
+              </div>
+            ) : messages.length === 0 ? (
               <div className="flex min-h-[300px] flex-1 items-center justify-center">
                 <ChatEmptyState onSuggestionClick={(content) => void sendMessage(content)} />
               </div>

@@ -18,7 +18,11 @@ const chatMocks = vi.hoisted(() => ({
     currentThread: null as { title: string; status: string } | null,
     sendMessage: vi.fn(),
     interrupt: vi.fn(),
+    retry: vi.fn(),
+    reauth: vi.fn(),
     connectionState: "connected" as WsConnectionPhase,
+    inputDisabled: false,
+    inputDisabledReason: null as string | null,
   },
 }))
 
@@ -42,7 +46,11 @@ describe("ChatContainer", () => {
       currentThread: null,
       sendMessage: vi.fn(),
       interrupt: vi.fn(),
+      retry: vi.fn(),
+      reauth: vi.fn(),
       connectionState: "connected",
+      inputDisabled: false,
+      inputDisabledReason: null,
     }
   })
 
@@ -95,5 +103,18 @@ describe("ChatContainer", () => {
   test("hides panel close button for page variant", () => {
     render(<ChatContainer variant="page" />)
     expect(screen.queryByText("Close")).toBeNull()
+  })
+
+  test("shows ChatProviderDisconnected when auth is required", () => {
+    chatMocks.state.status = "auth-expired"
+    render(<ChatContainer />)
+    expect(screen.getByTestId("chat-provider-disconnected")).toBeDefined()
+    expect(screen.queryByText("Start a conversation")).toBeNull()
+  })
+
+  test("does not show error banner when auth is required", () => {
+    chatMocks.state.status = "auth-expired"
+    render(<ChatContainer />)
+    expect(screen.queryByText("Session expired")).toBeNull()
   })
 })
