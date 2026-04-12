@@ -19,6 +19,8 @@ export interface ToolCallInfo {
   readonly toolName: string
   readonly args: string
   readonly status: "pending" | "complete" | "error"
+  readonly message?: string
+  readonly error?: string
 }
 
 export interface ChatMessage {
@@ -104,6 +106,7 @@ function getThreadTurns(
 export function buildChatMessages(
   snapshot: OrchestrationSnapshot | null,
   threadId: string | null,
+  toolCallsByTurnId: Readonly<Record<string, ReadonlyArray<ToolCallInfo>>> = {},
 ): ReadonlyArray<ChatMessage> {
   return getThreadTurns(snapshot, threadId).flatMap((turn) => {
     const timestamp = Date.parse(turn.startedAt)
@@ -120,6 +123,7 @@ export function buildChatMessages(
         content: turn.output,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
         isStreaming: turn.status === "pending" || turn.status === "streaming",
+        toolCalls: toolCallsByTurnId[turn.id] ?? [],
       },
     ] satisfies ReadonlyArray<ChatMessage>
   })
@@ -194,6 +198,8 @@ export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
       return `Turn completed: ${event.turnId}`
     case "provider.turnInterrupted":
       return `Turn interrupted: ${event.turnId}`
+    case "provider.mcpToolCall":
+      return `${event.status} tool call: ${event.toolName}`
   }
 }
 

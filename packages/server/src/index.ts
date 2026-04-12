@@ -3,6 +3,7 @@ import { CodexCli, CodexCliLive } from "./ai/CodexCli.js"
 import { ProviderRuntimeStoreLive } from "./ai/ProviderRuntimeStore.js"
 import { ConfigService, ConfigServiceLive } from "./config/ConfigService.js"
 import { Database, DatabaseLive } from "./db/Database.js"
+import { PluginGatewayLive } from "./mcp/PluginGateway.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
@@ -18,10 +19,16 @@ const CoreLive = Layer.mergeAll(
 )
 
 const RuntimeStoreLive = ProviderRuntimeStoreLive.pipe(Layer.provideMerge(CoreLive))
+const GatewayLive = PluginGatewayLive.pipe(Layer.provideMerge(CoreLive))
 
 const ProviderLive = Layer.mergeAll(
   RuntimeStoreLive,
-  CodexCliLive.pipe(Layer.provideMerge(CoreLive), Layer.provideMerge(RuntimeStoreLive)),
+  GatewayLive,
+  CodexCliLive.pipe(
+    Layer.provideMerge(CoreLive),
+    Layer.provideMerge(RuntimeStoreLive),
+    Layer.provideMerge(GatewayLive),
+  ),
 )
 
 const OrchestrationLive = OrchestrationServiceLive.pipe(

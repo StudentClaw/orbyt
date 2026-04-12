@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { Database as BunDatabase } from "bun:sqlite"
-import { mkdirSync, rmdirSync } from "node:fs"
+import { mkdirSync, renameSync, rmdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { runMigrations } from "../db/migrations/runner.js"
@@ -113,11 +113,10 @@ describe("workspace operations", () => {
 
     expect(result.workspaceId).toBeTruthy()
 
-    const row = db
-      .query<{ id: string; kind: string; root_path: string; availability: string }, []>(
-        "SELECT id, kind, root_path, availability FROM chat_workspaces WHERE id = ?",
-      )
-      .get(result.workspaceId)
+    const row = database.get<{ id: string; kind: string; root_path: string; availability: string }>(
+      "SELECT id, kind, root_path, availability FROM chat_workspaces WHERE id = ?",
+      [result.workspaceId],
+    )
 
     expect(row).not.toBeNull()
     expect(row!.kind).toBe("filesystem")
@@ -131,10 +130,11 @@ describe("workspace operations", () => {
 
     const snapshot = await service.getSnapshot()
     const fsWorkspaces = snapshot.workspaces.filter((w) => w.kind === "filesystem")
+    const createdWorkspace = fsWorkspaces[0]
 
     expect(fsWorkspaces).toHaveLength(1)
-    expect(fsWorkspaces[0].id).toBe(workspaceId)
-    expect(fsWorkspaces[0].availability).toBe("ready")
+    expect(createdWorkspace?.id).toBe(workspaceId)
+    expect(createdWorkspace?.availability).toBe("ready")
   })
 
   test("createWorkspace is idempotent for the same path", async () => {
@@ -144,13 +144,12 @@ describe("workspace operations", () => {
 
     expect(second.workspaceId).toBe(first.workspaceId)
 
-    const count = db
-      .query<{ n: number }, []>(
-        "SELECT COUNT(*) as n FROM chat_workspaces WHERE root_path = ?",
-      )
-      .get(tmpFolder)
+    const count = database.get<{ n: number }>(
+      "SELECT COUNT(*) as n FROM chat_workspaces WHERE root_path = ?",
+      [tmpFolder],
+    )
 
-    expect(count!.n).toBe(1)
+    expect(count?.n).toBe(1)
   })
 
   test("createWorkspace throws when the path does not exist", async () => {
@@ -175,12 +174,89 @@ describe("workspace operations", () => {
     const service = createOrchestrationService(makeDeps(database))
     await service.createWorkspace("cmd-5", tmpFolder)
 
-    const events = db
-      .query<{ event_type: string }, []>(
-        "SELECT event_type FROM orchestration_events WHERE command_id = ?",
-      )
-      .all("cmd-5")
+    const events = database.query<{ event_type: string }>(
+      "SELECT event_type FROM orchestration_events WHERE command_id = ?",
+      ["cmd-5"],
+    )
 
     expect(events.some((e) => e.event_type === "workspace.created")).toBe(true)
+  })
+
+  test("createThread seeds the provider session cwd from the workspace root", async () => {
+    const service = createOrchestrationService(makeDeps(database))
+    const { workspaceId } = await service.createWorkspace("cmd-6", tmpFolder)
+    const { threadId } = await service.createThread("cmd-7", workspaceId, "Scoped chat")
+
+    const row = database.get<{ cwd: string | null }>(
+      "SELECT cwd FROM provider_runtime_sessions WHERE thread_id = ?",
+      [threadId],
+    )
+
+    expect(row?.cwd).toBe(tmpFolder)
+  })
+
+  test("relinkWorkspace updates thread session cwd and clears provider thread bindings", async () => {
+    const service = createOrchestrationService(makeDeps(database))
+    const { workspaceId } = await service.createWorkspace("cmd-8", tmpFolder)
+    const { threadId } = await service.createThread("cmd-9", workspaceId, "Scoped chat")
+    const relinkedFolder = `${tmpFolder}-relinked`
+    renameSync(tmpFolder, relinkedFolder)
+
+    db.run(
+      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, cwd = ? WHERE thread_id = ?",
+      ["provider-thread-1", tmpFolder, threadId],
+    )
+
+    await service.relinkWorkspace("cmd-10", workspaceId, relinkedFolder)
+
+    const row = database.get<{ provider_thread_id: string | null; cwd: string | null }>(
+      "SELECT provider_thread_id, cwd FROM provider_runtime_sessions WHERE thread_id = ?",
+      [threadId],
+    )
+
+    expect(row?.provider_thread_id).toBeNull()
+    expect(row?.cwd).toBe(relinkedFolder)
+    tmpFolder = relinkedFolder
+  })
+
+  test("renameThread updates the persisted thread title", async () => {
+    const service = createOrchestrationService(makeDeps(database))
+    const { workspaceId } = await service.createWorkspace("cmd-11", tmpFolder)
+    const { threadId } = await service.createThread("cmd-12", workspaceId, "Original title")
+
+    await service.renameThread("cmd-13", threadId, "Renamed title")
+
+    const row = database.get<{ title: string }>(
+      "SELECT title FROM orchestration_threads WHERE id = ?",
+      [threadId],
+    )
+
+    expect(row?.title).toBe("Renamed title")
+  })
+
+  test("deleteThread removes the thread, its turns, and its runtime session", async () => {
+    const service = createOrchestrationService(makeDeps(database))
+    const { workspaceId } = await service.createWorkspace("cmd-14", tmpFolder)
+    const { threadId } = await service.createThread("cmd-15", workspaceId, "Disposable chat")
+    await service.sendTurn("cmd-16", threadId, "Hello")
+
+    await service.deleteThread("cmd-17", threadId)
+
+    const threadRow = database.get<{ id: string }>(
+      "SELECT id FROM orchestration_threads WHERE id = ?",
+      [threadId],
+    )
+    const turnCount = database.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM orchestration_turns WHERE thread_id = ?",
+      [threadId],
+    )
+    const sessionRow = database.get<{ thread_id: string }>(
+      "SELECT thread_id FROM provider_runtime_sessions WHERE thread_id = ?",
+      [threadId],
+    )
+
+    expect(threadRow).toBeNull()
+    expect(turnCount?.count).toBe(0)
+    expect(sessionRow).toBeNull()
   })
 })

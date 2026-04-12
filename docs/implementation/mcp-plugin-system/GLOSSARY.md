@@ -42,7 +42,7 @@ verification state is `Verified`.
 
 Start [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md).
 
-Do not start process spawning before the extension registry contract, status model, and IPC shapes exist in shared packages.
+Phase 02 is complete. Use the live `template-mcp` lifecycle path as the Phase 03 canary: lifecycle IPC already exists, `plugin:list` / `plugin:get-status` / `plugin:lifecycle` are live, and Electron Main already has `PluginManager.callTool()` for routed canary calls. The missing work in this phase is the Main/server bridge plus the Student Claw-owned gateway that propagates tool inventory and routes one fake tool end to end.
 
 ## Handoff Update Protocol
 
@@ -89,7 +89,7 @@ When a phase changes state, append a new entry to the relevant phase section bel
 
 ### Extension
 
-The installable Student Claw unit. An extension may package one local MCP server, one remote MCP definition, or a small bundle of plugin metadata plus auth UI.
+The installable Student Claw unit described by the shared extension manifest. In the current rollout, an extension is a `local_stdio` MCP server bundle with declared tools, permissions, and auth requirements. Broader extension forms remain future work and are out of scope for Phase 03.
 
 ### Plugin Runtime
 
@@ -97,15 +97,15 @@ The Electron Main subsystem that discovers, validates, spawns, stops, and monito
 
 ### Registry
 
-The canonical list of installed and discoverable extensions plus their current lifecycle and auth state.
+The canonical list of discovered and installed extensions plus their current lifecycle and validation state. It is the source of truth for what is available to run now; live credential and auth flows are added later and are not yet part of the routed Phase 03 path.
 
 ### Gateway
 
-The built-in Student Claw MCP surface that Codex connects to. It aggregates tools from installed extensions and hides the internal multi-process routing from Codex.
+The built-in, Main-owned Student Claw MCP surface that Codex connects to. It exposes extension tools through one stable Codex-facing entrypoint and hides the internal server-to-Main-to-plugin routing path. In this phase it should stay routing-only and avoid owning plugin business logic.
 
 ### System Extension
 
-A built-in extension-like component that is always present and not shown as a normal installable item. The Codex-facing gateway belongs in this category.
+A built-in extension-like component that is always present and not shown as a normal installable item. The Codex-facing gateway belongs in this category and should be treated as platform-owned infrastructure, not as a bundled user extension.
 
 ### Bundled Catalog
 
@@ -125,7 +125,7 @@ The post-start scoped message that delivers decrypted credentials to a plugin ru
 
 ### Tool Inventory
 
-The cached view of all tools surfaced by active extensions. Tool inventory changes must be pushed to both the local server and the Student Claw gateway.
+The active-tool view sourced from running extensions after startup. Tool inventory changes must be propagated to both the local server and the Student Claw gateway so Codex sees one consistent routed surface as plugins start and stop.
 
 ### Verification Gate
 
@@ -270,7 +270,28 @@ The set of checks that must be green before a phase can be marked complete:
 
 ### Phase 03 - Gateway And Codex Integration
 
-- Pending first implementation pass.
+- Date: 2026-04-11
+- Branch: `codex/plugin-bridge-reset`
+- Owner: Unassigned
+- Status change: none yet (`not_started`, kickoff context only)
+- Completed:
+  - Phase 02 prerequisites are in place: `template-mcp` is a live bundled canary server and Electron Main can spawn it, list tools, and call `template_ping`.
+  - Lifecycle IPC is already live for `plugin:list`, `plugin:get-status`, and `plugin:lifecycle`, and Settings can observe lifecycle changes in dev.
+  - Electron Main already has the local runtime ownership needed for routed calls via `PluginManager.callTool()`.
+- Remaining:
+  - Add the typed Main/server bridge for tool inventory reads, routed tool calls, and tools-changed notifications.
+  - Introduce the Student Claw-owned gateway surface that publishes extension tools through one Codex-facing entrypoint.
+  - Propagate active tool inventory updates after plugin start and stop and prove one fake routed tool call works end to end.
+- Risks or blockers:
+  - Scope can drift if Phase 03 starts pulling in credentials, install UX, or real Canvas service calls before the fake routing path is proven.
+  - The gateway should stay a thin routing surface; if it starts duplicating lifecycle or plugin business logic, later phases will have a muddier ownership split.
+- Commands run:
+  - None for Phase 03 yet; use the Phase 02 evidence as the starting point.
+- Evidence captured:
+  - Phase 02 already proved the live canary path in Main: spawn, `listTools()`, `template_ping`, stop, crash-to-error, and retry recovery.
+  - Current live concepts to build on are `template-mcp`, lifecycle IPC, `plugin:list`, `plugin:get-status`, `plugin:lifecycle`, and Main-side `callTool()`.
+- First recommended next step:
+  - Implement the Main/server bridge and gateway wiring from [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md), then capture one successful routed fake tool call plus one typed failure-path example.
 
 ### Phase 04 - Credentials And Auth UX
 

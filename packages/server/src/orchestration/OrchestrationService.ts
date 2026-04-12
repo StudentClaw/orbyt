@@ -20,17 +20,27 @@ import {
   type RetryProviderInitializeResult,
   type ServerConfig,
   type StartProviderAuthResult,
+  type WorkspaceId,
+} from "@student-claw/contracts"
+import type {
+  DeleteThreadResult,
+  RenameThreadResult,
 } from "@student-claw/contracts"
 import { createId } from "@student-claw/shared-runtime"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
+import type { AppConfig } from "../config/defaults.js"
 import { ConfigService } from "../config/ConfigService.js"
-import { Database } from "../db/Database.js"
-import { ServerReadiness } from "../runtime/ServerReadiness.js"
-import { PushBus } from "../ws/PushBus.js"
-import { RuntimeReceiptBus } from "./RuntimeReceiptBus.js"
+import { Database, type DatabaseService } from "../db/Database.js"
+import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerReadiness.js"
+import { PushBus, type PushBusService } from "../ws/PushBus.js"
+import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
+import { tokenizeStubResponse } from "./StubProvider.js"
 
 const LEGACY_WORKSPACE_ID = "workspace_legacy" as WorkspaceId
+type ProviderThreadScopedEvent = Extract<ProviderRuntimeEvent, { readonly threadId: unknown; readonly turnId: unknown }>
+type ProviderThreadId = ProviderThreadScopedEvent["threadId"]
+type ProviderTurnId = ProviderThreadScopedEvent["turnId"]
 
 type WorkspaceRow = {
   id: string
@@ -106,6 +116,8 @@ export interface OrchestrationServiceShape {
   readonly relinkWorkspace: (commandId: string, workspaceId: string, rootPath: string) => Promise<RelinkWorkspaceResult>
   readonly deleteWorkspace: (commandId: string, workspaceId: string) => Promise<DeleteWorkspaceResult>
   readonly createThread: (commandId: string, workspaceId: string, title?: string) => Promise<CreateThreadResult>
+  readonly renameThread: (commandId: string, threadId: string, title: string) => Promise<RenameThreadResult>
+  readonly deleteThread: (commandId: string, threadId: string) => Promise<DeleteThreadResult>
   readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
   readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
@@ -128,9 +140,13 @@ export function createRuntimeState(): OrchestrationRuntimeState {
   }
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function getFeatureFlags(): FeatureFlags {
   return {
-    pluginSystem: false,
+    pluginSystem: true,
   }
 }
 
@@ -351,6 +367,56 @@ function assertWorkspaceAcceptsChat(workspace: OrchestrationWorkspace): void {
   }
 }
 
+function readThreadSessionCwd(database: DatabaseService, threadId: string): string | null {
+  const thread = readThread(database, threadId)
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`)
+  }
+
+  const workspace = readWorkspace(database, thread.workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${thread.workspaceId}`)
+  }
+
+  return workspace.kind === "filesystem" ? workspace.rootPath : null
+}
+
+function resolveThreadExecutionCwd(database: DatabaseService, threadId: string): string | null {
+  const thread = readThread(database, threadId)
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`)
+  }
+
+  const workspace = readWorkspace(database, thread.workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${thread.workspaceId}`)
+  }
+
+  assertWorkspaceAcceptsChat(workspace)
+  return workspace.kind === "filesystem" ? workspace.rootPath : null
+}
+
+function resetWorkspaceThreadProviderSessions(
+  database: DatabaseService,
+  workspaceId: string,
+  cwd: string,
+  updatedAt: string,
+): void {
+  database.execute(
+    `UPDATE provider_runtime_sessions
+     SET provider_thread_id = NULL,
+         last_error = NULL,
+         cwd = ?,
+         updated_at = ?
+     WHERE thread_id IN (
+       SELECT id
+       FROM orchestration_threads
+       WHERE workspace_id = ?
+     )`,
+    [cwd, updatedAt, workspaceId],
+  )
+}
+
 async function publishDomainEvent(
   pushBus: PushBusService,
   event: OrchestrationDomainEvent,
@@ -402,6 +468,7 @@ function persistTurnCompletion(
 ): string {
   const completedAt = new Date().toISOString()
   const turnStatus = interrupted ? "interrupted" : "completed"
+  const sessionCwd = readThreadSessionCwd(database, work.threadId)
 
   database.transaction(() => {
     database.execute(
@@ -417,9 +484,11 @@ function persistTurnCompletion(
       [turnStatus, completedAt, work.threadId],
     )
     database.execute(
-      `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [work.threadId, "stub", interrupted ? "interrupted" : "idle", null, completedAt],
+      `INSERT OR REPLACE INTO provider_runtime_sessions (
+         thread_id, provider, status, last_error, updated_at,
+         provider_thread_id, auth_state, runtime_payload, cwd
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [work.threadId, "stub", interrupted ? "interrupted" : "idle", null, completedAt, null, "unknown", null, sessionCwd],
     )
   })
 
@@ -435,8 +504,8 @@ async function publishInterruptedTurn(
   recordReceipt(deps, work.commandId, "interrupted", { turnId: work.turnId, threadId: work.threadId })
   await publishRuntimeEvent(deps.pushBus, {
     type: "provider.turnInterrupted",
-    threadId: work.threadId as ProviderRuntimeEvent["threadId"],
-    turnId: work.turnId as ProviderRuntimeEvent["turnId"],
+    threadId: work.threadId as ProviderThreadId,
+    turnId: work.turnId as ProviderTurnId,
   })
   await publishDomainEvent(deps.pushBus, { type: "turn.interrupted", turn })
 }
@@ -451,8 +520,8 @@ async function publishCompletedTurn(
   recordReceipt(deps, work.commandId, "completed", { turnId: work.turnId, threadId: work.threadId })
   await publishRuntimeEvent(deps.pushBus, {
     type: "provider.turnCompleted",
-    threadId: work.threadId as ProviderRuntimeEvent["threadId"],
-    turnId: work.turnId as ProviderRuntimeEvent["turnId"],
+    threadId: work.threadId as ProviderThreadId,
+    turnId: work.turnId as ProviderTurnId,
     output,
   })
   await publishDomainEvent(deps.pushBus, { type: "turn.completed", turn })
@@ -504,8 +573,8 @@ async function publishStreamingUpdate(
 ): Promise<void> {
   await publishRuntimeEvent(deps.pushBus, {
     type: "provider.token",
-    threadId: work.threadId as ProviderRuntimeEvent["threadId"],
-    turnId: work.turnId as ProviderRuntimeEvent["turnId"],
+    threadId: work.threadId as ProviderThreadId,
+    turnId: work.turnId as ProviderTurnId,
     token,
     index,
   })
@@ -526,6 +595,7 @@ function interruptWorkWithError(
   error: unknown,
 ): void {
   const now = new Date().toISOString()
+  const sessionCwd = readThreadSessionCwd(database, work.threadId)
   database.transaction(() => {
     database.execute(
       `UPDATE orchestration_turns
@@ -540,14 +610,20 @@ function interruptWorkWithError(
       [now, work.threadId],
     )
     database.execute(
-      `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO provider_runtime_sessions (
+         thread_id, provider, status, last_error, updated_at,
+         provider_thread_id, auth_state, runtime_payload, cwd
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         work.threadId,
         "stub",
         "interrupted",
         error instanceof Error ? error.message : "Unknown orchestration error",
         now,
+        null,
+        "unknown",
+        null,
+        sessionCwd,
       ],
     )
   })
@@ -645,8 +721,16 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
      ORDER BY started_at ASC`,
   ).map(mapTurnRow)
 
-  const provider = deps.database.get<{ status: OrchestrationSnapshot["providerStatus"] }>(
-    `SELECT status FROM provider_runtime_sessions ORDER BY updated_at DESC LIMIT 1`,
+  const provider = deps.database.get<{
+    provider: "stub" | "codex"
+    status: OrchestrationSnapshot["providerStatus"]
+    auth_state: "unknown" | "authenticated" | "auth_required" | "expired"
+    last_error: string | null
+    updated_at: string
+  }>(
+    `SELECT provider, status, auth_state, last_error, updated_at
+     FROM provider_runtime_sessions
+     ORDER BY updated_at DESC LIMIT 1`,
   )
 
   return {
@@ -654,6 +738,19 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
     threads,
     turns,
     providerStatus: provider?.status ?? "offline",
+    providerRuntime: {
+      adapter: provider?.provider === "codex" ? "codex" : "stub",
+      status: provider?.status ?? "offline",
+      authState: provider?.auth_state ?? "unknown",
+      lastError: provider?.last_error
+        ? {
+            code: "provider_runtime_error",
+            message: provider.last_error,
+          }
+        : null,
+      queuedTurnCount: deps.state.workQueue.length,
+      lastUpdatedAt: provider?.updated_at ?? new Date(0).toISOString(),
+    },
     ready: deps.readiness.isReady(),
     lastSequence: deps.pushBus.getLastSequence(),
   }
@@ -669,6 +766,15 @@ function buildThread(workspaceId: string, title?: string): OrchestrationThread {
     createdAt: now,
     currentTurnId: null,
   }
+}
+
+function normalizeThreadTitle(title: string): string {
+  const normalized = title.trim()
+  if (normalized.length === 0) {
+    throw new Error("Thread title is required")
+  }
+
+  return normalized
 }
 
 function buildFilesystemWorkspace(rootPath: string): Extract<OrchestrationWorkspace, { kind: "filesystem" }> {
@@ -762,6 +868,7 @@ async function relinkWorkspace(
      WHERE id = ?`,
     [deriveWorkspaceName(rootPath), rootPath, "ready", now, workspaceId],
   )
+  resetWorkspaceThreadProviderSessions(deps.database, workspaceId, rootPath, now)
 
   const updatedWorkspace = readWorkspace(deps.database, workspaceId)
   if (!updatedWorkspace) {
@@ -855,6 +962,7 @@ async function createThread(
 
   const thread = buildThread(workspaceId, title)
   const now = new Date().toISOString()
+  const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
 
   deps.database.transaction(() => {
     deps.database.execute(
@@ -871,9 +979,11 @@ async function createThread(
       ],
     )
     deps.database.execute(
-      `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [thread.id, "stub", "idle", null, now],
+      `INSERT OR REPLACE INTO provider_runtime_sessions (
+         thread_id, provider, status, last_error, updated_at,
+         provider_thread_id, auth_state, runtime_payload, cwd
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [thread.id, "stub", "idle", null, now, null, "unknown", null, sessionCwd],
     )
   })
 
@@ -882,6 +992,73 @@ async function createThread(
   await publishDomainEvent(deps.pushBus, { type: "thread.created", thread })
   await deps.receiptBus.resolve(commandId, { threadId: thread.id })
   return { threadId: thread.id }
+}
+
+async function renameThread(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  threadId: string,
+  title: string,
+): Promise<RenameThreadResult> {
+  const thread = readThread(deps.database, threadId)
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`)
+  }
+
+  const normalizedTitle = normalizeThreadTitle(title)
+  const now = new Date().toISOString()
+
+  deps.database.execute(
+    `UPDATE orchestration_threads
+     SET title = ?, updated_at = ?
+     WHERE id = ?`,
+    [normalizedTitle, now, threadId],
+  )
+
+  const updatedThread = readThread(deps.database, threadId)
+  if (!updatedThread) {
+    throw new Error(`Thread not found after rename: ${threadId}`)
+  }
+
+  appendEvent(deps, "thread.updated", { thread: updatedThread }, { threadId, commandId })
+  recordReceipt(deps, commandId, "completed", { threadId, workspaceId: updatedThread.workspaceId })
+  await publishDomainEvent(deps.pushBus, { type: "thread.updated", thread: updatedThread })
+  await deps.receiptBus.resolve(commandId, { threadId })
+  return { threadId: updatedThread.id }
+}
+
+async function deleteThread(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  threadId: string,
+): Promise<DeleteThreadResult> {
+  const thread = readThread(deps.database, threadId)
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`)
+  }
+
+  if (thread.currentTurnId) {
+    deps.state.activeTurns.delete(thread.currentTurnId)
+  }
+
+  const remainingQueue = deps.state.workQueue.filter((item) => item.threadId !== threadId)
+  deps.state.workQueue.splice(0, deps.state.workQueue.length, ...remainingQueue)
+
+  deps.database.transaction(() => {
+    deps.database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
+    deps.database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
+    deps.database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
+  })
+
+  appendEvent(deps, "thread.deleted", { threadId, workspaceId: thread.workspaceId }, { threadId, commandId })
+  recordReceipt(deps, commandId, "completed", {
+    deleted: true,
+    threadId,
+    workspaceId: thread.workspaceId,
+  })
+  await publishDomainEvent(deps.pushBus, { type: "thread.deleted", threadId: thread.id, workspaceId: thread.workspaceId })
+  await deps.receiptBus.resolve(commandId, { deleted: true, threadId })
+  return { deleted: true }
 }
 
 function buildStreamingTurn(threadId: string, content: string): OrchestrationTurn {
@@ -916,6 +1093,7 @@ async function sendTurn(
 
   const turn = buildStreamingTurn(threadId, content)
   const now = new Date().toISOString()
+  const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
   await deps.receiptBus.track(commandId)
 
   deps.database.transaction(() => {
@@ -931,9 +1109,11 @@ async function sendTurn(
       ["streaming", turn.id, now, threadId],
     )
     deps.database.execute(
-      `INSERT OR REPLACE INTO provider_runtime_sessions (thread_id, provider, status, last_error, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [threadId, "stub", "streaming", null, now],
+      `INSERT OR REPLACE INTO provider_runtime_sessions (
+         thread_id, provider, status, last_error, updated_at,
+         provider_thread_id, auth_state, runtime_payload, cwd
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [threadId, "stub", "streaming", null, now, null, "unknown", null, sessionCwd],
     )
     recordReceipt(deps, commandId, "pending", { threadId, turnId: turn.id })
   })
@@ -943,8 +1123,8 @@ async function sendTurn(
   await publishDomainEvent(deps.pushBus, { type: "turn.started", turn })
   await publishRuntimeEvent(deps.pushBus, {
     type: "provider.turnStarted",
-    threadId: threadId as ProviderRuntimeEvent["threadId"],
-    turnId: turn.id as ProviderRuntimeEvent["turnId"],
+    threadId: threadId as ProviderThreadId,
+    turnId: turn.id as ProviderTurnId,
   })
   deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content })
   void drainQueue(deps)
@@ -990,8 +1170,14 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
     deleteWorkspace: (commandId, workspaceId) => deleteWorkspace(deps, commandId, workspaceId),
     createThread: (commandId, workspaceId, title) =>
       createThread(deps, commandId, workspaceId, title),
+    renameThread: (commandId, threadId, title) =>
+      renameThread(deps, commandId, threadId, title),
+    deleteThread: (commandId, threadId) =>
+      deleteThread(deps, commandId, threadId),
     sendTurn: (commandId, threadId, content) => sendTurn(deps, commandId, threadId, content),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
+    startProviderAuth: async () => ({ started: false }),
+    retryProviderInitialize: async () => ({ started: false }),
   }
 }
 
@@ -1044,7 +1230,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
     const readThread = (threadId: string): OrchestrationThread | null => {
       const row = database.get<ThreadRow>(
-        `SELECT id, title, status, current_turn_id, created_at
+        `SELECT id, workspace_id, title, status, current_turn_id, created_at
          FROM orchestration_threads
          WHERE id = ?`,
         [threadId],
@@ -1052,6 +1238,7 @@ export const OrchestrationServiceLive = Layer.scoped(
       if (!row) return null
       return {
         id: row.id as OrchestrationThread["id"],
+        workspaceId: row.workspace_id as WorkspaceId,
         title: row.title,
         status: row.status,
         createdAt: row.created_at,
@@ -1282,10 +1469,12 @@ export const OrchestrationServiceLive = Layer.scoped(
           turnId: work.turnId as never,
         })
 
+        const executionCwd = resolveThreadExecutionCwd(database, work.threadId)
         await codexCli.streamTurn({
           localThreadId: work.threadId,
           localTurnId: work.turnId,
           content: work.content,
+          cwd: executionCwd,
           onToken: async (token, index) => {
             if (activeTurns.get(work.turnId)?.interrupted) {
               const interrupted = await codexCli.interruptTurn(work.threadId, work.turnId)
@@ -1333,6 +1522,9 @@ export const OrchestrationServiceLive = Layer.scoped(
           },
           onError: async (error) => {
             await failTurn(work, error, true)
+          },
+          onMcpToolCall: async (event) => {
+            await publishRuntimeEvent(event)
           },
         })
       } catch (error) {
@@ -1502,6 +1694,7 @@ export const OrchestrationServiceLive = Layer.scoped(
            WHERE id = ?`,
           [deriveWorkspaceName(normalized), normalized, "ready", now, workspaceId],
         )
+        resetWorkspaceThreadProviderSessions(database, workspaceId, normalized, now)
 
         const updatedWorkspace = readWorkspace(database, workspaceId)
         if (!updatedWorkspace) {
@@ -1571,6 +1764,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         const thread = buildThread(workspaceId, title)
         const now = new Date().toISOString()
+        const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
 
         database.transaction(() => {
           database.execute(
@@ -1581,9 +1775,9 @@ export const OrchestrationServiceLive = Layer.scoped(
           database.execute(
             `INSERT OR REPLACE INTO provider_runtime_sessions (
                thread_id, provider, status, last_error, updated_at,
-               provider_thread_id, auth_state, runtime_payload
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [thread.id, "codex", "idle", null, now, null, "unknown", null],
+               provider_thread_id, auth_state, runtime_payload, cwd
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [thread.id, "codex", "idle", null, now, null, "unknown", null, sessionCwd],
           )
         })
 
@@ -1592,6 +1786,58 @@ export const OrchestrationServiceLive = Layer.scoped(
         await publishDomainEvent({ type: "thread.created", thread })
         await receiptBus.resolve(commandId, { threadId: thread.id })
         return { threadId: thread.id }
+      },
+      renameThread: async (commandId, threadId, title) => {
+        const thread = readThread(threadId)
+        if (!thread) {
+          throw new Error(`Thread not found: ${threadId}`)
+        }
+
+        const normalizedTitle = normalizeThreadTitle(title)
+        const now = new Date().toISOString()
+
+        database.execute(
+          `UPDATE orchestration_threads
+           SET title = ?, updated_at = ?
+           WHERE id = ?`,
+          [normalizedTitle, now, threadId],
+        )
+
+        const updatedThread = readThread(threadId)
+        if (!updatedThread) {
+          throw new Error(`Thread not found after rename: ${threadId}`)
+        }
+
+        appendEvent("thread.updated", { thread: updatedThread }, { threadId, commandId })
+        recordReceipt(commandId, "completed", { threadId, workspaceId: updatedThread.workspaceId })
+        await publishDomainEvent({ type: "thread.updated", thread: updatedThread })
+        await receiptBus.resolve(commandId, { threadId })
+        return { threadId: updatedThread.id }
+      },
+      deleteThread: async (commandId, threadId) => {
+        const thread = readThread(threadId)
+        if (!thread) {
+          throw new Error(`Thread not found: ${threadId}`)
+        }
+
+        if (thread.currentTurnId) {
+          activeTurns.delete(thread.currentTurnId)
+        }
+
+        const remainingQueue = workQueue.filter((item) => item.threadId !== threadId)
+        workQueue.splice(0, workQueue.length, ...remainingQueue)
+
+        database.transaction(() => {
+          database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
+          database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
+          database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
+        })
+
+        appendEvent("thread.deleted", { threadId, workspaceId: thread.workspaceId }, { threadId, commandId })
+        recordReceipt(commandId, "completed", { deleted: true, threadId, workspaceId: thread.workspaceId })
+        await publishDomainEvent({ type: "thread.deleted", threadId: thread.id, workspaceId: thread.workspaceId })
+        await receiptBus.resolve(commandId, { deleted: true, threadId })
+        return { deleted: true }
       },
       sendTurn: async (commandId, threadId, content) => {
         const thread = readThread(threadId)

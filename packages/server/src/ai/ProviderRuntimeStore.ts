@@ -28,6 +28,7 @@ type ProviderRuntimeSessionRow = {
   provider_thread_id: string | null
   auth_state: ProviderAuthState
   runtime_payload: string | null
+  cwd: string | null
 }
 
 type QueuedProviderTurnRow = {
@@ -47,6 +48,7 @@ export type ThreadProviderSession = {
   readonly providerThreadId: string | null
   readonly authState: ProviderAuthState
   readonly runtimePayload: unknown
+  readonly cwd: string | null
 }
 
 export type QueuedProviderTurn = {
@@ -72,6 +74,7 @@ type ThreadSessionPatch = {
   readonly providerThreadId?: string | null
   readonly authState?: ProviderAuthState
   readonly runtimePayload?: unknown
+  readonly cwd?: string | null
 }
 
 export interface ProviderRuntimeStoreService {
@@ -142,6 +145,7 @@ function toThreadSession(row: ProviderRuntimeSessionRow): ThreadProviderSession 
     providerThreadId: row.provider_thread_id,
     authState: row.auth_state,
     runtimePayload: parseJson(row.runtime_payload),
+    cwd: row.cwd,
   }
 }
 
@@ -292,7 +296,7 @@ export const ProviderRuntimeStoreLive = Layer.effect(
       getThreadSession: async (threadId) => {
         const row = database.get<ProviderRuntimeSessionRow>(
           `SELECT thread_id, provider, status, last_error, updated_at,
-                  provider_thread_id, auth_state, runtime_payload
+                  provider_thread_id, auth_state, runtime_payload, cwd
            FROM provider_runtime_sessions
            WHERE thread_id = ?`,
           [threadId],
@@ -302,7 +306,7 @@ export const ProviderRuntimeStoreLive = Layer.effect(
       upsertThreadSession: async (threadId, patch) => serializeWrite(async () => {
         const current = database.get<ProviderRuntimeSessionRow>(
           `SELECT thread_id, provider, status, last_error, updated_at,
-                  provider_thread_id, auth_state, runtime_payload
+                  provider_thread_id, auth_state, runtime_payload, cwd
            FROM provider_runtime_sessions
            WHERE thread_id = ?`,
           [threadId],
@@ -314,17 +318,24 @@ export const ProviderRuntimeStoreLive = Layer.effect(
           database.execute(
             `INSERT OR REPLACE INTO provider_runtime_sessions (
                thread_id, provider, status, last_error, updated_at,
-               provider_thread_id, auth_state, runtime_payload
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+               provider_thread_id, auth_state, runtime_payload, cwd
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               threadId,
               "codex",
               patch.status ?? current?.status ?? state.status,
-              patch.lastError ?? current?.last_error ?? null,
+              patch.lastError === undefined ? current?.last_error ?? null : patch.lastError,
               nextUpdatedAt,
-              patch.providerThreadId ?? current?.provider_thread_id ?? null,
+              patch.providerThreadId === undefined
+                ? current?.provider_thread_id ?? null
+                : patch.providerThreadId,
               patch.authState ?? current?.auth_state ?? state.authState,
-              JSON.stringify(patch.runtimePayload ?? parseJson(current?.runtime_payload ?? null) ?? null),
+              JSON.stringify(
+                patch.runtimePayload === undefined
+                  ? parseJson(current?.runtime_payload ?? null) ?? null
+                  : patch.runtimePayload,
+              ),
+              patch.cwd === undefined ? current?.cwd ?? null : patch.cwd,
             ],
           )
         })

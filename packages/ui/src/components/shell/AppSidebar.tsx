@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router"
 import {
+  SidebarSeparator,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -7,11 +8,17 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Moon02Icon, Sun01Icon } from "@hugeicons/core-free-icons"
+import {
+  Activity01Icon,
+  AiChat02Icon,
+  DashboardSquare01Icon,
+  Moon02Icon,
+  Settings01Icon,
+  Sun01Icon,
+} from "@hugeicons/core-free-icons"
 import { useRuntimeActivityUnreadCount } from "@/hooks/useAppRuntime"
 import { useTheme } from "@/hooks/useTheme"
 import { isChatPath } from "@/lib/chatRoutes"
@@ -19,20 +26,28 @@ import { ChatHistory } from "./ChatHistory"
 import { ConnectionStatus } from "./ConnectionStatus"
 
 const navItems = [
-  { label: "Dashboard", path: "/" },
-  { label: "Chat", path: "/chat" },
-  { label: "Activity", path: "/activity" },
-  { label: "Settings", path: "/settings" },
+  { label: "Dashboard", path: "/", icon: DashboardSquare01Icon },
+  { label: "Chat", path: "/chat", icon: AiChat02Icon },
+  { label: "Activity", path: "/activity", icon: Activity01Icon },
+  { label: "Settings", path: "/settings", icon: Settings01Icon },
 ] as const
 
 export function AppSidebar() {
+  return (
+    <Sidebar>
+      <AppSidebarContent />
+    </Sidebar>
+  )
+}
+
+export function AppSidebarContent() {
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
   const activityUnreadCount = useRuntimeActivityUnreadCount()
   const { theme, toggleTheme } = useTheme()
 
   return (
-    <Sidebar>
+    <>
       <SidebarHeader className="p-4">
         <h2 className="text-lg font-semibold">Student Claw</h2>
       </SidebarHeader>
@@ -45,6 +60,7 @@ export function AppSidebar() {
                 isActive={item.path === "/chat" ? isChatPath(currentPath) : currentPath === item.path}
               >
                 <Link to={item.path}>
+                  <HugeiconsIcon icon={item.icon} size={18} />
                   {item.label}
                   {item.path === "/activity" && activityUnreadCount > 0 && (
                     <span
@@ -77,6 +93,6 @@ export function AppSidebar() {
           />
         </Button>
       </SidebarFooter>
-    </Sidebar>
+    </>
   )
 }

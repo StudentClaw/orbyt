@@ -66,6 +66,8 @@ function makeDependencies() {
       relinkWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
       deleteWorkspace: async () => ({ deleted: true }),
       createThread: async () => ({ threadId }),
+      renameThread: async () => ({ threadId }),
+      deleteThread: async () => ({ deleted: true }),
       sendTurn: async () => ({ turnId }),
       interruptTurn: async () => ({ interrupted: true }),
       startProviderAuth: async () => ({ started: true }),

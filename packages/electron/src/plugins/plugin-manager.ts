@@ -13,7 +13,7 @@ import { PluginSandbox, type PluginSandboxOptions } from "./plugin-sandbox.js"
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>
 
-type PluginSandboxLike = Pick<PluginSandbox, "start" | "listTools" | "callTool" | "stop" | "onDidClose" | "pid">
+type PluginSandboxLike = Pick<PluginSandbox, "start" | "listTools" | "callTool" | "sendMessage" | "stop" | "onDidClose" | "pid">
 
 type PluginRuntimeState = {
   status: ExtensionLifecycleStatus
@@ -33,8 +33,9 @@ export type PluginManagerOptions = {
   registry: PluginRegistrySource
   emitLifecycleEvent?: (event: PluginLifecycleEvent) => void
   createSandbox?: PluginSandboxFactory
-  idleTimeoutMs?: number
+  idleTimeoutMs?: number | null
   retryDelaysMs?: number[]
+  getCredentialMessage?: (pluginId: string) => unknown | null
   now?: () => Date
   scheduleTimeout?: typeof globalThis.setTimeout
   clearScheduledTimeout?: typeof globalThis.clearTimeout
@@ -75,8 +76,9 @@ export class PluginManager {
   private readonly runtimes = new Map<string, PluginRuntimeState>()
   private readonly emitLifecycleEvent: (event: PluginLifecycleEvent) => void
   private readonly createSandbox: PluginSandboxFactory
-  private readonly idleTimeoutMs: number
+  private readonly idleTimeoutMs: number | null
   private readonly retryDelaysMs: number[]
+  private readonly getCredentialMessage: (pluginId: string) => unknown | null
   private readonly now: () => Date
   private readonly scheduleTimeout: typeof globalThis.setTimeout
   private readonly clearScheduledTimeout: typeof globalThis.clearTimeout
@@ -84,8 +86,9 @@ export class PluginManager {
   constructor(private readonly options: PluginManagerOptions) {
     this.emitLifecycleEvent = options.emitLifecycleEvent ?? (() => undefined)
     this.createSandbox = options.createSandbox ?? ((record) => new PluginSandbox(buildSandboxOptions(record)))
-    this.idleTimeoutMs = options.idleTimeoutMs ?? 30_000
+    this.idleTimeoutMs = options.idleTimeoutMs ?? null
     this.retryDelaysMs = options.retryDelaysMs ?? [250, 500, 1000]
+    this.getCredentialMessage = options.getCredentialMessage ?? (() => null)
     this.now = options.now ?? (() => new Date())
     this.scheduleTimeout = options.scheduleTimeout ?? globalThis.setTimeout
     this.clearScheduledTimeout = options.clearScheduledTimeout ?? globalThis.clearTimeout
@@ -228,9 +231,11 @@ export class PluginManager {
       await sandbox.start()
 
       const listed = await sandbox.listTools()
-      const hasCanary = listed.tools.some((tool) => tool.name === "template_ping")
-      if (!hasCanary) {
-        throw new Error(`Plugin ${pluginId} did not expose template_ping during startup`)
+      const expectedTools = record.entry.manifest.tools.map((tool) => tool.name)
+      const exposedTools = new Set(listed.tools.map((tool) => tool.name))
+      const missingTools = expectedTools.filter((toolName) => !exposedTools.has(toolName))
+      if (missingTools.length > 0) {
+        throw new Error(`Plugin ${pluginId} did not expose expected tools: ${missingTools.join(", ")}`)
       }
 
       this.updateRuntime(pluginId, {
@@ -239,9 +244,16 @@ export class PluginManager {
         idleTimer: null,
       })
 
-      const canaryResult = await sandbox.callTool("template_ping", {})
-      if (canaryResult.isError) {
-        throw new Error(`Plugin ${pluginId} failed the template_ping canary call`)
+      const credentialMessage = this.getCredentialMessage(pluginId)
+      if (credentialMessage) {
+        sandbox.sendMessage(credentialMessage)
+      }
+
+      if (exposedTools.has("template_ping")) {
+        const canaryResult = await sandbox.callTool("template_ping", {})
+        if (canaryResult.isError) {
+          throw new Error(`Plugin ${pluginId} failed the template_ping canary call`)
+        }
       }
 
       this.updateRuntime(pluginId, {
@@ -370,7 +382,7 @@ export class PluginManager {
     this.clearIdleTimer(pluginId)
 
     const runtime = this.runtimes.get(pluginId)
-    if (!runtime || runtime.sandbox !== sandbox) {
+    if (!runtime || runtime.sandbox !== sandbox || this.idleTimeoutMs === null) {
       return
     }
 

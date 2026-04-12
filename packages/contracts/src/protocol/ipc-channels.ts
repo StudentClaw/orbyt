@@ -22,6 +22,8 @@ export const IpcChannel = {
   PLUGIN_UNINSTALL: "plugin:uninstall",
   PLUGIN_GET_STATUS: "plugin:get-status",
   PLUGIN_LIFECYCLE: "plugin:lifecycle",
+  PLUGIN_GET_AUTH_STATUS: "plugin:get-auth-status",
+  PLUGIN_SAVE_AUTH: "plugin:save-auth",
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -58,6 +60,15 @@ export type PluginStopParams = {
 
 export type PluginRetryParams = {
   readonly pluginId: string
+}
+
+export type PluginGetAuthStatusParams = {
+  readonly pluginId: string
+}
+
+export type PluginSaveAuthParams = {
+  readonly pluginId: string
+  readonly values: Record<string, string>
 }
 
 export type PluginManagementFailureReason = "plugin_system_disabled" | "not_implemented"
@@ -101,6 +112,37 @@ export type PluginLifecycleEvent = {
   readonly emittedAt: string
 }
 
+export type PluginAuthStatusState = "not_configured" | "configured" | "error"
+
+export type PluginAuthStatus = {
+  readonly pluginId: string
+  readonly status: PluginAuthStatusState
+  readonly error?: string
+}
+
+export type PluginSaveAuthFailureReason =
+  | "plugin_system_disabled"
+  | "plugin_not_found"
+  | "invalid_plugin"
+  | "unsupported_auth_type"
+  | "validation_failed"
+  | "storage_unavailable"
+  | "save_failed"
+
+export type PluginSaveAuthResult =
+  | {
+    readonly ok: true
+    readonly pluginId: string
+    readonly status: Extract<PluginAuthStatusState, "configured">
+  }
+  | {
+    readonly ok: false
+    readonly pluginId: string
+    readonly reason: PluginSaveAuthFailureReason
+    readonly error: string
+    readonly fieldErrors?: Record<string, string>
+  }
+
 export type IpcInvokeArgsMap = {
   [IpcChannel.APP_GET_PATH]: [name: string]
   [IpcChannel.APP_GET_BOOTSTRAP]: []
@@ -121,6 +163,8 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.PLUGIN_SET_ENABLED]: [params: PluginSetEnabledParams]
   [IpcChannel.PLUGIN_UNINSTALL]: [params: PluginUninstallParams]
   [IpcChannel.PLUGIN_GET_STATUS]: [params: PluginGetStatusParams]
+  [IpcChannel.PLUGIN_GET_AUTH_STATUS]: [params: PluginGetAuthStatusParams]
+  [IpcChannel.PLUGIN_SAVE_AUTH]: [params: PluginSaveAuthParams]
 }
 
 export type IpcInvokeResultMap = {
@@ -140,6 +184,8 @@ export type IpcInvokeResultMap = {
   [IpcChannel.PLUGIN_SET_ENABLED]: PluginManagementActionResult
   [IpcChannel.PLUGIN_UNINSTALL]: PluginManagementActionResult
   [IpcChannel.PLUGIN_GET_STATUS]: ExtensionRegistryEntry | null
+  [IpcChannel.PLUGIN_GET_AUTH_STATUS]: PluginAuthStatus | null
+  [IpcChannel.PLUGIN_SAVE_AUTH]: PluginSaveAuthResult
 }
 
 export type IpcEventPayloadMap = {

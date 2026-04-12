@@ -94,8 +94,15 @@ export const ConfigServiceLive = Layer.effect(
       isDev,
       codexBinaryPath: resolveCodexBinaryPath(),
       codexHomePath: process.env.CODEX_HOME_PATH ?? defaultConfig.codexHomePath,
+      codexProcessHomePath: process.env.CODEX_PROCESS_HOME_PATH ?? defaultConfig.codexProcessHomePath,
       codexModel: process.env.CODEX_MODEL ?? defaultConfig.codexModel,
       codexRequestTimeoutMs,
+      pluginGatewayBridgeUrl: process.env.PLUGIN_GATEWAY_BRIDGE_URL ?? defaultConfig.pluginGatewayBridgeUrl,
+      pluginGatewayBridgeEventsUrl: process.env.PLUGIN_GATEWAY_BRIDGE_EVENTS_URL ?? defaultConfig.pluginGatewayBridgeEventsUrl,
+      pluginGatewayBridgeToken: process.env.PLUGIN_GATEWAY_BRIDGE_TOKEN ?? defaultConfig.pluginGatewayBridgeToken,
+      pluginGatewayMcpUrl: process.env.PLUGIN_GATEWAY_MCP_URL ?? defaultConfig.pluginGatewayMcpUrl,
+      pluginGatewayMcpBearerToken: process.env.PLUGIN_GATEWAY_MCP_BEARER_TOKEN ?? defaultConfig.pluginGatewayMcpBearerToken,
+      pluginGatewayMcpServerName: process.env.PLUGIN_GATEWAY_MCP_SERVER_NAME ?? defaultConfig.pluginGatewayMcpServerName,
     }
   }),
 )

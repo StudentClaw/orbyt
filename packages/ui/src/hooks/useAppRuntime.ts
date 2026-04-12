@@ -5,9 +5,11 @@ import {
   closeChatPanel,
   createOrchestrationWorkspace,
   createOrchestrationThread,
+  deleteOrchestrationThread,
   deleteOrchestrationWorkspace,
   interruptOrchestrationTurn,
   openChatPanel,
+  renameOrchestrationThread,
   relinkOrchestrationWorkspace,
   selectChatTarget,
   selectChatWorkspace,
@@ -20,6 +22,7 @@ import {
   useSelectedChatThreadId,
   useSelectedChatWorkspaceId,
   useProviderRuntimeEvents,
+  useProviderToolCallsByTurnId,
 } from "@/rpc/orchestrationState"
 import {
   useCanvasCourses,
@@ -63,6 +66,10 @@ export function useRuntimeOrchestrationSnapshot() {
 
 export function useRuntimeProviderEvents() {
   return useProviderRuntimeEvents()
+}
+
+export function useRuntimeProviderToolCallsByTurnId() {
+  return useProviderToolCallsByTurnId()
 }
 
 export function useRuntimeCourses() {
@@ -148,9 +155,17 @@ export function useOrchestrationActions() {
         deleteOrchestrationWorkspace(getPrimaryWsRpcClient(), workspaceId),
       createThread: (workspaceId: string, title?: string) =>
         createOrchestrationThread(getPrimaryWsRpcClient(), workspaceId, title),
+      renameThread: (threadId: string, title: string) =>
+        renameOrchestrationThread(getPrimaryWsRpcClient(), threadId, title),
+      deleteThread: (threadId: string) =>
+        deleteOrchestrationThread(getPrimaryWsRpcClient(), threadId),
       sendTurn: (threadId: string, content: string) =>
         sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
+      startProviderAuth: () =>
+        getPrimaryWsRpcClient().provider.startAuth(),
+      retryProviderInitialize: () =>
+        getPrimaryWsRpcClient().provider.retryInitialize(),
     }
   }, [])
 }

@@ -8,8 +8,15 @@ export const defaultConfig = {
   isDev: true,
   codexBinaryPath: "codex",
   codexHomePath: undefined,
+  codexProcessHomePath: undefined,
   codexModel: "gpt-5.4-mini",
   codexRequestTimeoutMs: 45_000,
+  pluginGatewayBridgeUrl: undefined,
+  pluginGatewayBridgeEventsUrl: undefined,
+  pluginGatewayBridgeToken: undefined,
+  pluginGatewayMcpUrl: undefined,
+  pluginGatewayMcpBearerToken: undefined,
+  pluginGatewayMcpServerName: "student-claw",
 } as const
 
 export type AppConfig = {
@@ -23,6 +30,13 @@ export type AppConfig = {
   readonly isDev: boolean
   readonly codexBinaryPath: string
   readonly codexHomePath?: string
+  readonly codexProcessHomePath?: string
   readonly codexModel: string
   readonly codexRequestTimeoutMs: number
+  readonly pluginGatewayBridgeUrl?: string
+  readonly pluginGatewayBridgeEventsUrl?: string
+  readonly pluginGatewayBridgeToken?: string
+  readonly pluginGatewayMcpUrl?: string
+  readonly pluginGatewayMcpBearerToken?: string
+  readonly pluginGatewayMcpServerName: string
 }

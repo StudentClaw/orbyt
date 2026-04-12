@@ -2,10 +2,12 @@ import { Schema } from "@effect/schema"
 import {
   CreateWorkspaceParams,
   CreateThreadParams,
+  DeleteThreadParams,
   DeleteWorkspaceParams,
   InterruptTurnParams,
   OrchestrationSnapshot,
   PUSH_CHANNELS,
+  RenameThreadParams,
   RetryProviderInitializeParams,
   RPC_METHODS,
   RelinkWorkspaceParams,
@@ -148,6 +150,15 @@ async function handleStreamMethod(
     case RPC_METHODS.PROVIDER_SUBSCRIBE_RUNTIME:
       dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.PROVIDER_RUNTIME)
       return encodeSuccess(request.id, { subscribed: true })
+    case RPC_METHODS.CANVAS_SUBSCRIBE_SYNC_PROGRESS:
+      dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.CANVAS_SYNC_PROGRESS)
+      return encodeSuccess(request.id, { subscribed: true })
+    case RPC_METHODS.DASHBOARD_SUBSCRIBE_UPDATES:
+      dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.DASHBOARD_UPDATE)
+      return encodeSuccess(request.id, { subscribed: true })
+    case RPC_METHODS.PLANNER_SUBSCRIBE_CHECK_INS:
+      dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.PLANNER_SESSION_CHECK_IN)
+      return encodeSuccess(request.id, { subscribed: true })
     default:
       return null
   }
@@ -173,6 +184,10 @@ async function handleOrchestrationMethod(
       return handleDeleteWorkspace(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_CREATE_THREAD:
       return handleCreateThread(id, params, dependencies)
+    case RPC_METHODS.ORCHESTRATION_RENAME_THREAD:
+      return handleRenameThread(id, params, dependencies)
+    case RPC_METHODS.ORCHESTRATION_DELETE_THREAD:
+      return handleDeleteThread(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_SEND_TURN:
       return handleSendTurn(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN:
@@ -252,6 +267,38 @@ async function handleCreateThread(
   return encodeSuccess(
     id,
     await dependencies.orchestration.createThread(id, decoded.workspaceId, decoded.title),
+  )
+}
+
+async function handleRenameThread(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(RenameThreadParams, params, id, "renameThread params are invalid")
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(
+    id,
+    await dependencies.orchestration.renameThread(id, decoded.threadId, decoded.title),
+  )
+}
+
+async function handleDeleteThread(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(DeleteThreadParams, params, id, "deleteThread params are invalid")
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(
+    id,
+    await dependencies.orchestration.deleteThread(id, decoded.threadId),
   )
 }
 

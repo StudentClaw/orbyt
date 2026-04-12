@@ -70,6 +70,8 @@ export const RPC_METHODS = {
   ORCHESTRATION_RELINK_WORKSPACE: "orchestration.relinkWorkspace",
   ORCHESTRATION_DELETE_WORKSPACE: "orchestration.deleteWorkspace",
   ORCHESTRATION_CREATE_THREAD: "orchestration.createThread",
+  ORCHESTRATION_RENAME_THREAD: "orchestration.renameThread",
+  ORCHESTRATION_DELETE_THREAD: "orchestration.deleteThread",
   ORCHESTRATION_SEND_TURN: "orchestration.sendTurn",
   ORCHESTRATION_INTERRUPT_TURN: "orchestration.interruptTurn",
   ORCHESTRATION_SUBSCRIBE_DOMAIN: "orchestration.subscribeDomain",
@@ -78,9 +80,12 @@ export const RPC_METHODS = {
   PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
   CANVAS_GET_COURSES: "canvas.getCourses",
   CANVAS_SYNC: "canvas.sync",
+  CANVAS_SUBSCRIBE_SYNC_PROGRESS: "canvas.subscribeSyncProgress",
   DASHBOARD_REFRESH: "dashboard.refresh",
+  DASHBOARD_SUBSCRIBE_UPDATES: "dashboard.subscribeUpdates",
   PLANNER_GET_SESSIONS: "planner.getSessions",
   PLANNER_CHECK_IN: "planner.checkIn",
+  PLANNER_SUBSCRIBE_CHECK_INS: "planner.subscribeCheckIns",
   ACTIVITY_SUBSCRIBE_FEED: "activity.subscribeFeed",
   ONBOARDING_GET_SNAPSHOT: "onboarding.getSnapshot",
   ONBOARDING_SET_STEP_STATUS: "onboarding.setStepStatus",
@@ -307,6 +312,35 @@ export const CreateThreadResult = Schema.Struct({
 })
 
 /**
+ * Parameters for renaming an orchestration thread.
+ */
+export const RenameThreadParams = Schema.Struct({
+  threadId: ThreadId,
+  title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(MAX_THREAD_TITLE_LENGTH)),
+})
+
+/**
+ * Result returned after a thread is renamed.
+ */
+export const RenameThreadResult = Schema.Struct({
+  threadId: ThreadId,
+})
+
+/**
+ * Parameters for deleting an orchestration thread.
+ */
+export const DeleteThreadParams = Schema.Struct({
+  threadId: ThreadId,
+})
+
+/**
+ * Result returned after a thread is deleted.
+ */
+export const DeleteThreadResult = Schema.Struct({
+  deleted: Schema.Boolean,
+})
+
+/**
  * Parameters for submitting a turn to the orchestrator.
  */
 export const SendTurnParams = Schema.Struct({
@@ -378,6 +412,18 @@ export const ProviderRuntimeEvent = Schema.Union(
     threadId: ThreadId,
     turnId: TurnId,
   }),
+  Schema.Struct({
+    type: Schema.Literal("provider.mcpToolCall"),
+    threadId: ThreadId,
+    turnId: TurnId,
+    itemId: Schema.String,
+    serverName: Schema.String,
+    toolName: Schema.String,
+    args: Schema.Unknown,
+    status: Schema.Literal("pending", "complete", "error"),
+    message: Schema.optional(Schema.String),
+    error: Schema.optional(Schema.String),
+  }),
 )
 
 /**
@@ -400,6 +446,15 @@ export const OrchestrationDomainEvent = Schema.Union(
   Schema.Struct({
     type: Schema.Literal("thread.created"),
     thread: OrchestrationThread,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.updated"),
+    thread: OrchestrationThread,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.deleted"),
+    threadId: ThreadId,
+    workspaceId: WorkspaceId,
   }),
   Schema.Struct({
     type: Schema.Literal("turn.started"),
@@ -507,6 +562,26 @@ export type CreateThreadParams = Schema.Schema.Type<typeof CreateThreadParams>
  * Runtime type for create-thread results.
  */
 export type CreateThreadResult = Schema.Schema.Type<typeof CreateThreadResult>
+
+/**
+ * Runtime type for rename-thread parameters.
+ */
+export type RenameThreadParams = Schema.Schema.Type<typeof RenameThreadParams>
+
+/**
+ * Runtime type for rename-thread results.
+ */
+export type RenameThreadResult = Schema.Schema.Type<typeof RenameThreadResult>
+
+/**
+ * Runtime type for delete-thread parameters.
+ */
+export type DeleteThreadParams = Schema.Schema.Type<typeof DeleteThreadParams>
+
+/**
+ * Runtime type for delete-thread results.
+ */
+export type DeleteThreadResult = Schema.Schema.Type<typeof DeleteThreadResult>
 
 /**
  * Runtime type for send-turn parameters.

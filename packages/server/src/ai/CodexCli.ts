@@ -1,7 +1,9 @@
 import { Context, Effect, Layer } from "effect"
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
 import readline from "node:readline"
+import type { ProviderRuntimeEvent } from "@student-claw/contracts"
 import { ConfigService } from "../config/ConfigService.js"
+import { PluginGateway } from "../mcp/PluginGateway.js"
 import { ProviderRuntimeStore } from "./ProviderRuntimeStore.js"
 
 type PendingRequest = {
@@ -19,6 +21,8 @@ type ActiveTurn = {
   readonly onCompleted: () => Promise<void>
   readonly onInterrupted: () => Promise<void>
   readonly onError: (error: ProviderRuntimeFailure) => Promise<void>
+  readonly onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
+  readonly mcpToolCalls: Map<string, Omit<CodexMcpToolCallSnapshot, "status" | "error">>
   tokenIndex: number
 }
 
@@ -60,14 +64,17 @@ export interface CodexCliService {
   readonly initialize: () => Promise<void>
   readonly retryInitialize: () => Promise<boolean>
   readonly startAuth: () => Promise<boolean>
+  readonly reloadGatewayTools: () => Promise<boolean>
   readonly streamTurn: (input: {
     localThreadId: string
     localTurnId: string
     content: string
+    cwd?: string | null
     onToken: (token: string, index: number) => Promise<void>
     onCompleted: () => Promise<void>
     onInterrupted: () => Promise<void>
     onError: (error: ProviderRuntimeFailure) => Promise<void>
+    onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
   }) => Promise<void>
   readonly interruptTurn: (localThreadId: string, localTurnId: string) => Promise<boolean>
   readonly shutdown: () => Promise<void>
@@ -95,6 +102,154 @@ function readString(target: unknown, key: string): string | undefined {
   return typeof value === "string" ? value : undefined
 }
 
+const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
+
+type ActiveTurnLocator = Pick<ActiveTurn, "localThreadId" | "localTurnId">
+type ProviderMcpToolCallEvent = Extract<ProviderRuntimeEvent, { readonly type: "provider.mcpToolCall" }>
+
+type CodexMcpToolCallSnapshot = {
+  readonly itemId: string
+  readonly serverName: string
+  readonly toolName: string
+  readonly args: unknown
+  readonly status: "inProgress" | "completed" | "failed"
+  readonly error?: string
+}
+
+export function buildCodexAppServerArgs(config: {
+  readonly pluginGatewayMcpServerName: string
+  readonly pluginGatewayMcpUrl?: string
+}): string[] {
+  const args = ["app-server"]
+
+  if (!config.pluginGatewayMcpUrl) {
+    return args
+  }
+
+  const quotedServerName = JSON.stringify(config.pluginGatewayMcpServerName)
+
+  args.push(
+    "-c",
+    `mcp_servers.${quotedServerName}.url="${config.pluginGatewayMcpUrl}"`,
+    "-c",
+    `mcp_servers.${quotedServerName}.bearer_token_env_var="${STUDENT_CLAW_GATEWAY_TOKEN_ENV}"`,
+  )
+
+  return args
+}
+
+function readMcpToolCallItem(item: unknown): CodexMcpToolCallSnapshot | null {
+  if (!isRecord(item) || item.type !== "mcpToolCall") {
+    return null
+  }
+
+  const itemId = readString(item, "id")
+  const serverName = readString(item, "server")
+  const toolName = readString(item, "tool")
+  const status = readString(item, "status")
+  if (
+    !itemId
+    || !serverName
+    || !toolName
+    || (status !== "inProgress" && status !== "completed" && status !== "failed")
+  ) {
+    return null
+  }
+
+  const error = isRecord(item.error) && typeof item.error.message === "string"
+    ? item.error.message
+    : undefined
+
+  return {
+    itemId,
+    serverName,
+    toolName,
+    args: "arguments" in item ? item.arguments : {},
+    status,
+    error,
+  }
+}
+
+export function mapCodexMcpToolCallStartedEvent(
+  params: unknown,
+  activeTurn: ActiveTurnLocator,
+): ProviderMcpToolCallEvent | null {
+  const item = isRecord(params) ? params.item : null
+  const mcpToolCall = readMcpToolCallItem(item)
+  if (!mcpToolCall) {
+    return null
+  }
+
+  const event: ProviderMcpToolCallEvent = {
+    type: "provider.mcpToolCall",
+    threadId: activeTurn.localThreadId as never,
+    turnId: activeTurn.localTurnId as never,
+    itemId: mcpToolCall.itemId,
+    serverName: mcpToolCall.serverName,
+    toolName: mcpToolCall.toolName,
+    args: mcpToolCall.args,
+    status: "pending",
+  }
+
+  return event
+}
+
+export function mapCodexMcpToolCallProgressEvent(
+  params: unknown,
+  activeTurn: ActiveTurnLocator,
+  snapshot?: Omit<CodexMcpToolCallSnapshot, "status" | "error">,
+): ProviderMcpToolCallEvent | null {
+  const itemId = readString(params, "itemId")
+  const message = readString(params, "message")
+  if (!itemId || !message) {
+    return null
+  }
+
+  const serverName = snapshot?.serverName ?? readString(params, "serverName") ?? "student-claw"
+  const toolName = snapshot?.toolName ?? readString(params, "toolName") ?? "unknown"
+  const args = snapshot?.args ?? (isRecord(params) && "arguments" in params ? params.arguments : {})
+
+  const event: ProviderMcpToolCallEvent = {
+    type: "provider.mcpToolCall",
+    threadId: activeTurn.localThreadId as never,
+    turnId: activeTurn.localTurnId as never,
+    itemId,
+    serverName,
+    toolName,
+    args,
+    status: "pending",
+    message,
+  }
+
+  return event
+}
+
+export function mapCodexMcpToolCallCompletedEvent(
+  params: unknown,
+  activeTurn: ActiveTurnLocator,
+  snapshot?: Omit<CodexMcpToolCallSnapshot, "status" | "error">,
+): ProviderMcpToolCallEvent | null {
+  const item = isRecord(params) ? params.item : null
+  const mcpToolCall = readMcpToolCallItem(item)
+  if (!mcpToolCall) {
+    return null
+  }
+
+  const event: ProviderMcpToolCallEvent = {
+    type: "provider.mcpToolCall",
+    threadId: activeTurn.localThreadId as never,
+    turnId: activeTurn.localTurnId as never,
+    itemId: mcpToolCall.itemId,
+    serverName: snapshot?.serverName ?? mcpToolCall.serverName,
+    toolName: snapshot?.toolName ?? mcpToolCall.toolName,
+    args: snapshot?.args ?? mcpToolCall.args,
+    status: mcpToolCall.status === "failed" ? "error" : "complete",
+    error: mcpToolCall.error,
+  }
+
+  return event
+}
+
 function readAuthFailure(stdout: string, stderr: string): ProviderRuntimeFailure | null {
   const output = `${stdout}\n${stderr}`.toLowerCase()
   if (output.includes("logged in")) {
@@ -116,6 +271,15 @@ function readAuthFailure(stdout: string, stderr: string): ProviderRuntimeFailure
   return null
 }
 
+function normalizeSessionCwd(cwd: string | null | undefined): string | null {
+  if (typeof cwd !== "string") {
+    return null
+  }
+
+  const normalized = cwd.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
 function buildInitializeParams() {
   return {
     clientInfo: {
@@ -133,10 +297,12 @@ export const CodexCliLive = Layer.effect(
   CodexCli,
   Effect.gen(function* () {
     const config = yield* ConfigService
+    const pluginGateway = yield* PluginGateway
     const runtimeStore = yield* ProviderRuntimeStore
 
     const binaryPath = config.codexBinaryPath
     const homePath = config.codexHomePath
+    const processHomePath = config.codexProcessHomePath
     const providerThreadIds = new Map<string, string>()
     const activeProviderTurns = new Map<string, ActiveTurn>()
     let child: ChildProcessWithoutNullStreams | null = null
@@ -144,6 +310,7 @@ export const CodexCliLive = Layer.effect(
     let pending = new Map<string, PendingRequest>()
     let nextRequestId = 1
     let initPromise: Promise<void> | null = null
+    let initialized = false
     let shuttingDown = false
 
     const cleanupProcess = async (failure?: ProviderRuntimeFailure) => {
@@ -152,6 +319,7 @@ export const CodexCliLive = Layer.effect(
       child = null
       output = null
       initPromise = null
+      initialized = false
 
       for (const entry of pending.values()) {
         clearTimeout(entry.timeout)
@@ -171,6 +339,15 @@ export const CodexCliLive = Layer.effect(
       if (currentChild && !currentChild.killed) {
         currentChild.kill()
       }
+    }
+
+    const reloadGatewayTools = async (): Promise<boolean> => {
+      if (!child?.stdin.writable || !initialized || !config.pluginGatewayMcpUrl) {
+        return false
+      }
+
+      await sendRequest("config/mcpServer/reload", undefined)
+      return true
     }
 
     const failActiveTurns = async (failure: ProviderRuntimeFailure) => {
@@ -202,6 +379,7 @@ export const CodexCliLive = Layer.effect(
         env: {
           ...process.env,
           ...(homePath ? { CODEX_HOME: homePath } : {}),
+          ...(processHomePath ? { HOME: processHomePath } : {}),
         },
         encoding: "utf8",
       })
@@ -290,12 +468,58 @@ export const CodexCliLive = Layer.effect(
       const activeTurn = providerTurnId ? activeProviderTurns.get(providerTurnId) : null
       if (!activeTurn) return
 
+      if (method === "item/started") {
+        const event = mapCodexMcpToolCallStartedEvent(params, activeTurn)
+        if (!event) {
+          return
+        }
+
+        activeTurn.mcpToolCalls.set(event.itemId, {
+          itemId: event.itemId,
+          serverName: event.serverName,
+          toolName: event.toolName,
+          args: event.args,
+        })
+        await activeTurn.onMcpToolCall(event)
+        return
+      }
+
+      if (method === "item/mcpToolCall/progress") {
+        const itemId = readString(params, "itemId")
+        const event = mapCodexMcpToolCallProgressEvent(
+          params,
+          activeTurn,
+          itemId ? activeTurn.mcpToolCalls.get(itemId) : undefined,
+        )
+        if (event) {
+          await activeTurn.onMcpToolCall(event)
+        }
+        return
+      }
+
       if (method === "item/agentMessage/delta") {
         const delta = readString(params, "delta")
         if (!delta) return
         const nextIndex = activeTurn.tokenIndex
         activeTurn.tokenIndex += 1
         await activeTurn.onToken(delta, nextIndex)
+        return
+      }
+
+      if (method === "item/completed") {
+        const item = isRecord(params) ? params.item : null
+        const itemId = isRecord(item) ? readString(item, "id") : undefined
+        const event = mapCodexMcpToolCallCompletedEvent(
+          params,
+          activeTurn,
+          itemId ? activeTurn.mcpToolCalls.get(itemId) : undefined,
+        )
+        if (event) {
+          if (event.status !== "pending") {
+            activeTurn.mcpToolCalls.delete(event.itemId)
+          }
+          await activeTurn.onMcpToolCall(event)
+        }
         return
       }
 
@@ -416,12 +640,19 @@ export const CodexCliLive = Layer.effect(
         })
 
         await ensureAuthenticated()
+        await pluginGateway.getInventory().catch(() => undefined)
 
-        child = spawn(binaryPath, ["app-server"], {
+        const appServerArgs = buildCodexAppServerArgs(config)
+
+        child = spawn(binaryPath, appServerArgs, {
           cwd: process.cwd(),
           env: {
             ...process.env,
             ...(homePath ? { CODEX_HOME: homePath } : {}),
+            ...(processHomePath ? { HOME: processHomePath } : {}),
+            ...(config.pluginGatewayMcpBearerToken
+              ? { [STUDENT_CLAW_GATEWAY_TOKEN_ENV]: config.pluginGatewayMcpBearerToken }
+              : {}),
           },
           stdio: ["pipe", "pipe", "pipe"],
           shell: process.platform === "win32",
@@ -450,6 +681,7 @@ export const CodexCliLive = Layer.effect(
           lastError: null,
           runtimePayload: account,
         })
+        initialized = true
       })().catch(async (error) => {
         const failure =
           error instanceof ProviderRuntimeFailure
@@ -467,17 +699,37 @@ export const CodexCliLive = Layer.effect(
       return initPromise
     }
 
-    const ensureProviderThread = async (localThreadId: string): Promise<string> => {
+    const ensureProviderThread = async (
+      localThreadId: string,
+      requestedCwd?: string | null,
+    ): Promise<string> => {
+      const normalizedRequestedCwd = normalizeSessionCwd(requestedCwd)
+      const persistedSession = await runtimeStore.getThreadSession(localThreadId)
+      const persistedProviderThreadId = persistedSession?.providerThreadId ?? null
+      const persistedCwd = normalizeSessionCwd(persistedSession?.cwd)
+      const cachedProviderThreadId = providerThreadIds.get(localThreadId) ?? null
       const existing =
-        providerThreadIds.get(localThreadId) ??
-        (await runtimeStore.getThreadSession(localThreadId))?.providerThreadId
-      if (existing) {
+        cachedProviderThreadId !== null && cachedProviderThreadId === persistedProviderThreadId
+          ? cachedProviderThreadId
+          : persistedProviderThreadId
+
+      if (existing && persistedCwd === normalizedRequestedCwd) {
         providerThreadIds.set(localThreadId, existing)
         return existing
       }
 
+      providerThreadIds.delete(localThreadId)
+      if (existing || persistedCwd !== normalizedRequestedCwd) {
+        await runtimeStore.upsertThreadSession(localThreadId, {
+          providerThreadId: null,
+          cwd: normalizedRequestedCwd,
+          status: "idle",
+          lastError: null,
+        })
+      }
+
       const response = await sendRequest<ThreadStartResponse>("thread/start", {
-        cwd: process.cwd(),
+        cwd: normalizedRequestedCwd ?? process.cwd(),
         model: config.codexModel,
         approvalPolicy: "never",
         sandbox: "danger-full-access",
@@ -496,9 +748,15 @@ export const CodexCliLive = Layer.effect(
         providerThreadId,
         status: "idle",
         authState: "authenticated",
+        cwd: normalizedRequestedCwd,
       })
       return providerThreadId
     }
+
+    const unsubscribeToolsChanged = pluginGateway.subscribeToolsChanged(() => {
+      void pluginGateway.getInventory().catch(() => undefined)
+      void reloadGatewayTools().catch(() => undefined)
+    })
 
     return {
       initialize,
@@ -507,6 +765,7 @@ export const CodexCliLive = Layer.effect(
         await initialize()
         return true
       },
+      reloadGatewayTools,
       startAuth: async () => {
         try {
           if (!child) {
@@ -529,7 +788,7 @@ export const CodexCliLive = Layer.effect(
       streamTurn: async (input) => {
         await initialize()
 
-        const providerThreadId = await ensureProviderThread(input.localThreadId)
+        const providerThreadId = await ensureProviderThread(input.localThreadId, input.cwd)
         await runtimeStore.updateState({
           status: "streaming",
           authState: "authenticated",
@@ -539,6 +798,7 @@ export const CodexCliLive = Layer.effect(
           providerThreadId,
           status: "streaming",
           authState: "authenticated",
+          cwd: normalizeSessionCwd(input.cwd),
         })
 
         const response = await sendRequest<TurnStartResponse>("turn/start", {
@@ -563,6 +823,8 @@ export const CodexCliLive = Layer.effect(
           onCompleted: input.onCompleted,
           onInterrupted: input.onInterrupted,
           onError: input.onError,
+          onMcpToolCall: input.onMcpToolCall,
+          mcpToolCalls: new Map(),
           tokenIndex: 0,
         }
 
@@ -592,6 +854,7 @@ export const CodexCliLive = Layer.effect(
       },
       shutdown: async () => {
         shuttingDown = true
+        unsubscribeToolsChanged()
         await cleanupProcess()
       },
     }

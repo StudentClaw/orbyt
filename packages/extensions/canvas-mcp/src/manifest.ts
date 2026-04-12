@@ -22,7 +22,22 @@ export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
     type: "manual_token",
     instructions:
       "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
-    requiredKeys: ["CANVAS_TOKEN", "CANVAS_BASE_URL"],
+    fields: [
+      {
+        key: "baseUrl",
+        label: "Canvas base URL",
+        type: "base_url",
+        required: true,
+        placeholder: "https://myschool.instructure.com",
+      },
+      {
+        key: "token",
+        label: "Canvas access token",
+        type: "secret",
+        required: true,
+        placeholder: "Paste your Canvas access token",
+      },
+    ],
   },
   tools: [
     { name: "get_courses", description: "List Canvas courses available to the student." },

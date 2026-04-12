@@ -33,10 +33,26 @@ export const ExtensionAuthNoneSchema = Schema.Struct({
 })
 export type ExtensionAuthNoneSchema = Schema.Schema.Type<typeof ExtensionAuthNoneSchema>
 
+export const ExtensionAuthFieldType = Schema.Literal(
+  "base_url",
+  "secret",
+  "text",
+)
+export type ExtensionAuthFieldType = Schema.Schema.Type<typeof ExtensionAuthFieldType>
+
+export const ExtensionAuthField = Schema.Struct({
+  key: Schema.String,
+  label: Schema.String,
+  type: ExtensionAuthFieldType,
+  required: Schema.Boolean,
+  placeholder: Schema.optional(Schema.String),
+})
+export type ExtensionAuthField = Schema.Schema.Type<typeof ExtensionAuthField>
+
 export const ExtensionAuthManualTokenSchema = Schema.Struct({
   type: Schema.Literal("manual_token"),
   instructions: Schema.String,
-  requiredKeys: Schema.Array(Schema.String),
+  fields: Schema.NonEmptyArray(ExtensionAuthField),
 })
 export type ExtensionAuthManualTokenSchema = Schema.Schema.Type<typeof ExtensionAuthManualTokenSchema>
 

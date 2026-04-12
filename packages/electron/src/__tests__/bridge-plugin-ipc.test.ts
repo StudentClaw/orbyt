@@ -102,6 +102,11 @@ describe("registerIpcHandlers plugin reads", () => {
           return false
         }
       },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
     }))
 
     const { registerIpcHandlers } = await import(`../ipc/bridge.js?test=${Date.now()}`)
@@ -124,6 +129,117 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(statusResult).toMatchObject({
       kind: "available",
       installSource: "bundled",
+    })
+  })
+
+  test("saves and reads plugin auth status through IPC", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const resourcesRoot = createTempDir()
+    const userDataRoot = createTempDir()
+
+    writeManifest(path.join(resourcesRoot, "extensions"), "canvas-mcp", {
+      id: "canvas-mcp",
+      name: "Canvas Assistant",
+      description: "Canvas extension",
+      version: "0.1.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      permissions: ["canvas"],
+      auth: {
+        type: "manual_token",
+        instructions: "Paste your Canvas base URL and token.",
+        fields: [
+          {
+            key: "baseUrl",
+            label: "Canvas base URL",
+            type: "base_url",
+            required: true,
+            placeholder: "https://myschool.instructure.com",
+          },
+          {
+            key: "token",
+            label: "Canvas access token",
+            type: "secret",
+            required: true,
+            placeholder: "Paste your Canvas access token",
+          },
+        ],
+      },
+      tools: [{ name: "get_courses", description: "List courses" }],
+      author: "student-claw",
+      homepage: "https://github.com/StudentClaw/student-claw",
+    })
+
+    process.resourcesPath = resourcesRoot
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: true,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?auth-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap)
+
+    const getAuthHandler = handlers.get(IpcChannel.PLUGIN_GET_AUTH_STATUS)
+    const saveAuthHandler = handlers.get(IpcChannel.PLUGIN_SAVE_AUTH)
+    expect(getAuthHandler).toBeDefined()
+    expect(saveAuthHandler).toBeDefined()
+
+    const before = await getAuthHandler?.({}, { pluginId: "canvas-mcp" })
+    expect(before).toEqual({
+      pluginId: "canvas-mcp",
+      status: "not_configured",
+    })
+
+    const saved = await saveAuthHandler?.({}, {
+      pluginId: "canvas-mcp",
+      values: {
+        baseUrl: "https://myschool.instructure.com",
+        token: "12345678901234567890",
+      },
+    })
+    expect(saved).toEqual({
+      ok: true,
+      pluginId: "canvas-mcp",
+      status: "configured",
+    })
+
+    const after = await getAuthHandler?.({}, { pluginId: "canvas-mcp" })
+    expect(after).toEqual({
+      pluginId: "canvas-mcp",
+      status: "configured",
     })
   })
 })

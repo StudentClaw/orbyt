@@ -1,5 +1,10 @@
+import { spawn, type ChildProcess, type Serializable } from "node:child_process"
+import process from "node:process"
+import { PassThrough } from "node:stream"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
+import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js"
+import type { JSONRPCMessage, MessageExtraInfo } from "@modelcontextprotocol/sdk/types.js"
 
 export type PluginSandboxOptions = {
   pluginId: string
@@ -16,10 +21,154 @@ function formatPluginLogLine(pluginId: string, chunk: string): string {
   return line.length > 0 ? `[plugin:${pluginId}] ${line}\n` : ""
 }
 
+class IpcCapableStdioTransport implements Transport {
+  onclose?: () => void
+  onerror?: (error: Error) => void
+  onmessage?: <T extends JSONRPCMessage>(message: T, extra?: MessageExtraInfo) => void
+
+  private readonly readBuffer = new ReadBuffer()
+  private readonly stderrStream = new PassThrough()
+  private child: ChildProcess | null = null
+
+  constructor(private readonly options: PluginSandboxOptions) {}
+
+  get stderr(): PassThrough {
+    return this.stderrStream
+  }
+
+  get pid(): number | null {
+    return this.child?.pid ?? null
+  }
+
+  async start(): Promise<void> {
+    if (this.child) {
+      throw new Error(`Plugin sandbox for ${this.options.pluginId} is already started`)
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(this.options.command, this.options.args, {
+        env: this.options.env,
+        stdio: ["pipe", "pipe", "pipe", "ipc"],
+        shell: false,
+        windowsHide: process.platform === "win32",
+        cwd: this.options.cwd,
+      })
+
+      this.child = child
+
+      child.on("error", (error) => {
+        reject(error)
+        this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+      })
+      child.on("spawn", () => {
+        resolve()
+      })
+      child.on("close", () => {
+        this.child = null
+        this.onclose?.()
+      })
+      child.stdin?.on("error", (error) => {
+        this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+      })
+      child.stdout?.on("data", (chunk: Buffer) => {
+        this.readBuffer.append(chunk)
+        this.processReadBuffer()
+      })
+      child.stdout?.on("error", (error) => {
+        this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+      })
+
+      if (child.stderr) {
+        child.stderr.pipe(this.stderrStream)
+      }
+    })
+  }
+
+  send(message: JSONRPCMessage, _options?: TransportSendOptions): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.child?.stdin) {
+        throw new Error("Not connected")
+      }
+
+      const serialized = serializeMessage(message)
+      if (this.child.stdin.write(serialized)) {
+        resolve()
+      } else {
+        this.child.stdin.once("drain", resolve)
+      }
+    })
+  }
+
+  sendProcessMessage(message: unknown): void {
+    if (!this.child?.connected || typeof this.child.send !== "function") {
+      throw new Error(`Plugin ${this.options.pluginId} is not available for runtime messages`)
+    }
+
+    this.child.send(message as Serializable)
+  }
+
+  async close(): Promise<void> {
+    if (!this.child) {
+      this.readBuffer.clear()
+      return
+    }
+
+    const child = this.child
+    this.child = null
+
+    const closePromise = new Promise<void>((resolve) => {
+      child.once("close", () => resolve())
+    })
+
+    try {
+      child.stdin?.end()
+      child.disconnect?.()
+    } catch {
+      // ignore shutdown errors
+    }
+
+    await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())])
+
+    if (child.exitCode === null) {
+      try {
+        child.kill("SIGTERM")
+      } catch {
+        // ignore
+      }
+      await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())])
+    }
+
+    if (child.exitCode === null) {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // ignore
+      }
+    }
+
+    this.readBuffer.clear()
+  }
+
+  private processReadBuffer(): void {
+    while (true) {
+      try {
+        const message = this.readBuffer.readMessage()
+        if (message === null) {
+          break
+        }
+
+        this.onmessage?.(message)
+      } catch (error) {
+        this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+      }
+    }
+  }
+}
+
 export class PluginSandbox {
   private readonly closeListeners = new Set<CloseListener>()
   private readonly client = new Client({ name: "student-claw-plugin-manager", version: "0.1.0" })
-  private transport: StdioClientTransport | null = null
+  private transport: IpcCapableStdioTransport | null = null
   private started = false
 
   constructor(private readonly options: PluginSandboxOptions) {}
@@ -33,15 +182,8 @@ export class PluginSandbox {
       throw new Error(`Plugin sandbox for ${this.options.pluginId} is already started`)
     }
 
-    const transport = new StdioClientTransport({
-      command: this.options.command,
-      args: this.options.args,
-      cwd: this.options.cwd,
-      env: this.options.env,
-      stderr: "pipe",
-    })
-
-    transport.stderr?.on("data", (chunk: Buffer | string) => {
+    const transport = new IpcCapableStdioTransport(this.options)
+    transport.stderr.on("data", (chunk: Buffer | string) => {
       process.stderr.write(formatPluginLogLine(this.options.pluginId, chunk.toString()))
     })
     transport.onclose = () => {
@@ -70,6 +212,14 @@ export class PluginSandbox {
 
   async callTool(name: string, args: Record<string, unknown> = {}) {
     return this.client.callTool({ name, arguments: args })
+  }
+
+  sendMessage(message: unknown): void {
+    if (!this.transport) {
+      throw new Error(`Plugin sandbox for ${this.options.pluginId} is not connected`)
+    }
+
+    this.transport.sendProcessMessage(message)
   }
 
   onDidClose(listener: CloseListener): () => void {

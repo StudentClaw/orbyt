@@ -7,8 +7,6 @@ import { SidebarProvider } from "../components/ui/sidebar"
 const historyMocks = vi.hoisted(() => ({
   pathname: "/",
   snapshot: null as OrchestrationSnapshot | null,
-  selectedWorkspaceId: null as string | null,
-  selectedThreadId: null as string | null,
   connectionStatus: {
     phase: "connected" as const,
     wsUrl: "ws://127.0.0.1:8787",
@@ -19,10 +17,8 @@ const historyMocks = vi.hoisted(() => ({
   relinkWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
   createThread: vi.fn(),
-  openPanel: vi.fn(),
-  selectWorkspace: vi.fn(),
-  selectChatTarget: vi.fn(),
-  clearSelection: vi.fn(),
+  renameThread: vi.fn(),
+  deleteThread: vi.fn(),
   navigate: vi.fn(),
 }))
 
@@ -36,20 +32,14 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeOrchestrationSnapshot: () => historyMocks.snapshot,
-  useRuntimeSelectedWorkspaceId: () => historyMocks.selectedWorkspaceId,
-  useRuntimeSelectedThreadId: () => historyMocks.selectedThreadId,
   useRuntimeConnectionStatus: () => historyMocks.connectionStatus,
   useOrchestrationActions: () => ({
     createWorkspace: historyMocks.createWorkspace,
     relinkWorkspace: historyMocks.relinkWorkspace,
     deleteWorkspace: historyMocks.deleteWorkspace,
     createThread: historyMocks.createThread,
-  }),
-  useChatUiActions: () => ({
-    openPanel: historyMocks.openPanel,
-    selectWorkspace: historyMocks.selectWorkspace,
-    selectChatTarget: historyMocks.selectChatTarget,
-    clearSelection: historyMocks.clearSelection,
+    renameThread: historyMocks.renameThread,
+    deleteThread: historyMocks.deleteThread,
   }),
 }))
 
@@ -63,6 +53,15 @@ const snapshot: OrchestrationSnapshot = {
       name: "Repo",
       rootPath: "/repo",
       availability: "ready",
+      createdAt: "2026-04-09T00:00:00.000Z",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+    },
+    {
+      id: "workspace-legacy" as never,
+      kind: "legacy",
+      name: "Imported legacy chats",
+      rootPath: null,
+      availability: null,
       createdAt: "2026-04-09T00:00:00.000Z",
       updatedAt: "2026-04-09T00:00:00.000Z",
     },
@@ -84,6 +83,14 @@ const snapshot: OrchestrationSnapshot = {
       createdAt: "2026-04-09T00:02:00.000Z",
       currentTurnId: "turn-2" as never,
     },
+    {
+      id: "thread-legacy" as never,
+      workspaceId: "workspace-legacy" as never,
+      title: "Legacy thread",
+      status: "completed",
+      createdAt: "2026-04-09T00:03:00.000Z",
+      currentTurnId: null,
+    },
   ],
   turns: [],
   providerStatus: "idle",
@@ -103,8 +110,6 @@ describe("ChatHistory", () => {
   beforeEach(() => {
     historyMocks.pathname = "/"
     historyMocks.snapshot = snapshot
-    historyMocks.selectedWorkspaceId = "workspace-1"
-    historyMocks.selectedThreadId = "thread-2"
     historyMocks.connectionStatus = {
       phase: "connected",
       wsUrl: "ws://127.0.0.1:8787",
@@ -115,10 +120,8 @@ describe("ChatHistory", () => {
     historyMocks.relinkWorkspace.mockReset()
     historyMocks.deleteWorkspace.mockReset()
     historyMocks.createThread.mockReset()
-    historyMocks.openPanel.mockReset()
-    historyMocks.selectWorkspace.mockReset()
-    historyMocks.selectChatTarget.mockReset()
-    historyMocks.clearSelection.mockReset()
+    historyMocks.renameThread.mockReset()
+    historyMocks.deleteThread.mockReset()
     historyMocks.navigate.mockReset()
     window.electronAPI = {
       getBootstrap: vi.fn().mockResolvedValue(null),
@@ -129,24 +132,17 @@ describe("ChatHistory", () => {
     }
   })
 
-  test("renders workspaces and runtime threads in recency order", () => {
+  test("renders filesystem folders and their chats in recency order", () => {
     render(<SidebarProvider><ChatHistory /></SidebarProvider>)
     expect(screen.getByText("Repo")).toBeTruthy()
+    expect(screen.queryByText("Imported legacy chats")).toBeNull()
     const labels = screen.getAllByRole("button").map((node) => node.textContent)
     expect(labels.some((entry) => entry?.includes("Recent thread"))).toBe(true)
     expect(labels.some((entry) => entry?.includes("Older thread"))).toBe(true)
+    expect(labels.some((entry) => entry?.includes("Legacy thread"))).toBe(false)
   })
 
-  test("selecting a thread opens the side panel off-route", async () => {
-    const user = userEvent.setup()
-    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
-    await user.click(screen.getByText("Older thread"))
-    expect(historyMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-1")
-    expect(historyMocks.openPanel).toHaveBeenCalled()
-  })
-
-  test("selecting a thread on /chat navigates instead of reopening the side panel", async () => {
-    historyMocks.pathname = "/chat/workspace-1/thread-2"
+  test("selecting a thread navigates to the chat page", async () => {
     const user = userEvent.setup()
     render(<SidebarProvider><ChatHistory /></SidebarProvider>)
     await user.click(screen.getByText("Older thread"))
@@ -154,21 +150,21 @@ describe("ChatHistory", () => {
       to: "/chat/$workspaceId/$threadId",
       params: { workspaceId: "workspace-1", threadId: "thread-1" },
     })
-    expect(historyMocks.openPanel).not.toHaveBeenCalled()
   })
 
-  test("creating a thread from a workspace targets that workspace", async () => {
+  test("creating a thread from a workspace navigates to the new chat", async () => {
     historyMocks.createThread.mockResolvedValue("thread-new")
     const user = userEvent.setup()
     render(<SidebarProvider><ChatHistory /></SidebarProvider>)
     await user.click(screen.getByRole("button", { name: "Add chat to Repo" }))
     expect(historyMocks.createThread).toHaveBeenCalledWith("workspace-1", "New chat")
-    expect(historyMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
-    expect(historyMocks.openPanel).toHaveBeenCalled()
+    expect(historyMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId/$threadId",
+      params: { workspaceId: "workspace-1", threadId: "thread-new" },
+    })
   })
 
-  test("adding a folder on /chat opens the folder empty state without creating a chat", async () => {
-    historyMocks.pathname = "/chat"
+  test("adding a folder navigates to the folder chat page without creating a thread", async () => {
     historyMocks.createWorkspace.mockResolvedValue("workspace-2")
     const user = userEvent.setup()
     render(<SidebarProvider><ChatHistory /></SidebarProvider>)
@@ -179,16 +175,6 @@ describe("ChatHistory", () => {
       to: "/chat/$workspaceId",
       params: { workspaceId: "workspace-2" },
     })
-    expect(historyMocks.createThread).not.toHaveBeenCalled()
-  })
-
-  test("adding an existing folder off-route focuses it without creating a chat", async () => {
-    historyMocks.createWorkspace.mockResolvedValue("workspace-1")
-    const user = userEvent.setup()
-    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
-    await user.click(screen.getByRole("button", { name: "Add folder" }))
-    expect(historyMocks.selectWorkspace).toHaveBeenCalledWith("workspace-1")
-    expect(historyMocks.openPanel).toHaveBeenCalled()
     expect(historyMocks.createThread).not.toHaveBeenCalled()
   })
 
@@ -207,6 +193,8 @@ describe("ChatHistory", () => {
       workspaces: [
         {
           ...snapshot.workspaces[0],
+          kind: "filesystem",
+          rootPath: "/repo",
           availability: "missing",
         },
       ],
@@ -221,5 +209,41 @@ describe("ChatHistory", () => {
     await user.click(screen.getByRole("button", { name: "Remove" }))
     expect(confirmSpy).toHaveBeenCalledOnce()
     expect(historyMocks.deleteWorkspace).not.toHaveBeenCalled()
+  })
+
+  test("renaming a thread starts from the dropdown menu", async () => {
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    await user.click(screen.getByRole("button", { name: "Open actions for Older thread" }))
+    await user.click(screen.getByText("Rename"))
+    await user.clear(screen.getByLabelText("Rename Older thread"))
+    await user.type(screen.getByLabelText("Rename Older thread"), "Renamed thread")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    expect(historyMocks.renameThread).toHaveBeenCalledWith("thread-1", "Renamed thread")
+  })
+
+  test("deleting the selected thread returns to the workspace route", async () => {
+    historyMocks.pathname = "/chat/workspace-1/thread-1"
+    historyMocks.deleteThread.mockResolvedValue(true)
+    const confirmSpy = vi.fn(() => true)
+    Object.defineProperty(window, "confirm", {
+      value: confirmSpy,
+      configurable: true,
+    })
+
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    await user.click(screen.getByRole("button", { name: "Open actions for Older thread" }))
+    await user.click(screen.getByText("Delete"))
+
+    expect(confirmSpy).toHaveBeenCalledOnce()
+    expect(historyMocks.deleteThread).toHaveBeenCalledWith("thread-1")
+    expect(historyMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId",
+      params: { workspaceId: "workspace-1" },
+    })
   })
 })

@@ -21,7 +21,7 @@ function getToolLabel(toolName: string): string {
 }
 
 export function ToolCallIndicator({ toolCall }: ToolCallIndicatorProps) {
-  const label = getToolLabel(toolCall.toolName)
+  const label = toolCall.error ?? toolCall.message ?? getToolLabel(toolCall.toolName)
 
   return (
     <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">

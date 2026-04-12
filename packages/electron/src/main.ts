@@ -2,8 +2,11 @@ import { app, BrowserWindow, nativeImage } from "electron"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
+import { IpcChannel } from "@student-claw/contracts"
 import { registerIpcHandlers } from "./ipc/bridge.js"
+import { createPluginGatewayService, type PluginGatewayService } from "./plugins/plugin-gateway-service.js"
 import { PluginManager } from "./plugins/plugin-manager.js"
+import { createPluginRuntime } from "./plugins/plugin-runtime.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
 import { createWindow } from "./window/window-manager.js"
@@ -25,6 +28,7 @@ let mainWindow: BrowserWindow | null = null
 let serverProcess: ServerProcess | null = null
 let serverProcessPromise: Promise<ServerProcess> | null = null
 let pluginManager: PluginManager | null = null
+let pluginGateway: PluginGatewayService | null = null
 let isQuitting = false
 
 async function ensureServerProcess(): Promise<ServerProcess> {
@@ -33,11 +37,43 @@ async function ensureServerProcess(): Promise<ServerProcess> {
   }
 
   if (!serverProcessPromise) {
-    serverProcessPromise = spawnServer()
+    const runtime = createPluginRuntime({
+      currentDir,
+      isPackaged: app.isPackaged,
+      userDataPath: app.getPath("userData"),
+      emitLifecycleEvent: (event) => {
+        const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+        for (const window of windows) {
+          window.webContents.send(IpcChannel.PLUGIN_LIFECYCLE, event)
+        }
+
+        void pluginGateway?.notifyToolInventoryChanged()
+      },
+    })
+    pluginManager = runtime.manager
+
+    serverProcessPromise = createPluginGatewayService({
+      runtime: runtime.manager,
+    })
+      .then((gateway) => {
+        pluginGateway = gateway
+        return spawnServer(gateway.config, {
+          userDataPath: app.getPath("userData"),
+        })
+      })
       .then((nextServerProcess) => {
         serverProcess = nextServerProcess
-        pluginManager = registerIpcHandlers(nextServerProcess.bootstrap).pluginManager
+        pluginManager = registerIpcHandlers(
+          nextServerProcess.bootstrap,
+          { pluginManager: runtime.manager, pluginAuthService: runtime.authService },
+        ).pluginManager
         return nextServerProcess
+      })
+      .catch(async (error) => {
+        await pluginGateway?.close().catch(() => undefined)
+        pluginGateway = null
+        pluginManager = null
+        throw error
       })
       .finally(() => {
         serverProcessPromise = null
@@ -97,6 +133,8 @@ app.on("before-quit", () => {
   isQuitting = true
   void pluginManager?.dispose()
   pluginManager = null
+  void pluginGateway?.close()
+  pluginGateway = null
   serverProcess?.kill()
   serverProcess = null
   serverProcessPromise = null
