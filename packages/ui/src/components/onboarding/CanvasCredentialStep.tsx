@@ -9,11 +9,15 @@ import { Label } from "@/components/ui/label"
 
 type ValidationStatus = "idle" | "valid" | "invalid"
 
-const CANVAS_URL_PATTERN = /^https:\/\/[a-zA-Z0-9.-]+\.instructure\.com\/?$/
 const MIN_TOKEN_LENGTH = 20
 
 function validateCanvasUrl(url: string): boolean {
-  return CANVAS_URL_PATTERN.test(url.trim())
+  try {
+    const parsed = new URL(url.trim())
+    return parsed.protocol === "https:" && parsed.hostname.length > 0
+  } catch {
+    return false
+  }
 }
 
 function validateCanvasToken(token: string): boolean {
@@ -105,7 +109,7 @@ export function CanvasCredentialStep({ onNext: _onNext }: OnboardingStepProps) {
             >
               {status === "valid"
                 ? "Credentials validated successfully"
-                : "Invalid URL or token. URL must be https://[school].instructure.com and token must be at least 20 characters."}
+                : "Invalid URL or token. URL must be a valid HTTPS Canvas URL and token must be at least 20 characters."}
             </p>
           )}
         </CardContent>

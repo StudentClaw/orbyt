@@ -4,6 +4,7 @@ import {
   useOrchestrationActions,
   useRuntimeConnectionStatus,
   useRuntimeOrchestrationSnapshot,
+  useRuntimeProviderToolCallsByTurnId,
   useRuntimeSelectedThreadId,
   useRuntimeSelectedWorkspaceId,
 } from "@/hooks/useAppRuntime"
@@ -27,6 +28,7 @@ export interface ChatSelectionInput {
 export function useChat(selection?: ChatSelectionInput) {
   const snapshot = useRuntimeOrchestrationSnapshot()
   const connectionStatus = useRuntimeConnectionStatus()
+  const providerToolCallsByTurnId = useRuntimeProviderToolCallsByTurnId()
   const selectedWorkspaceIdFromUi = useRuntimeSelectedWorkspaceId()
   const selectedThreadIdFromUi = useRuntimeSelectedThreadId()
   const actions = useOrchestrationActions()
@@ -44,8 +46,8 @@ export function useChat(selection?: ChatSelectionInput) {
   }, [selectedThreadId, selectedWorkspaceId, snapshot])
 
   const messages = useMemo(() => {
-    return buildChatMessages(snapshot, currentThread?.id ?? null)
-  }, [currentThread?.id, snapshot])
+    return buildChatMessages(snapshot, currentThread?.id ?? null, providerToolCallsByTurnId)
+  }, [currentThread?.id, providerToolCallsByTurnId, snapshot])
 
   const chatState = useMemo(() => {
     return resolveChatState(snapshot, currentThread, connectionStatus)
@@ -100,6 +102,14 @@ export function useChat(selection?: ChatSelectionInput) {
     await actions.interruptTurn(activeThreadId)
   }, [actions, currentThread?.id, selectedThreadId])
 
+  const retry = useCallback(async () => {
+    await actions.retryProviderInitialize()
+  }, [actions])
+
+  const reauth = useCallback(async () => {
+    await actions.startProviderAuth()
+  }, [actions])
+
   return {
     messages,
     status: chatState.status,
@@ -108,6 +118,8 @@ export function useChat(selection?: ChatSelectionInput) {
     currentWorkspace,
     sendMessage,
     interrupt,
+    retry,
+    reauth,
     connectionState: connectionStatus.phase,
     inputDisabled: Boolean(inputDisabledReason),
     inputDisabledReason,

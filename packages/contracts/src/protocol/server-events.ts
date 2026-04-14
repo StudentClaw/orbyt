@@ -1,4 +1,7 @@
 import { Schema } from "@effect/schema"
+import { CanvasChangeDetected, CanvasSyncProgress } from "./canvas.js"
+
+export { CanvasChangeDetected, CanvasSyncProgress } from "./canvas.js"
 
 export const ChatStreaming = Schema.Struct({
   event: Schema.Literal("chat.streaming"),
@@ -21,15 +24,6 @@ export const ChatToolCall = Schema.Struct({
   data: Schema.Struct({
     toolName: Schema.String,
     args: Schema.String,
-  }),
-})
-
-export const CanvasSyncProgress = Schema.Struct({
-  event: Schema.Literal("canvas.syncProgress"),
-  data: Schema.Struct({
-    courseId: Schema.String,
-    progress: Schema.Number,
-    status: Schema.Literal("syncing", "done", "error"),
   }),
 })
 
@@ -77,6 +71,7 @@ export const ServerEvent = Schema.Union(
   ChatComplete,
   ChatToolCall,
   CanvasSyncProgress,
+  CanvasChangeDetected,
   ActivityFeedUpsert,
   PlannerSessionCheckIn,
   DashboardUpdate,

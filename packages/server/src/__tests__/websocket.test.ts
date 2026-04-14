@@ -29,6 +29,9 @@ function makeDependencies() {
         wsAuthToken: "a".repeat(64),
         appVersion: "0.1.0",
         platform: "test",
+        featureFlags: {
+          pluginSystem: false,
+        },
       }),
       getServerConfig: async () => ({
         appVersion: "0.1.0",
@@ -39,12 +42,23 @@ function makeDependencies() {
           providerRuntime: true,
           desktopBootstrap: true,
         },
+        featureFlags: {
+          pluginSystem: false,
+        },
       }),
       getSnapshot: async () => ({
         workspaces: [],
         threads: [],
         turns: [],
         providerStatus: "idle" as const,
+        providerRuntime: {
+          adapter: "codex" as const,
+          status: "idle" as const,
+          authState: "authenticated" as const,
+          lastError: null,
+          queuedTurnCount: 0,
+          lastUpdatedAt: "2026-04-09T12:00:00.000Z",
+        },
         ready: true,
         lastSequence: 1,
       }),
@@ -52,8 +66,12 @@ function makeDependencies() {
       relinkWorkspace: async () => ({ workspaceId: "workspace_1" as never }),
       deleteWorkspace: async () => ({ deleted: true }),
       createThread: async () => ({ threadId }),
+      renameThread: async () => ({ threadId }),
+      deleteThread: async () => ({ deleted: true }),
       sendTurn: async () => ({ turnId }),
       interruptTurn: async () => ({ interrupted: true }),
+      startProviderAuth: async () => ({ started: true }),
+      retryProviderInitialize: async () => ({ started: true }),
     },
     database: {
       db,

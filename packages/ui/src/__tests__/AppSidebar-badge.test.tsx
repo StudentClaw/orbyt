@@ -27,9 +27,7 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SidebarHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SidebarMenu: ({ children }: { children: React.ReactNode }) => <ul>{children}</ul>,
-  SidebarMenuButton: ({ children, ...props }: { children: React.ReactNode; asChild?: boolean; isActive?: boolean }) => (
-    <li {...props}>{children}</li>
-  ),
+  SidebarMenuButton: ({ children }: { children: React.ReactNode; asChild?: boolean; isActive?: boolean }) => <>{children}</>,
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <li>{children}</li>,
   SidebarSeparator: () => <hr />,
 }))
@@ -76,5 +74,10 @@ describe("AppSidebar activity badge", () => {
     render(<AppSidebar />)
     const badge = screen.getByTestId("activity-badge")
     expect(badge.textContent).toBe("99")
+  })
+
+  test("renders the embedded chat history section", () => {
+    render(<AppSidebar />)
+    expect(screen.getByTestId("chat-history")).toBeDefined()
   })
 })

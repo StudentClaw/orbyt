@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The Shared Contracts package is the type-safe glue between every other layer. It defines the domain schemas (Course, Assignment, Grade, etc.), the WebSocket message protocol, and the typed error hierarchy — all using Effect Schema. Both the React UI and the Effect-TS server import from this single source of truth. Nothing crosses a boundary without being validated against a shared contract.
+The shared contract layer is the type-safe glue between every other layer. `packages/contracts` is the canonical source of truth for schemas, protocol messages, and typed errors; `packages/shared` is an ergonomic re-export layer for app consumers that should not define competing boundary contracts. Both the React UI and the Effect-TS server import from this source of truth. Nothing crosses a boundary without being validated against a shared contract.
 
 ---
 
@@ -43,7 +43,7 @@ Core data types shared across the entire application.
 | `PlannedSession` | taskId, startTime, endTime, status, completionNote | Planner, Dashboard, Notifications |
 | `ActivityFeedEntry` | category, type, title, body, priority, deepLink | Notifications, Dashboard Activity Center |
 | `MemoryEntry` | content, scope, source, createdAt, confidence | Memory System |
-| `Extension` | id, name, version, status, permissions | Plugin System, Extension Manager |
+| `ExtensionManifest` / `ExtensionRegistryEntry` | manifest metadata, install source, lifecycle status, auth, tool summaries | Plugin System, Extension Manager |
 | `StudentPreference` | studyTimes, courseRanking, notificationPrefs, quietHours | Memory, Onboarding, Notifications |
 | `OnboardingState` | step, status, completedAt | Onboarding |
 
@@ -85,6 +85,12 @@ All cross-boundary messages are typed. Student Claw uses:
 | `file:open-dialog` | Renderer → Main | Open native file picker |
 | `file:save-dialog` | Renderer → Main | Open native save dialog |
 | `notification:show` | Renderer/Server → Main | Trigger native OS notification |
+| `plugin:list` | Renderer → Main | Read the registry snapshot for installed/discovered extensions |
+| `plugin:install-bundled` | Renderer → Main | Install a bundled extension |
+| `plugin:set-enabled` | Renderer → Main | Enable or disable an installed extension |
+| `plugin:uninstall` | Renderer → Main | Remove an installed extension |
+| `plugin:get-status` | Renderer → Main | Read a single extension lifecycle snapshot |
+| `plugin:lifecycle` | Main → Renderer | Push extension lifecycle status changes |
 | `plugin:tool-call` | Server/Main bridge | Execute MCP tool through Electron Plugin Orchestrator |
 | `plugin:tools-changed` | Main → Server | Notify server that plugin tool inventory changed |
 | `dashboard:open-chat-panel` | Renderer local event | Slide-over chat launch from dashboard quick actions |
@@ -99,8 +105,11 @@ Errors are values in Effect-TS, tracked in the type system.
 | `CanvasApiError` | Canvas REST API returned an error |
 | `CodexSpawnError` | Codex CLI failed to start |
 | `CodexTimeoutError` | AI response took too long |
+| `ExtensionManifestValidationError` | A manifest failed shared-schema validation |
 | `JsonRpcParseError` | Malformed JSON-RPC message |
 | `PluginStartError` | MCP plugin failed to initialize |
+| `PluginAuthError` | Plugin credential/auth handshake failed |
+| `PluginRegistryMismatchError` | Registry state drifted from the expected plugin identity or metadata |
 | `VaultDecryptError` | Credential decryption failed |
 | `MemoryWriteError` | Failed to persist a memory |
 | `SchemaDecodeError` | Incoming data didn't match expected schema |
@@ -112,7 +121,7 @@ Errors are values in Effect-TS, tracked in the type system.
 ## Proposed File Structure
 
 ```
-packages/shared/
+packages/contracts/
   package.json
   tsconfig.json
   src/
@@ -139,7 +148,11 @@ packages/shared/
       plugin-errors.ts
       memory-errors.ts
       schema-errors.ts
-    index.ts                  # Barrel export
+    index.ts                  # Canonical barrel export
+
+packages/shared/
+  src/
+    index.ts                  # Thin re-export layer over canonical contracts + shared runtime
 ```
 
 ---

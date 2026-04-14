@@ -11,8 +11,29 @@ import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
-import type { DesktopBootstrap, CodexAuthResult } from "@student-claw/contracts"
+import {
+  IpcChannel,
+  type CodexAuthResult,
+  type DesktopBootstrap,
+  type ExtensionRegistryEntry,
+  type PluginGetStatusParams,
+  type PluginGetAuthStatusParams,
+  type PluginInstallBundledParams,
+  type PluginAuthStatus,
+  type PluginLifecycleActionResult,
+  type PluginManagementActionResult,
+  type PluginRetryParams,
+  type PluginSaveAuthParams,
+  type PluginSaveAuthResult,
+  type PluginStartParams,
+  type PluginStopParams,
+  type PluginSetEnabledParams,
+  type PluginUninstallParams,
+} from "@student-claw/contracts"
 import { IPC_CHANNELS } from "./channels.js"
+import { PluginManager } from "../plugins/plugin-manager.js"
+import { PluginAuthService } from "../plugins/plugin-auth-service.js"
+import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -32,7 +53,10 @@ function resolveCodexPath(): string {
 /**
  * Registers the Electron main-process IPC handlers needed by the renderer runtime.
  */
-export function registerIpcHandlers(bootstrap: DesktopBootstrap): void {
+export function registerIpcHandlers(
+  bootstrap: DesktopBootstrap,
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService },
+): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   ipcMain.handle(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
   })
@@ -125,4 +149,166 @@ export function registerIpcHandlers(bootstrap: DesktopBootstrap): void {
       })
     })
   })
+
+  return registerPluginIpcHandlers(bootstrap, runtime)
+}
+
+function buildPluginActionResult(
+  bootstrap: DesktopBootstrap,
+  pluginId: string,
+): PluginManagementActionResult {
+  return {
+    ok: false,
+    pluginId,
+    reason: bootstrap.featureFlags.pluginSystem ? "not_implemented" : "plugin_system_disabled",
+  }
+}
+
+function buildPluginLifecycleActionResult(
+  bootstrap: DesktopBootstrap,
+  pluginId: string,
+): PluginLifecycleActionResult {
+  return {
+    ok: false,
+    pluginId,
+    reason: bootstrap.featureFlags.pluginSystem ? "start_failed" : "plugin_system_disabled",
+  }
+}
+
+function buildPluginAuthSaveResult(
+  bootstrap: DesktopBootstrap,
+  pluginId: string,
+): PluginSaveAuthResult {
+  return {
+    ok: false,
+    pluginId,
+    reason: "plugin_system_disabled",
+    error: bootstrap.featureFlags.pluginSystem
+      ? `Plugin auth save is unavailable for ${pluginId}.`
+      : "Plugin system is disabled.",
+  }
+}
+
+function emitPluginLifecycle(payload: { pluginId: string; status: ExtensionRegistryEntry["status"]; emittedAt: string }): void {
+  const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+  for (const window of windows) {
+    window.webContents.send(IpcChannel.PLUGIN_LIFECYCLE, payload)
+  }
+}
+
+function registerPluginIpcHandlers(
+  bootstrap: DesktopBootstrap,
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService },
+): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
+  const runtimeServices = runtime ?? (() => {
+    const createdRuntime = createPluginRuntime({
+      currentDir,
+      isPackaged: app.isPackaged,
+      userDataPath: app.getPath("userData"),
+      emitLifecycleEvent: emitPluginLifecycle,
+    })
+
+    return {
+      pluginManager: createdRuntime.manager,
+      pluginAuthService: createdRuntime.authService,
+    }
+  })()
+  const pluginManager = runtimeServices.pluginManager
+  const pluginAuthService = runtimeServices.pluginAuthService
+
+  ipcMain.handle(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
+    return pluginManager.list()
+  })
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_START,
+    (_event, params: PluginStartParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.start(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_STOP,
+    (_event, params: PluginStopParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.stop(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_RETRY,
+    (_event, params: PluginRetryParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
+      }
+
+      return pluginManager.retry(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_INSTALL_BUNDLED,
+    (_event, params: PluginInstallBundledParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_SET_ENABLED,
+    (_event, params: PluginSetEnabledParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_UNINSTALL,
+    (_event, params: PluginUninstallParams): PluginManagementActionResult => {
+      return buildPluginActionResult(bootstrap, params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_GET_STATUS,
+    (_event, params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
+      return pluginManager.getStatus(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_GET_AUTH_STATUS,
+    (_event, params: PluginGetAuthStatusParams): PluginAuthStatus | null => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return {
+          pluginId: params.pluginId,
+          status: "error",
+          error: "Plugin system is disabled.",
+        }
+      }
+
+      return pluginAuthService.getStatus(params.pluginId)
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannel.PLUGIN_SAVE_AUTH,
+    (_event, params: PluginSaveAuthParams): PluginSaveAuthResult => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginAuthSaveResult(bootstrap, params.pluginId)
+      }
+
+      return pluginAuthService.saveCredentials(params)
+    },
+  )
+
+  return {
+    pluginManager,
+    pluginAuthService,
+  }
 }

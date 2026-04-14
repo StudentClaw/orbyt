@@ -1,27 +1,31 @@
-import { useRef, useCallback, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import {
-  useChatUiActions,
   useIsOnboardingComplete,
   useIsServerHydrationComplete,
-  useRuntimeChatPanelOpen,
-  useRuntimeChatPanelWidth,
 } from "@/hooks/useAppRuntime"
 import { useNativeNotification } from "@/hooks/useNativeNotification"
-import { SidebarProvider } from "@/components/ui/sidebar"
-import { ChatContainer } from "@/components/chat/ChatContainer"
-import { isChatPath } from "@/lib/chatRoutes"
-import { AppSidebar } from "./AppSidebar"
-
-const CHAT_DEFAULT_WIDTH = 33
-const CHAT_MIN_WIDTH = 20
-const CHAT_MAX_WIDTH = 55
+import {
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
+import {
+  readDesktopSidebarWidth,
+  persistDesktopSidebarWidth,
+  MIN_DESKTOP_SIDEBAR_WIDTH,
+  MAX_DESKTOP_SIDEBAR_WIDTH,
+} from "@/lib/sidebarLayout"
+import type { PanelImperativeHandle } from "react-resizable-panels"
+import { AppSidebar, AppSidebarContent } from "./AppSidebar"
 
 export function AppShell() {
   const routerState = useRouterState()
-  const chatPanelOpen = useRuntimeChatPanelOpen()
-  const chatPanelWidth = useRuntimeChatPanelWidth()
-  const { setPanelWidth } = useChatUiActions()
   const onboardingComplete = useIsOnboardingComplete()
   const hydrationComplete = useIsServerHydrationComplete()
   const navigate = useNavigate()
@@ -36,74 +40,91 @@ export function AppShell() {
     }
   }, [hydrationComplete, onboardingComplete, pathname, navigate])
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const chatPanelRef = useRef<HTMLDivElement>(null)
-  const showPanel = chatPanelOpen && !isChatPath(pathname)
+  return (
+    <SidebarProvider>
+      <AppShellLayout />
+    </SidebarProvider>
+  )
+}
+
+function AppShellLayout() {
+  const { isMobile, open, openMobile } = useSidebar()
+  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null)
+  const [desktopSidebarWidth, setDesktopSidebarWidth] = useState(readDesktopSidebarWidth)
+  const chromeLabel = isMobile
+    ? openMobile ? "Hide sidebar" : "Show sidebar"
+    : open ? "Hide sidebar" : "Show sidebar"
 
   useEffect(() => {
-    if (showPanel && chatPanelRef.current) {
-      chatPanelRef.current.style.width = `${chatPanelWidth}%`
-    }
-  }, [chatPanelWidth, showPanel])
-
-  const startDrag = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-
-    const container = containerRef.current
-    const chatPanel = chatPanelRef.current
-    if (!container || !chatPanel) {
+    if (isMobile) {
       return
     }
 
-    const onMouseMove = (ev: MouseEvent) => {
-      const rect = container.getBoundingClientRect()
-      const newWidth = ((rect.right - ev.clientX) / rect.width) * 100
-      const clamped = Math.min(CHAT_MAX_WIDTH, Math.max(CHAT_MIN_WIDTH, newWidth))
-      chatPanel.style.width = `${clamped}%`
-      setPanelWidth(clamped)
+    if (open) {
+      sidebarPanelRef.current?.expand()
+      return
     }
 
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove)
-      document.removeEventListener("mouseup", onMouseUp)
-      document.body.style.cursor = ""
-      document.body.style.userSelect = ""
-    }
+    sidebarPanelRef.current?.collapse()
+  }, [isMobile, open])
 
-    document.body.style.cursor = "col-resize"
-    document.body.style.userSelect = "none"
-    document.addEventListener("mousemove", onMouseMove)
-    document.addEventListener("mouseup", onMouseUp)
-  }, [setPanelWidth])
+  if (isMobile) {
+    return (
+      <div className="flex h-full w-full min-h-0">
+        <AppSidebar />
+        <ShellMain chromeLabel={chromeLabel} />
+      </div>
+    )
+  }
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div ref={containerRef} className="flex min-w-0 flex-1 overflow-hidden">
-          <main className="flex-1 min-w-0 overflow-auto">
-            <Outlet />
-          </main>
-          {showPanel && (
-            <>
-              <div
-                className="w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary"
-                onMouseDown={startDrag}
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize chat panel"
-              />
-              <div
-                ref={chatPanelRef}
-                className="h-full shrink-0 overflow-hidden"
-                style={{ width: `${chatPanelWidth || CHAT_DEFAULT_WIDTH}%` }}
-              >
-                <ChatContainer variant="panel" />
-              </div>
-            </>
-          )}
-        </div>
+    <ResizablePanelGroup className="h-full w-full min-h-0" orientation="horizontal">
+      <ResizablePanel
+        panelRef={sidebarPanelRef}
+        id="app-shell-sidebar"
+        collapsible
+        collapsedSize={0}
+        defaultSize={desktopSidebarWidth}
+        minSize={MIN_DESKTOP_SIDEBAR_WIDTH}
+        maxSize={MAX_DESKTOP_SIDEBAR_WIDTH}
+        groupResizeBehavior="preserve-pixel-size"
+        className="min-w-0"
+        onResize={(panelSize) => {
+          if (panelSize.inPixels <= 0) {
+            return
+          }
+
+          setDesktopSidebarWidth(persistDesktopSidebarWidth(panelSize.inPixels))
+        }}
+      >
+        <aside
+          className="flex h-full min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground"
+          data-testid="desktop-sidebar"
+        >
+          {open ? <AppSidebarContent /> : null}
+        </aside>
+      </ResizablePanel>
+      <ResizableHandle
+        withHandle
+        disabled={!open}
+        className={!open ? "hidden" : "transition-colors hover:bg-sidebar-accent"}
+      />
+      <ResizablePanel id="app-shell-main" minSize={0}>
+        <ShellMain chromeLabel={chromeLabel} />
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  )
+}
+
+function ShellMain({ chromeLabel }: { chromeLabel: string }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur">
+        <SidebarTrigger aria-label={chromeLabel} data-testid="shell-sidebar-trigger" />
       </div>
-    </SidebarProvider>
+      <main className="min-h-0 flex-1 overflow-auto">
+        <Outlet />
+      </main>
+    </div>
   )
 }

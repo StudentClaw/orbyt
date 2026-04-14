@@ -4,9 +4,18 @@ import * as migration002 from "./002-orchestration-runtime.js"
 import * as migration003 from "./003-secure-canvas-credentials.js"
 import * as migration004 from "./004-onboarding-expansion.js"
 import * as migration005 from "./005-chat-workspaces.js"
-import * as migration006 from "./006-skill-turns.js"
+import * as migration006 from "./006-provider-runtime-state-repair.js"
+import * as migration007 from "./007-provider-runtime-session-cwd.js"
 
-const migrations = [migration001, migration002, migration003, migration004, migration005, migration006]
+const migrations = [
+  migration001,
+  migration002,
+  migration003,
+  migration004,
+  migration005,
+  migration006,
+  migration007,
+]
 
 export function runMigrations(db: Database): void {
   db.run(`
@@ -20,12 +29,19 @@ export function runMigrations(db: Database): void {
     .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
     .get()?.version ?? 0
 
+  const isDuplicateColumn = (error: unknown): boolean =>
+    error instanceof Error && error.message.includes("duplicate column name")
+
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
       db.transaction(() => {
         const statements = migration.up.split(";").filter((s) => s.trim())
         for (const stmt of statements) {
-          db.run(stmt)
+          try {
+            db.run(stmt)
+          } catch (error) {
+            if (!isDuplicateColumn(error)) throw error
+          }
         }
         db.run("INSERT INTO schema_version (version) VALUES (?)", [migration.version])
       })()

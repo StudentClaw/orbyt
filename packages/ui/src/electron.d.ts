@@ -1,11 +1,19 @@
-import type { DesktopBootstrap } from "@student-claw/contracts"
+import type {
+  DesktopBootstrap,
+  IpcChannel,
+  IpcEventPayloadMap,
+  IpcInvokeArgsMap,
+  IpcInvokeResultMap,
+} from "@student-claw/contracts"
+
+type InvokableChannel = keyof IpcInvokeArgsMap & keyof IpcInvokeResultMap
 
 interface ElectronAPI {
   getBootstrap: () => Promise<DesktopBootstrap | null>
   codexAuthStart: () => Promise<{ status: "connected" | "failed"; error?: string }>
-  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
-  send: (channel: string, ...args: unknown[]) => void
-  on: (channel: string, callback: (...args: unknown[]) => void) => () => void
+  invoke: <T extends InvokableChannel>(channel: T, ...args: IpcInvokeArgsMap[T]) => Promise<IpcInvokeResultMap[T]>
+  send: (channel: IpcChannel, ...args: unknown[]) => void
+  on: <T extends keyof IpcEventPayloadMap>(channel: T, callback: (payload: IpcEventPayloadMap[T]) => void) => () => void
 }
 
 declare global {

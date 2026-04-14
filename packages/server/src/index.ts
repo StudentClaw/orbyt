@@ -1,6 +1,9 @@
 import { Effect, Layer } from "effect"
+import { CodexCli, CodexCliLive } from "./ai/CodexCli.js"
+import { ProviderRuntimeStoreLive } from "./ai/ProviderRuntimeStore.js"
 import { ConfigService, ConfigServiceLive } from "./config/ConfigService.js"
 import { Database, DatabaseLive } from "./db/Database.js"
+import { PluginGatewayLive } from "./mcp/PluginGateway.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
@@ -17,7 +20,21 @@ const CoreLive = Layer.mergeAll(
   SkillResolverLive,
 )
 
+const RuntimeStoreLive = ProviderRuntimeStoreLive.pipe(Layer.provideMerge(CoreLive))
+const GatewayLive = PluginGatewayLive.pipe(Layer.provideMerge(CoreLive))
+
+const ProviderLive = Layer.mergeAll(
+  RuntimeStoreLive,
+  GatewayLive,
+  CodexCliLive.pipe(
+    Layer.provideMerge(CoreLive),
+    Layer.provideMerge(RuntimeStoreLive),
+    Layer.provideMerge(GatewayLive),
+  ),
+)
+
 const OrchestrationLive = OrchestrationServiceLive.pipe(
+  Layer.provideMerge(ProviderLive),
   Layer.provideMerge(CoreLive),
 )
 
@@ -45,6 +62,7 @@ const program = Effect.gen(function* () {
   const db = yield* Database
   const readiness = yield* ServerReadiness
   yield* OrchestrationService
+  const codex = yield* CodexCli
   const ws = yield* WebSocketServerService
 
   readiness.markReady()
@@ -55,11 +73,15 @@ const program = Effect.gen(function* () {
   const shutdown = () => {
     writeStdout("")
     writeStdout("Shutting down...")
-    db.close()
-    ws.close().then(() => {
-      writeStdout("Server stopped.")
-      process.exit(0)
-    })
+    codex.shutdown()
+      .catch(() => undefined)
+      .finally(() => {
+        db.close()
+        ws.close().then(() => {
+          writeStdout("Server stopped.")
+          process.exit(0)
+        })
+      })
   }
 
   process.on("SIGINT", shutdown)

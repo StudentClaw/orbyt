@@ -21,6 +21,9 @@ const baseConfig: ServerConfig = {
     providerRuntime: true,
     desktopBootstrap: true,
   },
+  featureFlags: {
+    pluginSystem: false,
+  },
 }
 
 describe("serverState", () => {
@@ -78,6 +81,9 @@ describe("serverState", () => {
           wsAuthToken: "a".repeat(64),
           appVersion: "0.1.0",
           platform: "test",
+          featureFlags: {
+            pluginSystem: false,
+          },
         },
         connectedAt: "2026-04-09T12:00:00.000Z",
       },

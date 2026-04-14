@@ -49,7 +49,7 @@ describe("CanvasCredentialStep", () => {
     const urlInput = screen.getByTestId("canvas-url-input")
     const tokenInput = screen.getByTestId("canvas-token-input")
 
-    await userEvent.type(urlInput, "https://myschool.instructure.com")
+    await userEvent.type(urlInput, "https://canvas.socccd.edu/")
     await userEvent.type(tokenInput, "a".repeat(20))
     await userEvent.click(screen.getByTestId("canvas-validate-btn"))
 

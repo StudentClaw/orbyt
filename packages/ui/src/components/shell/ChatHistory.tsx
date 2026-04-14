@@ -6,32 +6,39 @@ import {
   ArrowDown01Icon,
   Delete01Icon,
   FolderAddIcon,
+  MoreHorizontalCircle01Icon,
 } from "@hugeicons/core-free-icons"
 import { IpcChannel } from "@student-claw/contracts"
 import type { OrchestrationThread } from "@student-claw/contracts"
 import {
-  useChatUiActions,
   useOrchestrationActions,
   useRuntimeConnectionStatus,
   useRuntimeOrchestrationSnapshot,
-  useRuntimeSelectedThreadId,
-  useRuntimeSelectedWorkspaceId,
 } from "@/hooks/useAppRuntime"
 import { sortThreadsByRecency } from "@/hooks/chat-model"
-import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
+import { resolveChatRouteSelection } from "@/lib/chatRoutes"
 import {
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarMenuAction,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const COLLAPSED_WORKSPACE_STORAGE_KEY = "student-claw:chat-collapsed-workspaces"
+const SEEN_THREAD_TURNS_STORAGE_KEY = "student-claw:chat-seen-thread-turns"
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -65,16 +72,11 @@ function persistCollapsedWorkspaceIds(ids: Set<string>): void {
   }
 
   try {
-    window.localStorage.setItem(
-      COLLAPSED_WORKSPACE_STORAGE_KEY,
-      JSON.stringify([...ids]),
-    )
+    window.localStorage.setItem(COLLAPSED_WORKSPACE_STORAGE_KEY, JSON.stringify([...ids]))
   } catch {
     // Ignore localStorage failures to avoid breaking the sidebar.
   }
 }
-
-const SEEN_THREAD_TURNS_STORAGE_KEY = "student-claw:chat-seen-thread-turns"
 
 function readSeenThreadTurns(): Map<string, string | null> {
   if (typeof window === "undefined") {
@@ -144,38 +146,30 @@ export function ChatHistory() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const navigate = useNavigate()
   const snapshot = useRuntimeOrchestrationSnapshot()
-  const selectedWorkspaceId = useRuntimeSelectedWorkspaceId()
-  const selectedThreadId = useRuntimeSelectedThreadId()
   const connectionStatus = useRuntimeConnectionStatus()
   const {
     createWorkspace,
     relinkWorkspace,
     deleteWorkspace,
     createThread,
+    renameThread,
+    deleteThread,
   } = useOrchestrationActions()
-  const { openPanel, selectWorkspace, selectChatTarget, clearSelection } = useChatUiActions()
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(readCollapsedWorkspaceIds)
   const [seenThreadTurns, setSeenThreadTurns] = useState<Map<string, string | null>>(readSeenThreadTurns)
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null)
+  const [busyThreadId, setBusyThreadId] = useState<string | null>(null)
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState("")
   const [addingFolder, setAddingFolder] = useState(false)
-  const [folderActionError, setFolderActionError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const routeSelection = resolveChatRouteSelection(pathname)
-  const isOnChatRoute = isChatPath(pathname)
-  const effectiveSelection = isOnChatRoute
-    ? routeSelection
-    : {
-        workspaceId: selectedWorkspaceId,
-        threadId: selectedThreadId,
-      }
+  const effectiveSelection = resolveChatRouteSelection(pathname)
 
   const workspaces = useMemo(() => {
-    return [...(snapshot?.workspaces ?? [])].sort((left, right) => {
-      if (left.kind !== right.kind) {
-        return left.kind === "filesystem" ? -1 : 1
-      }
-      return left.name.localeCompare(right.name)
-    })
+    return [...(snapshot?.workspaces ?? [])]
+      .filter((workspace) => workspace.kind === "filesystem")
+      .sort((left, right) => left.name.localeCompare(right.name))
   }, [snapshot?.workspaces])
 
   const threadsByWorkspaceId = useMemo(() => {
@@ -215,20 +209,30 @@ export function ChatHistory() {
     })
   }, [])
 
-  // Auto-mark the currently selected thread as seen when its currentTurnId changes
-  // (the user is watching it, so any new turn is immediately "seen").
   useEffect(() => {
     if (!effectiveSelection.threadId) {
       return
     }
 
-    const selectedThread = snapshot?.threads.find((t) => t.id === effectiveSelection.threadId)
+    const selectedThread = snapshot?.threads.find((thread) => thread.id === effectiveSelection.threadId)
     if (!selectedThread) {
       return
     }
 
     markThreadSeen(selectedThread.id, selectedThread.currentTurnId)
   }, [effectiveSelection.threadId, snapshot?.threads, markThreadSeen])
+
+  useEffect(() => {
+    if (!editingThreadId) {
+      return
+    }
+
+    const threadStillExists = snapshot?.threads.some((thread) => thread.id === editingThreadId) ?? false
+    if (!threadStillExists) {
+      setEditingThreadId(null)
+      setEditingTitle("")
+    }
+  }, [editingThreadId, snapshot?.threads])
 
   const toggleWorkspaceExpanded = useCallback((workspaceId: string) => {
     setCollapsedIds((() => {
@@ -255,32 +259,20 @@ export function ChatHistory() {
   }, [])
 
   const focusWorkspace = useCallback(async (workspaceId: string) => {
-    if (isOnChatRoute) {
-      await navigate({
-        to: "/chat/$workspaceId",
-        params: { workspaceId },
-      })
-      return
-    }
-
-    selectWorkspace(workspaceId)
-    openPanel()
-  }, [isOnChatRoute, navigate, openPanel, selectWorkspace])
+    await navigate({
+      to: "/chat/$workspaceId",
+      params: { workspaceId },
+    })
+  }, [navigate])
 
   const focusThread = useCallback(async (workspaceId: string, threadId: string, currentTurnId?: string | null) => {
     markThreadSeen(threadId, currentTurnId ?? null)
 
-    if (isOnChatRoute) {
-      await navigate({
-        to: "/chat/$workspaceId/$threadId",
-        params: { workspaceId, threadId },
-      })
-      return
-    }
-
-    selectChatTarget(workspaceId, threadId)
-    openPanel()
-  }, [isOnChatRoute, markThreadSeen, navigate, openPanel, selectChatTarget])
+    await navigate({
+      to: "/chat/$workspaceId/$threadId",
+      params: { workspaceId, threadId },
+    })
+  }, [markThreadSeen, navigate])
 
   const handleCreateThread = useCallback(async (workspaceId: string, seedTitle = "New chat") => {
     const threadId = await createThread(workspaceId, seedTitle)
@@ -288,13 +280,13 @@ export function ChatHistory() {
   }, [createThread, focusThread])
 
   const handleAddFolder = useCallback(async () => {
-    setFolderActionError(null)
+    setActionError(null)
 
     let pickedPath: string | null
     try {
       pickedPath = await pickFolder()
     } catch (error) {
-      setFolderActionError(
+      setActionError(
         getErrorMessage(error, "Failed to open the folder picker. Restart the desktop app and try again."),
       )
       return
@@ -309,22 +301,20 @@ export function ChatHistory() {
       const workspaceId = await createWorkspace(pickedPath)
       await focusWorkspace(workspaceId)
     } catch (error) {
-      setFolderActionError(
-        getErrorMessage(error, "Failed to add the selected folder. Try again."),
-      )
+      setActionError(getErrorMessage(error, "Failed to add the selected folder. Try again."))
     } finally {
       setAddingFolder(false)
     }
   }, [createWorkspace, focusWorkspace, pickFolder])
 
   const handleRelinkWorkspace = useCallback(async (workspaceId: string) => {
-    setFolderActionError(null)
+    setActionError(null)
 
     let pickedPath: string | null
     try {
       pickedPath = await pickFolder()
     } catch (error) {
-      setFolderActionError(
+      setActionError(
         getErrorMessage(error, "Failed to open the folder picker. Restart the desktop app and try again."),
       )
       return
@@ -337,7 +327,7 @@ export function ChatHistory() {
     setBusyWorkspaceId(workspaceId)
     try {
       await relinkWorkspace(workspaceId, pickedPath)
-      if (effectiveSelection.workspaceId === workspaceId && isOnChatRoute) {
+      if (effectiveSelection.workspaceId === workspaceId) {
         await navigate({
           to: effectiveSelection.threadId
             ? "/chat/$workspaceId/$threadId"
@@ -348,16 +338,13 @@ export function ChatHistory() {
         })
       }
     } catch (error) {
-      setFolderActionError(
-        getErrorMessage(error, "Failed to relink the folder. Try again."),
-      )
+      setActionError(getErrorMessage(error, "Failed to relink the folder. Try again."))
     } finally {
       setBusyWorkspaceId(null)
     }
   }, [
     effectiveSelection.threadId,
     effectiveSelection.workspaceId,
-    isOnChatRoute,
     navigate,
     pickFolder,
     relinkWorkspace,
@@ -380,20 +367,111 @@ export function ChatHistory() {
     try {
       await deleteWorkspace(workspaceId)
       if (effectiveSelection.workspaceId === workspaceId) {
-        if (isOnChatRoute) {
-          await navigate({ to: "/chat" })
-        } else {
-          clearSelection()
-        }
+        await navigate({ to: "/chat" })
       }
     } finally {
       setBusyWorkspaceId(null)
     }
-  }, [clearSelection, deleteWorkspace, effectiveSelection.workspaceId, isOnChatRoute, navigate])
+  }, [deleteWorkspace, effectiveSelection.workspaceId, navigate])
 
   const handleWorkspaceClick = useCallback(async (workspaceId: string) => {
     await focusWorkspace(workspaceId)
   }, [focusWorkspace])
+
+  const startThreadRename = useCallback((thread: OrchestrationThread) => {
+    setActionError(null)
+    setEditingThreadId(thread.id)
+    setEditingTitle(thread.title)
+  }, [])
+
+  const cancelThreadRename = useCallback(() => {
+    setEditingThreadId(null)
+    setEditingTitle("")
+  }, [])
+
+  const handleRenameThread = useCallback(async (
+    threadId: string,
+    workspaceId: string,
+  ) => {
+    const normalizedTitle = editingTitle.trim()
+    if (normalizedTitle.length === 0) {
+      setActionError("Thread title cannot be empty.")
+      return
+    }
+
+    const existingThread = snapshot?.threads.find((thread) => thread.id === threadId)
+    if (!existingThread) {
+      cancelThreadRename()
+      return
+    }
+
+    if (existingThread.title === normalizedTitle) {
+      cancelThreadRename()
+      return
+    }
+
+    setActionError(null)
+    setBusyThreadId(threadId)
+    try {
+      await renameThread(threadId, normalizedTitle)
+      if (effectiveSelection.threadId === threadId) {
+        await navigate({
+          to: "/chat/$workspaceId/$threadId",
+          params: { workspaceId, threadId },
+        })
+      }
+      cancelThreadRename()
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Failed to rename the chat. Try again."))
+    } finally {
+      setBusyThreadId(null)
+    }
+  }, [
+    cancelThreadRename,
+    editingTitle,
+    effectiveSelection.threadId,
+    navigate,
+    renameThread,
+    snapshot?.threads,
+  ])
+
+  const handleDeleteThread = useCallback(async (
+    threadId: string,
+    workspaceId: string,
+    title: string,
+  ) => {
+    const confirmed = window.confirm(
+      `Delete "${title}" and remove its message history from Student Claw?`,
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setActionError(null)
+    setBusyThreadId(threadId)
+    try {
+      await deleteThread(threadId)
+      if (editingThreadId === threadId) {
+        cancelThreadRename()
+      }
+      if (effectiveSelection.threadId === threadId) {
+        await navigate({
+          to: "/chat/$workspaceId",
+          params: { workspaceId },
+        })
+      }
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Failed to delete the chat. Try again."))
+    } finally {
+      setBusyThreadId(null)
+    }
+  }, [
+    cancelThreadRename,
+    deleteThread,
+    editingThreadId,
+    effectiveSelection.threadId,
+    navigate,
+  ])
 
   const canCreateChat = connectionStatus.phase === "connected"
 
@@ -410,8 +488,8 @@ export function ChatHistory() {
         <span className="sr-only">Add folder</span>
       </SidebarGroupAction>
       <SidebarGroupContent>
-        {folderActionError && (
-          <p className="px-2 pb-2 text-xs text-destructive">{folderActionError}</p>
+        {actionError && (
+          <p className="px-2 pb-2 text-xs text-destructive">{actionError}</p>
         )}
         {workspaces.length === 0 ? (
           <p className="px-2 py-1 text-xs text-muted-foreground">No folders yet</p>
@@ -422,8 +500,7 @@ export function ChatHistory() {
               const isCollapsed = collapsedWorkspaceIds.has(workspace.id)
               const isWorkspaceActive =
                 effectiveSelection.workspaceId === workspace.id && effectiveSelection.threadId === null
-              const isWorkspaceMissing =
-                workspace.kind === "filesystem" && workspace.availability === "missing"
+              const isWorkspaceMissing = workspace.availability === "missing"
               const isWorkspaceBusy = busyWorkspaceId === workspace.id
 
               return (
@@ -445,7 +522,7 @@ export function ChatHistory() {
                     </Button>
                     <button
                       type="button"
-                      title={workspace.kind === "filesystem" ? workspace.rootPath : workspace.name}
+                      title={workspace.rootPath}
                       className={`flex min-w-0 flex-1 flex-col rounded-md px-2 py-1 text-left transition-colors ${
                         isWorkspaceActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/60"
                       }`}
@@ -510,24 +587,97 @@ export function ChatHistory() {
                           {workspaceThreads.map((thread) => {
                             const isThreadSelected = effectiveSelection.threadId === thread.id
                             const indicator = getThreadIndicator(thread, isThreadSelected, seenThreadTurns)
+                            const isEditingThread = editingThreadId === thread.id
+                            const isThreadBusy = busyThreadId === thread.id
+
                             return (
                               <SidebarMenuItem key={thread.id}>
-                                <SidebarMenuButton
-                                  isActive={isThreadSelected}
-                                  onClick={() => void focusThread(workspace.id, thread.id, thread.currentTurnId)}
-                                  className="flex h-auto items-center gap-2 py-1"
-                                >
-                                  <span className="flex shrink-0 items-center justify-center size-3">
-                                    {indicator === "spinner" && <Spinner className="size-3" />}
-                                    {indicator === "green-dot" && (
-                                      <span className="block size-2 rounded-full bg-green-500" />
-                                    )}
-                                    {indicator === "gray-dot" && (
-                                      <span className="block size-2 rounded-full bg-muted-foreground/40" />
-                                    )}
-                                  </span>
-                                  <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-                                </SidebarMenuButton>
+                                {isEditingThread ? (
+                                  <form
+                                    className="rounded-lg bg-sidebar-accent/60 p-2"
+                                    onSubmit={(event) => {
+                                      event.preventDefault()
+                                      void handleRenameThread(thread.id, workspace.id)
+                                    }}
+                                  >
+                                    <Input
+                                      value={editingTitle}
+                                      onChange={(event) => setEditingTitle(event.target.value)}
+                                      autoFocus
+                                      disabled={isThreadBusy}
+                                      aria-label={`Rename ${thread.title}`}
+                                      className="h-8 bg-background"
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Escape") {
+                                          event.preventDefault()
+                                          cancelThreadRename()
+                                        }
+                                      }}
+                                    />
+                                    <div className="mt-2 flex justify-end gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7"
+                                        onClick={cancelThreadRename}
+                                        disabled={isThreadBusy}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        type="submit"
+                                        size="sm"
+                                        className="h-7"
+                                        disabled={isThreadBusy}
+                                      >
+                                        Save
+                                      </Button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <>
+                                    <SidebarMenuButton
+                                      isActive={isThreadSelected}
+                                      onClick={() => void focusThread(workspace.id, thread.id, thread.currentTurnId)}
+                                      className="flex h-auto items-center gap-2 py-1 pr-9"
+                                      disabled={isThreadBusy}
+                                    >
+                                      <span className="flex size-3 shrink-0 items-center justify-center">
+                                        {indicator === "spinner" && <Spinner className="size-3" />}
+                                        {indicator === "green-dot" && (
+                                          <span className="block size-2 rounded-full bg-green-500" />
+                                        )}
+                                        {indicator === "gray-dot" && (
+                                          <span className="block size-2 rounded-full bg-muted-foreground/40" />
+                                        )}
+                                      </span>
+                                      <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+                                    </SidebarMenuButton>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <SidebarMenuAction
+                                          showOnHover
+                                          aria-label={`Open actions for ${thread.title}`}
+                                          disabled={isThreadBusy}
+                                        >
+                                          <HugeiconsIcon icon={MoreHorizontalCircle01Icon} size={14} />
+                                        </SidebarMenuAction>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onSelect={() => startThreadRename(thread)}>
+                                          Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onSelect={() => void handleDeleteThread(thread.id, workspace.id, thread.title)}
+                                        >
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </>
+                                )}
                               </SidebarMenuItem>
                             )
                           })}

@@ -18,13 +18,19 @@ import {
   type OnboardingSnapshot,
   type PlannedSession,
   type RelinkWorkspaceResult,
+  type RetryProviderInitializeResult,
   type SendTurnResult,
+  type StartProviderAuthResult,
   type SetAiAuthStatusParams,
   type SetOverallStatusParams,
   type SetRoutinesParams,
   type SetStepStatusParams,
   type StudentPreference,
   type UpdatePreferencesParams,
+} from "@student-claw/contracts"
+import type {
+  DeleteThreadResult,
+  RenameThreadResult,
 } from "@student-claw/contracts"
 import { WsTransport } from "./wsTransport"
 
@@ -95,6 +101,8 @@ export interface WsRpcClient {
     readonly relinkWorkspace: (workspaceId: string, rootPath: string) => Promise<RelinkWorkspaceResult>
     readonly deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceResult>
     readonly createThread: (workspaceId: string, title?: string) => Promise<CreateThreadResult>
+    readonly renameThread: (threadId: string, title: string) => Promise<RenameThreadResult>
+    readonly deleteThread: (threadId: string) => Promise<DeleteThreadResult>
     readonly sendTurn: (threadId: string, content: string) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
@@ -103,6 +111,8 @@ export interface WsRpcClient {
     ) => () => void
   }
   readonly provider: {
+    readonly startAuth: () => Promise<StartProviderAuthResult>
+    readonly retryInitialize: () => Promise<RetryProviderInitializeResult>
     readonly onRuntimeEvent: (
       listener: (event: ProviderRuntimeEvent, sequence: number) => void,
       options?: StreamSubscriptionOptions,
@@ -198,6 +208,13 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
         RPC_METHODS.ORCHESTRATION_CREATE_THREAD,
         title ? { workspaceId, title } : { workspaceId },
       ),
+    renameThread: async (threadId, title) =>
+      transport.request<RenameThreadResult>(RPC_METHODS.ORCHESTRATION_RENAME_THREAD, {
+        threadId,
+        title,
+      }),
+    deleteThread: async (threadId) =>
+      transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
     sendTurn: async (threadId, content) =>
       transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, { threadId, content }),
     interruptTurn: async (threadId) =>
@@ -216,6 +233,9 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
 
 function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
   return {
+    startAuth: () => transport.request<StartProviderAuthResult>(RPC_METHODS.PROVIDER_START_AUTH, {}),
+    retryInitialize: () =>
+      transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
     onRuntimeEvent: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.PROVIDER_RUNTIME,
@@ -235,7 +255,7 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
     onSyncProgress: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.CANVAS_SYNC_PROGRESS,
-        RPC_METHODS.CANVAS_SYNC,
+        RPC_METHODS.CANVAS_SUBSCRIBE_SYNC_PROGRESS,
         (push) => {
           listener(push.data as CanvasSyncProgressEvent)
         },
@@ -250,7 +270,7 @@ function createDashboardApi(transport: WsTransport): WsRpcClient["dashboard"] {
     onUpdate: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.DASHBOARD_UPDATE,
-        RPC_METHODS.DASHBOARD_REFRESH,
+        RPC_METHODS.DASHBOARD_SUBSCRIBE_UPDATES,
         (push) => {
           listener(push.data as DashboardUpdateEvent)
         },
@@ -267,7 +287,7 @@ function createPlannerApi(transport: WsTransport): WsRpcClient["planner"] {
     onSessionCheckIn: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.PLANNER_SESSION_CHECK_IN,
-        RPC_METHODS.PLANNER_CHECK_IN,
+        RPC_METHODS.PLANNER_SUBSCRIBE_CHECK_INS,
         (push) => {
           listener(push.data as PlannerSessionCheckInEvent)
         },

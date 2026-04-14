@@ -1,0 +1,52 @@
+import {
+  ExtensionManifest,
+  parseExtensionManifestSync,
+  type ExtensionManifest as CanvasManifest,
+} from "@student-claw/contracts"
+
+export const CanvasManifestSchema = ExtensionManifest
+
+export type { CanvasManifest }
+
+export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
+  id: "canvas-mcp",
+  name: "Canvas Assistant",
+  description: "Connects to Canvas coursework, grades, announcements, modules, and pages",
+  version: "0.1.0",
+  transport: {
+    type: "local_stdio",
+    entry: "dist/index.js",
+  },
+  permissions: ["assignments", "grades", "announcements", "modules", "pages"],
+  auth: {
+    type: "manual_token",
+    instructions:
+      "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
+    fields: [
+      {
+        key: "baseUrl",
+        label: "Canvas base URL",
+        type: "base_url",
+        required: true,
+        placeholder: "https://myschool.instructure.com",
+      },
+      {
+        key: "token",
+        label: "Canvas access token",
+        type: "secret",
+        required: true,
+        placeholder: "Paste your Canvas access token",
+      },
+    ],
+  },
+  tools: [
+    { name: "get_courses", description: "List Canvas courses available to the student." },
+    { name: "get_coursework", description: "List coursework items across Canvas courses." },
+    { name: "get_coursework_detail", description: "Fetch detailed information for a single coursework item." },
+    { name: "get_grades", description: "Fetch current Canvas grade information." },
+    { name: "get_announcements", description: "List recent Canvas announcements." },
+    { name: "sync_now", description: "Trigger an immediate Canvas refresh read." },
+  ],
+  author: "student-claw",
+  homepage: "https://github.com/StudentClaw/student-claw",
+})

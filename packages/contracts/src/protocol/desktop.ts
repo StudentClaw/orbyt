@@ -1,4 +1,5 @@
 import { Schema } from "@effect/schema"
+import { FeatureFlags } from "./feature-flags.js"
 
 /**
  * Desktop-provided bootstrap data used to initialize the renderer runtime.
@@ -8,6 +9,7 @@ export const DesktopBootstrap = Schema.Struct({
   wsAuthToken: Schema.String,
   appVersion: Schema.String,
   platform: Schema.String,
+  featureFlags: FeatureFlags,
 })
 
 /**

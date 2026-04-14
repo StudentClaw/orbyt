@@ -17,3 +17,6 @@ export type SessionId = Schema.Schema.Type<typeof SessionId>
 
 export const ActivityEntryId = Schema.String.pipe(Schema.brand("ActivityEntryId"))
 export type ActivityEntryId = Schema.Schema.Type<typeof ActivityEntryId>
+
+export const AnnouncementId = Schema.String.pipe(Schema.brand("AnnouncementId"))
+export type AnnouncementId = Schema.Schema.Type<typeof AnnouncementId>

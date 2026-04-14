@@ -72,9 +72,18 @@ const baseSnapshot: OrchestrationSnapshot = {
       status: "streaming",
       startedAt: "2026-04-09T00:01:00.000Z",
       completedAt: null,
+      skill: null,
     },
   ],
   providerStatus: "streaming",
+  providerRuntime: {
+    adapter: "codex",
+    status: "streaming",
+    authState: "authenticated",
+    lastError: null,
+    queuedTurnCount: 0,
+    lastUpdatedAt: "2026-04-09T00:01:00.000Z",
+  },
   ready: true,
   lastSequence: 2,
 }

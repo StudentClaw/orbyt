@@ -4,11 +4,9 @@ import { render } from "@testing-library/react"
 const hookMocks = vi.hoisted(() => ({
   onboardingComplete: false,
   hydrationComplete: true,
-  chatPanelOpen: false,
-  chatPanelWidth: 33,
   pathname: "/",
   navigateFn: vi.fn(),
-  setPanelWidth: vi.fn(),
+  isMobile: false,
 }))
 
 vi.mock("@tanstack/react-router", () => ({
@@ -20,25 +18,17 @@ vi.mock("@tanstack/react-router", () => ({
 }))
 
 vi.mock("@/hooks/useAppRuntime", () => ({
-  useRuntimeChatPanelOpen: () => hookMocks.chatPanelOpen,
-  useRuntimeChatPanelWidth: () => hookMocks.chatPanelWidth,
-  useChatUiActions: () => ({
-    setPanelWidth: hookMocks.setPanelWidth,
-  }),
   useIsOnboardingComplete: () => hookMocks.onboardingComplete,
   useIsServerHydrationComplete: () => hookMocks.hydrationComplete,
 }))
 
-vi.mock("@/components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}))
-
-vi.mock("@/components/chat/ChatContainer", () => ({
-  ChatContainer: () => <div data-testid="chat-container" />,
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => hookMocks.isMobile,
 }))
 
 vi.mock("@/components/shell/AppSidebar", () => ({
   AppSidebar: () => <div data-testid="app-sidebar" />,
+  AppSidebarContent: () => <div data-testid="app-sidebar-content" />,
 }))
 
 vi.mock("@/hooks/useNativeNotification", () => ({
@@ -52,6 +42,7 @@ describe("onboarding guard", () => {
     hookMocks.onboardingComplete = false
     hookMocks.hydrationComplete = true
     hookMocks.pathname = "/"
+    hookMocks.isMobile = false
     hookMocks.navigateFn.mockClear()
   })
 

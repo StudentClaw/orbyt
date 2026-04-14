@@ -1,0 +1,24 @@
+{
+  "id": "template-mcp",
+  "name": "Template MCP",
+  "description": "Starter extension used to validate discovery, registry rendering, and future lifecycle wiring.",
+  "version": "0.1.0",
+  "transport": {
+    "type": "local_stdio",
+    "entry": "dist/index.js"
+  },
+  "permissions": [
+    "template"
+  ],
+  "auth": {
+    "type": "none"
+  },
+  "tools": [
+    {
+      "name": "template_ping",
+      "description": "Placeholder tool metadata for registry and lifecycle testing."
+    }
+  ],
+  "author": "student-claw",
+  "homepage": "https://github.com/StudentClaw/student-claw"
+}

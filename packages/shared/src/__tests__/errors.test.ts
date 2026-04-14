@@ -4,6 +4,9 @@ import {
   CanvasApiError,
   CodexSpawnError,
   CodexTimeoutError,
+  ExtensionManifestValidationError,
+  PluginAuthError,
+  PluginRegistryMismatchError,
   PluginStartError,
   PluginToolCallError,
   VaultDecryptError,
@@ -42,9 +45,31 @@ describe("AI errors", () => {
 })
 
 describe("Plugin errors", () => {
+  test("ExtensionManifestValidationError has correct _tag and issues", () => {
+    const err = new ExtensionManifestValidationError({
+      message: "Manifest invalid",
+      pluginId: "canvas-mcp",
+      issues: ["transport.type must be local_stdio"],
+    })
+    expect(err._tag).toBe("ExtensionManifestValidationError")
+    expect(err.issues).toEqual(["transport.type must be local_stdio"])
+  })
+
   test("PluginStartError has correct _tag and pluginId", () => {
     const err = new PluginStartError({ message: "Start failed", pluginId: "canvas-mcp" })
     expect(err._tag).toBe("PluginStartError")
+    expect(err.pluginId).toBe("canvas-mcp")
+  })
+
+  test("PluginAuthError has correct _tag and pluginId", () => {
+    const err = new PluginAuthError({ message: "Auth failed", pluginId: "canvas-mcp" })
+    expect(err._tag).toBe("PluginAuthError")
+    expect(err.pluginId).toBe("canvas-mcp")
+  })
+
+  test("PluginRegistryMismatchError has correct _tag and pluginId", () => {
+    const err = new PluginRegistryMismatchError({ message: "Registry mismatch", pluginId: "canvas-mcp" })
+    expect(err._tag).toBe("PluginRegistryMismatchError")
     expect(err.pluginId).toBe("canvas-mcp")
   })
 
@@ -92,7 +117,10 @@ describe("Error discrimination", () => {
       new CanvasApiError({ message: "", statusCode: 0 }),
       new CodexSpawnError({ message: "" }),
       new CodexTimeoutError({ message: "", timeoutMs: 0 }),
+      new ExtensionManifestValidationError({ message: "", issues: [] }),
       new PluginStartError({ message: "", pluginId: "" }),
+      new PluginAuthError({ message: "", pluginId: "" }),
+      new PluginRegistryMismatchError({ message: "", pluginId: "" }),
       new PluginToolCallError({ message: "", toolName: "" }),
       new VaultDecryptError({ message: "" }),
       new MemoryWriteError({ message: "" }),

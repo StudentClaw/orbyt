@@ -4,9 +4,20 @@ import type {
   OrchestrationThread,
   OrchestrationTurn,
   ProviderRuntimeEvent,
+  ProviderRuntimeState,
 } from "@student-claw/contracts"
+import type { ToolCallInfo } from "@/hooks/chat-model"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
+
+const FALLBACK_PROVIDER_RUNTIME: ProviderRuntimeState = {
+  adapter: "stub",
+  status: "idle",
+  authState: "unknown",
+  lastError: null,
+  queuedTurnCount: 0,
+  lastUpdatedAt: new Date().toISOString(),
+}
 
 const orchestrationSnapshotAtom = createAtom<OrchestrationSnapshot | null>(
   "orchestration-snapshot",
@@ -16,6 +27,15 @@ const orchestrationSnapshotAtom = createAtom<OrchestrationSnapshot | null>(
 const providerRuntimeEventsAtom = createAtom<ReadonlyArray<ProviderRuntimeEvent>>(
   "provider-runtime-events",
   [],
+)
+
+type StoredToolCall = ToolCallInfo & {
+  readonly itemId: string
+}
+
+const providerToolCallsAtom = createAtom<Readonly<Record<string, ReadonlyArray<StoredToolCall>>>>(
+  "provider-tool-calls",
+  {},
 )
 
 export interface ChatUiState {
@@ -89,6 +109,21 @@ function syncChatUiState(snapshot: OrchestrationSnapshot | null): void {
   })
 }
 
+function pruneProviderToolCalls(snapshot: OrchestrationSnapshot | null): void {
+  if (!snapshot) {
+    appAtomRegistry.set(providerToolCallsAtom, {})
+    return
+  }
+
+  const allowedTurnIds = new Set<string>(snapshot.turns.map((turn) => turn.id))
+  const current = appAtomRegistry.get(providerToolCallsAtom)
+  const next = Object.fromEntries(
+    Object.entries(current).filter(([turnId]) => allowedTurnIds.has(turnId)),
+  )
+
+  appAtomRegistry.set(providerToolCallsAtom, next)
+}
+
 function applyTurnEvent(
   current: OrchestrationSnapshot,
   turn: OrchestrationTurn,
@@ -141,6 +176,7 @@ function applyDomainEvent(
             threads: [],
             turns: [],
             providerStatus: "idle",
+            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
             ready: true,
             lastSequence: sequence,
           }
@@ -151,6 +187,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
@@ -169,6 +206,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
@@ -192,9 +230,45 @@ function applyDomainEvent(
             threads: [event.thread],
             turns: [],
             providerStatus: "idle",
+            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
             ready: true,
             lastSequence: sequence,
           }
+    case "thread.updated":
+      if (!current) {
+        return {
+          workspaces: [],
+          threads: [event.thread],
+          turns: [],
+          providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
+          ready: true,
+          lastSequence: sequence,
+        }
+      }
+      return {
+        ...current,
+        threads: current.threads.map((thread) => thread.id === event.thread.id ? event.thread : thread),
+        lastSequence: sequence,
+      }
+    case "thread.deleted":
+      if (!current) {
+        return {
+          workspaces: [],
+          threads: [],
+          turns: [],
+          providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
+          ready: true,
+          lastSequence: sequence,
+        }
+      }
+      return {
+        ...current,
+        threads: current.threads.filter((thread) => thread.id !== event.threadId),
+        turns: current.turns.filter((turn) => turn.threadId !== event.threadId),
+        lastSequence: sequence,
+      }
     case "turn.started":
     case "turn.updated":
     case "turn.completed":
@@ -205,6 +279,7 @@ function applyDomainEvent(
           threads: [],
           turns: [],
           providerStatus: "idle",
+          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
           ready: true,
           lastSequence: sequence,
         }
@@ -219,6 +294,7 @@ export function getOrchestrationSnapshot(): OrchestrationSnapshot | null {
 
 export function setOrchestrationSnapshot(snapshot: OrchestrationSnapshot): void {
   appAtomRegistry.set(orchestrationSnapshotAtom, snapshot)
+  pruneProviderToolCalls(snapshot)
   syncChatUiState(snapshot)
 }
 
@@ -228,6 +304,7 @@ export function applyOrchestrationDomainEvent(
 ): void {
   const nextSnapshot = applyDomainEvent(getOrchestrationSnapshot(), event, sequence)
   appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+  pruneProviderToolCalls(nextSnapshot)
   syncChatUiState(nextSnapshot)
 }
 
@@ -242,10 +319,53 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     return
   }
 
+  if (event.type === "provider.mcpToolCall") {
+    const currentToolCalls = appAtomRegistry.get(providerToolCallsAtom)
+    const existing = currentToolCalls[event.turnId] ?? []
+    const serializedArgs = (() => {
+      try {
+        return JSON.stringify(event.args ?? {}, null, 2)
+      } catch {
+        return "{}"
+      }
+    })()
+    const nextToolCall: StoredToolCall = {
+      itemId: event.itemId,
+      toolName: event.toolName,
+      args: serializedArgs,
+      status: event.status,
+      message: event.message,
+      error: event.error,
+    }
+    const nextForTurn = existing.some((toolCall) => toolCall.itemId === event.itemId)
+      ? existing.map((toolCall) => (toolCall.itemId === event.itemId ? nextToolCall : toolCall))
+      : [...existing, nextToolCall]
+
+    appAtomRegistry.set(providerToolCallsAtom, {
+      ...currentToolCalls,
+      [event.turnId]: nextForTurn,
+    })
+    return
+  }
+
+  if (event.type === "provider.stateChanged") {
+    const nextSnapshot: OrchestrationSnapshot = {
+      ...current,
+      providerStatus: event.state.status,
+      providerRuntime: event.state,
+    }
+    appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    return
+  }
+
   if (event.type === "provider.turnInterrupted") {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "interrupted",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "interrupted",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -255,6 +375,10 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "streaming",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "streaming",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -264,6 +388,10 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
       providerStatus: "idle",
+      providerRuntime: {
+        ...current.providerRuntime,
+        status: "idle",
+      },
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
   }
@@ -341,6 +469,23 @@ export async function createOrchestrationThread(
   return result.threadId
 }
 
+export async function renameOrchestrationThread(
+  client: WsRpcClient,
+  threadId: string,
+  title: string,
+): Promise<string> {
+  const result = await client.orchestration.renameThread(threadId, title)
+  return result.threadId
+}
+
+export async function deleteOrchestrationThread(
+  client: WsRpcClient,
+  threadId: string,
+): Promise<boolean> {
+  const result = await client.orchestration.deleteThread(threadId)
+  return result.deleted
+}
+
 export async function sendOrchestrationTurn(
   client: WsRpcClient,
   threadId: string,
@@ -374,6 +519,10 @@ export function useOrchestrationSnapshot(): OrchestrationSnapshot | null {
 
 export function useProviderRuntimeEvents(): ReadonlyArray<ProviderRuntimeEvent> {
   return useAtomValue(providerRuntimeEventsAtom)
+}
+
+export function useProviderToolCallsByTurnId(): Readonly<Record<string, ReadonlyArray<ToolCallInfo>>> {
+  return useAtomValue(providerToolCallsAtom)
 }
 
 export function getChatUiState(): ChatUiState {
@@ -462,5 +611,6 @@ export function setChatPanelWidth(width: number): void {
 export function resetOrchestrationStateForTests(): void {
   appAtomRegistry.set(orchestrationSnapshotAtom, null)
   appAtomRegistry.set(providerRuntimeEventsAtom, [])
+  appAtomRegistry.set(providerToolCallsAtom, {})
   appAtomRegistry.set(chatUiStateAtom, INITIAL_CHAT_UI_STATE)
 }

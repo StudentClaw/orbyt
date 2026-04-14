@@ -37,6 +37,9 @@ describe("Server lifecycle", () => {
       wsAuthToken: "a".repeat(64),
       appVersion: "0.1.0",
       platform: "test",
+      featureFlags: {
+        pluginSystem: false,
+      },
     }
 
     const result = await healthCheck(
@@ -91,6 +94,9 @@ describe("Server lifecycle", () => {
               wsAuthToken: "b".repeat(64),
               appVersion: "0.1.0",
               platform: "test",
+              featureFlags: {
+                pluginSystem: false,
+              },
             },
           }))
         })

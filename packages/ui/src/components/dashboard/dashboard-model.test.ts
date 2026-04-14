@@ -36,6 +36,7 @@ function makeItem(
     title,
     effectiveDueAt: dueAt,
     sourceType: "assignment",
+    sourceId: "mock-source-id",
     freshnessStatus: "fresh",
   }
 }
