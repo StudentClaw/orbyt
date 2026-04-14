@@ -1,4 +1,5 @@
 import { Schema } from "@effect/schema"
+import { SkillId } from "../schemas/ids.js"
 import { DesktopBootstrap } from "./desktop.js"
 
 /**
@@ -197,6 +198,7 @@ export const OrchestrationTurn = Schema.Struct({
   status: Schema.Literal("pending", "streaming", "interrupted", "completed"),
   startedAt: Schema.String,
   completedAt: Schema.NullOr(Schema.String),
+  skill: Schema.NullOr(Schema.Struct({ id: SkillId, name: Schema.String })),
 })
 
 /**
@@ -275,6 +277,7 @@ export const CreateThreadResult = Schema.Struct({
 export const SendTurnParams = Schema.Struct({
   threadId: ThreadId,
   content: Schema.String.pipe(Schema.maxLength(MAX_TURN_CONTENT_LENGTH)),
+  skillId: Schema.optional(SkillId),
 })
 
 /**

@@ -11,6 +11,21 @@ export function ChatPage() {
   const selection = resolveChatRouteSelection(pathname)
 
   useEffect(() => {
+    if (!snapshot || selection.workspaceId) {
+      return
+    }
+
+    const workspace = snapshot.workspaces[0]
+    if (workspace) {
+      void navigate({
+        to: "/chat/$workspaceId",
+        params: { workspaceId: workspace.id },
+        replace: true,
+      })
+    }
+  }, [navigate, selection.workspaceId, snapshot])
+
+  useEffect(() => {
     if (!snapshot || !selection.workspaceId) {
       return
     }

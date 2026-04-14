@@ -17,6 +17,7 @@ import {
   type RelinkWorkspaceResult,
   type SendTurnResult,
   type ServerConfig,
+  type SkillId,
   type WorkspaceId,
 } from "@student-claw/contracts"
 import { createId, sleepMs } from "@student-claw/shared-runtime"
@@ -27,6 +28,8 @@ import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerR
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
 import { tokenizeStubResponse } from "./StubProvider.js"
+import { SkillResolver, type SkillResolverService } from "../skills/index.js"
+import { buildCanvasContext } from "../skills/CanvasContextBuilder.js"
 
 const LEGACY_WORKSPACE_ID = "workspace_legacy" as WorkspaceId
 
@@ -57,6 +60,8 @@ type TurnRow = {
   status: OrchestrationTurn["status"]
   started_at: string
   completed_at: string | null
+  skill_id: string | null
+  skill_name: string | null
 }
 
 type WorkspaceThreadRow = {
@@ -72,6 +77,8 @@ type TurnWorkRef = {
 
 type WorkItem = TurnWorkRef & {
   readonly content: string
+  readonly skillId: string | null
+  readonly skillName: string | null
 }
 
 type ActiveTurnState = {
@@ -90,6 +97,7 @@ type OrchestrationRuntimeDeps = {
   readonly pushBus: PushBusService
   readonly readiness: ServerReadinessService
   readonly receiptBus: RuntimeReceiptBusService
+  readonly skillResolver: SkillResolverService
   readonly state: OrchestrationRuntimeState
 }
 
@@ -104,7 +112,7 @@ export interface OrchestrationServiceShape {
   readonly relinkWorkspace: (commandId: string, workspaceId: string, rootPath: string) => Promise<RelinkWorkspaceResult>
   readonly deleteWorkspace: (commandId: string, workspaceId: string) => Promise<DeleteWorkspaceResult>
   readonly createThread: (commandId: string, workspaceId: string, title?: string) => Promise<CreateThreadResult>
-  readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
+  readonly sendTurn: (commandId: string, threadId: string, content: string, skillId?: SkillId) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
 }
 
@@ -202,6 +210,9 @@ function mapTurnRow(row: TurnRow): OrchestrationTurn {
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    skill: row.skill_id && row.skill_name
+      ? { id: row.skill_id as SkillId, name: row.skill_name }
+      : null,
   }
 }
 
@@ -280,7 +291,7 @@ function readThread(database: DatabaseService, threadId: string): OrchestrationT
 
 function readTurn(database: DatabaseService, turnId: string): OrchestrationTurn | null {
   const row = database.get<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at, skill_id, skill_name
      FROM orchestration_turns
      WHERE id = ?`,
     [turnId],
@@ -550,7 +561,8 @@ async function processWork(
   try {
     let output = ""
 
-    for (const [index, token] of tokenizeStubResponse(work.content).entries()) {
+    const skillForStub = work.skillId ? { id: work.skillId, name: work.skillName ?? "" } : null
+    for (const [index, token] of tokenizeStubResponse(work.content, skillForStub).entries()) {
       if (deps.state.activeTurns.get(work.turnId)?.interrupted) {
         await completeTurn(deps, work, output, true)
         return
@@ -628,7 +640,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   ).map(mapThreadRow)
 
   const turns = deps.database.query<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at, skill_id, skill_name
      FROM orchestration_turns
      ORDER BY started_at ASC`,
   ).map(mapTurnRow)
@@ -641,7 +653,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
     workspaces,
     threads,
     turns,
-    providerStatus: provider?.status ?? "offline",
+    providerStatus: provider?.status ?? "idle",
     ready: deps.readiness.isReady(),
     lastSequence: deps.pushBus.getLastSequence(),
   }
@@ -872,7 +884,11 @@ async function createThread(
   return { threadId: thread.id }
 }
 
-function buildStreamingTurn(threadId: string, content: string): OrchestrationTurn {
+function buildStreamingTurn(
+  threadId: string,
+  content: string,
+  skill: { id: SkillId; name: string } | null,
+): OrchestrationTurn {
   const now = new Date().toISOString()
   return {
     id: createId("turn") as OrchestrationTurn["id"],
@@ -882,6 +898,7 @@ function buildStreamingTurn(threadId: string, content: string): OrchestrationTur
     status: "streaming",
     startedAt: now,
     completedAt: null,
+    skill,
   }
 }
 
@@ -890,6 +907,7 @@ async function sendTurn(
   commandId: string,
   threadId: string,
   content: string,
+  skillId?: SkillId,
 ): Promise<SendTurnResult> {
   const thread = readThread(deps.database, threadId)
   if (!thread) {
@@ -902,15 +920,29 @@ async function sendTurn(
   }
   assertWorkspaceAcceptsChat(workspace)
 
-  const turn = buildStreamingTurn(threadId, content)
+  let skillMeta: { id: SkillId; name: string } | null = null
+  let enrichedContent = content
+  if (skillId !== undefined) {
+    const resolved = deps.skillResolver.resolve(skillId)
+    if (!resolved) {
+      throw new Error(`Unknown skill: ${skillId}`)
+    }
+    skillMeta = { id: resolved.id, name: resolved.name }
+    if (resolved.contextKey === "canvas") {
+      const canvasContext = buildCanvasContext(deps.database, new Date())
+      enrichedContent = `${canvasContext}\n[User Message]\n${content}`
+    }
+  }
+
+  const turn = buildStreamingTurn(threadId, enrichedContent, skillMeta)
   const now = new Date().toISOString()
   await deps.receiptBus.track(commandId)
 
   deps.database.transaction(() => {
     deps.database.execute(
-      `INSERT INTO orchestration_turns (id, thread_id, input_text, output_text, status, started_at, completed_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, now],
+      `INSERT INTO orchestration_turns (id, thread_id, input_text, output_text, status, started_at, completed_at, skill_id, skill_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, skillMeta?.id ?? null, skillMeta?.name ?? null, now],
     )
     deps.database.execute(
       `UPDATE orchestration_threads
@@ -934,7 +966,7 @@ async function sendTurn(
     threadId: threadId as ProviderRuntimeEvent["threadId"],
     turnId: turn.id as ProviderRuntimeEvent["turnId"],
   })
-  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content })
+  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content: enrichedContent, skillId: skillMeta?.id ?? null, skillName: skillMeta?.name ?? null })
   void drainQueue(deps)
   return { turnId: turn.id }
 }
@@ -978,7 +1010,7 @@ function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orchestrati
     deleteWorkspace: (commandId, workspaceId) => deleteWorkspace(deps, commandId, workspaceId),
     createThread: (commandId, workspaceId, title) =>
       createThread(deps, commandId, workspaceId, title),
-    sendTurn: (commandId, threadId, content) => sendTurn(deps, commandId, threadId, content),
+    sendTurn: (commandId, threadId, content, skillId) => sendTurn(deps, commandId, threadId, content, skillId),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
   }
 }
@@ -994,6 +1026,7 @@ export const OrchestrationServiceLive = Layer.scoped(
     const pushBus = yield* PushBus
     const readiness = yield* ServerReadiness
     const receiptBus = yield* RuntimeReceiptBus
+    const skillResolver = yield* SkillResolver
 
     return createOrchestrationService({
       config,
@@ -1001,6 +1034,7 @@ export const OrchestrationServiceLive = Layer.scoped(
       pushBus,
       readiness,
       receiptBus,
+      skillResolver,
       state: createRuntimeState(),
     })
   }),

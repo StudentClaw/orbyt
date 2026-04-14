@@ -24,8 +24,6 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     currentWorkspace,
     sendMessage,
     interrupt,
-    retry,
-    reauth,
     connectionState,
     inputDisabled,
     inputDisabledReason,
@@ -100,8 +98,6 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
           <ErrorBanner
             status={status}
             error={error}
-            onRetry={() => void retry()}
-            onReauth={() => void reauth()}
           />
         </div>
       )}
@@ -115,7 +111,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
           >
             {isAuthRequired ? (
               <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatProviderDisconnected onConnected={() => void reauth()} />
+                <ChatProviderDisconnected />
               </div>
             ) : messages.length === 0 ? (
               <div className="flex min-h-[300px] flex-1 items-center justify-center">

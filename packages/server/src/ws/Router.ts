@@ -266,7 +266,7 @@ async function handleSendTurn(
 
   return encodeSuccess(
     id,
-    await dependencies.orchestration.sendTurn(id, decoded.threadId, decoded.content),
+    await dependencies.orchestration.sendTurn(id, decoded.threadId, decoded.content, decoded.skillId),
   )
 }
 

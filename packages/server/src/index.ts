@@ -4,6 +4,7 @@ import { Database, DatabaseLive } from "./db/Database.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
+import { SkillResolverLive } from "./skills/index.js"
 import { PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 
@@ -13,6 +14,7 @@ const CoreLive = Layer.mergeAll(
   ServerReadinessLive,
   PushBusLive,
   RuntimeReceiptBusLive,
+  SkillResolverLive,
 )
 
 const OrchestrationLive = OrchestrationServiceLive.pipe(

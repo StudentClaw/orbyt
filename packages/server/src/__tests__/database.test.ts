@@ -50,7 +50,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(5)
+    expect(version?.version).toBe(6)
 
     db.close()
   })
@@ -62,8 +62,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(5)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5])
+    expect(rows.length).toBe(6)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -107,7 +107,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(5)
+    expect(version?.version).toBe(6)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("chat_workspaces")
@@ -224,6 +224,21 @@ describe("Database migrations", () => {
       user_id: "user-42",
       created_at: "2026-04-10T00:00:00.000Z",
     })
+
+    db.close()
+  })
+
+  test("migration 006 adds skill_id and skill_name columns to orchestration_turns", () => {
+    const db = new BunDatabase(":memory:")
+    runMigrations(db)
+
+    const columns = db
+      .query<{ name: string }, []>("PRAGMA table_info(orchestration_turns)")
+      .all()
+      .map((column) => column.name)
+
+    expect(columns).toContain("skill_id")
+    expect(columns).toContain("skill_name")
 
     db.close()
   })
