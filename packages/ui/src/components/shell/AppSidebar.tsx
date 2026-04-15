@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/useTheme"
 import { isChatPath } from "@/lib/chatRoutes"
 import { ChatHistory } from "./ChatHistory"
 import { ConnectionStatus } from "./ConnectionStatus"
+import studentClawLogo from "@/assets/student-claw-logo.png"
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: DashboardSquare01Icon },
@@ -48,8 +49,12 @@ export function AppSidebarContent() {
 
   return (
     <>
-      <SidebarHeader className="p-4">
-        <h2 className="text-lg font-semibold">Student Claw</h2>
+      <SidebarHeader className="px-4 py-3">
+        <img
+          alt="Student Claw"
+          className="block h-auto w-[131px] max-w-none"
+          src={studentClawLogo}
+        />
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>

@@ -47,7 +47,7 @@ export function PromptInput({
   )
 
   return (
-    <div className="relative flex items-end gap-2 border-t bg-background p-3">
+    <div className="relative flex items-end gap-2 border-t bg-transparent p-3">
       <Textarea
         ref={textareaRef}
         value={value}
@@ -65,7 +65,7 @@ export function PromptInput({
               : "Ask anything..."
         }
         disabled={!isConnected || disabled}
-        className="min-h-10 max-h-32 pr-12"
+        className="min-h-10 max-h-32 bg-transparent pr-12 shadow-none"
         aria-label="Chat message input"
       />
       <div className="absolute right-5 bottom-5">

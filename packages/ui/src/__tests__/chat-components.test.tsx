@@ -8,6 +8,7 @@ import { ToolCallIndicator } from "../components/chat/ToolCallIndicator"
 import { MessageBubble } from "../components/chat/MessageBubble"
 import { ChatEmptyState } from "../components/chat/ChatEmptyState"
 import { ErrorBanner } from "../components/chat/ErrorBanner"
+import { ChatStatusBadge } from "../components/chat/ChatStatusBadge"
 import type { ChatMessage, ToolCallInfo } from "../hooks/chat-model"
 
 describe("MarkdownContent", () => {
@@ -225,5 +226,18 @@ describe("ErrorBanner", () => {
   test("shows default error when error is null", () => {
     render(<ErrorBanner status="error" error={null} />)
     expect(screen.getByText("An unexpected error occurred.")).toBeDefined()
+  })
+})
+
+describe("ChatStatusBadge", () => {
+  test("renders a ready state label", () => {
+    render(<ChatStatusBadge status="idle" />)
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Ready")
+  })
+
+  test("renders a streaming state label", () => {
+    const { container } = render(<ChatStatusBadge status="streaming" />)
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Streaming")
+    expect(container.querySelector(".animate-pulse")).not.toBeNull()
   })
 })

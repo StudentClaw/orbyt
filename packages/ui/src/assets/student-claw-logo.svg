@@ -1,0 +1,43 @@
+<svg width="634" height="153" viewBox="0 0 634 153" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="634" height="153" rx="18" fill="black" fill-opacity="0"/>
+  <g filter="url(#glow)">
+    <rect x="18" y="22" width="92" height="92" rx="18" fill="url(#iconBase)"/>
+    <rect x="18" y="22" width="92" height="92" rx="18" fill="url(#iconSheen)" fill-opacity="0.9"/>
+    <path d="M34 67.5C49 58.5 61.5 53.5 71.5 53.5C80.6 53.5 80.6 63.5 88.8 63.5C93.2 63.5 98.7 62.1 105 59.1" stroke="white" stroke-width="7.5" stroke-linecap="round"/>
+    <path d="M73.5 61C62 67 55 71.7 52.5 75.1C49.8 78.7 51.8 82.5 57.3 82.5C64.4 82.5 74.5 79.7 88.4 74.2" stroke="white" stroke-width="7.5" stroke-linecap="round"/>
+  </g>
+  <text
+    x="130"
+    y="92"
+    fill="white"
+    font-family="'Geist Variable', 'Inter', 'Segoe UI', sans-serif"
+    font-size="68"
+    font-weight="400"
+    letter-spacing="-2.8"
+  >
+    Student Claw
+  </text>
+  <defs>
+    <linearGradient id="iconBase" x1="22" y1="28" x2="102" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF2D6F"/>
+      <stop offset="0.34" stop-color="#C500C8"/>
+      <stop offset="0.7" stop-color="#8C3DFF"/>
+      <stop offset="1" stop-color="#69C9FF"/>
+    </linearGradient>
+    <radialGradient id="iconSheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(91 35) rotate(136.198) scale(89.6902 77.5994)">
+      <stop stop-color="#FFB6E7"/>
+      <stop offset="0.39" stop-color="white" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="0" y="4" width="128" height="128" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset/>
+      <feGaussianBlur stdDeviation="9"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.905882 0 0 0 0 0.482353 0 0 0 0 0.996078 0 0 0 0.45 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+</svg>

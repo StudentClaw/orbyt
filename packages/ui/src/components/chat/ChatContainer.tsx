@@ -55,40 +55,41 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     }
   }, [messages, userScrolledUp])
 
+  const title = currentThread?.title ?? currentWorkspace?.name ?? "Chat"
+  const detail = currentWorkspace
+    ? currentWorkspace.kind === "filesystem"
+      ? currentWorkspace.rootPath
+      : "Imported legacy chats"
+    : "Add or choose a folder to start chatting"
+
   return (
     <div className={`flex h-full flex-col ${variant === "page" ? "mx-auto max-w-3xl" : ""}`}>
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="font-heading text-base font-medium">
-            {currentThread?.title ?? currentWorkspace?.name ?? "Chat"}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {currentThread
-              ? currentThread.status
-              : currentWorkspace
-                ? currentWorkspace.kind === "filesystem"
-                  ? currentWorkspace.rootPath
-                  : "Imported legacy chats"
-                : "Add or choose a folder to start chatting"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {connectionState !== "connected" && (
-            <span className="text-xs text-muted-foreground">
-              {connectionState === "connecting"
-                ? "Connecting..."
-                : connectionState === "reconnecting"
-                  ? "Reconnecting..."
-                  : "Disconnected"}
-            </span>
-          )}
-          {variant === "panel" && (
+      {variant === "panel" ? (
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="font-heading text-base font-medium">
+              {title}
+            </h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {detail}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {connectionState !== "connected" && (
+              <span className="text-xs text-muted-foreground">
+                {connectionState === "connecting"
+                  ? "Connecting..."
+                  : connectionState === "reconnecting"
+                    ? "Reconnecting..."
+                    : "Disconnected"}
+              </span>
+            )}
             <Button variant="ghost" size="sm" onClick={closePanel}>
               Close
             </Button>
-          )}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {status !== "idle" && status !== "streaming" && status !== "interrupted" && (
         <div className="px-4 pt-3">

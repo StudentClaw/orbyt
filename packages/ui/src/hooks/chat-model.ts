@@ -15,6 +15,12 @@ export type ChatStatus =
   | "auth-expired"
   | "error"
 
+export interface ChatStatusPresentation {
+  readonly label: string
+  readonly dotClassName: string
+  readonly pulse: boolean
+}
+
 export interface ToolCallInfo {
   readonly toolName: string
   readonly args: string
@@ -277,5 +283,53 @@ export function resolveChatState(
   return {
     status: "idle",
     error: null,
+  }
+}
+
+export function getChatStatusPresentation(status: ChatStatus): ChatStatusPresentation {
+  switch (status) {
+    case "streaming":
+      return {
+        label: "Streaming",
+        dotClassName: "bg-emerald-500",
+        pulse: true,
+      }
+    case "interrupted":
+      return {
+        label: "Interrupted",
+        dotClassName: "bg-amber-500",
+        pulse: false,
+      }
+    case "offline":
+      return {
+        label: "Offline",
+        dotClassName: "bg-red-500",
+        pulse: false,
+      }
+    case "rate-limited":
+      return {
+        label: "Rate limited",
+        dotClassName: "bg-orange-500",
+        pulse: false,
+      }
+    case "auth-expired":
+      return {
+        label: "Sign in required",
+        dotClassName: "bg-yellow-500",
+        pulse: false,
+      }
+    case "error":
+      return {
+        label: "Unavailable",
+        dotClassName: "bg-rose-500",
+        pulse: false,
+      }
+    case "idle":
+    default:
+      return {
+        label: "Ready",
+        dotClassName: "bg-slate-400",
+        pulse: false,
+      }
   }
 }

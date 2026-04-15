@@ -16,9 +16,12 @@ const chatMocks = vi.hoisted(() => ({
     status: "idle" as ChatStatus,
     error: null as string | null,
     currentThread: null as { title: string; status: string } | null,
+    currentWorkspace: null as { name: string; kind?: string; rootPath?: string } | null,
     sendMessage: vi.fn(),
     interrupt: vi.fn(),
     connectionState: "connected" as WsConnectionPhase,
+    inputDisabled: false,
+    inputDisabledReason: null as string | null,
   },
 }))
 
@@ -40,9 +43,12 @@ describe("ChatContainer", () => {
       status: "idle",
       error: null,
       currentThread: null,
+      currentWorkspace: null,
       sendMessage: vi.fn(),
       interrupt: vi.fn(),
       connectionState: "connected",
+      inputDisabled: false,
+      inputDisabledReason: null,
     }
   })
 
@@ -94,6 +100,15 @@ describe("ChatContainer", () => {
 
   test("hides panel close button for page variant", () => {
     render(<ChatContainer variant="page" />)
+    expect(screen.queryByText("Close")).toBeNull()
+  })
+
+  test("uses a slim header for page variant", () => {
+    chatMocks.state.currentThread = { title: "Weekly planning", status: "streaming" }
+    render(<ChatContainer variant="page" />)
+
+    expect(screen.queryByRole("heading", { name: "Weekly planning" })).toBeNull()
+    expect(screen.queryByText("streaming")).toBeNull()
     expect(screen.queryByText("Close")).toBeNull()
   })
 })
