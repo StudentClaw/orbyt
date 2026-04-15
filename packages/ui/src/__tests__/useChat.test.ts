@@ -21,6 +21,7 @@ const hookMocks = vi.hoisted(() => ({
 
 vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeOrchestrationSnapshot: () => hookMocks.snapshot,
+  useRuntimeProviderToolCallsByTurnId: () => ({}),
   useRuntimeSelectedWorkspaceId: () => hookMocks.selectedWorkspaceId,
   useRuntimeSelectedThreadId: () => hookMocks.selectedThreadId,
   useRuntimeConnectionStatus: () => hookMocks.connectionStatus,
@@ -69,6 +70,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       threadId: "thread-1" as never,
       input: "Plan my week",
       output: "Working on it",
+      reasoning: "",
       status: "streaming",
       startedAt: "2026-04-09T00:01:00.000Z",
       completedAt: null,
@@ -119,7 +121,7 @@ describe("useChat", () => {
     await act(async () => {
       await result.current.sendMessage("Hello")
     })
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello")
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", undefined)
     expect(hookMocks.createThread).not.toHaveBeenCalled()
   })
 
@@ -135,7 +137,17 @@ describe("useChat", () => {
 
     expect(hookMocks.createThread).toHaveBeenCalledWith("workspace-1", "New thread title")
     expect(hookMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title")
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title", undefined)
+  })
+
+  test("sendMessage passes the selected model through to the runtime", async () => {
+    const { result } = renderHook(() => useChat({ model: "o3" }))
+
+    await act(async () => {
+      await result.current.sendMessage("Hello")
+    })
+
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", "o3")
   })
 
   test("interrupt calls the runtime interrupt action", async () => {

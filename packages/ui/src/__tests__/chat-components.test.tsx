@@ -1,9 +1,14 @@
 import { describe, test, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtStep,
+} from "../components/chat/ChainOfThought"
 import { MarkdownContent } from "../components/chat/MarkdownContent"
 import { StreamingResponse } from "../components/chat/StreamingResponse"
-import { ReasoningBlock } from "../components/chat/ReasoningBlock"
 import { ToolCallIndicator } from "../components/chat/ToolCallIndicator"
 import { MessageBubble } from "../components/chat/MessageBubble"
 import { ChatEmptyState } from "../components/chat/ChatEmptyState"
@@ -64,23 +69,45 @@ describe("StreamingResponse", () => {
   })
 })
 
-describe("ReasoningBlock", () => {
+describe("ChainOfThought", () => {
   test("renders trigger text", () => {
-    render(<ReasoningBlock reasoning="I need to think about this" />)
-    expect(screen.getByText("View reasoning")).toBeDefined()
-    expect(screen.getByText("Thinking")).toBeDefined()
+    render(
+      <ChainOfThought defaultOpen={false}>
+        <ChainOfThoughtHeader>Chain of thought</ChainOfThoughtHeader>
+        <ChainOfThoughtContent>
+          <ChainOfThoughtStep label="I need to think about this" />
+        </ChainOfThoughtContent>
+      </ChainOfThought>,
+    )
+
+    expect(screen.getByText("Chain of thought")).toBeDefined()
   })
 
   test("content is collapsed by default", () => {
-    render(<ReasoningBlock reasoning="I need to think about this" />)
-    const content = screen.queryByText("I need to think about this")
-    expect(content).toBeNull()
+    render(
+      <ChainOfThought defaultOpen={false}>
+        <ChainOfThoughtHeader>Chain of thought</ChainOfThoughtHeader>
+        <ChainOfThoughtContent>
+          <ChainOfThoughtStep label="I need to think about this" />
+        </ChainOfThoughtContent>
+      </ChainOfThought>,
+    )
+
+    expect(screen.queryByText("I need to think about this")).toBeNull()
   })
 
   test("expands on click", async () => {
     const user = userEvent.setup()
-    render(<ReasoningBlock reasoning="I need to think about this" />)
-    await user.click(screen.getByText("View reasoning"))
+    render(
+      <ChainOfThought defaultOpen={false}>
+        <ChainOfThoughtHeader>Chain of thought</ChainOfThoughtHeader>
+        <ChainOfThoughtContent>
+          <ChainOfThoughtStep label="I need to think about this" />
+        </ChainOfThoughtContent>
+      </ChainOfThought>,
+    )
+
+    await user.click(screen.getByText("Chain of thought"))
     expect(screen.getByText("I need to think about this")).toBeDefined()
   })
 })
@@ -148,7 +175,7 @@ describe("MessageBubble", () => {
     expect(screen.getByText("Fetching courses...")).toBeDefined()
   })
 
-  test("renders reasoning block in assistant message", async () => {
+  test("renders chain of thought in assistant message", async () => {
     const user = userEvent.setup()
     const message: ChatMessage = {
       id: "5",
@@ -158,9 +185,27 @@ describe("MessageBubble", () => {
       reasoning: "Let me think step by step...",
     }
     render(<MessageBubble message={message} />)
-    expect(screen.getByText("View reasoning")).toBeDefined()
-    await user.click(screen.getByText("View reasoning"))
+    expect(screen.getByText("Chain of Thought")).toBeDefined()
+    expect(screen.getByText("The answer is 42.")).toBeDefined()
+    expect(screen.queryByText("Let me think step by step...")).toBeNull()
+    await user.click(screen.getByText("Chain of Thought"))
     expect(screen.getByText("Let me think step by step...")).toBeDefined()
+  })
+
+  test("keeps streaming reasoning out of the main answer bubble", () => {
+    const message: ChatMessage = {
+      id: "6",
+      role: "assistant",
+      content: "",
+      timestamp: now,
+      isStreaming: true,
+      reasoning: "Searching and planning...",
+    }
+
+    render(<MessageBubble message={message} />)
+
+    expect(screen.getByText("Thinking")).toBeDefined()
+    expect(screen.queryByText("Thinking...")).toBeNull()
   })
 })
 

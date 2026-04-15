@@ -1,10 +1,12 @@
 import { describe, test, expect, beforeEach, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import type { ChatStatus } from "../hooks/chat-model"
 import type { WsConnectionPhase } from "../rpc/wsConnectionState"
 
 const chatMocks = vi.hoisted(() => ({
   closePanel: vi.fn(),
+  navigate: vi.fn(),
   state: {
     messages: [] as ReadonlyArray<{
       id: string
@@ -28,6 +30,10 @@ vi.mock("../hooks/useChat", () => ({
   useChat: () => chatMocks.state,
 }))
 
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => chatMocks.navigate,
+}))
+
 vi.mock("../hooks/useAppRuntime", () => ({
   useChatUiActions: () => ({ closePanel: chatMocks.closePanel }),
 }))
@@ -36,7 +42,9 @@ import { ChatContainer } from "../components/chat/ChatContainer"
 
 describe("ChatContainer", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     chatMocks.closePanel.mockReset()
+    chatMocks.navigate.mockReset()
     chatMocks.state = {
       messages: [],
       status: "idle",
@@ -58,6 +66,16 @@ describe("ChatContainer", () => {
   test("renders default header when no thread is selected", () => {
     render(<ChatContainer />)
     expect(screen.getByText("Chat")).toBeDefined()
+  })
+
+  test("renders the static footer persona without network fetches", () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal("fetch", fetchSpy)
+
+    render(<ChatContainer />)
+
+    expect(screen.getByTestId("chat-persona")).toBeDefined()
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   test("renders the active thread title when selected", () => {
@@ -99,6 +117,16 @@ describe("ChatContainer", () => {
   test("hides panel close button for page variant", () => {
     render(<ChatContainer variant="page" />)
     expect(screen.queryByText("Close")).toBeNull()
+  })
+
+  test("shows a dashboard button for page variant and navigates home", async () => {
+    const user = userEvent.setup()
+
+    render(<ChatContainer variant="page" />)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard" }))
+
+    expect(chatMocks.navigate).toHaveBeenCalledWith({ to: "/" })
   })
 
   test("shows ChatProviderDisconnected when auth is required", () => {

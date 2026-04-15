@@ -242,4 +242,72 @@ describe("registerIpcHandlers plugin reads", () => {
       status: "configured",
     })
   })
+
+  test("runs Codex login inside the app-isolated Codex home", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+    let spawnOptions: Record<string, unknown> | null = null
+
+    mock.module("node:child_process", () => ({
+      spawn: (_command: string, _args: string[], options: Record<string, unknown>) => {
+        spawnOptions = options
+        return {
+          kill: () => undefined,
+          on: (event: string, callback: (...args: unknown[]) => void) => {
+            if (event === "exit") {
+              queueMicrotask(() => callback(0))
+            }
+            return undefined
+          },
+        }
+      },
+    }))
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: true,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?codex-auth-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap)
+
+    const authHandler = handlers.get(IpcChannel.CODEX_AUTH_START)
+    expect(authHandler).toBeDefined()
+
+    const result = await authHandler?.()
+    expect(result).toEqual({ status: "connected" })
+    expect(spawnOptions).not.toBeNull()
+    expect((spawnOptions?.env as Record<string, string>).CODEX_HOME).toBe(path.join(userDataRoot, "codex-home"))
+    expect((spawnOptions?.env as Record<string, string>).HOME).toBe(path.join(userDataRoot, "codex-user-home"))
+  })
 })

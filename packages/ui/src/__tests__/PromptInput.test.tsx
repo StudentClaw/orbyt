@@ -1,14 +1,33 @@
 import { describe, test, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ChatModel } from "@student-claw/contracts"
 import { PromptInput } from "../components/chat/PromptInput"
 
 describe("PromptInput", () => {
+  const availableModels: readonly ChatModel[] = [
+    {
+      id: "gpt-5.4-mini",
+      label: "GPT-5.4 Mini",
+      description: "Fast default model",
+      group: "standard",
+    },
+    {
+      id: "o3",
+      label: "o3",
+      description: "Most capable reasoning model",
+      group: "reasoning",
+    },
+  ]
+
   const defaultProps = {
     onSend: vi.fn(),
     onInterrupt: vi.fn(),
     status: "idle" as const,
     connectionState: "connected" as const,
+    availableModels,
+    selectedModel: "gpt-5.4-mini",
+    onModelChange: vi.fn(),
   }
 
   test("renders textarea with placeholder", () => {
@@ -95,5 +114,32 @@ describe("PromptInput", () => {
     render(<PromptInput {...defaultProps} status="streaming" onInterrupt={onInterrupt} />)
     await user.click(screen.getByLabelText("Stop generating"))
     expect(onInterrupt).toHaveBeenCalledOnce()
+  })
+
+  test("shows the selected model label", () => {
+    render(<PromptInput {...defaultProps} />)
+    expect(screen.getByText("GPT-5.4 Mini")).toBeDefined()
+  })
+
+  test("changes the selected model from the selector", async () => {
+    const onModelChange = vi.fn()
+    const user = userEvent.setup()
+    render(<PromptInput {...defaultProps} onModelChange={onModelChange} />)
+
+    await user.click(screen.getByLabelText("Select model"))
+    await user.click(screen.getByText("o3"))
+
+    expect(onModelChange).toHaveBeenCalledWith("o3")
+  })
+
+  test("hides the selector when the runtime exposes a single model", () => {
+    render(
+      <PromptInput
+        {...defaultProps}
+        availableModels={[availableModels[0]!]}
+      />,
+    )
+
+    expect(screen.queryByLabelText("Select model")).toBeNull()
   })
 })

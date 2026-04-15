@@ -2,6 +2,10 @@ import { describe, expect, test, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
+const codexAuthMocks = vi.hoisted(() => ({
+  connectCodexAccount: vi.fn(),
+}))
+
 vi.mock("@/rpc/onboardingState", () => ({
   setAiAuthStatus: vi.fn(),
 }))
@@ -12,6 +16,10 @@ vi.mock("@/rpc/appRuntime", () => ({
       setAiAuth: vi.fn().mockResolvedValue({}),
     },
   }),
+}))
+
+vi.mock("@/lib/codexAuth", () => ({
+  connectCodexAccount: codexAuthMocks.connectCodexAccount,
 }))
 
 import { AiAuthStep } from "../components/onboarding/AiAuthStep"
@@ -26,6 +34,7 @@ describe("AiAuthStep", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
     window.electronAPI = {
       codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
       getBootstrap: vi.fn().mockResolvedValue(null),
@@ -68,11 +77,15 @@ describe("AiAuthStep", () => {
     const user = userEvent.setup()
     render(<AiAuthStep {...defaultProps} />)
     await user.click(screen.getByTestId("ai-auth-connect-btn"))
-    expect(window.electronAPI!.codexAuthStart).toHaveBeenCalledOnce()
+    expect(codexAuthMocks.connectCodexAccount).toHaveBeenCalledOnce()
+    expect(screen.getByTestId("ai-auth-status").textContent).toBe("Connected")
   })
 
   test("shows error when electronAPI unavailable", async () => {
-    Reflect.deleteProperty(window, "electronAPI")
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({
+      status: "failed",
+      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+    })
     const user = userEvent.setup()
     render(<AiAuthStep {...defaultProps} />)
     await user.click(screen.getByTestId("ai-auth-connect-btn"))

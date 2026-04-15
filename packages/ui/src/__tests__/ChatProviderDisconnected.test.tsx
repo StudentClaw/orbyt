@@ -2,10 +2,20 @@ import { describe, expect, test, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
+const codexAuthMocks = vi.hoisted(() => ({
+  connectCodexAccount: vi.fn(),
+}))
+
+vi.mock("@/lib/codexAuth", () => ({
+  connectCodexAccount: codexAuthMocks.connectCodexAccount,
+}))
+
 import { ChatProviderDisconnected } from "../components/chat/ChatProviderDisconnected"
 
 describe("ChatProviderDisconnected", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
     window.electronAPI = {
       codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
       getBootstrap: vi.fn().mockResolvedValue(null),
@@ -34,7 +44,7 @@ describe("ChatProviderDisconnected", () => {
     const user = userEvent.setup()
     render(<ChatProviderDisconnected />)
     await user.click(screen.getByTestId("chat-provider-connect-btn"))
-    expect(window.electronAPI!.codexAuthStart).toHaveBeenCalledOnce()
+    expect(codexAuthMocks.connectCodexAccount).toHaveBeenCalledOnce()
   })
 
   test("calls onConnected after successful auth", async () => {
@@ -53,7 +63,10 @@ describe("ChatProviderDisconnected", () => {
   })
 
   test("shows error when electronAPI is unavailable", async () => {
-    Reflect.deleteProperty(window, "electronAPI")
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({
+      status: "failed",
+      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+    })
     const user = userEvent.setup()
     render(<ChatProviderDisconnected />)
     await user.click(screen.getByTestId("chat-provider-connect-btn"))
@@ -62,6 +75,10 @@ describe("ChatProviderDisconnected", () => {
   })
 
   test("shows try again button after error", async () => {
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({
+      status: "failed",
+      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+    })
     Reflect.deleteProperty(window, "electronAPI")
     const user = userEvent.setup()
     render(<ChatProviderDisconnected />)

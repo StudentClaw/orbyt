@@ -65,6 +65,7 @@ describe("chat UI state", () => {
           threadId: "thread-123" as never,
           input: "Hello",
           output: "World",
+          reasoning: "",
           status: "completed",
           startedAt: "2026-04-11T00:02:00.000Z",
           completedAt: "2026-04-11T00:02:01.000Z",

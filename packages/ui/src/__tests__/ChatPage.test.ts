@@ -42,6 +42,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       threadId: "thread-2" as never,
       input: "hello",
       output: "world",
+      reasoning: "",
       status: "streaming",
       startedAt: "2026-04-09T00:01:00.000Z",
       completedAt: null,

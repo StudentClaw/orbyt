@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { connectCodexAccount } from "@/lib/codexAuth"
 
 type ConnectPhase = "idle" | "connecting" | "connected" | "error"
 
@@ -13,18 +14,10 @@ export function ChatProviderDisconnected({ onConnected }: ChatProviderDisconnect
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleConnect = async () => {
-    if (!window.electronAPI?.codexAuthStart) {
-      setPhase("error")
-      setErrorMessage(
-        "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
-      )
-      return
-    }
-
     setPhase("connecting")
     setErrorMessage(null)
 
-    const result = await window.electronAPI.codexAuthStart()
+    const result = await connectCodexAccount()
 
     if (result.status === "connected") {
       setPhase("connected")

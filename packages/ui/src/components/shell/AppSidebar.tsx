@@ -1,6 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router"
 import {
-  SidebarSeparator,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -48,10 +47,8 @@ export function AppSidebarContent() {
 
   return (
     <>
-      <SidebarHeader className="p-4">
+      <SidebarHeader className="p-4 pb-2">
         <h2 className="text-lg font-semibold">Student Claw</h2>
-      </SidebarHeader>
-      <SidebarContent>
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.path}>
@@ -75,7 +72,8 @@ export function AppSidebarContent() {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <SidebarSeparator />
+      </SidebarHeader>
+      <SidebarContent>
         <ChatHistory />
       </SidebarContent>
       <SidebarFooter className="p-4 flex flex-row items-center justify-between">

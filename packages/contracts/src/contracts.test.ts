@@ -50,6 +50,15 @@ describe("@student-claw/contracts", () => {
         providerRuntime: true,
         desktopBootstrap: true,
       },
+      defaultChatModel: "gpt-5.4-mini",
+      chatModels: [
+        {
+          id: "gpt-5.4-mini",
+          label: "GPT-5.4 Mini",
+          description: "Fast default model",
+          group: "standard",
+        },
+      ],
       featureFlags: {
         pluginSystem: false,
       },
@@ -81,6 +90,8 @@ describe("@student-claw/contracts", () => {
     expect(bootstrap.wsUrl).toContain("127.0.0.1")
     expect(bootstrap.featureFlags.pluginSystem).toBe(false)
     expect(config.protocolVersion).toBe("rpc-v1")
+    expect(config.defaultChatModel).toBe("gpt-5.4-mini")
+    expect(config.chatModels[0]?.id).toBe("gpt-5.4-mini")
     expect(config.featureFlags.pluginSystem).toBe(false)
     expect(lifecycle.payload.bootstrap.platform).toBe("darwin")
     expect(snapshot.ready).toBe(true)

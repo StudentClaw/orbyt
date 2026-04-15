@@ -22,6 +22,7 @@ function buildThreadTitle(content: string): string {
 export interface ChatSelectionInput {
   readonly workspaceId?: string | null
   readonly threadId?: string | null
+  readonly model?: string | null
   readonly onThreadCreated?: (workspaceId: string, threadId: string) => void | Promise<void>
 }
 
@@ -81,7 +82,7 @@ export function useChat(selection?: ChatSelectionInput) {
       }
     }
 
-    await actions.sendTurn(threadId, trimmed)
+    await actions.sendTurn(threadId, trimmed, selection?.model)
   }, [
     actions,
     connectionStatus.phase,

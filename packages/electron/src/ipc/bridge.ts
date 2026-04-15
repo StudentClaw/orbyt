@@ -31,6 +31,7 @@ import {
   type PluginUninstallParams,
 } from "@student-claw/contracts"
 import { IPC_CHANNELS } from "./channels.js"
+import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
@@ -121,9 +122,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
     const codexPath = resolveCodexPath()
+    const env = buildIsolatedCodexEnv(app.getPath("userData"))
 
     return new Promise((resolve) => {
-      const proc = spawn(codexPath, ["login"], { stdio: "pipe" })
+      const proc = spawn(codexPath, ["login"], {
+        env,
+        stdio: "pipe",
+        shell: process.platform === "win32",
+      })
       const OAUTH_TIMEOUT_MS = 120_000
 
       const timer = setTimeout(() => {

@@ -5,6 +5,7 @@ import { ChatPage } from "@/pages/ChatPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { ActivityPage } from "@/pages/ActivityPage"
+import { createAppHistory } from "@/lib/routerHistory"
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -62,7 +63,10 @@ const routeTree = rootRoute.addChildren([
   activityRoute,
 ])
 
-export const router = createRouter({ routeTree })
+export const router = createRouter({
+  routeTree,
+  history: createAppHistory(),
+})
 
 declare module "@tanstack/react-router" {
   interface Register {

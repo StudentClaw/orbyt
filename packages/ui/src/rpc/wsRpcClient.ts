@@ -103,7 +103,7 @@ export interface WsRpcClient {
     readonly createThread: (workspaceId: string, title?: string) => Promise<CreateThreadResult>
     readonly renameThread: (threadId: string, title: string) => Promise<RenameThreadResult>
     readonly deleteThread: (threadId: string) => Promise<DeleteThreadResult>
-    readonly sendTurn: (threadId: string, content: string) => Promise<SendTurnResult>
+    readonly sendTurn: (threadId: string, content: string, model?: string | null) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
       listener: (event: OrchestrationDomainEvent, sequence: number) => void,
@@ -215,8 +215,8 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
       }),
     deleteThread: async (threadId) =>
       transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
-    sendTurn: async (threadId, content) =>
-      transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, { threadId, content }),
+    sendTurn: async (threadId, content, model) =>
+      transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, { threadId, content, ...(model ? { model } : {}) }),
     interruptTurn: async (threadId) =>
       transport.request<InterruptTurnResult>(RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN, { threadId }),
     onDomainEvent: (listener, options) =>

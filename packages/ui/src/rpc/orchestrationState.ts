@@ -490,8 +490,9 @@ export async function sendOrchestrationTurn(
   client: WsRpcClient,
   threadId: string,
   content: string,
+  model?: string | null,
 ): Promise<string> {
-  const result = await client.orchestration.sendTurn(threadId, content)
+  const result = await client.orchestration.sendTurn(threadId, content, model)
   return result.turnId
 }
 

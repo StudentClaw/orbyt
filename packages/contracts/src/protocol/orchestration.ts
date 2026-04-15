@@ -123,6 +123,15 @@ export const ServerCapabilities = Schema.Struct({
   desktopBootstrap: Schema.Boolean,
 })
 
+export const ChatModelGroup = Schema.Literal("standard", "reasoning")
+
+export const ChatModel = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  description: Schema.String,
+  group: ChatModelGroup,
+})
+
 /**
  * Static server configuration snapshot.
  */
@@ -131,6 +140,8 @@ export const ServerConfig = Schema.Struct({
   platform: Schema.String,
   protocolVersion: Schema.String,
   capabilities: ServerCapabilities,
+  defaultChatModel: Schema.String,
+  chatModels: Schema.Array(ChatModel),
   featureFlags: FeatureFlags,
 })
 
@@ -204,6 +215,7 @@ export const OrchestrationTurn = Schema.Struct({
   threadId: ThreadId,
   input: Schema.String,
   output: Schema.String,
+  reasoning: Schema.String,
   status: Schema.Literal("pending", "streaming", "interrupted", "completed"),
   startedAt: Schema.String,
   completedAt: Schema.NullOr(Schema.String),
@@ -349,6 +361,7 @@ export const SendTurnParams = Schema.Struct({
   threadId: ThreadId,
   content: Schema.String.pipe(Schema.maxLength(MAX_TURN_CONTENT_LENGTH)),
   skillId: Schema.optional(SkillId),
+  model: Schema.optional(Schema.String),
 })
 
 /**
@@ -399,6 +412,13 @@ export const ProviderRuntimeEvent = Schema.Union(
   }),
   Schema.Struct({
     type: Schema.Literal("provider.token"),
+    threadId: ThreadId,
+    turnId: TurnId,
+    token: Schema.String,
+    index: Schema.Number,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.reasoning"),
     threadId: ThreadId,
     turnId: TurnId,
     token: Schema.String,
@@ -486,6 +506,9 @@ export type ServerLifecycleEvent = Schema.Schema.Type<typeof ServerLifecycleEven
  * Runtime type for server capability flags.
  */
 export type ServerCapabilities = Schema.Schema.Type<typeof ServerCapabilities>
+
+export type ChatModelGroup = Schema.Schema.Type<typeof ChatModelGroup>
+export type ChatModel = Schema.Schema.Type<typeof ChatModel>
 
 /**
  * Runtime type for server configuration.

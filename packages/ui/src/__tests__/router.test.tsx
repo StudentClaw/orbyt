@@ -1,19 +1,24 @@
 import { describe, test, expect } from "vitest"
-import { router } from "../router"
+import { createAppHistory, resolveInitialRouteFromHash } from "../lib/routerHistory"
 
 describe("Router", () => {
-  test("router is defined", () => {
-    expect(router).toBeDefined()
+  test("uses in-memory routing for file-based Electron builds", () => {
+    const history = createAppHistory({ protocol: "file:", hash: "#/chat/workspace-1" })
+
+    expect(history.location.pathname).toBe("/chat/workspace-1")
+
+    history.push("/")
+    expect(history.location.pathname).toBe("/")
+
+    history.push("/chat/workspace-1/thread-1")
+    expect(history.location.pathname).toBe("/chat/workspace-1/thread-1")
   })
 
-  test("router has all expected routes", () => {
-    const routes = router.routeTree.children
-    const paths = routes?.map((r: any) => r.path ?? r.options?.path) ?? []
-    // TanStack Router stores child paths without leading slash (except root)
-    expect(paths).toContain("/")
-    expect(paths).toContain("chat")
-    expect(paths).toContain("onboarding")
-    expect(paths).toContain("settings")
-    expect(paths).toContain("activity")
+  test("derives the initial route from a file hash when present", () => {
+    expect(resolveInitialRouteFromHash("")).toBe("/")
+    expect(resolveInitialRouteFromHash("#")).toBe("/")
+    expect(resolveInitialRouteFromHash("#/chat")).toBe("/chat")
+    expect(resolveInitialRouteFromHash("#/chat/workspace-1/thread-1")).toBe("/chat/workspace-1/thread-1")
+    expect(resolveInitialRouteFromHash("#dashboard")).toBe("/")
   })
 })

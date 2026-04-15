@@ -1,14 +1,30 @@
 import { useRef, useEffect, useState, useCallback } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChat } from "@/hooks/useChat"
+import { useChatModel } from "@/hooks/useChatModel"
 import { useChatUiActions } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
 import { MessageBubble } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
+import { Persona } from "@/components/ai/persona"
 import type { ChatSelectionInput } from "@/hooks/useChat"
+import type { ChatStatus, ChatMessage } from "@/hooks/chat-model"
+import type { PersonaState } from "@/components/ai/persona"
+
+function toChatPersonaState(status: ChatStatus, messages: readonly ChatMessage[]): PersonaState {
+  if (status === "offline" || status === "rate-limited" || status === "auth-expired") {
+    return "asleep"
+  }
+  if (status === "streaming") {
+    const last = messages[messages.length - 1]
+    return last?.content ? "speaking" : "thinking"
+  }
+  return "idle"
+}
 
 interface ChatContainerProps {
   readonly variant?: "panel" | "page"
@@ -16,6 +32,8 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ variant = "panel", selection }: ChatContainerProps) {
+  const navigate = useNavigate()
+  const { selectedModel, setSelectedModel, availableModels } = useChatModel()
   const {
     messages,
     status,
@@ -27,7 +45,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     connectionState,
     inputDisabled,
     inputDisabledReason,
-  } = useChat(selection)
+  } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
 
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -38,6 +56,10 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
     setUserScrolledUp(false)
   }, [])
+
+  const handleGoToDashboard = useCallback(() => {
+    void navigate({ to: "/" })
+  }, [navigate])
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
@@ -85,6 +107,11 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
                   : "Disconnected"}
             </span>
           )}
+          {variant === "page" && (
+            <Button variant="outline" size="sm" onClick={handleGoToDashboard}>
+              Dashboard
+            </Button>
+          )}
           {variant === "panel" && (
             <Button variant="ghost" size="sm" onClick={closePanel}>
               Close
@@ -118,9 +145,11 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
                 <ChatEmptyState onSuggestionClick={(content) => void sendMessage(content)} />
               </div>
             ) : (
-              messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))
+              <>
+                {messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))}
+              </>
             )}
             <div ref={bottomRef} aria-hidden="true" />
           </div>
@@ -142,6 +171,14 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         )}
       </div>
 
+      <div className="border-t px-4 py-2">
+        <Persona
+          state={toChatPersonaState(status, messages)}
+          variant="obsidian"
+          className="w-full"
+        />
+      </div>
+
       <PromptInput
         onSend={(content) => void sendMessage(content)}
         onInterrupt={() => void interrupt()}
@@ -149,6 +186,9 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         connectionState={connectionState}
         disabled={inputDisabled}
         disabledReason={inputDisabledReason}
+        availableModels={availableModels}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
       />
     </div>
   )

@@ -42,6 +42,15 @@ function makeDependencies() {
           providerRuntime: true,
           desktopBootstrap: true,
         },
+        defaultChatModel: "gpt-5.4-mini",
+        chatModels: [
+          {
+            id: "gpt-5.4-mini",
+            label: "GPT-5.4 Mini",
+            description: "Fast default model",
+            group: "standard" as const,
+          },
+        ],
         featureFlags: {
           pluginSystem: false,
         },

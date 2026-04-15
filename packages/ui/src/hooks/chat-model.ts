@@ -129,6 +129,7 @@ export function buildChatMessages(
         id: `${turn.id}:assistant`,
         role: "assistant",
         content: turn.output,
+        reasoning: turn.reasoning || undefined,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
         isStreaming: turn.status === "pending" || turn.status === "streaming",
         toolCalls: toolCallsByTurnId[turn.id] ?? [],
@@ -245,13 +246,6 @@ export function resolveChatState(
     }
   }
 
-  if (snapshot.providerRuntime.status === "rate_limited") {
-    return {
-      status: "rate-limited",
-      error: guidance?.detail ?? null,
-    }
-  }
-
   if (
     !snapshot.ready
     || snapshot.providerStatus === "offline"
@@ -281,6 +275,13 @@ export function resolveChatState(
     return {
       status: "streaming",
       error: null,
+    }
+  }
+
+  if (snapshot.providerRuntime.status === "rate_limited") {
+    return {
+      status: "rate-limited",
+      error: guidance?.detail ?? null,
     }
   }
 

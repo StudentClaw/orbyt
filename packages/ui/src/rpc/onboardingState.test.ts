@@ -5,6 +5,7 @@ import {
   getOnboardingState,
   goToOnboardingStep,
   hydrateOnboardingState,
+  hydrateOnboardingStateFromServer,
   isOnboardingComplete,
   ONBOARDING_STEPS,
   persistOnboardingState,
@@ -230,6 +231,66 @@ describe("onboardingState", () => {
       resetOnboardingStateForTests()
       hydrateOnboardingState()
       expect(isOnboardingComplete()).toBe(true)
+    })
+
+    test("server hydration preserves a completed local onboarding state", async () => {
+      completeOnboarding()
+      persistOnboardingState()
+
+      resetOnboardingStateForTests()
+
+      const client = {
+        onboarding: {
+          getSnapshot: vi.fn().mockResolvedValue({
+            steps: [],
+            overallStatus: "in_progress" as const,
+          }),
+          getAiAuth: vi.fn().mockResolvedValue({
+            status: "pending" as const,
+            provider: null,
+            connectedAt: null,
+          }),
+          setOverallStatus: vi.fn().mockResolvedValue({ ok: true }),
+          setAiAuth: vi.fn().mockResolvedValue({
+            status: "connected" as const,
+            provider: "codex",
+            connectedAt: null,
+          }),
+        },
+      } as any
+
+      await hydrateOnboardingStateFromServer(client)
+
+      expect(isOnboardingComplete()).toBe(true)
+      expect(client.onboarding.setOverallStatus).toHaveBeenCalledWith({ status: "completed" })
+    })
+
+    test("server hydration promotes connected Codex auth to completed onboarding", async () => {
+      const client = {
+        onboarding: {
+          getSnapshot: vi.fn().mockResolvedValue({
+            steps: [],
+            overallStatus: "in_progress" as const,
+          }),
+          getAiAuth: vi.fn().mockResolvedValue({
+            status: "connected" as const,
+            provider: "codex",
+            connectedAt: "2026-04-14T00:00:00.000Z",
+          }),
+          setOverallStatus: vi.fn().mockResolvedValue({ ok: true }),
+          setAiAuth: vi.fn().mockResolvedValue({
+            status: "connected" as const,
+            provider: "codex",
+            connectedAt: "2026-04-14T00:00:00.000Z",
+          }),
+        },
+      } as any
+
+      await hydrateOnboardingStateFromServer(client)
+
+      expect(getOnboardingState().aiAuthStatus).toBe("connected")
+      expect(isOnboardingComplete()).toBe(true)
+      expect(client.onboarding.setOverallStatus).toHaveBeenCalledWith({ status: "completed" })
     })
   })
 

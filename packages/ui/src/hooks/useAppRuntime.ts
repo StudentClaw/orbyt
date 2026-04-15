@@ -159,8 +159,8 @@ export function useOrchestrationActions() {
         renameOrchestrationThread(getPrimaryWsRpcClient(), threadId, title),
       deleteThread: (threadId: string) =>
         deleteOrchestrationThread(getPrimaryWsRpcClient(), threadId),
-      sendTurn: (threadId: string, content: string) =>
-        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content),
+      sendTurn: (threadId: string, content: string, model?: string | null) =>
+        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, model),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
       startProviderAuth: () =>
         getPrimaryWsRpcClient().provider.startAuth(),

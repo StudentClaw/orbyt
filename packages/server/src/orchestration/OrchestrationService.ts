@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs"
 import path from "node:path"
 import { Context, Effect, Layer } from "effect"
 import {
+  type ChatModel,
   type FeatureFlags,
   PUSH_CHANNELS,
   type CreateThreadResult,
@@ -66,6 +67,7 @@ type TurnRow = {
   thread_id: string
   input_text: string
   output_text: string
+  reasoning_text: string
   status: OrchestrationTurn["status"]
   started_at: string
   completed_at: string | null
@@ -84,6 +86,7 @@ type TurnWorkRef = {
 
 type WorkItem = TurnWorkRef & {
   readonly content: string
+  readonly model?: string | null
 }
 
 type ActiveTurnState = {
@@ -118,7 +121,7 @@ export interface OrchestrationServiceShape {
   readonly createThread: (commandId: string, workspaceId: string, title?: string) => Promise<CreateThreadResult>
   readonly renameThread: (commandId: string, threadId: string, title: string) => Promise<RenameThreadResult>
   readonly deleteThread: (commandId: string, threadId: string) => Promise<DeleteThreadResult>
-  readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
+  readonly sendTurn: (commandId: string, threadId: string, content: string, model?: string | null) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
   readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
   readonly retryProviderInitialize: (commandId: string) => Promise<RetryProviderInitializeResult>
@@ -148,6 +151,55 @@ function getFeatureFlags(): FeatureFlags {
   return {
     pluginSystem: true,
   }
+}
+
+const BASE_CHAT_MODELS: readonly ChatModel[] = [
+  {
+    id: "gpt-5",
+    label: "GPT-5",
+    description: "Most capable standard model",
+    group: "standard",
+  },
+  {
+    id: "gpt-5.4",
+    label: "GPT-5.4",
+    description: "Balanced standard model",
+    group: "standard",
+  },
+  {
+    id: "gpt-5.4-mini",
+    label: "GPT-5.4 Mini",
+    description: "Fast default model",
+    group: "standard",
+  },
+  {
+    id: "o4-mini",
+    label: "o4-mini",
+    description: "Fast reasoning model",
+    group: "reasoning",
+  },
+  {
+    id: "o3",
+    label: "o3",
+    description: "Most capable reasoning model",
+    group: "reasoning",
+  },
+]
+
+function buildChatModels(config: AppConfig): ReadonlyArray<ChatModel> {
+  if (BASE_CHAT_MODELS.some((model) => model.id === config.codexModel)) {
+    return BASE_CHAT_MODELS
+  }
+
+  return [
+    {
+      id: config.codexModel,
+      label: config.codexModel,
+      description: "Configured default model",
+      group: "standard",
+    },
+    ...BASE_CHAT_MODELS,
+  ]
 }
 
 function normalizeRootPath(rawRootPath: string): string {
@@ -225,6 +277,7 @@ function mapTurnRow(row: TurnRow): OrchestrationTurn {
     threadId: row.thread_id as OrchestrationTurn["threadId"],
     input: row.input_text,
     output: row.output_text,
+    reasoning: row.reasoning_text,
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -307,7 +360,7 @@ function readThread(database: DatabaseService, threadId: string): OrchestrationT
 
 function readTurn(database: DatabaseService, turnId: string): OrchestrationTurn | null {
   const row = database.get<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+    `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
      FROM orchestration_turns
      WHERE id = ?`,
     [turnId],
@@ -687,7 +740,7 @@ function buildDesktopBootstrap(config: AppConfig): DesktopBootstrap {
   }
 }
 
-function buildServerConfig(): ServerConfig {
+function buildServerConfig(config: AppConfig): ServerConfig {
   return {
     appVersion: "0.1.0",
     platform: process.platform,
@@ -697,6 +750,8 @@ function buildServerConfig(): ServerConfig {
       providerRuntime: true,
       desktopBootstrap: true,
     },
+    defaultChatModel: config.codexModel,
+    chatModels: buildChatModels(config),
     featureFlags: getFeatureFlags(),
   }
 }
@@ -717,7 +772,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   ).map(mapThreadRow)
 
   const turns = deps.database.query<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+    `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
      FROM orchestration_turns
      ORDER BY started_at ASC`,
   ).map(mapTurnRow)
@@ -726,12 +781,13 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
     provider: "stub" | "codex"
     status: OrchestrationSnapshot["providerStatus"]
     auth_state: "unknown" | "authenticated" | "auth_required" | "expired"
-    last_error: string | null
-    updated_at: string
+    last_error_code: string | null
+    last_error_message: string | null
+    last_updated_at: string
   }>(
-    `SELECT provider, status, auth_state, last_error, updated_at
-     FROM provider_runtime_sessions
-     ORDER BY updated_at DESC LIMIT 1`,
+    `SELECT provider, status, auth_state, last_error_code, last_error_message, last_updated_at
+     FROM provider_runtime_state
+     WHERE provider = 'codex'`,
   )
 
   return {
@@ -743,14 +799,14 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
       adapter: provider?.provider === "codex" ? "codex" : "stub",
       status: provider?.status ?? "offline",
       authState: provider?.auth_state ?? "unknown",
-      lastError: provider?.last_error
+      lastError: provider?.last_error_code && provider?.last_error_message
         ? {
-            code: "provider_runtime_error",
-            message: provider.last_error,
+            code: provider.last_error_code,
+            message: provider.last_error_message,
           }
         : null,
       queuedTurnCount: deps.state.workQueue.length,
-      lastUpdatedAt: provider?.updated_at ?? new Date(0).toISOString(),
+      lastUpdatedAt: provider?.last_updated_at ?? new Date(0).toISOString(),
     },
     ready: deps.readiness.isReady(),
     lastSequence: deps.pushBus.getLastSequence(),
@@ -1069,6 +1125,7 @@ function buildStreamingTurn(threadId: string, content: string): OrchestrationTur
     threadId: threadId as OrchestrationTurn["threadId"],
     input: content,
     output: "",
+    reasoning: "",
     status: "streaming",
     startedAt: now,
     completedAt: null,
@@ -1081,6 +1138,7 @@ async function sendTurn(
   commandId: string,
   threadId: string,
   content: string,
+  model?: string | null,
 ): Promise<SendTurnResult> {
   const thread = readThread(deps.database, threadId)
   if (!thread) {
@@ -1128,7 +1186,7 @@ async function sendTurn(
     threadId: threadId as ProviderThreadId,
     turnId: turn.id as ProviderTurnId,
   })
-  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content })
+  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
   void drainQueue(deps)
   return { turnId: turn.id }
 }
@@ -1164,7 +1222,7 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
 
   return {
     getDesktopBootstrap: async () => buildDesktopBootstrap(deps.config),
-    getServerConfig: async () => buildServerConfig(),
+    getServerConfig: async () => buildServerConfig(deps.config),
     getSnapshot: () => getSnapshot(deps),
     createWorkspace: (commandId, rootPath) => createWorkspace(deps, commandId, rootPath),
     relinkWorkspace: (commandId, workspaceId, rootPath) =>
@@ -1176,7 +1234,7 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
       renameThread(deps, commandId, threadId, title),
     deleteThread: (commandId, threadId) =>
       deleteThread(deps, commandId, threadId),
-    sendTurn: (commandId, threadId, content) => sendTurn(deps, commandId, threadId, content),
+    sendTurn: (commandId, threadId, content, model) => sendTurn(deps, commandId, threadId, content, model),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
     startProviderAuth: async () => ({ started: false }),
     retryProviderInitialize: async () => ({ started: false }),
@@ -1250,7 +1308,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
     const readTurn = (turnId: string): OrchestrationTurn | null => {
       const row = database.get<TurnRow>(
-        `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+        `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
          FROM orchestration_turns
          WHERE id = ?`,
         [turnId],
@@ -1261,6 +1319,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         threadId: row.thread_id as OrchestrationTurn["threadId"],
         input: row.input_text,
         output: row.output_text,
+        reasoning: row.reasoning_text,
         status: row.status,
         startedAt: row.started_at,
         completedAt: row.completed_at,
@@ -1478,6 +1537,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           localTurnId: work.turnId,
           content: work.content,
           cwd: executionCwd,
+          model: work.model,
           onToken: async (token, index) => {
             if (activeTurns.get(work.turnId)?.interrupted) {
               const interrupted = await codexCli.interruptTurn(work.threadId, work.turnId)
@@ -1499,6 +1559,35 @@ export const OrchestrationServiceLive = Layer.scoped(
 
             await publishRuntimeEvent({
               type: "provider.token",
+              threadId: work.threadId as never,
+              turnId: work.turnId as never,
+              token,
+              index,
+            })
+
+            const turn = readTurn(work.turnId)
+            if (turn) {
+              appendEvent("turn.updated", { turn }, {
+                threadId: work.threadId,
+                turnId: work.turnId,
+                commandId: work.commandId,
+              })
+              await publishDomainEvent({ type: "turn.updated", turn })
+            }
+          },
+          onReasoning: async (token, index) => {
+            const current = readTurn(work.turnId)
+            const reasoning = `${current?.reasoning ?? ""}${token}`
+
+            database.execute(
+              `UPDATE orchestration_turns
+               SET reasoning_text = ?, updated_at = ?
+               WHERE id = ?`,
+              [reasoning, new Date().toISOString(), work.turnId],
+            )
+
+            await publishRuntimeEvent({
+              type: "provider.reasoning",
               threadId: work.threadId as never,
               turnId: work.turnId as never,
               token,
@@ -1598,6 +1687,8 @@ export const OrchestrationServiceLive = Layer.scoped(
           providerRuntime: true,
           desktopBootstrap: true,
         },
+        defaultChatModel: config.codexModel,
+        chatModels: buildChatModels(config),
         featureFlags: getFeatureFlags(),
       }),
       getSnapshot: async () => {
@@ -1614,7 +1705,7 @@ export const OrchestrationServiceLive = Layer.scoped(
            ORDER BY created_at ASC`,
         ).map(mapThreadRow)
         const turns = database.query<TurnRow>(
-          `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+          `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
            FROM orchestration_turns
            ORDER BY started_at ASC`,
         ).map(mapTurnRow)
@@ -1842,7 +1933,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { deleted: true, threadId })
         return { deleted: true }
       },
-      sendTurn: async (commandId, threadId, content) => {
+      sendTurn: async (commandId, threadId, content, model) => {
         const thread = readThread(threadId)
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
@@ -1860,6 +1951,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           threadId: threadId as OrchestrationTurn["threadId"],
           input: content,
           output: "",
+          reasoning: "",
           status: "pending",
           startedAt: now,
           completedAt: null,
@@ -1892,7 +1984,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         appendEvent("turn.started", { turn }, { threadId, turnId: turn.id, commandId })
         await publishDomainEvent({ type: "turn.started", turn })
-        workQueue.push({ commandId, threadId, turnId: turn.id, content })
+        workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
         void drainQueue()
         return { turnId: turn.id }
       },

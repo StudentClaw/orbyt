@@ -371,7 +371,7 @@ export const MOCK_ACTIVITY_FEED: ReadonlyArray<ActivityFeedEntry> = [
     title: "New grade: CS 101 — Problem Set 4",
     body: "You scored 95/100 (A)",
     priority: 2,
-    deepLink: "/dashboard",
+    deepLink: "/",
   },
   {
     id: activityId(2) as any,

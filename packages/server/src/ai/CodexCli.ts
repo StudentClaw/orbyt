@@ -18,12 +18,16 @@ type ActiveTurn = {
   readonly providerThreadId: string
   providerTurnId: string | null
   readonly onToken: (token: string, index: number) => Promise<void>
+  readonly onReasoning: (token: string, index: number) => Promise<void>
   readonly onCompleted: () => Promise<void>
   readonly onInterrupted: () => Promise<void>
   readonly onError: (error: ProviderRuntimeFailure) => Promise<void>
   readonly onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
+  readonly agentMessagePhases: Map<string, AgentMessagePhase>
+  readonly emittedTextLengths: Map<string, number>
   readonly mcpToolCalls: Map<string, Omit<CodexMcpToolCallSnapshot, "status" | "error">>
   tokenIndex: number
+  reasoningIndex: number
 }
 
 type ThreadStartResponse = {
@@ -70,7 +74,9 @@ export interface CodexCliService {
     localTurnId: string
     content: string
     cwd?: string | null
+    model?: string | null
     onToken: (token: string, index: number) => Promise<void>
+    onReasoning: (token: string, index: number) => Promise<void>
     onCompleted: () => Promise<void>
     onInterrupted: () => Promise<void>
     onError: (error: ProviderRuntimeFailure) => Promise<void>
@@ -100,6 +106,136 @@ function readString(target: unknown, key: string): string | undefined {
   if (!isRecord(target)) return undefined
   const value = target[key]
   return typeof value === "string" ? value : undefined
+}
+
+function normalizeCodexItemType(itemType: string): string {
+  return itemType.replace(/[^a-z]/gi, "").toLowerCase()
+}
+
+export function isReasoningItemType(itemType: string | null | undefined): boolean {
+  if (!itemType) {
+    return false
+  }
+
+  const normalizedItemType = normalizeCodexItemType(itemType)
+  return normalizedItemType.includes("reasoning") || normalizedItemType.includes("thinking")
+}
+
+type AgentMessagePhase = "commentary" | "final_answer" | "unknown"
+
+export function normalizeAgentMessagePhase(
+  phase: string | null | undefined,
+): AgentMessagePhase {
+  if (phase === "commentary" || phase === "final_answer") {
+    return phase
+  }
+
+  return "unknown"
+}
+
+function readReasoningItemState(params: unknown): {
+  readonly itemId: string | null
+  readonly reasoningState: boolean | null
+  readonly text: string | null
+} {
+  const item = isRecord(params) ? params.item : null
+  const itemId = readString(item, "id") ?? readString(params, "itemId") ?? null
+  const itemType =
+    readString(item, "type")
+    ?? readString(params, "itemType")
+    ?? readString(params, "type")
+
+  const summary = isRecord(item) && Array.isArray(item.summary)
+    ? item.summary.filter((entry): entry is string => typeof entry === "string").join("")
+    : ""
+  const content = isRecord(item) && Array.isArray(item.content)
+    ? item.content.filter((entry): entry is string => typeof entry === "string").join("")
+    : ""
+
+  return {
+    itemId,
+    reasoningState: itemType ? isReasoningItemType(itemType) : null,
+    text: content || summary || null,
+  }
+}
+
+function readAgentMessageState(params: unknown): {
+  readonly itemId: string | null
+  readonly phase: AgentMessagePhase
+  readonly text: string | null
+} {
+  const item = isRecord(params) ? params.item : null
+  const itemId = readString(item, "id") ?? readString(params, "itemId") ?? null
+  const phase =
+    normalizeAgentMessagePhase(
+      readString(item, "phase")
+      ?? readString(params, "phase"),
+    )
+  const text = readString(item, "text") ?? null
+
+  return {
+    itemId,
+    phase,
+    text,
+  }
+}
+
+export function shouldTreatAgentMessageAsReasoning(
+  phase: string | null | undefined,
+): boolean {
+  return normalizeAgentMessagePhase(phase) === "commentary"
+}
+
+function recordEmittedTextLength(
+  activeTurn: ActiveTurn,
+  itemId: string,
+  emittedLength: number,
+): void {
+  const currentLength = activeTurn.emittedTextLengths.get(itemId) ?? 0
+  activeTurn.emittedTextLengths.set(itemId, currentLength + emittedLength)
+}
+
+async function emitTextByPhase(
+  activeTurn: ActiveTurn,
+  itemId: string | null,
+  text: string,
+  phase: AgentMessagePhase,
+): Promise<void> {
+  if (!text) {
+    return
+  }
+
+  if (shouldTreatAgentMessageAsReasoning(phase)) {
+    const nextIndex = activeTurn.reasoningIndex
+    activeTurn.reasoningIndex += 1
+    await activeTurn.onReasoning(text, nextIndex)
+  } else {
+    const nextIndex = activeTurn.tokenIndex
+    activeTurn.tokenIndex += 1
+    await activeTurn.onToken(text, nextIndex)
+  }
+
+  if (itemId) {
+    recordEmittedTextLength(activeTurn, itemId, text.length)
+  }
+}
+
+async function emitReasoningText(
+  activeTurn: ActiveTurn,
+  itemId: string | null,
+  text: string,
+): Promise<void> {
+  if (!text) {
+    return
+  }
+
+  const nextIndex = activeTurn.reasoningIndex
+  activeTurn.reasoningIndex += 1
+  await activeTurn.onReasoning(text, nextIndex)
+
+  if (itemId) {
+    recordEmittedTextLength(activeTurn, itemId, text.length)
+  }
 }
 
 const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
@@ -469,6 +605,16 @@ export const CodexCliLive = Layer.effect(
       if (!activeTurn) return
 
       if (method === "item/started") {
+        const agentMessage = readAgentMessageState(params)
+        if (agentMessage.itemId) {
+          activeTurn.agentMessagePhases.set(agentMessage.itemId, agentMessage.phase)
+        }
+
+        const reasoningItem = readReasoningItemState(params)
+        if (reasoningItem.reasoningState) {
+          return
+        }
+
         const event = mapCodexMcpToolCallStartedEvent(params, activeTurn)
         if (!event) {
           return
@@ -481,6 +627,17 @@ export const CodexCliLive = Layer.effect(
           args: event.args,
         })
         await activeTurn.onMcpToolCall(event)
+        return
+      }
+
+      if (method === "item/reasoning/textDelta" || method === "item/reasoning/summaryTextDelta") {
+        const itemId = readString(params, "itemId") ?? null
+        const delta = readString(params, "delta")
+        if (!delta) {
+          return
+        }
+
+        await emitReasoningText(activeTurn, itemId, delta)
         return
       }
 
@@ -499,16 +656,40 @@ export const CodexCliLive = Layer.effect(
 
       if (method === "item/agentMessage/delta") {
         const delta = readString(params, "delta")
-        if (!delta) return
-        const nextIndex = activeTurn.tokenIndex
-        activeTurn.tokenIndex += 1
-        await activeTurn.onToken(delta, nextIndex)
+        const itemId = readString(params, "itemId") ?? null
+        if (!delta) {
+          return
+        }
+
+        const phase = itemId
+          ? activeTurn.agentMessagePhases.get(itemId) ?? "unknown"
+          : "unknown"
+        await emitTextByPhase(activeTurn, itemId, delta, phase)
         return
       }
 
       if (method === "item/completed") {
-        const item = isRecord(params) ? params.item : null
-        const itemId = isRecord(item) ? readString(item, "id") : undefined
+        const agentMessage = readAgentMessageState(params)
+        if (agentMessage.itemId && agentMessage.text) {
+          const emittedLength = activeTurn.emittedTextLengths.get(agentMessage.itemId) ?? 0
+          const remainingText = agentMessage.text.slice(emittedLength)
+          await emitTextByPhase(activeTurn, agentMessage.itemId, remainingText, agentMessage.phase)
+          activeTurn.agentMessagePhases.delete(agentMessage.itemId)
+          activeTurn.emittedTextLengths.delete(agentMessage.itemId)
+        }
+
+        const reasoningItem = readReasoningItemState(params)
+        if (reasoningItem.itemId && reasoningItem.text) {
+          const emittedLength = activeTurn.emittedTextLengths.get(reasoningItem.itemId) ?? 0
+          const remainingText = reasoningItem.text.slice(emittedLength)
+          await emitReasoningText(activeTurn, reasoningItem.itemId, remainingText)
+          activeTurn.emittedTextLengths.delete(reasoningItem.itemId)
+        }
+
+        const itemId = agentMessage.itemId ?? reasoningItem.itemId ?? undefined
+        if (itemId) {
+          activeTurn.agentMessagePhases.delete(itemId)
+        }
         const event = mapCodexMcpToolCallCompletedEvent(
           params,
           activeTurn,
@@ -810,7 +991,7 @@ export const CodexCliLive = Layer.effect(
               text_elements: [],
             },
           ],
-          model: config.codexModel,
+          model: input.model ?? config.codexModel,
         })
 
         const providerTurnId = response.turn?.id
@@ -820,12 +1001,16 @@ export const CodexCliLive = Layer.effect(
           providerThreadId,
           providerTurnId: providerTurnId ?? null,
           onToken: input.onToken,
+          onReasoning: input.onReasoning,
           onCompleted: input.onCompleted,
           onInterrupted: input.onInterrupted,
           onError: input.onError,
           onMcpToolCall: input.onMcpToolCall,
+          agentMessagePhases: new Map(),
+          emittedTextLengths: new Map(),
           mcpToolCalls: new Map(),
           tokenIndex: 0,
+          reasoningIndex: 0,
         }
 
         if (!providerTurnId) {
