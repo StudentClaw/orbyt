@@ -329,8 +329,43 @@ describe("PromptInput", () => {
 
     expect(screen.getByText("Command needs approval")).toBeDefined()
     expect(screen.getByText("rm -rf ./tmp")).toBeDefined()
+    expect(screen.getByTestId("pending-approval-surface")).toBeDefined()
+    expect(screen.queryByLabelText("Chat message input")).toBeNull()
+    expect(screen.queryByLabelText("Send message")).toBeNull()
+    expect(screen.getByTestId("approval-command").className).toContain("whitespace-pre-wrap")
+    expect(screen.getByTestId("approval-command").className).toContain("overflow-y-auto")
+    expect(screen.getByRole("button", { name: "Approve" }).textContent).toContain("↵")
 
     await user.click(screen.getByRole("button", { name: "Deny" }))
     expect(onRespondToApproval).toHaveBeenCalledWith("deny")
+  })
+
+  test("pressing Enter approves the pending request", async () => {
+    const onRespondToApproval = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <PromptInput
+        {...defaultProps}
+        pendingApproval={{
+          id: "approval-1",
+          threadId: "thread-1" as never,
+          turnId: "turn-1" as never,
+          kind: "command",
+          itemId: "item-1",
+          approvalId: "provider-approval-1",
+          reason: "This command modifies files outside the immediate workspace.",
+          command: "rm -rf ./tmp",
+          cwd: "/repo",
+          availableDecisions: ["approve", "deny"],
+        }}
+        onRespondToApproval={onRespondToApproval}
+      />,
+    )
+
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Approve" }))
+
+    await user.keyboard("{Enter}")
+
+    expect(onRespondToApproval).toHaveBeenCalledWith("approve")
   })
 })

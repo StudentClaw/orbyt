@@ -1,51 +1,174 @@
-import { useState, useEffect, useCallback } from "react"
+import { useCallback, useEffect, useSyncExternalStore } from "react"
 
 export type Theme = "light" | "dark" | "auto"
 
 const STORAGE_KEY = "sc-theme"
+const subscribers = new Set<() => void>()
+let systemThemeCleanup: (() => void) | null = null
 
-function getResolvedTheme(theme: Theme): "light" | "dark" {
-  if (theme === "auto") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-  }
-  return theme
+function isTheme(value: string | null): value is Theme {
+  return value === "dark" || value === "light" || value === "auto"
 }
 
-function getInitialTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === "dark" || stored === "light" || stored === "auto") return stored
-  } catch {
-    // ignore
+function getStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null
   }
-  return "auto"
+
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+function getStoredTheme(): Theme {
+  const storage = getStorage()
+  if (!storage) {
+    return "auto"
+  }
+
+  try {
+    const stored = storage.getItem(STORAGE_KEY)
+    return isTheme(stored) ? stored : "auto"
+  } catch {
+    return "auto"
+  }
+}
+
+function getSystemTheme(): "light" | "dark" {
+  if (typeof window === "undefined") {
+    return "light"
+  }
+
+  const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)")
+  return mediaQuery?.matches ? "dark" : "light"
+}
+
+function getResolvedTheme(theme: Theme): "light" | "dark" {
+  return theme === "auto" ? getSystemTheme() : theme
 }
 
 function applyTheme(theme: Theme) {
+  if (typeof document === "undefined") {
+    return
+  }
+
   document.documentElement.classList.toggle("dark", getResolvedTheme(theme) === "dark")
 }
 
+function detachSystemThemeListener() {
+  if (!systemThemeCleanup) {
+    return
+  }
+
+  systemThemeCleanup()
+  systemThemeCleanup = null
+}
+
+function syncSystemThemeListener(theme: Theme) {
+  if (theme !== "auto" || typeof window === "undefined") {
+    detachSystemThemeListener()
+    return
+  }
+
+  const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)")
+  if (!mediaQuery) {
+    return
+  }
+
+  if (systemThemeCleanup) {
+    return
+  }
+
+  const handleChange = () => applyTheme("auto")
+
+  if (typeof mediaQuery.addEventListener === "function") {
+    mediaQuery.addEventListener("change", handleChange)
+    systemThemeCleanup = () => mediaQuery.removeEventListener("change", handleChange)
+    return
+  }
+
+  mediaQuery.addListener?.(handleChange)
+  systemThemeCleanup = () => mediaQuery.removeListener?.(handleChange)
+}
+
+function setStoredTheme(theme: Theme) {
+  const storage = getStorage()
+  if (!storage) {
+    return
+  }
+
+  try {
+    storage.setItem(STORAGE_KEY, theme)
+  } catch {
+    // ignore
+  }
+}
+
+function emitThemeChange() {
+  for (const subscriber of subscribers) {
+    subscriber()
+  }
+}
+
+function handleStorageChange(event: StorageEvent) {
+  const storage = getStorage()
+  if (!storage) {
+    return
+  }
+
+  if (event.storageArea && event.storageArea !== storage) {
+    return
+  }
+
+  if (event.key !== null && event.key !== STORAGE_KEY) {
+    return
+  }
+
+  initializeTheme()
+  emitThemeChange()
+}
+
+function subscribeToTheme(callback: () => void) {
+  subscribers.add(callback)
+
+  if (subscribers.size === 1 && typeof window !== "undefined") {
+    window.addEventListener("storage", handleStorageChange)
+  }
+
+  return () => {
+    subscribers.delete(callback)
+
+    if (subscribers.size === 0 && typeof window !== "undefined") {
+      window.removeEventListener("storage", handleStorageChange)
+    }
+  }
+}
+
+function getThemeSnapshot(): Theme {
+  return getStoredTheme()
+}
+
+export function initializeTheme(): Theme {
+  const theme = getStoredTheme()
+  applyTheme(theme)
+  syncSystemThemeListener(theme)
+  return theme
+}
+
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme)
+  const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, () => "auto")
 
   useEffect(() => {
-    applyTheme(theme)
-    try {
-      localStorage.setItem(STORAGE_KEY, theme)
-    } catch {
-      // ignore
-    }
-
-    if (theme === "auto") {
-      const mq = window.matchMedia("(prefers-color-scheme: dark)")
-      const handler = () => applyTheme("auto")
-      mq.addEventListener("change", handler)
-      return () => mq.removeEventListener("change", handler)
-    }
+    initializeTheme()
   }, [theme])
 
   const setTheme = useCallback((nextTheme: Theme) => {
-    setThemeState(nextTheme)
+    setStoredTheme(nextTheme)
+    applyTheme(nextTheme)
+    syncSystemThemeListener(nextTheme)
+    emitThemeChange()
   }, [])
 
   return { theme, setTheme }
