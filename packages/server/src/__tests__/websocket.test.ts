@@ -59,6 +59,7 @@ function makeDependencies() {
         workspaces: [],
         threads: [],
         turns: [],
+        pendingApprovals: [],
         providerStatus: "idle" as const,
         providerRuntime: {
           adapter: "codex" as const,
@@ -77,10 +78,12 @@ function makeDependencies() {
       createThread: async () => ({ threadId }),
       renameThread: async () => ({ threadId }),
       deleteThread: async () => ({ deleted: true }),
+      setThreadAccessMode: async () => ({ threadId, accessMode: "default" as const }),
       sendTurn: async () => ({ turnId }),
       interruptTurn: async () => ({ interrupted: true }),
       startProviderAuth: async () => ({ started: true }),
       retryProviderInitialize: async () => ({ started: true }),
+      respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
     },
     database: {
       db,

@@ -1,5 +1,5 @@
-import { describe, test, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, test, expect, vi, afterEach } from "vitest"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import {
   ChainOfThought,
@@ -14,6 +14,10 @@ import { MessageBubble } from "../components/chat/MessageBubble"
 import { ChatEmptyState } from "../components/chat/ChatEmptyState"
 import { ErrorBanner } from "../components/chat/ErrorBanner"
 import type { ChatMessage, ToolCallInfo } from "../hooks/chat-model"
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe("MarkdownContent", () => {
   test("renders plain text", () => {
@@ -142,18 +146,101 @@ describe("ToolCallIndicator", () => {
 describe("MessageBubble", () => {
   const now = Date.now()
 
-  test("renders user message", () => {
+  test("renders user message as a right-aligned bubble with left-aligned text", () => {
     const message: ChatMessage = { id: "1", role: "user", content: "Hello", timestamp: now }
     render(<MessageBubble message={message} />)
+
+    const row = screen.getByTestId("user-message-row")
+    const bubble = screen.getByTestId("user-message-bubble")
+
     expect(screen.getByText("Hello")).toBeDefined()
-    expect(screen.getByText("You")).toBeDefined()
+    expect(row.className.includes("justify-end")).toBe(true)
+    expect(bubble.className.includes("bg-primary")).toBe(true)
+    expect(bubble.className.includes("text-left")).toBe(true)
+    expect(screen.queryByText("You")).toBeNull()
+    expect(screen.queryByText(/ago/)).toBeNull()
   })
 
-  test("renders assistant message with markdown", () => {
+  test("renders user attachments in history without an empty bubble", () => {
+    const message: ChatMessage = {
+      id: "1a",
+      role: "user",
+      content: "",
+      timestamp: now,
+      attachments: [
+        {
+          id: "attachment-1" as never,
+          path: "/Users/rereynrd/Desktop/diagram.png",
+          name: "diagram.png",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          kind: "image",
+        },
+        {
+          id: "attachment-2" as never,
+          path: "/Users/rereynrd/Desktop/notes.md",
+          name: "notes.md",
+          mimeType: "text/markdown",
+          sizeBytes: 256,
+          kind: "file",
+        },
+      ],
+    }
+
+    render(<MessageBubble message={message} />)
+
+    expect(screen.getByText("diagram.png")).toBeDefined()
+    expect(screen.getByText("notes.md")).toBeDefined()
+    expect(screen.queryByTestId("user-message-bubble")).toBeNull()
+  })
+
+  test("renders assistant message as an unwrapped response block", () => {
     const message: ChatMessage = { id: "2", role: "assistant", content: "**Bold response**", timestamp: now }
     render(<MessageBubble message={message} />)
+
+    const response = screen.getByTestId("assistant-response")
+
     expect(screen.getByText("Bold response")).toBeDefined()
-    expect(screen.getByText("SC")).toBeDefined()
+    expect(screen.queryByText("SC")).toBeNull()
+    expect(screen.queryByText(/ago/)).toBeNull()
+    expect(response.className.includes("border")).toBe(false)
+    expect(response.className.includes("rounded")).toBe(false)
+    expect(response.className.includes("bg-card")).toBe(false)
+  })
+
+  test("copy action swaps to copied state for one second without rendering a tooltip", async () => {
+    vi.useFakeTimers()
+
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    })
+
+    const message: ChatMessage = {
+      id: "2a",
+      role: "assistant",
+      content: "Copy me",
+      timestamp: now,
+    }
+
+    render(<MessageBubble message={message} />)
+
+    const copyButton = screen.getByRole("button", { name: "Copy response" })
+    await act(async () => {
+      fireEvent.click(copyButton)
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledWith("Copy me")
+    expect(screen.getByRole("button", { name: "Copied" })).toBeDefined()
+    expect(screen.queryByText("Copy response")).toBeNull()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(screen.getByRole("button", { name: "Copy response" })).toBeDefined()
   })
 
   test("renders streaming assistant message", () => {
@@ -175,7 +262,7 @@ describe("MessageBubble", () => {
     expect(screen.getByText("Fetching courses...")).toBeDefined()
   })
 
-  test("renders chain of thought in assistant message", async () => {
+  test("renders chain of thought above the assistant response", async () => {
     const user = userEvent.setup()
     const message: ChatMessage = {
       id: "5",
@@ -185,14 +272,20 @@ describe("MessageBubble", () => {
       reasoning: "Let me think step by step...",
     }
     render(<MessageBubble message={message} />)
+
+    const thoughtRow = screen.getByTestId("assistant-thought-row")
+    const response = screen.getByTestId("assistant-response")
+
     expect(screen.getByText("Chain of Thought")).toBeDefined()
     expect(screen.getByText("The answer is 42.")).toBeDefined()
     expect(screen.queryByText("Let me think step by step...")).toBeNull()
+    expect(thoughtRow.contains(response)).toBe(false)
+    expect(response.contains(screen.getByText("Chain of Thought"))).toBe(false)
     await user.click(screen.getByText("Chain of Thought"))
     expect(screen.getByText("Let me think step by step...")).toBeDefined()
   })
 
-  test("keeps streaming reasoning out of the main answer bubble", () => {
+  test("keeps streaming reasoning out of the assistant response block", () => {
     const message: ChatMessage = {
       id: "6",
       role: "assistant",
@@ -206,6 +299,63 @@ describe("MessageBubble", () => {
 
     expect(screen.getByText("Thinking")).toBeDefined()
     expect(screen.queryByText("Thinking...")).toBeNull()
+    expect(screen.queryByTestId("assistant-response")).toBeNull()
+  })
+
+  test("briefly shows chain of thought for newly streaming assistant messages before collapsing it", () => {
+    vi.useFakeTimers()
+
+    const message: ChatMessage = {
+      id: "7",
+      role: "assistant",
+      content: "Working on it...",
+      timestamp: now,
+      isStreaming: true,
+      reasoning: "Searching and planning...",
+    }
+
+    render(<MessageBubble message={message} />)
+
+    expect(screen.getByText("Searching and planning...")).toBeDefined()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(screen.queryByText("Searching and planning...")).toBeNull()
+  })
+
+  test("opens chain of thought when reasoning first arrives on a streaming message, then auto-collapses it", () => {
+    vi.useFakeTimers()
+
+    const message: ChatMessage = {
+      id: "8",
+      role: "assistant",
+      content: "Working on it...",
+      timestamp: now,
+      isStreaming: true,
+    }
+
+    const { rerender } = render(<MessageBubble message={message} />)
+
+    expect(screen.queryByTestId("assistant-thought-row")).toBeNull()
+
+    rerender(
+      <MessageBubble
+        message={{
+          ...message,
+          reasoning: "Checking the course list...",
+        }}
+      />,
+    )
+
+    expect(screen.getByText("Checking the course list...")).toBeDefined()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(screen.queryByText("Checking the course list...")).toBeNull()
   })
 })
 

@@ -640,7 +640,8 @@ export function ChatHistory() {
                                     <SidebarMenuButton
                                       isActive={isThreadSelected}
                                       onClick={() => void focusThread(workspace.id, thread.id, thread.currentTurnId)}
-                                      className="flex h-auto items-center gap-2 py-1 pr-9"
+                                      onDoubleClick={() => startThreadRename(thread)}
+                                      className="flex h-auto items-center gap-2 py-1 pr-11"
                                       disabled={isThreadBusy}
                                     >
                                       <span className="flex size-3 shrink-0 items-center justify-center">
@@ -660,6 +661,7 @@ export function ChatHistory() {
                                           showOnHover
                                           aria-label={`Open actions for ${thread.title}`}
                                           disabled={isThreadBusy}
+                                          className="!right-1.5 !top-1/2 !h-7 !w-7 !-translate-y-1/2 rounded-full"
                                         >
                                           <HugeiconsIcon icon={MoreHorizontalCircle01Icon} size={14} />
                                         </SidebarMenuAction>

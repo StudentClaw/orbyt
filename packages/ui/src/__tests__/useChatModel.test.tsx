@@ -24,16 +24,22 @@ const baseConfig: ServerConfig = {
   defaultChatModel: "gpt-5.4-mini",
   chatModels: [
     {
+      id: "gpt-5.4",
+      label: "GPT-5.4",
+      description: "Best general-purpose model",
+      group: "standard",
+    },
+    {
       id: "gpt-5.4-mini",
       label: "GPT-5.4 Mini",
       description: "Fast default model",
       group: "standard",
     },
     {
-      id: "o3",
-      label: "o3",
-      description: "Most capable reasoning model",
-      group: "reasoning",
+      id: "gpt-5.3-codex",
+      label: "GPT-5.3 Codex",
+      description: "Best coding-focused option",
+      group: "standard",
     },
   ],
   featureFlags: {
@@ -58,12 +64,12 @@ describe("useChatModel", () => {
   })
 
   test("restores a valid stored model when it exists in the runtime catalog", async () => {
-    localStorage.setItem("student-claw:selected-model", "o3")
+    localStorage.setItem("student-claw:selected-model", "gpt-5.3-codex")
 
     const { result } = renderHook(() => useChatModel())
 
     await waitFor(() => {
-      expect(result.current.selectedModel).toBe("o3")
+      expect(result.current.selectedModel).toBe("gpt-5.3-codex")
     })
   })
 
@@ -71,10 +77,10 @@ describe("useChatModel", () => {
     const { result } = renderHook(() => useChatModel())
 
     await act(async () => {
-      result.current.setSelectedModel("o3")
+      result.current.setSelectedModel("gpt-5.3-codex")
     })
 
-    expect(result.current.selectedModel).toBe("o3")
-    expect(localStorage.getItem("student-claw:selected-model")).toBe("o3")
+    expect(result.current.selectedModel).toBe("gpt-5.3-codex")
+    expect(localStorage.getItem("student-claw:selected-model")).toBe("gpt-5.3-codex")
   })
 })

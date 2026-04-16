@@ -16,6 +16,8 @@ const hookMocks = vi.hoisted(() => ({
   createThread: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
+  setThreadAccessMode: vi.fn(),
+  respondToApproval: vi.fn(),
   selectChatTarget: vi.fn(),
 }))
 
@@ -29,6 +31,8 @@ vi.mock("../hooks/useAppRuntime", () => ({
     createThread: hookMocks.createThread,
     sendTurn: hookMocks.sendTurn,
     interruptTurn: hookMocks.interruptTurn,
+    setThreadAccessMode: hookMocks.setThreadAccessMode,
+    respondToApproval: hookMocks.respondToApproval,
   }),
   useChatUiActions: () => ({
     selectChatTarget: hookMocks.selectChatTarget,
@@ -59,6 +63,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       id: "thread-1" as never,
       workspaceId: "workspace-1" as never,
       title: "Weekly plan",
+      accessMode: "default",
       status: "streaming",
       createdAt: "2026-04-09T00:00:00.000Z",
       currentTurnId: "turn-1" as never,
@@ -75,8 +80,10 @@ const baseSnapshot: OrchestrationSnapshot = {
       startedAt: "2026-04-09T00:01:00.000Z",
       completedAt: null,
       skill: null,
+      attachments: [],
     },
   ],
+  pendingApprovals: [],
   providerStatus: "streaming",
   providerRuntime: {
     adapter: "codex",
@@ -104,6 +111,8 @@ describe("useChat", () => {
     hookMocks.createThread.mockReset()
     hookMocks.sendTurn.mockReset()
     hookMocks.interruptTurn.mockReset()
+    hookMocks.setThreadAccessMode.mockReset()
+    hookMocks.respondToApproval.mockReset()
     hookMocks.selectChatTarget.mockReset()
   })
 
@@ -119,9 +128,9 @@ describe("useChat", () => {
   test("sendMessage reuses the selected thread", async () => {
     const { result } = renderHook(() => useChat())
     await act(async () => {
-      await result.current.sendMessage("Hello")
+      await result.current.sendMessage({ content: "Hello", attachments: [] })
     })
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", undefined)
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], undefined)
     expect(hookMocks.createThread).not.toHaveBeenCalled()
   })
 
@@ -132,22 +141,22 @@ describe("useChat", () => {
 
     const { result } = renderHook(() => useChat())
     await act(async () => {
-      await result.current.sendMessage("  New thread title  ")
+      await result.current.sendMessage({ content: "  New thread title  ", attachments: [] })
     })
 
     expect(hookMocks.createThread).toHaveBeenCalledWith("workspace-1", "New thread title")
     expect(hookMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title", undefined)
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title", [], undefined)
   })
 
   test("sendMessage passes the selected model through to the runtime", async () => {
     const { result } = renderHook(() => useChat({ model: "o3" }))
 
     await act(async () => {
-      await result.current.sendMessage("Hello")
+      await result.current.sendMessage({ content: "Hello", attachments: [] })
     })
 
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", "o3")
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], "o3")
   })
 
   test("interrupt calls the runtime interrupt action", async () => {
@@ -166,5 +175,43 @@ describe("useChat", () => {
 
     const { result } = renderHook(() => useChat())
     expect(result.current.status).toBe("offline")
+  })
+
+  test("setThreadAccessMode delegates to the runtime for the active thread", async () => {
+    const { result } = renderHook(() => useChat())
+
+    await act(async () => {
+      await result.current.setThreadAccessMode("full")
+    })
+
+    expect(hookMocks.setThreadAccessMode).toHaveBeenCalledWith("thread-1", "full")
+  })
+
+  test("respondToApproval delegates to the runtime for the current thread approval", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      pendingApprovals: [
+        {
+          id: "approval-1",
+          threadId: "thread-1" as never,
+          turnId: "turn-1" as never,
+          kind: "command",
+          itemId: "item-1",
+          approvalId: "provider-approval-1",
+          reason: "Needs approval",
+          command: "rm -rf ./tmp",
+          cwd: "/repo",
+          availableDecisions: ["approve", "deny"],
+        },
+      ],
+    }
+
+    const { result } = renderHook(() => useChat())
+
+    await act(async () => {
+      await result.current.respondToApproval("approve")
+    })
+
+    expect(hookMocks.respondToApproval).toHaveBeenCalledWith("approval-1", "approve")
   })
 })

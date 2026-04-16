@@ -8,6 +8,7 @@ import {
   OrchestrationSnapshot,
   PUSH_CHANNELS,
   RenameThreadParams,
+  RespondToProviderApprovalParams,
   RetryProviderInitializeParams,
   RPC_METHODS,
   RelinkWorkspaceParams,
@@ -17,6 +18,7 @@ import {
   SendTurnParams,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
+  SetThreadAccessModeParams,
   SetAiAuthStatusParams,
   SetStepStatusParams,
   SetOverallStatusParams,
@@ -186,6 +188,8 @@ async function handleOrchestrationMethod(
       return handleCreateThread(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_RENAME_THREAD:
       return handleRenameThread(id, params, dependencies)
+    case RPC_METHODS.ORCHESTRATION_SET_THREAD_ACCESS_MODE:
+      return handleSetThreadAccessMode(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_DELETE_THREAD:
       return handleDeleteThread(id, params, dependencies)
     case RPC_METHODS.ORCHESTRATION_SEND_TURN:
@@ -302,6 +306,27 @@ async function handleDeleteThread(
   )
 }
 
+async function handleSetThreadAccessMode(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const decoded = decodeParams(
+    SetThreadAccessModeParams,
+    params,
+    id,
+    "setThreadAccessMode params are invalid",
+  )
+  if (typeof decoded === "string") {
+    return decoded
+  }
+
+  return encodeSuccess(
+    id,
+    await dependencies.orchestration.setThreadAccessMode(id, decoded.threadId, decoded.accessMode),
+  )
+}
+
 async function handleSendTurn(
   id: string,
   params: unknown,
@@ -314,7 +339,13 @@ async function handleSendTurn(
 
   return encodeSuccess(
     id,
-    await dependencies.orchestration.sendTurn(id, decoded.threadId, decoded.content, decoded.model ?? null),
+    await dependencies.orchestration.sendTurn(
+      id,
+      decoded.threadId,
+      decoded.content,
+      decoded.attachments,
+      decoded.model ?? null,
+    ),
   )
 }
 
@@ -370,6 +401,41 @@ async function subscribeConfig(
     }),
   )
   return encodeSuccess(id, { subscribed: true })
+}
+
+async function handleProviderMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method, params } = request
+
+  switch (method) {
+    case RPC_METHODS.PROVIDER_START_AUTH:
+      return encodeSuccess(id, await dependencies.orchestration.startProviderAuth(id))
+    case RPC_METHODS.PROVIDER_RETRY_INITIALIZE:
+      return encodeSuccess(id, await dependencies.orchestration.retryProviderInitialize(id))
+    case RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL: {
+      const decoded = decodeParams(
+        RespondToProviderApprovalParams,
+        params,
+        id,
+        "respondToApproval params are invalid",
+      )
+      if (typeof decoded === "string") {
+        return decoded
+      }
+      return encodeSuccess(
+        id,
+        await dependencies.orchestration.respondToProviderApproval(
+          id,
+          decoded.approvalRequestId,
+          decoded.decision,
+        ),
+      )
+    }
+    default:
+      return null
+  }
 }
 
 async function handleOnboardingMethod(
@@ -464,6 +530,7 @@ export async function routeMessage(
     const response = await handleServerMethod(decoded, ws, dependencies)
       ?? await handleStreamMethod(decoded, ws, dependencies)
       ?? await handleOrchestrationMethod(decoded, dependencies)
+      ?? await handleProviderMethod(decoded, dependencies)
       ?? await handleOnboardingMethod(decoded, dependencies)
 
     if (response) {

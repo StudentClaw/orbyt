@@ -9,10 +9,12 @@ import {
   deleteOrchestrationWorkspace,
   interruptOrchestrationTurn,
   openChatPanel,
+  respondToProviderApproval,
   renameOrchestrationThread,
   relinkOrchestrationWorkspace,
   selectChatTarget,
   selectChatWorkspace,
+  setOrchestrationThreadAccessMode,
   setChatPanelWidth,
   useChatPanelOpen,
   useChatPanelWidth,
@@ -43,6 +45,7 @@ import {
 } from "@/rpc/onboardingState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
+import type { TurnAttachmentInput } from "@student-claw/contracts"
 
 export function useRuntimeConnectionStatus() {
   return useWsConnectionStatus()
@@ -159,13 +162,22 @@ export function useOrchestrationActions() {
         renameOrchestrationThread(getPrimaryWsRpcClient(), threadId, title),
       deleteThread: (threadId: string) =>
         deleteOrchestrationThread(getPrimaryWsRpcClient(), threadId),
-      sendTurn: (threadId: string, content: string, model?: string | null) =>
-        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, model),
+      setThreadAccessMode: (threadId: string, accessMode: "default" | "full") =>
+        setOrchestrationThreadAccessMode(getPrimaryWsRpcClient(), threadId, accessMode),
+      sendTurn: (
+        threadId: string,
+        content: string,
+        attachments: readonly TurnAttachmentInput[],
+        model?: string | null,
+      ) =>
+        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, attachments, model),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
       startProviderAuth: () =>
         getPrimaryWsRpcClient().provider.startAuth(),
       retryProviderInitialize: () =>
         getPrimaryWsRpcClient().provider.retryInitialize(),
+      respondToApproval: (approvalRequestId: string, decision: "approve" | "deny") =>
+        respondToProviderApproval(getPrimaryWsRpcClient(), approvalRequestId, decision),
     }
   }, [])
 }

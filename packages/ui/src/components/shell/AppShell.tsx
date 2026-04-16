@@ -51,7 +51,7 @@ function AppShellLayout() {
   const { isMobile, open, openMobile } = useSidebar()
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null)
   const [desktopSidebarWidth, setDesktopSidebarWidth] = useState(readDesktopSidebarWidth)
-  const chromeLabel = isMobile
+  const sidebarLabel = isMobile
     ? openMobile ? "Hide sidebar" : "Show sidebar"
     : open ? "Hide sidebar" : "Show sidebar"
 
@@ -72,7 +72,7 @@ function AppShellLayout() {
     return (
       <div className="flex h-full w-full min-h-0">
         <AppSidebar />
-        <ShellMain chromeLabel={chromeLabel} />
+        <ShellMain showSidebarTrigger sidebarLabel={sidebarLabel} />
       </div>
     )
   }
@@ -83,7 +83,7 @@ function AppShellLayout() {
         panelRef={sidebarPanelRef}
         id="app-shell-sidebar"
         collapsible
-        collapsedSize={0}
+        collapsedSize={48}
         defaultSize={desktopSidebarWidth}
         minSize={MIN_DESKTOP_SIDEBAR_WIDTH}
         maxSize={MAX_DESKTOP_SIDEBAR_WIDTH}
@@ -98,10 +98,12 @@ function AppShellLayout() {
         }}
       >
         <aside
-          className="flex h-full min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground"
+          className="group flex h-full min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground"
+          data-state={open ? "expanded" : "collapsed"}
+          data-collapsible={open ? "" : "icon"}
           data-testid="desktop-sidebar"
         >
-          {open ? <AppSidebarContent /> : null}
+          <AppSidebarContent />
         </aside>
       </ResizablePanel>
       <ResizableHandle
@@ -110,18 +112,26 @@ function AppShellLayout() {
         className={!open ? "hidden" : "transition-colors hover:bg-sidebar-accent"}
       />
       <ResizablePanel id="app-shell-main" minSize={0}>
-        <ShellMain chromeLabel={chromeLabel} />
+        <ShellMain />
       </ResizablePanel>
     </ResizablePanelGroup>
   )
 }
 
-function ShellMain({ chromeLabel }: { chromeLabel: string }) {
+function ShellMain({
+  showSidebarTrigger = false,
+  sidebarLabel = "Toggle sidebar",
+}: {
+  showSidebarTrigger?: boolean
+  sidebarLabel?: string
+}) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur">
-        <SidebarTrigger aria-label={chromeLabel} data-testid="shell-sidebar-trigger" />
-      </div>
+      {showSidebarTrigger && (
+        <div className="flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur">
+          <SidebarTrigger aria-label={sidebarLabel} data-testid="shell-sidebar-trigger" />
+        </div>
+      )}
       <main className="min-h-0 flex-1 overflow-auto">
         <Outlet />
       </main>

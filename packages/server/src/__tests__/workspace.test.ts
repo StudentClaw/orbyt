@@ -187,12 +187,16 @@ describe("workspace operations", () => {
     const { workspaceId } = await service.createWorkspace("cmd-6", tmpFolder)
     const { threadId } = await service.createThread("cmd-7", workspaceId, "Scoped chat")
 
-    const row = database.get<{ cwd: string | null }>(
-      "SELECT cwd FROM provider_runtime_sessions WHERE thread_id = ?",
+    const row = database.get<{ cwd: string | null; access_mode: string }>(
+      `SELECT prs.cwd, ot.access_mode
+       FROM provider_runtime_sessions prs
+       JOIN orchestration_threads ot ON ot.id = prs.thread_id
+       WHERE prs.thread_id = ?`,
       [threadId],
     )
 
     expect(row?.cwd).toBe(tmpFolder)
+    expect(row?.access_mode).toBe("default")
   })
 
   test("relinkWorkspace updates thread session cwd and clears provider thread bindings", async () => {
@@ -234,11 +238,52 @@ describe("workspace operations", () => {
     expect(row?.title).toBe("Renamed title")
   })
 
+  test("setThreadAccessMode persists the mode and clears bound provider threads", async () => {
+    const service = createOrchestrationService(makeDeps(database))
+    const { workspaceId } = await service.createWorkspace("cmd-13a", tmpFolder)
+    const { threadId } = await service.createThread("cmd-13b", workspaceId, "Scoped chat")
+
+    db.run(
+      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, last_error = ? WHERE thread_id = ?",
+      ["provider-thread-1", "stale", threadId],
+    )
+
+    const result = await service.setThreadAccessMode("cmd-13c", threadId, "full")
+
+    const threadRow = database.get<{ access_mode: string }>(
+      "SELECT access_mode FROM orchestration_threads WHERE id = ?",
+      [threadId],
+    )
+    const sessionRow = database.get<{ provider_thread_id: string | null; last_error: string | null }>(
+      "SELECT provider_thread_id, last_error FROM provider_runtime_sessions WHERE thread_id = ?",
+      [threadId],
+    )
+
+    expect(result).toEqual({ threadId, accessMode: "full" })
+    expect(threadRow?.access_mode).toBe("full")
+    expect(sessionRow?.provider_thread_id).toBeNull()
+    expect(sessionRow?.last_error).toBeNull()
+  })
+
   test("deleteThread removes the thread, its turns, and its runtime session", async () => {
     const service = createOrchestrationService(makeDeps(database))
     const { workspaceId } = await service.createWorkspace("cmd-14", tmpFolder)
     const { threadId } = await service.createThread("cmd-15", workspaceId, "Disposable chat")
-    await service.sendTurn("cmd-16", threadId, "Hello")
+    const now = new Date().toISOString()
+
+    database.execute(
+      `INSERT INTO orchestration_turns (
+         id, thread_id, input_text, output_text, reasoning_text, status,
+         started_at, completed_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["turn-test", threadId, "Hello", "", "", "pending", now, null, now],
+    )
+    database.execute(
+      `UPDATE orchestration_threads
+       SET current_turn_id = ?, status = ?, updated_at = ?
+       WHERE id = ?`,
+      ["turn-test", "pending", now, threadId],
+    )
 
     await service.deleteThread("cmd-17", threadId)
 

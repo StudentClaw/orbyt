@@ -1,6 +1,8 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { formatDistanceToNow } from "date-fns"
+import { useEffect, useRef, useState } from "react"
+import { CheckIcon, CopyIcon } from "lucide-react"
 import type { ChatMessage } from "@/hooks/chat-model"
+import { Actions, Action } from "@/components/ai/actions"
+import { cn } from "@/lib/utils"
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -10,25 +12,32 @@ import {
 import { MarkdownContent } from "./MarkdownContent"
 import { StreamingResponse } from "./StreamingResponse"
 import { ToolCallIndicator } from "./ToolCallIndicator"
+import { ChatAttachments } from "./ChatAttachments"
 
 interface MessageBubbleProps {
   readonly message: ChatMessage
 }
 
+const CHAIN_OF_THOUGHT_PREVIEW_MS = 1000
+
 function UserMessage({ message }: MessageBubbleProps) {
+  const hasVisibleContent = message.content.trim().length > 0
+
   return (
-    <div className="flex items-start gap-3 justify-end">
-      <div className="flex flex-col items-end gap-1 max-w-[80%]">
-        <div className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-primary-foreground">
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-        </div>
-        <span className="text-[10px] text-muted-foreground">
-          {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
-        </span>
+    <div data-testid="user-message-row" className="flex justify-end">
+      <div className="flex max-w-[min(32rem,85%)] flex-col items-end gap-2">
+        {message.attachments && message.attachments.length > 0 && (
+          <ChatAttachments attachments={message.attachments} className="max-w-full" />
+        )}
+        {hasVisibleContent && (
+          <div
+            data-testid="user-message-bubble"
+            className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-left text-primary-foreground"
+          >
+            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          </div>
+        )}
       </div>
-      <Avatar size="sm">
-        <AvatarFallback>You</AvatarFallback>
-      </Avatar>
     </div>
   )
 }
@@ -37,52 +46,114 @@ function AssistantMessage({ message }: MessageBubbleProps) {
   const hasVisibleContent = message.content.trim().length > 0
   const shouldRenderMainResponse =
     hasVisibleContent || (message.isStreaming && !message.reasoning)
+  const [isThoughtOpen, setIsThoughtOpen] = useState(() => Boolean(message.isStreaming && message.reasoning))
+  const [isCopied, setIsCopied] = useState(false)
+  const hasPreviewedStreamingThought = useRef(false)
+  const copyResetTimeoutRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!message.isStreaming || !message.reasoning || hasPreviewedStreamingThought.current) {
+      return
+    }
+
+    hasPreviewedStreamingThought.current = true
+    setIsThoughtOpen(true)
+
+    const collapseTimer = window.setTimeout(() => {
+      setIsThoughtOpen(false)
+    }, CHAIN_OF_THOUGHT_PREVIEW_MS)
+
+    return () => {
+      window.clearTimeout(collapseTimer)
+    }
+  }, [message.isStreaming, message.reasoning])
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(message.content)
+    setIsCopied(true)
+
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current)
+    }
+
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setIsCopied(false)
+      copyResetTimeoutRef.current = null
+    }, 1000)
+  }
 
   return (
-    <div className="flex items-start gap-3">
-      <Avatar size="sm">
-        <AvatarFallback className="bg-primary/10 text-primary">SC</AvatarFallback>
-      </Avatar>
-      <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-card-foreground border">
-          {message.reasoning && (
-            <ChainOfThought className="mb-3" defaultOpen={false}>
-              <ChainOfThoughtHeader>
-                {message.isStreaming ? "Thinking" : "Chain of Thought"}
-              </ChainOfThoughtHeader>
-              <ChainOfThoughtContent>
-                <ChainOfThoughtStep
-                  label={(
-                    <div className="text-xs leading-6 text-muted-foreground">
-                      <MarkdownContent content={message.reasoning} />
-                    </div>
-                  )}
-                  status={message.isStreaming ? "active" : "complete"}
-                />
-              </ChainOfThoughtContent>
-            </ChainOfThought>
-          )}
-          {message.toolCalls?.map((toolCall, i) => (
-            <div key={i} className="mb-2">
-              <ToolCallIndicator toolCall={toolCall} />
-            </div>
-          ))}
-          {shouldRenderMainResponse
-            ? message.isStreaming
-              ? (
-                  <StreamingResponse content={message.content} isStreaming />
-                )
-              : (
-                  <div className="text-sm">
-                    <MarkdownContent content={message.content} />
-                  </div>
-                )
-            : null}
+    <div className="flex min-w-0 max-w-[min(42rem,100%)] flex-col gap-3">
+      {message.reasoning && (
+        <ChainOfThought
+          data-testid="assistant-thought-row"
+          open={isThoughtOpen}
+          onOpenChange={setIsThoughtOpen}
+        >
+          <ChainOfThoughtHeader>
+            {message.isStreaming ? "Thinking" : "Chain of Thought"}
+          </ChainOfThoughtHeader>
+          <ChainOfThoughtContent>
+            <ChainOfThoughtStep
+              label={(
+                <div className="text-xs leading-6 text-muted-foreground">
+                  <MarkdownContent content={message.reasoning} />
+                </div>
+              )}
+              status={message.isStreaming ? "active" : "complete"}
+            />
+          </ChainOfThoughtContent>
+        </ChainOfThought>
+      )}
+      {message.toolCalls?.map((toolCall, i) => (
+        <div key={i}>
+          <ToolCallIndicator toolCall={toolCall} />
         </div>
-        <span className="text-[10px] text-muted-foreground">
-          {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
-        </span>
-      </div>
+      ))}
+      {shouldRenderMainResponse
+        ? (
+            <div data-testid="assistant-response" className="text-sm text-foreground">
+              {message.isStreaming
+                ? <StreamingResponse content={message.content} isStreaming />
+                : <MarkdownContent content={message.content} />}
+            </div>
+          )
+        : null}
+      {!message.isStreaming && hasVisibleContent && (
+        <Actions>
+          <Action
+            label={isCopied ? "Copied" : "Copy response"}
+            onClick={() => void handleCopy()}
+            className={cn(
+              "transition-colors duration-200",
+              isCopied && "text-primary hover:text-primary",
+            )}
+          >
+            <span aria-hidden="true" className="relative size-4">
+              <CopyIcon
+                className={cn(
+                  "absolute inset-0 size-4 transition-all duration-200 ease-out",
+                  isCopied ? "scale-75 -rotate-12 opacity-0" : "scale-100 rotate-0 opacity-100",
+                )}
+              />
+              <CheckIcon
+                className={cn(
+                  "absolute inset-0 size-4 transition-all duration-200 ease-out",
+                  isCopied ? "scale-100 rotate-0 opacity-100" : "scale-75 rotate-12 opacity-0",
+                )}
+              />
+            </span>
+          </Action>
+        </Actions>
+      )}
     </div>
   )
 }

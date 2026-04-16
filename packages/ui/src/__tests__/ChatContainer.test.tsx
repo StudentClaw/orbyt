@@ -6,7 +6,10 @@ import type { WsConnectionPhase } from "../rpc/wsConnectionState"
 
 const chatMocks = vi.hoisted(() => ({
   closePanel: vi.fn(),
+  selectChatTarget: vi.fn(),
   navigate: vi.fn(),
+  renameThread: vi.fn(),
+  deleteThread: vi.fn(),
   state: {
     messages: [] as ReadonlyArray<{
       id: string
@@ -17,9 +20,21 @@ const chatMocks = vi.hoisted(() => ({
     }>,
     status: "idle" as ChatStatus,
     error: null as string | null,
-    currentThread: null as { title: string; status: string } | null,
+    currentThread: null as {
+      id: string
+      title: string
+      status: string
+      workspaceId: string
+      accessMode: "default" | "full"
+    } | null,
+    currentWorkspace: null as { id: string; name: string } | null,
     sendMessage: vi.fn(),
     interrupt: vi.fn(),
+    setThreadAccessMode: vi.fn(),
+    respondToApproval: vi.fn(),
+    currentPendingApproval: null,
+    accessModeMutationPending: false,
+    approvalDecisionPending: false,
     connectionState: "connected" as WsConnectionPhase,
     inputDisabled: false,
     inputDisabledReason: null as string | null,
@@ -35,7 +50,14 @@ vi.mock("@tanstack/react-router", () => ({
 }))
 
 vi.mock("../hooks/useAppRuntime", () => ({
-  useChatUiActions: () => ({ closePanel: chatMocks.closePanel }),
+  useChatUiActions: () => ({
+    closePanel: chatMocks.closePanel,
+    selectChatTarget: chatMocks.selectChatTarget,
+  }),
+  useOrchestrationActions: () => ({
+    renameThread: chatMocks.renameThread,
+    deleteThread: chatMocks.deleteThread,
+  }),
 }))
 
 import { ChatContainer } from "../components/chat/ChatContainer"
@@ -44,14 +66,23 @@ describe("ChatContainer", () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
     chatMocks.closePanel.mockReset()
+    chatMocks.selectChatTarget.mockReset()
     chatMocks.navigate.mockReset()
+    chatMocks.renameThread.mockReset()
+    chatMocks.deleteThread.mockReset()
     chatMocks.state = {
       messages: [],
       status: "idle",
       error: null,
       currentThread: null,
+      currentWorkspace: null,
       sendMessage: vi.fn(),
       interrupt: vi.fn(),
+      setThreadAccessMode: vi.fn(),
+      respondToApproval: vi.fn(),
+      currentPendingApproval: null,
+      accessModeMutationPending: false,
+      approvalDecisionPending: false,
       connectionState: "connected",
       inputDisabled: false,
       inputDisabledReason: null,
@@ -65,21 +96,29 @@ describe("ChatContainer", () => {
 
   test("renders default header when no thread is selected", () => {
     render(<ChatContainer />)
-    expect(screen.getByText("Chat")).toBeDefined()
+    expect(screen.getByText("New chat")).toBeDefined()
   })
 
-  test("renders the static footer persona without network fetches", () => {
+  test("renders the static empty state without network fetches", () => {
     const fetchSpy = vi.fn()
     vi.stubGlobal("fetch", fetchSpy)
 
     render(<ChatContainer />)
 
-    expect(screen.getByTestId("chat-persona")).toBeDefined()
+    expect(screen.getByText("Start a conversation")).toBeDefined()
+    expect(screen.getByText("What's due this week?")).toBeDefined()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   test("renders the active thread title when selected", () => {
-    chatMocks.state.currentThread = { title: "Weekly planning", status: "streaming" }
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "streaming",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
+    chatMocks.state.currentWorkspace = { id: "workspace-1", name: "Repo" }
     render(<ChatContainer />)
     expect(screen.getByText("Weekly planning")).toBeDefined()
   })
@@ -119,14 +158,71 @@ describe("ChatContainer", () => {
     expect(screen.queryByText("Close")).toBeNull()
   })
 
-  test("shows a dashboard button for page variant and navigates home", async () => {
+  test("double-clicking the header title starts rename inline", async () => {
     const user = userEvent.setup()
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "completed",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
+    chatMocks.state.currentWorkspace = { id: "workspace-1", name: "Repo" }
 
-    render(<ChatContainer variant="page" />)
+    render(<ChatContainer />)
 
-    await user.click(screen.getByRole("button", { name: "Dashboard" }))
+    await user.dblClick(screen.getByText("Weekly planning"))
 
-    expect(chatMocks.navigate).toHaveBeenCalledWith({ to: "/" })
+    expect(screen.getByLabelText("Rename Weekly planning")).toBeDefined()
+  })
+
+  test("header dropdown renames the active thread", async () => {
+    const user = userEvent.setup()
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "completed",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
+    chatMocks.state.currentWorkspace = { id: "workspace-1", name: "Repo" }
+
+    render(<ChatContainer />)
+
+    await user.click(screen.getByRole("button", { name: "Open actions for Weekly planning" }))
+    await user.click(screen.getByText("Rename"))
+    await user.clear(screen.getByLabelText("Rename Weekly planning"))
+    await user.type(screen.getByLabelText("Rename Weekly planning"), "Renamed planning")
+    await user.keyboard("{Enter}")
+
+    expect(chatMocks.renameThread).toHaveBeenCalledWith("thread-1", "Renamed planning")
+  })
+
+  test("header dropdown deletes the active thread", async () => {
+    const user = userEvent.setup()
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "completed",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
+    chatMocks.state.currentWorkspace = { id: "workspace-1", name: "Repo" }
+    chatMocks.deleteThread.mockResolvedValue(true)
+    const confirmSpy = vi.fn(() => true)
+    Object.defineProperty(window, "confirm", {
+      value: confirmSpy,
+      configurable: true,
+    })
+
+    render(<ChatContainer />)
+
+    await user.click(screen.getByRole("button", { name: "Open actions for Weekly planning" }))
+    await user.click(screen.getByText("Delete"))
+
+    expect(confirmSpy).toHaveBeenCalledOnce()
+    expect(chatMocks.deleteThread).toHaveBeenCalledWith("thread-1")
+    expect(chatMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", null)
   })
 
   test("shows ChatProviderDisconnected when auth is required", () => {

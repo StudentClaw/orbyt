@@ -24,10 +24,23 @@ vi.mock("../hooks/use-mobile", () => ({
   useIsMobile: () => shellMocks.isMobile,
 }))
 
-vi.mock("../components/shell/AppSidebar", () => ({
-  AppSidebar: () => <div data-testid="mobile-sidebar">Sidebar</div>,
-  AppSidebarContent: () => <div data-testid="desktop-sidebar-content">Sidebar</div>,
-}))
+vi.mock("../components/shell/AppSidebar", async () => {
+  const { SidebarTrigger, useSidebar } = await import("../components/ui/sidebar")
+
+  return {
+    AppSidebar: () => <div data-testid="mobile-sidebar">Sidebar</div>,
+    AppSidebarContent: () => {
+      const { open } = useSidebar()
+
+      return (
+        <div>
+          <SidebarTrigger data-testid="shell-sidebar-trigger" />
+          {open ? <div data-testid="desktop-sidebar-content">Sidebar</div> : null}
+        </div>
+      )
+    },
+  }
+})
 
 vi.mock("../hooks/useNativeNotification", () => ({
   useNativeNotification: () => {},

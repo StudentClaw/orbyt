@@ -1,29 +1,32 @@
 import { useRef, useEffect, useState, useCallback } from "react"
 import { useNavigate } from "@tanstack/react-router"
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChat } from "@/hooks/useChat"
 import { useChatModel } from "@/hooks/useChatModel"
-import { useChatUiActions } from "@/hooks/useAppRuntime"
+import { useChatUiActions, useOrchestrationActions } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
 import { MessageBubble } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
-import { Persona } from "@/components/ai/persona"
 import type { ChatSelectionInput } from "@/hooks/useChat"
-import type { ChatStatus, ChatMessage } from "@/hooks/chat-model"
-import type { PersonaState } from "@/components/ai/persona"
 
-function toChatPersonaState(status: ChatStatus, messages: readonly ChatMessage[]): PersonaState {
-  if (status === "offline" || status === "rate-limited" || status === "auth-expired") {
-    return "asleep"
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message
   }
-  if (status === "streaming") {
-    const last = messages[messages.length - 1]
-    return last?.content ? "speaking" : "thinking"
-  }
-  return "idle"
+
+  return fallback
 }
 
 interface ChatContainerProps {
@@ -34,6 +37,7 @@ interface ChatContainerProps {
 export function ChatContainer({ variant = "panel", selection }: ChatContainerProps) {
   const navigate = useNavigate()
   const { selectedModel, setSelectedModel, availableModels } = useChatModel()
+  const { renameThread, deleteThread } = useOrchestrationActions()
   const {
     messages,
     status,
@@ -42,24 +46,31 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     currentWorkspace,
     sendMessage,
     interrupt,
+    setThreadAccessMode,
+    respondToApproval,
+    currentPendingApproval,
+    accessModeMutationPending,
+    approvalDecisionPending,
     connectionState,
     inputDisabled,
     inputDisabledReason,
   } = useChat({ ...selection, model: selectedModel })
-  const { closePanel } = useChatUiActions()
+  const { closePanel, selectChatTarget } = useChatUiActions()
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
+  const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false)
+  const [headerTitleDraft, setHeaderTitleDraft] = useState("")
+  const [headerActionPending, setHeaderActionPending] = useState<"rename" | "delete" | null>(null)
+  const [headerActionError, setHeaderActionError] = useState<string | null>(null)
+
+  const headerTitle = currentThread?.title ?? currentWorkspace?.name ?? "New chat"
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
     setUserScrolledUp(false)
   }, [])
-
-  const handleGoToDashboard = useCallback(() => {
-    void navigate({ to: "/" })
-  }, [navigate])
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
@@ -78,46 +89,197 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     }
   }, [messages, userScrolledUp])
 
+  useEffect(() => {
+    if (!currentThread) {
+      setIsEditingHeaderTitle(false)
+      setHeaderTitleDraft("")
+      return
+    }
+
+    if (!isEditingHeaderTitle) {
+      setHeaderTitleDraft(currentThread.title)
+    }
+  }, [currentThread, isEditingHeaderTitle])
+
+  useEffect(() => {
+    setHeaderActionError(null)
+  }, [currentThread?.id])
+
+  const startHeaderRename = useCallback(() => {
+    if (!currentThread || headerActionPending) {
+      return
+    }
+
+    setHeaderActionError(null)
+    setHeaderTitleDraft(currentThread.title)
+    setIsEditingHeaderTitle(true)
+  }, [currentThread, headerActionPending])
+
+  const cancelHeaderRename = useCallback(() => {
+    setIsEditingHeaderTitle(false)
+    setHeaderTitleDraft(currentThread?.title ?? "")
+  }, [currentThread?.title])
+
+  const commitHeaderRename = useCallback(async () => {
+    if (!currentThread || headerActionPending) {
+      return
+    }
+
+    const normalizedTitle = headerTitleDraft.trim()
+    if (normalizedTitle.length === 0 || normalizedTitle === currentThread.title) {
+      cancelHeaderRename()
+      return
+    }
+
+    setHeaderActionError(null)
+    setHeaderActionPending("rename")
+    try {
+      await renameThread(currentThread.id, normalizedTitle)
+      setIsEditingHeaderTitle(false)
+    } catch (error) {
+      setHeaderActionError(getErrorMessage(error, "Failed to rename the chat. Try again."))
+    } finally {
+      setHeaderActionPending(null)
+    }
+  }, [cancelHeaderRename, currentThread, headerActionPending, headerTitleDraft, renameThread])
+
+  const handleDeleteCurrentThread = useCallback(async () => {
+    if (!currentThread || headerActionPending) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Delete "${currentThread.title}" and remove its message history from Student Claw?`,
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setHeaderActionError(null)
+    setHeaderActionPending("delete")
+    try {
+      await deleteThread(currentThread.id)
+      setIsEditingHeaderTitle(false)
+
+      if (variant === "page") {
+        if (currentWorkspace) {
+          await navigate({
+            to: "/chat/$workspaceId",
+            params: { workspaceId: currentWorkspace.id },
+          })
+        } else {
+          await navigate({ to: "/chat" })
+        }
+        return
+      }
+
+      selectChatTarget(currentWorkspace?.id ?? null, null)
+    } catch (error) {
+      setHeaderActionError(getErrorMessage(error, "Failed to delete the chat. Try again."))
+    } finally {
+      setHeaderActionPending(null)
+    }
+  }, [
+    currentThread,
+    currentWorkspace,
+    deleteThread,
+    headerActionPending,
+    navigate,
+    selectChatTarget,
+    variant,
+  ])
+
   const isAuthRequired = status === "auth-expired"
 
   return (
     <div className={`flex h-full flex-col ${variant === "page" ? "mx-auto max-w-3xl" : ""}`}>
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="font-heading text-base font-medium">
-            {currentThread?.title ?? currentWorkspace?.name ?? "Chat"}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {currentThread
-              ? currentThread.status
-              : currentWorkspace
-                ? currentWorkspace.kind === "filesystem"
-                  ? currentWorkspace.rootPath
-                  : "Imported legacy chats"
-                : "Add or choose a folder to start chatting"}
-          </p>
+      <div className="border-b">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-1">
+            {isEditingHeaderTitle && currentThread ? (
+              <form
+                className="min-w-0"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void commitHeaderRename()
+                }}
+              >
+                <Input
+                  value={headerTitleDraft}
+                  onChange={(event) => setHeaderTitleDraft(event.target.value)}
+                  autoFocus
+                  disabled={headerActionPending !== null}
+                  aria-label={`Rename ${currentThread.title}`}
+                  className="h-9 min-w-[220px] max-w-full font-heading text-base"
+                  onBlur={() => void commitHeaderRename()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault()
+                      cancelHeaderRename()
+                    }
+                  }}
+                />
+              </form>
+            ) : (
+              <>
+                <h2
+                  className={`min-w-0 truncate font-heading text-base font-medium ${
+                    currentThread ? "cursor-text" : ""
+                  }`}
+                  title={headerTitle}
+                  onDoubleClick={currentThread ? startHeaderRename : undefined}
+                >
+                  {headerTitle}
+                </h2>
+                {currentThread && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+                        aria-label={`Open actions for ${currentThread.title}`}
+                        disabled={headerActionPending !== null}
+                      >
+                        <HugeiconsIcon icon={ArrowDown01Icon} size={14} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onSelect={startHeaderRename}>
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => void handleDeleteCurrentThread()}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {connectionState !== "connected" && (
+              <span className="text-xs text-muted-foreground">
+                {connectionState === "connecting"
+                  ? "Connecting..."
+                  : connectionState === "reconnecting"
+                    ? "Reconnecting..."
+                    : "Disconnected"}
+              </span>
+            )}
+            {variant === "panel" && (
+              <Button variant="ghost" size="sm" onClick={closePanel}>
+                Close
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {connectionState !== "connected" && (
-            <span className="text-xs text-muted-foreground">
-              {connectionState === "connecting"
-                ? "Connecting..."
-                : connectionState === "reconnecting"
-                  ? "Reconnecting..."
-                  : "Disconnected"}
-            </span>
-          )}
-          {variant === "page" && (
-            <Button variant="outline" size="sm" onClick={handleGoToDashboard}>
-              Dashboard
-            </Button>
-          )}
-          {variant === "panel" && (
-            <Button variant="ghost" size="sm" onClick={closePanel}>
-              Close
-            </Button>
-          )}
-        </div>
+        {headerActionError && (
+          <p className="px-4 pb-3 text-xs text-destructive">{headerActionError}</p>
+        )}
       </div>
 
       {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" && (
@@ -142,7 +304,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
               </div>
             ) : messages.length === 0 ? (
               <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatEmptyState onSuggestionClick={(content) => void sendMessage(content)} />
+                <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
               </div>
             ) : (
               <>
@@ -171,16 +333,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         )}
       </div>
 
-      <div className="border-t px-4 py-2">
-        <Persona
-          state={toChatPersonaState(status, messages)}
-          variant="obsidian"
-          className="w-full"
-        />
-      </div>
-
       <PromptInput
-        onSend={(content) => void sendMessage(content)}
+        onSend={sendMessage}
         onInterrupt={() => void interrupt()}
         status={status}
         connectionState={connectionState}
@@ -189,6 +343,12 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         availableModels={availableModels}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
+        accessMode={currentThread?.accessMode ?? null}
+        onAccessModeChange={(accessMode) => void setThreadAccessMode(accessMode)}
+        accessModeUpdatePending={accessModeMutationPending}
+        pendingApproval={currentPendingApproval}
+        onRespondToApproval={(decision) => void respondToApproval(decision)}
+        approvalDecisionPending={approvalDecisionPending}
       />
     </div>
   )

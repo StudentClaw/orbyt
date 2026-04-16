@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { RouterProvider } from "@tanstack/react-router"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { startAppRuntime } from "@/rpc/appRuntime"
 import { seedDevMockData } from "@/rpc/devMockSeed"
 import { router } from "./router"
@@ -14,7 +15,11 @@ function App() {
     })
   }, [])
 
-  return <RouterProvider router={router} />
+  return (
+    <TooltipProvider>
+      <RouterProvider router={router} />
+    </TooltipProvider>
+  )
 }
 
 export default App

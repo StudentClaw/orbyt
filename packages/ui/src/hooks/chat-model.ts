@@ -1,10 +1,12 @@
 import type {
   OrchestrationSnapshot,
   OrchestrationThread,
+  OrchestrationTurnAttachment,
   OrchestrationTurn,
   OrchestrationWorkspace,
   ProviderRuntimeEvent,
 } from "@student-claw/contracts"
+import { extractDisplayContent } from "@/lib/chatAttachments"
 
 export type ProviderGuidance = {
   title: string
@@ -36,6 +38,7 @@ export interface ChatMessage {
   readonly role: "user" | "assistant"
   readonly content: string
   readonly timestamp: number
+  readonly attachments?: readonly OrchestrationTurnAttachment[]
   readonly isStreaming?: boolean
   readonly toolCalls?: readonly ToolCallInfo[]
   readonly reasoning?: string
@@ -122,8 +125,9 @@ export function buildChatMessages(
       {
         id: `${turn.id}:user`,
         role: "user",
-        content: turn.input,
+        content: extractDisplayContent(turn.input, turn.attachments),
         timestamp,
+        attachments: turn.attachments,
       },
       {
         id: `${turn.id}:assistant`,
@@ -209,6 +213,10 @@ export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
       return `Turn interrupted: ${event.turnId}`
     case "provider.mcpToolCall":
       return `${event.status} tool call: ${event.toolName}`
+    case "provider.approvalRequested":
+      return `Approval requested: ${event.approval.kind}`
+    case "provider.approvalResolved":
+      return `Approval ${event.decision}: ${event.approvalRequestId}`
     default:
       return ""
   }

@@ -74,6 +74,7 @@ describe("@student-claw/contracts", () => {
       workspaces: [],
       threads: [],
       turns: [],
+      pendingApprovals: [],
       providerStatus: "idle",
       providerRuntime: {
         adapter: "codex",
