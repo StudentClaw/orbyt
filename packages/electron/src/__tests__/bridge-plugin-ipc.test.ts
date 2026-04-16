@@ -84,6 +84,7 @@ describe("registerIpcHandlers plugin reads", () => {
         showSaveDialog: async () => ({ canceled: true, filePath: null }),
       },
       ipcMain: {
+        removeHandler: () => undefined,
         handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
           handlers.set(channel, handler)
         },
@@ -102,6 +103,10 @@ describe("registerIpcHandlers plugin reads", () => {
           return false
         }
       },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
       safeStorage: {
         isEncryptionAvailable: () => true,
         encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
@@ -114,8 +119,10 @@ describe("registerIpcHandlers plugin reads", () => {
 
     const listHandler = handlers.get(IpcChannel.PLUGIN_LIST)
     const statusHandler = handlers.get(IpcChannel.PLUGIN_GET_STATUS)
+    const pushSettingsHandler = handlers.get(IpcChannel.PUSH_GET_SETTINGS)
     expect(listHandler).toBeDefined()
     expect(statusHandler).toBeDefined()
+    expect(pushSettingsHandler).toBeDefined()
 
     const listResult = await listHandler?.({}, {})
     expect(listResult).toHaveLength(1)
@@ -129,6 +136,12 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(statusResult).toMatchObject({
       kind: "available",
       installSource: "bundled",
+    })
+
+    expect(await pushSettingsHandler?.({})).toMatchObject({
+      enabled: true,
+      linkedDevice: null,
+      activePairing: null,
     })
   })
 
@@ -184,6 +197,7 @@ describe("registerIpcHandlers plugin reads", () => {
         showSaveDialog: async () => ({ canceled: true, filePath: null }),
       },
       ipcMain: {
+        removeHandler: () => undefined,
         handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
           handlers.set(channel, handler)
         },
@@ -201,6 +215,10 @@ describe("registerIpcHandlers plugin reads", () => {
         static isSupported(): boolean {
           return false
         }
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
       },
       safeStorage: {
         isEncryptionAvailable: () => true,
@@ -273,6 +291,7 @@ describe("registerIpcHandlers plugin reads", () => {
         showSaveDialog: async () => ({ canceled: true, filePath: null }),
       },
       ipcMain: {
+        removeHandler: () => undefined,
         handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
           handlers.set(channel, handler)
         },
@@ -290,6 +309,10 @@ describe("registerIpcHandlers plugin reads", () => {
         static isSupported(): boolean {
           return false
         }
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
       },
       safeStorage: {
         isEncryptionAvailable: () => true,
@@ -309,5 +332,152 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(spawnOptions).not.toBeNull()
     expect((spawnOptions?.env as Record<string, string>).CODEX_HOME).toBe(path.join(userDataRoot, "codex-home"))
     expect((spawnOptions?.env as Record<string, string>).HOME).toBe(path.join(userDataRoot, "codex-user-home"))
+  })
+
+  test("registers phone push IPC handlers when a push manager is provided", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+    const pushManager = {
+      start: async () => undefined,
+      stop: () => undefined,
+      getSettings: () => ({
+        enabled: true,
+        workflowEventsEnabled: true,
+        weeklyInsightsEnabled: true,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        weeklyInsightsDay: 1,
+        weeklyInsightsTime: "08:00",
+        relayBaseUrl: "https://push.example.com",
+        linkedDevice: null,
+        activePairing: null,
+      }),
+      updateSettings: () => ({
+        enabled: false,
+        workflowEventsEnabled: true,
+        weeklyInsightsEnabled: true,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        weeklyInsightsDay: 1,
+        weeklyInsightsTime: "08:00",
+        relayBaseUrl: "https://push.example.com",
+        linkedDevice: null,
+        activePairing: null,
+      }),
+      startPairing: async () => ({
+        sessionId: "session_1",
+        qrUrl: "https://push.example.com/pair/session_1",
+        expiresAt: "2026-04-15T13:00:00.000Z",
+        state: "pending" as const,
+      }),
+      getPairingStatus: async () => ({
+        linkedDevice: null,
+        activePairing: null,
+      }),
+      cancelPairing: async () => ({
+        enabled: true,
+        workflowEventsEnabled: true,
+        weeklyInsightsEnabled: true,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        weeklyInsightsDay: 1,
+        weeklyInsightsTime: "08:00",
+        relayBaseUrl: "https://push.example.com",
+        linkedDevice: null,
+        activePairing: null,
+      }),
+      sendTest: async () => ({ ok: true }),
+      unlinkDevice: () => ({
+        enabled: true,
+        workflowEventsEnabled: true,
+        weeklyInsightsEnabled: true,
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        weeklyInsightsDay: 1,
+        weeklyInsightsTime: "08:00",
+        relayBaseUrl: "https://push.example.com",
+        linkedDevice: null,
+        activePairing: null,
+      }),
+    }
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: true,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?push-ipc-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap, {
+      pluginManager: {
+        list: () => [],
+        start: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        stop: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        retry: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        getStatus: () => null,
+        dispose: async () => undefined,
+      } as never,
+      pluginAuthService: {
+        getStatus: () => null,
+        saveCredentials: () => ({
+          ok: false,
+          pluginId: "ignored",
+          reason: "plugin_system_disabled",
+          error: "disabled",
+        }),
+      } as never,
+      pushManager: pushManager as never,
+    })
+
+    const getSettings = handlers.get(IpcChannel.PUSH_GET_SETTINGS)
+    const startPairing = handlers.get(IpcChannel.PUSH_START_PAIRING)
+    const sendTest = handlers.get(IpcChannel.PUSH_SEND_TEST)
+
+    expect(getSettings).toBeDefined()
+    expect(startPairing).toBeDefined()
+    expect(sendTest).toBeDefined()
+    expect(await getSettings?.({})).toMatchObject({
+      enabled: true,
+      relayBaseUrl: "https://push.example.com",
+    })
+    expect(await startPairing?.({})).toMatchObject({
+      sessionId: "session_1",
+      state: "pending",
+    })
+    expect(await sendTest?.({})).toEqual({ ok: true })
   })
 })

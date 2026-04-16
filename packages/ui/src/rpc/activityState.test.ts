@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest"
+import type { ActivityFeedEntry } from "@student-claw/contracts"
 import {
   applyActivityFeedUpsertEvent,
   filterActivityEntries,
@@ -48,9 +49,10 @@ describe("activityState", () => {
   describe("applyActivityFeedUpsertEvent", () => {
     test("adds a new entry and increments unread count", () => {
       applyActivityFeedUpsertEvent({
-        entryId: "e1",
+        id: "e1" as ActivityFeedEntry["id"],
         title: "New grade posted",
         category: "canvas",
+        type: "canvas_update",
       })
 
       const entries = getActivityEntries()
@@ -63,14 +65,16 @@ describe("activityState", () => {
 
     test("updates existing entry without incrementing unread count", () => {
       applyActivityFeedUpsertEvent({
-        entryId: "e1",
+        id: "e1" as ActivityFeedEntry["id"],
         title: "Original title",
         category: "canvas",
+        type: "canvas_update",
       })
       applyActivityFeedUpsertEvent({
-        entryId: "e1",
+        id: "e1" as ActivityFeedEntry["id"],
         title: "Updated title",
         category: "canvas",
+        type: "canvas_update",
       })
 
       const entries = getActivityEntries()
@@ -81,14 +85,16 @@ describe("activityState", () => {
 
     test("prepends new entries (newest first)", () => {
       applyActivityFeedUpsertEvent({
-        entryId: "e1",
+        id: "e1" as ActivityFeedEntry["id"],
         title: "First",
         category: "canvas",
+        type: "canvas_update",
       })
       applyActivityFeedUpsertEvent({
-        entryId: "e2",
+        id: "e2" as ActivityFeedEntry["id"],
         title: "Second",
         category: "planner",
+        type: "planner_update",
       })
 
       const entries = getActivityEntries()
@@ -97,18 +103,36 @@ describe("activityState", () => {
     })
 
     test("multiple new entries each increment unread count", () => {
-      applyActivityFeedUpsertEvent({ entryId: "e1", title: "A", category: "canvas" })
-      applyActivityFeedUpsertEvent({ entryId: "e2", title: "B", category: "planner" })
-      applyActivityFeedUpsertEvent({ entryId: "e3", title: "C", category: "insight" })
+      applyActivityFeedUpsertEvent({ id: "e1" as ActivityFeedEntry["id"], title: "A", category: "canvas", type: "canvas_update" })
+      applyActivityFeedUpsertEvent({ id: "e2" as ActivityFeedEntry["id"], title: "B", category: "planner", type: "planner_update" })
+      applyActivityFeedUpsertEvent({ id: "e3" as ActivityFeedEntry["id"], title: "C", category: "insight", type: "weekly_summary" })
 
       expect(getActivityUnreadCount()).toBe(3)
+    })
+
+    test("preserves optional body, priority, and deep link fields from the feed payload", () => {
+      applyActivityFeedUpsertEvent({
+        id: "e9" as ActivityFeedEntry["id"],
+        category: "workflow",
+        type: "workflow_completed",
+        title: "Workflow complete",
+        body: "The agent finished your task.",
+        priority: 3,
+        deepLink: "/chat",
+      })
+
+      expect(getActivityEntries()[0]).toMatchObject({
+        body: "The agent finished your task.",
+        priority: 3,
+        deepLink: "/chat",
+      })
     })
   })
 
   describe("markAllActivityRead", () => {
     test("resets unread count to 0", () => {
-      applyActivityFeedUpsertEvent({ entryId: "e1", title: "A", category: "canvas" })
-      applyActivityFeedUpsertEvent({ entryId: "e2", title: "B", category: "planner" })
+      applyActivityFeedUpsertEvent({ id: "e1" as ActivityFeedEntry["id"], title: "A", category: "canvas", type: "canvas_update" })
+      applyActivityFeedUpsertEvent({ id: "e2" as ActivityFeedEntry["id"], title: "B", category: "planner", type: "planner_update" })
       expect(getActivityUnreadCount()).toBe(2)
 
       markAllActivityRead()
@@ -116,7 +140,7 @@ describe("activityState", () => {
     })
 
     test("does not remove entries", () => {
-      applyActivityFeedUpsertEvent({ entryId: "e1", title: "A", category: "canvas" })
+      applyActivityFeedUpsertEvent({ id: "e1" as ActivityFeedEntry["id"], title: "A", category: "canvas", type: "canvas_update" })
       markAllActivityRead()
       expect(getActivityEntries()).toHaveLength(1)
     })
@@ -175,7 +199,7 @@ describe("activityState", () => {
 
   describe("resetActivityStateForTests", () => {
     test("clears all atoms to initial values", () => {
-      applyActivityFeedUpsertEvent({ entryId: "e1", title: "A", category: "canvas" })
+      applyActivityFeedUpsertEvent({ id: "e1" as ActivityFeedEntry["id"], title: "A", category: "canvas", type: "canvas_update" })
       setActivityFilter("planner")
 
       resetActivityStateForTests()

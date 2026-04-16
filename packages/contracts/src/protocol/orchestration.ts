@@ -1,5 +1,7 @@
 import { Schema } from "@effect/schema"
 import { SkillId } from "../schemas/ids.js"
+import { ActivityFeedEntry } from "../schemas/activity-feed-entry.js"
+import { WeeklyInsight } from "../schemas/weekly-insight.js"
 import { DesktopBootstrap } from "./desktop.js"
 import { FeatureFlags } from "./feature-flags.js"
 
@@ -90,11 +92,13 @@ export const RPC_METHODS = {
   PLANNER_CHECK_IN: "planner.checkIn",
   PLANNER_SUBSCRIBE_CHECK_INS: "planner.subscribeCheckIns",
   ACTIVITY_SUBSCRIBE_FEED: "activity.subscribeFeed",
+  ACTIVITY_GENERATE_WEEKLY_INSIGHT: "activity.generateWeeklyInsight",
   ONBOARDING_GET_SNAPSHOT: "onboarding.getSnapshot",
   ONBOARDING_SET_STEP_STATUS: "onboarding.setStepStatus",
   ONBOARDING_SET_OVERALL_STATUS: "onboarding.setOverallStatus",
   ONBOARDING_GET_PREFERENCES: "onboarding.getPreferences",
   ONBOARDING_SET_PREFERENCES: "onboarding.setPreferences",
+  ONBOARDING_GET_ROUTINES: "onboarding.getRoutines",
   ONBOARDING_SET_ROUTINES: "onboarding.setRoutines",
   ONBOARDING_GET_AI_AUTH: "onboarding.getAiAuth",
   ONBOARDING_SET_AI_AUTH: "onboarding.setAiAuth",
@@ -174,6 +178,8 @@ export const ServerConfigStreamEvent = Schema.Union(
     config: ServerConfig,
   }),
 )
+
+export { ActivityFeedEntry, WeeklyInsight }
 
 /**
  * Snapshot of a persisted chat workspace.

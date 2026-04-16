@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
+  ActivityFeedEntry,
   DesktopBootstrap,
   GatewayToolCallResult,
   GatewayToolInventoryReadResult,
@@ -17,6 +18,7 @@ import {
   ServerConfig,
   ServerLifecycleEvent,
   RpcRequestEnvelope,
+  WeeklyInsight,
 } from "./index.js"
 
 describe("@student-claw/contracts", () => {
@@ -117,6 +119,28 @@ describe("@student-claw/contracts", () => {
 
     expect(event.type).toBe("provider.stateChanged")
     expect(event.state.queuedTurnCount).toBe(2)
+  })
+
+  test("decodes activity feed entries and weekly insight payloads", () => {
+    const entry = Schema.decodeUnknownSync(ActivityFeedEntry)({
+      id: "activity_1",
+      category: "workflow",
+      type: "workflow_completed",
+      title: "Workflow complete",
+      body: "The agent finished your task.",
+      priority: 3,
+      deepLink: "/chat",
+    })
+
+    const insight = Schema.decodeUnknownSync(WeeklyInsight)({
+      title: "Weekly insight ready",
+      body: "You completed 4 workflow tasks this week.",
+      weekKey: "2026-04-13",
+    })
+
+    expect(entry.priority).toBe(3)
+    expect(entry.deepLink).toBe("/chat")
+    expect(insight.weekKey).toBe("2026-04-13")
   })
 
   test("decodes gateway bridge contracts and provider MCP tool-call events", () => {

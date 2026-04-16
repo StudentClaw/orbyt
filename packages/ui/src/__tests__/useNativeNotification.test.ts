@@ -3,6 +3,9 @@ import { renderHook } from "@testing-library/react"
 import type { ActivityFeedEntry } from "@student-claw/contracts"
 
 let mockEntries: ReadonlyArray<ActivityFeedEntry> = []
+const notificationMocks = {
+  create: vi.fn(),
+}
 
 vi.mock("@/rpc/activityState", () => ({
   useActivityEntries: () => mockEntries,
@@ -10,8 +13,16 @@ vi.mock("@/rpc/activityState", () => ({
 
 beforeEach(() => {
   mockEntries = []
+  notificationMocks.create.mockClear()
   ;(globalThis as any).window = {
     ...globalThis.window,
+    Notification: class MockNotification {
+      static permission: NotificationPermission = "granted"
+
+      constructor(title: string, options?: NotificationOptions) {
+        notificationMocks.create(title, options)
+      }
+    },
     electronAPI: {
       invoke: vi.fn(),
     },
@@ -34,6 +45,7 @@ function makeEntry(id: string, priority?: number): ActivityFeedEntry {
 describe("useNativeNotification", () => {
   test("does not fire notification on initial render with empty entries", () => {
     renderHook(() => useNativeNotification())
+    expect(notificationMocks.create).not.toHaveBeenCalled()
     expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
   })
 
@@ -44,9 +56,9 @@ describe("useNativeNotification", () => {
     mockEntries = [makeEntry("e1", 3)]
     rerender()
 
-    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(
-      "notification:show",
-      expect.objectContaining({ title: "Entry e1" }),
+    expect(notificationMocks.create).toHaveBeenCalledWith(
+      "Entry e1",
+      expect.objectContaining({ body: "Body for e1" }),
     )
   })
 
@@ -56,7 +68,7 @@ describe("useNativeNotification", () => {
     mockEntries = [makeEntry("e1", 1)]
     rerender()
 
-    expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
+    expect(notificationMocks.create).not.toHaveBeenCalled()
   })
 
   test("does not fire notification for entry without priority", () => {
@@ -65,7 +77,7 @@ describe("useNativeNotification", () => {
     mockEntries = [makeEntry("e1", undefined)]
     rerender()
 
-    expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
+    expect(notificationMocks.create).not.toHaveBeenCalled()
   })
 
   test("only fires for new entries, not existing ones", () => {
@@ -73,10 +85,9 @@ describe("useNativeNotification", () => {
     const { rerender } = renderHook(() => useNativeNotification())
 
     // Re-render with same entries — should not fire again
-    const invokeFn = window.electronAPI?.invoke as ReturnType<typeof vi.fn>
-    invokeFn?.mockClear()
+    notificationMocks.create.mockClear()
 
     rerender()
-    expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
+    expect(notificationMocks.create).not.toHaveBeenCalled()
   })
 })

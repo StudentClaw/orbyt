@@ -1,0 +1,9 @@
+{
+  "name": "Student Claw Pair Phone",
+  "short_name": "Student Claw",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1b2a",
+  "theme_color": "#0d1b2a",
+  "icons": []
+}

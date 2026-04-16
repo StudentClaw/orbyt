@@ -1,5 +1,6 @@
 import { Schema } from "@effect/schema"
 import {
+  type ActivityFeedEntry,
   CreateWorkspaceParams,
   CreateThreadParams,
   DeleteThreadParams,
@@ -22,14 +23,19 @@ import {
   SetAiAuthStatusParams,
   SetStepStatusParams,
   SetOverallStatusParams,
+  UpdatePreferencesParams,
+  SetRoutinesParams,
 } from "@student-claw/contracts"
 import type { WebSocket } from "ws"
+import type { AppConfig } from "../config/defaults.js"
+import { generateWeeklyInsight } from "../activity/feed.js"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
 import type { DatabaseService } from "../db/Database.js"
 
 type RouteDependencies = {
+  readonly config: AppConfig
   readonly orchestration: OrchestrationServiceShape
   readonly pushBus: PushBusService
   readonly readiness: ServerReadinessService
@@ -161,6 +167,23 @@ async function handleStreamMethod(
     case RPC_METHODS.PLANNER_SUBSCRIBE_CHECK_INS:
       dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.PLANNER_SESSION_CHECK_IN)
       return encodeSuccess(request.id, { subscribed: true })
+    default:
+      return null
+  }
+}
+
+async function handleActivityMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+
+  switch (method) {
+    case RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT:
+      return encodeSuccess(id, await generateWeeklyInsight({
+        database: dependencies.database,
+        config: dependencies.config,
+      }))
     default:
       return null
   }
@@ -508,6 +531,137 @@ async function handleOnboardingMethod(
       )
       return encodeSuccess(id, { ok: true })
     }
+    case RPC_METHODS.ONBOARDING_GET_PREFERENCES: {
+      // Ensure a default row exists, then return it.
+      database.execute(
+        `INSERT OR IGNORE INTO user_preferences
+           (id, study_times, course_ranking, max_session_mins, off_limit_days,
+            notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration)
+         VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none')`,
+      )
+      const row = database.get<{
+        study_times: string
+        course_ranking: string
+        max_session_mins: number
+        off_limit_days: string
+        notification_enabled: number
+        quiet_hours_start: string
+        quiet_hours_end: string
+        calendar_integration: string
+      }>("SELECT * FROM user_preferences WHERE id = 1")
+      if (!row) return encodeError(id, "internal_error", "Could not read preferences")
+      return encodeSuccess(id, {
+        studyTimes: JSON.parse(row.study_times) as string[],
+        courseRanking: JSON.parse(row.course_ranking) as string[],
+        maxSessionMins: row.max_session_mins,
+        offLimitDays: JSON.parse(row.off_limit_days) as number[],
+        notificationEnabled: row.notification_enabled === 1,
+        quietHoursStart: row.quiet_hours_start,
+        quietHoursEnd: row.quiet_hours_end,
+        calendarIntegration: row.calendar_integration,
+      })
+    }
+    case RPC_METHODS.ONBOARDING_SET_PREFERENCES: {
+      const decoded = decodeParams(UpdatePreferencesParams, params, id, "setPreferences params are invalid")
+      if (typeof decoded === "string") return decoded
+      // Ensure default row exists before merging.
+      database.execute(
+        `INSERT OR IGNORE INTO user_preferences
+           (id, study_times, course_ranking, max_session_mins, off_limit_days,
+            notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration)
+         VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none')`,
+      )
+      const now = new Date().toISOString()
+      if (decoded.studyTimes !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET study_times = ?, updated_at = ? WHERE id = 1",
+          [JSON.stringify(decoded.studyTimes), now],
+        )
+      }
+      if (decoded.courseRanking !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET course_ranking = ?, updated_at = ? WHERE id = 1",
+          [JSON.stringify(decoded.courseRanking), now],
+        )
+      }
+      if (decoded.maxSessionMins !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET max_session_mins = ?, updated_at = ? WHERE id = 1",
+          [decoded.maxSessionMins, now],
+        )
+      }
+      if (decoded.offLimitDays !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET off_limit_days = ?, updated_at = ? WHERE id = 1",
+          [JSON.stringify(decoded.offLimitDays), now],
+        )
+      }
+      if (decoded.notificationEnabled !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET notification_enabled = ?, updated_at = ? WHERE id = 1",
+          [decoded.notificationEnabled ? 1 : 0, now],
+        )
+      }
+      if (decoded.quietHoursStart !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET quiet_hours_start = ?, updated_at = ? WHERE id = 1",
+          [decoded.quietHoursStart, now],
+        )
+      }
+      if (decoded.quietHoursEnd !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET quiet_hours_end = ?, updated_at = ? WHERE id = 1",
+          [decoded.quietHoursEnd, now],
+        )
+      }
+      if (decoded.calendarIntegration !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET calendar_integration = ?, updated_at = ? WHERE id = 1",
+          [decoded.calendarIntegration, now],
+        )
+      }
+      const row = database.get<{
+        study_times: string
+        course_ranking: string
+        max_session_mins: number
+        off_limit_days: string
+        notification_enabled: number
+        quiet_hours_start: string
+        quiet_hours_end: string
+        calendar_integration: string
+      }>("SELECT * FROM user_preferences WHERE id = 1")
+      if (!row) return encodeError(id, "internal_error", "Could not read updated preferences")
+      return encodeSuccess(id, {
+        studyTimes: JSON.parse(row.study_times) as string[],
+        courseRanking: JSON.parse(row.course_ranking) as string[],
+        maxSessionMins: row.max_session_mins,
+        offLimitDays: JSON.parse(row.off_limit_days) as number[],
+        notificationEnabled: row.notification_enabled === 1,
+        quietHoursStart: row.quiet_hours_start,
+        quietHoursEnd: row.quiet_hours_end,
+        calendarIntegration: row.calendar_integration,
+      })
+    }
+    case RPC_METHODS.ONBOARDING_GET_ROUTINES: {
+      const cells = database.query<{ day_of_week: number; hour_of_day: number }>(
+        "SELECT day_of_week, hour_of_day FROM routines ORDER BY day_of_week, hour_of_day",
+      ).map((r) => ({ dayOfWeek: r.day_of_week, hourOfDay: r.hour_of_day }))
+      return encodeSuccess(id, { cells })
+    }
+    case RPC_METHODS.ONBOARDING_SET_ROUTINES: {
+      const decoded = decodeParams(SetRoutinesParams, params, id, "setRoutines params are invalid")
+      if (typeof decoded === "string") return decoded
+      database.transaction(() => {
+        database.execute("DELETE FROM routines")
+        for (const cell of decoded.cells) {
+          database.execute(
+            "INSERT OR IGNORE INTO routines (day_of_week, hour_of_day) VALUES (?, ?)",
+            [cell.dayOfWeek, cell.hourOfDay],
+          )
+        }
+      })
+      return encodeSuccess(id, { count: decoded.cells.length })
+    }
     default:
       return null
   }
@@ -529,6 +683,7 @@ export async function routeMessage(
   try {
     const response = await handleServerMethod(decoded, ws, dependencies)
       ?? await handleStreamMethod(decoded, ws, dependencies)
+      ?? await handleActivityMethod(decoded, dependencies)
       ?? await handleOrchestrationMethod(decoded, dependencies)
       ?? await handleProviderMethod(decoded, dependencies)
       ?? await handleOnboardingMethod(decoded, dependencies)

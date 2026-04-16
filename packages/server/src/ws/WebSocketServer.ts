@@ -69,7 +69,7 @@ function createWebSocketService(
   })
 
   wss.on("connection", (ws) => {
-    registerSocketHandlers(ws as WebSocket, readiness, pushBus, orchestration, database)
+    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database)
   })
 
   return {
@@ -83,6 +83,7 @@ function createWebSocketService(
 
 function registerSocketHandlers(
   ws: WebSocket,
+  config: AppConfig,
   readiness: ServerReadinessService,
   pushBus: PushBusService,
   orchestration: OrchestrationServiceShape,
@@ -97,6 +98,7 @@ function registerSocketHandlers(
     }
 
     const result = await routeMessage(data.toString(), ws, {
+      config,
       orchestration,
       pushBus,
       readiness,

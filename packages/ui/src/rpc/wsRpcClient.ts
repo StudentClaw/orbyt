@@ -8,6 +8,7 @@ import {
   ServerConfig,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
+  type ActivityFeedEntry,
   type AiAuthState,
   type Course,
   type CreateWorkspaceResult,
@@ -31,6 +32,7 @@ import {
   type StudentPreference,
   type TurnAttachmentInput,
   type UpdatePreferencesParams,
+  type WeeklyInsight,
 } from "@student-claw/contracts"
 import type {
   DeleteThreadResult,
@@ -76,11 +78,7 @@ export interface PlannerSessionCheckInEvent {
 /**
  * Activity feed upsert payload emitted over the runtime push channel.
  */
-export interface ActivityFeedUpsertEvent {
-  readonly entryId: string
-  readonly title: string
-  readonly category: string
-}
+export type ActivityFeedUpsertEvent = ActivityFeedEntry
 
 /**
  * Typed RPC client facade used by the renderer runtime state modules.
@@ -159,6 +157,7 @@ export interface WsRpcClient {
     ) => () => void
   }
   readonly activity: {
+    readonly generateWeeklyInsight: () => Promise<WeeklyInsight>
     readonly onFeedUpdate: (
       listener: (event: ActivityFeedUpsertEvent) => void,
       options?: StreamSubscriptionOptions,
@@ -170,6 +169,7 @@ export interface WsRpcClient {
     readonly setOverallStatus: (params: SetOverallStatusParams) => Promise<{ ok: boolean }>
     readonly getPreferences: () => Promise<StudentPreference>
     readonly setPreferences: (params: UpdatePreferencesParams) => Promise<StudentPreference>
+    readonly getRoutines: () => Promise<{ cells: Array<{ dayOfWeek: number; hourOfDay: number }> }>
     readonly setRoutines: (params: SetRoutinesParams) => Promise<{ count: number }>
     readonly getAiAuth: () => Promise<AiAuthState>
     readonly setAiAuth: (params: SetAiAuthStatusParams) => Promise<AiAuthState>
@@ -330,6 +330,7 @@ function createPlannerApi(transport: WsTransport): WsRpcClient["planner"] {
 
 function createActivityApi(transport: WsTransport): WsRpcClient["activity"] {
   return {
+    generateWeeklyInsight: () => transport.request(RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT, {}),
     onFeedUpdate: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.ACTIVITY_FEED,
@@ -349,6 +350,7 @@ function createOnboardingApi(transport: WsTransport): WsRpcClient["onboarding"] 
     setOverallStatus: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_OVERALL_STATUS, params),
     getPreferences: () => transport.request(RPC_METHODS.ONBOARDING_GET_PREFERENCES, {}),
     setPreferences: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_PREFERENCES, params),
+    getRoutines: () => transport.request(RPC_METHODS.ONBOARDING_GET_ROUTINES, {}),
     setRoutines: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_ROUTINES, params),
     getAiAuth: () => transport.request(RPC_METHODS.ONBOARDING_GET_AI_AUTH, {}),
     setAiAuth: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_AI_AUTH, params),

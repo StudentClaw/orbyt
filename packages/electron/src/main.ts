@@ -7,6 +7,7 @@ import { registerIpcHandlers } from "./ipc/bridge.js"
 import { createPluginGatewayService, type PluginGatewayService } from "./plugins/plugin-gateway-service.js"
 import { PluginManager } from "./plugins/plugin-manager.js"
 import { createPluginRuntime } from "./plugins/plugin-runtime.js"
+import { createPushManager, type PushManager } from "./push/push-manager.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
 import { createWindow } from "./window/window-manager.js"
@@ -29,6 +30,7 @@ let serverProcess: ServerProcess | null = null
 let serverProcessPromise: Promise<ServerProcess> | null = null
 let pluginManager: PluginManager | null = null
 let pluginGateway: PluginGatewayService | null = null
+let pushManager: PushManager | null = null
 let isQuitting = false
 
 async function ensureServerProcess(): Promise<ServerProcess> {
@@ -63,10 +65,20 @@ async function ensureServerProcess(): Promise<ServerProcess> {
       })
       .then((nextServerProcess) => {
         serverProcess = nextServerProcess
+        pushManager = createPushManager({
+          userDataPath: app.getPath("userData"),
+          bootstrap: nextServerProcess.bootstrap,
+          relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
+        })
         pluginManager = registerIpcHandlers(
           nextServerProcess.bootstrap,
-          { pluginManager: runtime.manager, pluginAuthService: runtime.authService },
+          {
+            pluginManager: runtime.manager,
+            pluginAuthService: runtime.authService,
+            pushManager,
+          },
         ).pluginManager
+        void pushManager.start()
         return nextServerProcess
       })
       .catch(async (error) => {
@@ -133,6 +145,8 @@ app.on("before-quit", () => {
   isQuitting = true
   void pluginManager?.dispose()
   pluginManager = null
+  pushManager?.stop()
+  pushManager = null
   void pluginGateway?.close()
   pluginGateway = null
   serverProcess?.kill()

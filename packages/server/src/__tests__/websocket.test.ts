@@ -1,7 +1,9 @@
 import { describe, test, expect } from "bun:test"
-import { Database as BunDatabase } from "bun:sqlite"
+import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
 import { routeMessage } from "../ws/Router.js"
+import { defaultConfig } from "../config/defaults.js"
+import { runMigrations } from "../db/migrations/runner.js"
 
 const mockWs = { readyState: 1, send: () => undefined } as never
 
@@ -9,7 +11,13 @@ function makeDependencies() {
   const threadId = "thread_1" as ThreadId
   const turnId = "turn_1" as TurnId
   const db = new BunDatabase(":memory:")
+  runMigrations(db)
   return {
+    config: {
+      ...defaultConfig,
+      wsAuthToken: "a".repeat(64),
+      codexBinaryPath: "/usr/bin/false",
+    },
     readiness: {
       awaitReady: async () => undefined,
       markReady: () => undefined,
@@ -87,9 +95,11 @@ function makeDependencies() {
     },
     database: {
       db,
-      get: () => null,
-      query: () => [],
-      execute: () => undefined,
+      get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
+      query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
+      execute: (sql: string, params: SQLQueryBindings[] = []) => {
+        db.run(sql, params as never)
+      },
       transaction: <T>(fn: () => T) => fn(),
       close: () => db.close(),
     },
@@ -158,5 +168,36 @@ describe("Router", () => {
     expect(response.kind).toBe("response")
     expect(response.ok).toBe(false)
     expect(response.error.code).toBe("method_not_found")
+  })
+
+  test("activity.generateWeeklyInsight returns a weekly insight payload", async () => {
+    const deps = makeDependencies()
+    deps.database.execute(
+      `INSERT INTO activity_feed (id, category, type, title, body, priority, deep_link, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        "activity_1",
+        "workflow",
+        "workflow_completed",
+        "Workflow complete",
+        "Task finished",
+        3,
+        "/chat",
+        "2026-04-15T10:00:00.000Z",
+      ],
+    )
+
+    const response = JSON.parse(
+      (await routeMessage(JSON.stringify({
+        kind: "request",
+        method: RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT,
+        id: "weekly-1",
+        params: {},
+      }), mockWs, deps)).response,
+    )
+
+    expect(response.ok).toBe(true)
+    expect(response.result.title).toContain("Weekly insight")
+    expect(response.result.weekKey).toBe("2026-04-13")
   })
 })

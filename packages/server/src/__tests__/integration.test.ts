@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws"
 import { WebSocket } from "ws"
 import { Database as BunDatabase } from "bun:sqlite"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
+import { defaultConfig } from "../config/defaults.js"
 import { runMigrations } from "../db/migrations/runner.js"
 import { routeMessage } from "../ws/Router.js"
 
@@ -32,6 +33,11 @@ describe("Server integration", () => {
     wss.on("connection", (ws) => {
       ws.on("message", async (data) => {
         const response = await routeMessage(data.toString(), ws as never, {
+          config: {
+            ...defaultConfig,
+            wsAuthToken: "a".repeat(64),
+            codexBinaryPath: "/usr/bin/false",
+          },
           readiness: {
             awaitReady: async () => undefined,
             markReady: () => undefined,
