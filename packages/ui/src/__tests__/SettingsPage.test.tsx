@@ -5,16 +5,28 @@ import { IpcChannel } from "@student-claw/contracts"
 
 const runtimeHooks = vi.hoisted(() => ({
   useRuntimeBootstrap: vi.fn(),
+  useRuntimeOrchestrationSnapshot: vi.fn(),
+  useOrchestrationActions: vi.fn(),
   useRuntimeServerConfig: vi.fn(),
 }))
 
 vi.mock("@/hooks/useAppRuntime", () => ({
+  useOrchestrationActions: runtimeHooks.useOrchestrationActions,
   useRuntimeBootstrap: runtimeHooks.useRuntimeBootstrap,
+  useRuntimeOrchestrationSnapshot: runtimeHooks.useRuntimeOrchestrationSnapshot,
   useRuntimeServerConfig: runtimeHooks.useRuntimeServerConfig,
 }))
 
 vi.mock("@/components/dev/DevOnboardingControls", () => ({
   DevOnboardingControls: () => <div data-testid="dev-onboarding-controls" />,
+}))
+
+const codexAuthMocks = vi.hoisted(() => ({
+  connectCodexAccount: vi.fn(),
+}))
+
+vi.mock("@/lib/codexAuth", () => ({
+  connectCodexAccount: codexAuthMocks.connectCodexAccount,
 }))
 
 import { SettingsPage } from "../pages/SettingsPage"
@@ -75,8 +87,22 @@ describe("SettingsPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
     runtimeHooks.useRuntimeServerConfig.mockReturnValue({
       appVersion: "0.1.0",
+    })
+    runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
+      providerRuntime: {
+        adapter: "codex",
+        status: "idle",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: new Date(0).toISOString(),
+      },
+    })
+    runtimeHooks.useOrchestrationActions.mockReturnValue({
+      retryProviderInitialize: vi.fn().mockResolvedValue({ started: true }),
     })
 
     window.electronAPI = {
@@ -99,7 +125,7 @@ describe("SettingsPage", () => {
         }
 
         return null
-      }),
+      }) as any,
       send: vi.fn(),
       on: vi.fn().mockReturnValue(() => {}),
     }
@@ -115,8 +141,54 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
     expect(screen.getByTestId("settings-plugin-disabled")).toBeDefined()
     expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
+  })
+
+  test("shows Codex connection status from the runtime snapshot", () => {
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    expect(screen.getByTestId("settings-codex-card")).toBeDefined()
+    expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
+    expect(screen.getByTestId("settings-codex-auth-state").textContent).toContain("authenticated")
+    expect(screen.getByTestId("settings-codex-runtime-state").textContent).toContain("idle")
+  })
+
+  test("connects Codex from settings when sign-in is required", async () => {
+    const user = userEvent.setup()
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+    runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
+      providerRuntime: {
+        adapter: "codex",
+        status: "auth_required",
+        authState: "auth_required",
+        lastError: {
+          code: "codex_auth_required",
+          message: "Codex CLI is not authenticated.",
+        },
+        queuedTurnCount: 0,
+        lastUpdatedAt: new Date(0).toISOString(),
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await user.click(screen.getByTestId("settings-codex-connect"))
+
+    expect(codexAuthMocks.connectCodexAccount).toHaveBeenCalledOnce()
   })
 
   test("renders discovered registry rows and manual auth fields when the plugin flag is on", async () => {
@@ -180,7 +252,7 @@ describe("SettingsPage", () => {
       }
 
       return null
-    })
+    }) as any
 
     render(<SettingsPage />)
 
@@ -225,7 +297,7 @@ describe("SettingsPage", () => {
       }
 
       return null
-    })
+    }) as any
     window.electronAPI!.on = vi.fn((_channel, callback) => {
       lifecycleListener = callback as (payload: { pluginId: string }) => void
       return () => {
@@ -239,7 +311,7 @@ describe("SettingsPage", () => {
       expect(screen.getByText("discovered")).toBeDefined()
     })
 
-    lifecycleListener?.({ pluginId: "canvas-mcp" })
+    ;(lifecycleListener as ((payload: { pluginId: string }) => void) | null)?.({ pluginId: "canvas-mcp" })
 
     await waitFor(() => {
       expect(screen.getByText("active")).toBeDefined()
@@ -273,7 +345,7 @@ describe("SettingsPage", () => {
       }
 
       return null
-    })
+    }) as any
 
     render(<SettingsPage />)
 
@@ -321,7 +393,7 @@ describe("SettingsPage", () => {
       }
 
       return null
-    })
+    }) as any
 
     render(<SettingsPage />)
 
@@ -409,7 +481,7 @@ describe("SettingsPage", () => {
       }
 
       return null
-    })
+    }) as any
 
     render(<SettingsPage />)
 

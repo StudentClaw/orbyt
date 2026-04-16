@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { OnboardingStepProps } from "./OnboardingWizard"
 import { setAiAuthStatus } from "@/rpc/onboardingState"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { connectCodexAccount } from "@/lib/codexAuth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -12,25 +13,13 @@ export function AiAuthStep({ onNext }: OnboardingStepProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleConnect = async () => {
-    if (!window.electronAPI?.codexAuthStart) {
-      setPhase("error")
-      setErrorMessage(
-        "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
-      )
-      return
-    }
-
     setPhase("connecting")
     setErrorMessage(null)
 
-    const result = await window.electronAPI.codexAuthStart()
+    const result = await connectCodexAccount()
 
     if (result.status === "connected") {
       setPhase("connected")
-      setAiAuthStatus("connected")
-      void getPrimaryWsRpcClient().onboarding
-        .setAiAuth({ status: "connected", provider: "codex" })
-        .catch(() => undefined)
     } else {
       setPhase("error")
       setErrorMessage(result.error ?? "Connection failed. Please try again.")

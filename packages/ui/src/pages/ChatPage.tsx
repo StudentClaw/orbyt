@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from "react"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { ChatContainer } from "@/components/chat/ChatContainer"
-import { resolveChatRouteSelection } from "@/lib/chatRoutes"
+import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
 import { useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 
 export function ChatPage() {
@@ -9,6 +9,21 @@ export function ChatPage() {
   const snapshot = useRuntimeOrchestrationSnapshot()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const selection = resolveChatRouteSelection(pathname)
+
+  useEffect(() => {
+    if (!snapshot || !isChatPath(pathname) || selection.workspaceId) {
+      return
+    }
+
+    const workspace = snapshot.workspaces[0]
+    if (workspace) {
+      void navigate({
+        to: "/chat/$workspaceId",
+        params: { workspaceId: workspace.id },
+        replace: true,
+      })
+    }
+  }, [navigate, pathname, selection.workspaceId, snapshot])
 
   useEffect(() => {
     if (!snapshot || !selection.workspaceId) {

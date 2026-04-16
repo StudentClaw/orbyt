@@ -1,21 +1,28 @@
 import { useState, useEffect, useCallback } from "react"
 
-type Theme = "light" | "dark"
+export type Theme = "light" | "dark" | "auto"
 
 const STORAGE_KEY = "sc-theme"
+
+function getResolvedTheme(theme: Theme): "light" | "dark" {
+  if (theme === "auto") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  }
+  return theme
+}
 
 function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === "dark" || stored === "light") return stored
+    if (stored === "dark" || stored === "light" || stored === "auto") return stored
   } catch {
     // ignore
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  return "auto"
 }
 
 function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark")
+  document.documentElement.classList.toggle("dark", getResolvedTheme(theme) === "dark")
 }
 
 export function useTheme() {
@@ -28,11 +35,18 @@ export function useTheme() {
     } catch {
       // ignore
     }
+
+    if (theme === "auto") {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)")
+      const handler = () => applyTheme("auto")
+      mq.addEventListener("change", handler)
+      return () => mq.removeEventListener("change", handler)
+    }
   }, [theme])
 
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"))
+  const setTheme = useCallback((nextTheme: Theme) => {
+    setThemeState(nextTheme)
   }, [])
 
-  return { theme, toggleTheme }
+  return { theme, setTheme }
 }

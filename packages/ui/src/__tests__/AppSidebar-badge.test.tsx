@@ -27,8 +27,11 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SidebarHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SidebarMenu: ({ children }: { children: React.ReactNode }) => <ul>{children}</ul>,
+  SidebarMenuBadge: ({ children, ...props }: { children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   SidebarMenuButton: ({ children }: { children: React.ReactNode; asChild?: boolean; isActive?: boolean }) => <>{children}</>,
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <li>{children}</li>,
+  SidebarTrigger: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
+  useSidebar: () => ({ isMobile: false, open: true, openMobile: false }),
   SidebarSeparator: () => <hr />,
 }))
 

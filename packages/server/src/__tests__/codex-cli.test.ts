@@ -8,9 +8,12 @@ import {
   buildCodexAppServerArgs,
   CodexCli,
   CodexCliLive,
+  isReasoningItemType,
   mapCodexMcpToolCallCompletedEvent,
   mapCodexMcpToolCallProgressEvent,
   mapCodexMcpToolCallStartedEvent,
+  normalizeAgentMessagePhase,
+  shouldTreatAgentMessageAsReasoning,
 } from "../ai/CodexCli.js"
 import type { ProviderRuntimeStoreService } from "../ai/ProviderRuntimeStore.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
@@ -206,6 +209,21 @@ afterEach(() => {
 })
 
 describe("CodexCli gateway wiring", () => {
+  test("classifies reasoning items and commentary phases separately from final answers", () => {
+    expect(isReasoningItemType("reasoning")).toBe(true)
+    expect(isReasoningItemType("thinking")).toBe(true)
+    expect(isReasoningItemType("reasoningSummary")).toBe(true)
+    expect(isReasoningItemType("reasoning_summary")).toBe(true)
+    expect(isReasoningItemType("agentMessage")).toBe(false)
+
+    expect(normalizeAgentMessagePhase("commentary")).toBe("commentary")
+    expect(normalizeAgentMessagePhase("final_answer")).toBe("final_answer")
+    expect(normalizeAgentMessagePhase(null)).toBe("unknown")
+    expect(shouldTreatAgentMessageAsReasoning("commentary")).toBe(true)
+    expect(shouldTreatAgentMessageAsReasoning("final_answer")).toBe(false)
+    expect(shouldTreatAgentMessageAsReasoning(undefined)).toBe(false)
+  })
+
   test("applies the fixed MCP gateway override at startup", () => {
     expect(buildCodexAppServerArgs({
       pluginGatewayMcpServerName: "student-claw",

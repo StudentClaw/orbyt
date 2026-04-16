@@ -23,6 +23,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       id: "thread-1" as never,
       workspaceId: "workspace-1" as never,
       title: "Old thread",
+      accessMode: "default",
       status: "completed",
       createdAt: "2026-04-09T00:00:00.000Z",
       currentTurnId: null,
@@ -31,6 +32,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       id: "thread-2" as never,
       workspaceId: "workspace-1" as never,
       title: "Streaming thread",
+      accessMode: "full",
       status: "streaming",
       createdAt: "2026-04-09T00:01:00.000Z",
       currentTurnId: "turn-2" as never,
@@ -42,11 +44,15 @@ const baseSnapshot: OrchestrationSnapshot = {
       threadId: "thread-2" as never,
       input: "hello",
       output: "world",
+      reasoning: "",
       status: "streaming",
       startedAt: "2026-04-09T00:01:00.000Z",
       completedAt: null,
+      skill: null,
+      attachments: [],
     },
   ],
+  pendingApprovals: [],
   providerStatus: "streaming",
   providerRuntime: {
     adapter: "codex",
@@ -133,5 +139,25 @@ describe("ChatPage thread selection", () => {
     expect(formatProviderEventLabel(event)).toBe(
       "State changed to rate limited: codex_rate_limited",
     )
+  })
+
+  test("formats approval runtime events with meaningful detail", () => {
+    const event: ProviderRuntimeEvent = {
+      type: "provider.approvalRequested",
+      approval: {
+        id: "approval-1",
+        threadId: "thread-2" as never,
+        turnId: "turn-2" as never,
+        kind: "command",
+        itemId: "item-1",
+        approvalId: "provider-approval-1",
+        reason: "Needs approval",
+        command: "rm -rf ./tmp",
+        cwd: "/repo",
+        availableDecisions: ["approve", "deny"],
+      },
+    }
+
+    expect(formatProviderEventLabel(event)).toBe("Approval requested: command")
   })
 })

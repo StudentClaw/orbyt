@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest"
 import {
   applyOrchestrationDomainEvent,
+  applyProviderRuntimeEvent,
   closeChatPanel,
   getOrchestrationSnapshot,
   getChatUiState,
@@ -54,6 +55,7 @@ describe("chat UI state", () => {
           id: "thread-123" as never,
           workspaceId: "workspace-123" as never,
           title: "Old title",
+          accessMode: "default",
           status: "completed",
           createdAt: "2026-04-11T00:01:00.000Z",
           currentTurnId: null,
@@ -65,11 +67,15 @@ describe("chat UI state", () => {
           threadId: "thread-123" as never,
           input: "Hello",
           output: "World",
+          reasoning: "",
           status: "completed",
           startedAt: "2026-04-11T00:02:00.000Z",
           completedAt: "2026-04-11T00:02:01.000Z",
+          skill: null,
+          attachments: [],
         },
       ],
+      pendingApprovals: [],
       providerStatus: "idle",
       providerRuntime: {
         adapter: "codex",
@@ -89,6 +95,7 @@ describe("chat UI state", () => {
         id: "thread-123" as never,
         workspaceId: "workspace-123" as never,
         title: "New title",
+        accessMode: "full",
         status: "completed",
         createdAt: "2026-04-11T00:01:00.000Z",
         currentTurnId: null,
@@ -96,6 +103,7 @@ describe("chat UI state", () => {
     }, 2)
 
     expect(getOrchestrationSnapshot()?.threads[0]?.title).toBe("New title")
+    expect(getOrchestrationSnapshot()?.threads[0]?.accessMode).toBe("full")
 
     applyOrchestrationDomainEvent({
       type: "thread.deleted",
@@ -105,5 +113,63 @@ describe("chat UI state", () => {
 
     expect(getOrchestrationSnapshot()?.threads).toHaveLength(0)
     expect(getOrchestrationSnapshot()?.turns).toHaveLength(0)
+  })
+
+  test("tracks pending approvals from provider runtime events", () => {
+    setOrchestrationSnapshot({
+      workspaces: [],
+      threads: [
+        {
+          id: "thread-123" as never,
+          workspaceId: "workspace-123" as never,
+          title: "Chat",
+          accessMode: "default",
+          status: "streaming",
+          createdAt: "2026-04-11T00:01:00.000Z",
+          currentTurnId: "turn-123" as never,
+        },
+      ],
+      turns: [],
+      pendingApprovals: [],
+      providerStatus: "streaming",
+      providerRuntime: {
+        adapter: "codex",
+        status: "streaming",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-11T00:02:01.000Z",
+      },
+      ready: true,
+      lastSequence: 1,
+    })
+
+    applyProviderRuntimeEvent({
+      type: "provider.approvalRequested",
+      approval: {
+        id: "approval-123",
+        threadId: "thread-123" as never,
+        turnId: "turn-123" as never,
+        kind: "command",
+        itemId: "item-123",
+        approvalId: "provider-approval-123",
+        reason: "Needs approval",
+        command: "rm -rf tmp",
+        cwd: "/repo",
+        availableDecisions: ["approve", "deny"],
+      },
+    })
+
+    expect(getOrchestrationSnapshot()?.pendingApprovals).toHaveLength(1)
+
+    applyProviderRuntimeEvent({
+      type: "provider.approvalResolved",
+      approvalRequestId: "approval-123",
+      threadId: "thread-123" as never,
+      turnId: "turn-123" as never,
+      decision: "approve",
+    })
+
+    expect(getOrchestrationSnapshot()?.pendingApprovals).toHaveLength(0)
   })
 })

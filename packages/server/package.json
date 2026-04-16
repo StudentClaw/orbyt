@@ -7,7 +7,7 @@
     "dev": "bun --watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "bun test"
+    "test": "bun test src --max-concurrency=1"
   },
   "dependencies": {
     "@effect/platform": "^0.96.0",
@@ -16,6 +16,7 @@
     "@student-claw/contracts": "workspace:*",
     "@student-claw/shared-runtime": "workspace:*",
     "effect": "^3.21.0",
+    "gray-matter": "^4.0.3",
     "ws": "^8.20.0"
   },
   "devDependencies": {

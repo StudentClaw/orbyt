@@ -21,6 +21,15 @@ const baseConfig: ServerConfig = {
     providerRuntime: true,
     desktopBootstrap: true,
   },
+  defaultChatModel: "gpt-5.4-mini",
+  chatModels: [
+    {
+      id: "gpt-5.4-mini",
+      label: "GPT-5.4 Mini",
+      description: "Fast default model",
+      group: "standard",
+    },
+  ],
   featureFlags: {
     pluginSystem: false,
   },

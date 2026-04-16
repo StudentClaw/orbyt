@@ -3,8 +3,11 @@ import type {
   OrchestrationSnapshot,
   OrchestrationThread,
   OrchestrationTurn,
+  ProviderApprovalDecision,
   ProviderRuntimeEvent,
   ProviderRuntimeState,
+  ThreadAccessMode,
+  TurnAttachmentInput,
 } from "@student-claw/contracts"
 import type { ToolCallInfo } from "@/hooks/chat-model"
 import type { WsRpcClient } from "./wsRpcClient"
@@ -58,6 +61,19 @@ const chatUiStateAtom = createAtom<ChatUiState>(
   "chat-ui-state",
   INITIAL_CHAT_UI_STATE,
 )
+
+function buildEmptySnapshot(sequence = 0): OrchestrationSnapshot {
+  return {
+    workspaces: [],
+    threads: [],
+    turns: [],
+    pendingApprovals: [],
+    providerStatus: "idle",
+    providerRuntime: FALLBACK_PROVIDER_RUNTIME,
+    ready: true,
+    lastSequence: sequence,
+  }
+}
 
 function syncChatUiState(snapshot: OrchestrationSnapshot | null): void {
   const current = appAtomRegistry.get(chatUiStateAtom)
@@ -152,6 +168,10 @@ function applyTurnEvent(
     ...current,
     threads,
     turns,
+    pendingApprovals:
+      turn.status === "completed" || turn.status === "interrupted"
+        ? current.pendingApprovals.filter((approval) => approval.turnId !== turn.id)
+        : current.pendingApprovals,
     lastSequence: sequence ?? current.lastSequence,
   }
 }
@@ -172,24 +192,14 @@ function applyDomainEvent(
             lastSequence: sequence,
           }
         : {
+            ...buildEmptySnapshot(sequence),
             workspaces: [event.workspace],
-            threads: [],
-            turns: [],
-            providerStatus: "idle",
-            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-            ready: true,
-            lastSequence: sequence,
           }
     case "workspace.updated":
       if (!current) {
         return {
+          ...buildEmptySnapshot(sequence),
           workspaces: [event.workspace],
-          threads: [],
-          turns: [],
-          providerStatus: "idle",
-          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-          ready: true,
-          lastSequence: sequence,
         }
       }
       return {
@@ -201,21 +211,16 @@ function applyDomainEvent(
       }
     case "workspace.deleted":
       if (!current) {
-        return {
-          workspaces: [],
-          threads: [],
-          turns: [],
-          providerStatus: "idle",
-          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-          ready: true,
-          lastSequence: sequence,
-        }
+        return buildEmptySnapshot(sequence)
       }
       return {
         ...current,
         workspaces: current.workspaces.filter((workspace) => workspace.id !== event.workspaceId),
         threads: current.threads.filter((thread) => !event.deletedThreadIds.includes(thread.id)),
         turns: current.turns.filter((turn) => !event.deletedThreadIds.includes(turn.threadId)),
+        pendingApprovals: current.pendingApprovals.filter(
+          (approval) => !event.deletedThreadIds.includes(approval.threadId),
+        ),
         lastSequence: sequence,
       }
     case "thread.created":
@@ -226,24 +231,14 @@ function applyDomainEvent(
             lastSequence: sequence,
           }
         : {
-            workspaces: [],
+            ...buildEmptySnapshot(sequence),
             threads: [event.thread],
-            turns: [],
-            providerStatus: "idle",
-            providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-            ready: true,
-            lastSequence: sequence,
           }
     case "thread.updated":
       if (!current) {
         return {
-          workspaces: [],
+          ...buildEmptySnapshot(sequence),
           threads: [event.thread],
-          turns: [],
-          providerStatus: "idle",
-          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-          ready: true,
-          lastSequence: sequence,
         }
       }
       return {
@@ -253,20 +248,15 @@ function applyDomainEvent(
       }
     case "thread.deleted":
       if (!current) {
-        return {
-          workspaces: [],
-          threads: [],
-          turns: [],
-          providerStatus: "idle",
-          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-          ready: true,
-          lastSequence: sequence,
-        }
+        return buildEmptySnapshot(sequence)
       }
       return {
         ...current,
         threads: current.threads.filter((thread) => thread.id !== event.threadId),
         turns: current.turns.filter((turn) => turn.threadId !== event.threadId),
+        pendingApprovals: current.pendingApprovals.filter(
+          (approval) => approval.threadId !== event.threadId,
+        ),
         lastSequence: sequence,
       }
     case "turn.started":
@@ -274,15 +264,7 @@ function applyDomainEvent(
     case "turn.completed":
     case "turn.interrupted":
       if (!current) {
-        return {
-          workspaces: [],
-          threads: [],
-          turns: [],
-          providerStatus: "idle",
-          providerRuntime: FALLBACK_PROVIDER_RUNTIME,
-          ready: true,
-          lastSequence: sequence,
-        }
+        return buildEmptySnapshot(sequence)
       }
       return applyTurnEvent(current, event.turn, sequence)
   }
@@ -361,6 +343,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
   if (event.type === "provider.turnInterrupted") {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
+      pendingApprovals: current.pendingApprovals.filter((approval) => approval.turnId !== event.turnId),
       providerStatus: "interrupted",
       providerRuntime: {
         ...current.providerRuntime,
@@ -384,9 +367,34 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
     return
   }
 
+  if (event.type === "provider.approvalRequested") {
+    const nextSnapshot: OrchestrationSnapshot = {
+      ...current,
+      pendingApprovals: current.pendingApprovals.some((approval) => approval.id === event.approval.id)
+        ? current.pendingApprovals.map((approval) =>
+            approval.id === event.approval.id ? event.approval : approval,
+          )
+        : [...current.pendingApprovals, event.approval],
+    }
+    appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    return
+  }
+
+  if (event.type === "provider.approvalResolved") {
+    const nextSnapshot: OrchestrationSnapshot = {
+      ...current,
+      pendingApprovals: current.pendingApprovals.filter(
+        (approval) => approval.id !== event.approvalRequestId,
+      ),
+    }
+    appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    return
+  }
+
   if (event.type === "provider.turnCompleted") {
     const nextSnapshot: OrchestrationSnapshot = {
       ...current,
+      pendingApprovals: current.pendingApprovals.filter((approval) => approval.turnId !== event.turnId),
       providerStatus: "idle",
       providerRuntime: {
         ...current.providerRuntime,
@@ -486,12 +494,23 @@ export async function deleteOrchestrationThread(
   return result.deleted
 }
 
+export async function setOrchestrationThreadAccessMode(
+  client: WsRpcClient,
+  threadId: string,
+  accessMode: ThreadAccessMode,
+): Promise<ThreadAccessMode> {
+  const result = await client.orchestration.setThreadAccessMode(threadId, accessMode)
+  return result.accessMode
+}
+
 export async function sendOrchestrationTurn(
   client: WsRpcClient,
   threadId: string,
   content: string,
+  attachments: readonly TurnAttachmentInput[],
+  model?: string | null,
 ): Promise<string> {
-  const result = await client.orchestration.sendTurn(threadId, content)
+  const result = await client.orchestration.sendTurn(threadId, content, attachments, model)
   return result.turnId
 }
 
@@ -501,6 +520,25 @@ export async function interruptOrchestrationTurn(
 ): Promise<boolean> {
   const result = await client.orchestration.interruptTurn(threadId)
   return result.interrupted
+}
+
+export async function startOrchestrationProviderAuth(client: WsRpcClient): Promise<boolean> {
+  const result = await client.provider.startAuth()
+  return result.started
+}
+
+export async function retryOrchestrationProviderInitialize(client: WsRpcClient): Promise<boolean> {
+  const result = await client.provider.retryInitialize()
+  return result.started
+}
+
+export async function respondToProviderApproval(
+  client: WsRpcClient,
+  approvalRequestId: string,
+  decision: ProviderApprovalDecision,
+): Promise<boolean> {
+  const result = await client.provider.respondToApproval(approvalRequestId, decision)
+  return result.resolved
 }
 
 export function useOrchestrationSnapshot(): OrchestrationSnapshot | null {

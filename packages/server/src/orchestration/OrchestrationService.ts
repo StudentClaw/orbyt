@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs"
 import path from "node:path"
 import { Context, Effect, Layer } from "effect"
 import {
+  type ChatModel,
   type FeatureFlags,
   PUSH_CHANNELS,
   type CreateThreadResult,
@@ -10,8 +11,11 @@ import {
   type DesktopBootstrap,
   type InterruptTurnResult,
   type OrchestrationDomainEvent,
+  type ProviderApprovalDecision,
+  type ProviderPendingApproval,
   type OrchestrationSnapshot,
   type OrchestrationThread,
+  type OrchestrationTurnAttachment,
   type OrchestrationTurn,
   type OrchestrationWorkspace,
   type ProviderRuntimeEvent,
@@ -20,11 +24,15 @@ import {
   type RetryProviderInitializeResult,
   type ServerConfig,
   type StartProviderAuthResult,
+  type ThreadAccessMode,
+  type TurnAttachmentInput,
   type WorkspaceId,
 } from "@student-claw/contracts"
 import type {
   DeleteThreadResult,
   RenameThreadResult,
+  RespondToProviderApprovalResult,
+  SetThreadAccessModeResult,
 } from "@student-claw/contracts"
 import { createId } from "@student-claw/shared-runtime"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
@@ -56,6 +64,7 @@ type ThreadRow = {
   id: string
   workspace_id: string
   title: string
+  access_mode: OrchestrationThread["accessMode"]
   status: OrchestrationThread["status"]
   current_turn_id: string | null
   created_at: string
@@ -66,9 +75,21 @@ type TurnRow = {
   thread_id: string
   input_text: string
   output_text: string
+  reasoning_text: string
   status: OrchestrationTurn["status"]
   started_at: string
   completed_at: string | null
+}
+
+type TurnAttachmentRow = {
+  id: string
+  turn_id: string
+  path: string
+  name: string
+  mime_type: string | null
+  size_bytes: number | null
+  kind: OrchestrationTurnAttachment["kind"]
+  position: number
 }
 
 type WorkspaceThreadRow = {
@@ -84,6 +105,7 @@ type TurnWorkRef = {
 
 type WorkItem = TurnWorkRef & {
   readonly content: string
+  readonly model?: string | null
 }
 
 type ActiveTurnState = {
@@ -117,11 +139,27 @@ export interface OrchestrationServiceShape {
   readonly deleteWorkspace: (commandId: string, workspaceId: string) => Promise<DeleteWorkspaceResult>
   readonly createThread: (commandId: string, workspaceId: string, title?: string) => Promise<CreateThreadResult>
   readonly renameThread: (commandId: string, threadId: string, title: string) => Promise<RenameThreadResult>
+  readonly setThreadAccessMode: (
+    commandId: string,
+    threadId: string,
+    accessMode: ThreadAccessMode,
+  ) => Promise<SetThreadAccessModeResult>
   readonly deleteThread: (commandId: string, threadId: string) => Promise<DeleteThreadResult>
-  readonly sendTurn: (commandId: string, threadId: string, content: string) => Promise<SendTurnResult>
+  readonly sendTurn: (
+    commandId: string,
+    threadId: string,
+    content: string,
+    attachments: readonly TurnAttachmentInput[],
+    model?: string | null,
+  ) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
   readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
   readonly retryProviderInitialize: (commandId: string) => Promise<RetryProviderInitializeResult>
+  readonly respondToProviderApproval: (
+    commandId: string,
+    approvalRequestId: string,
+    decision: ProviderApprovalDecision,
+  ) => Promise<RespondToProviderApprovalResult>
 }
 
 /**
@@ -148,6 +186,43 @@ function getFeatureFlags(): FeatureFlags {
   return {
     pluginSystem: true,
   }
+}
+
+const BASE_CHAT_MODELS: readonly ChatModel[] = [
+  {
+    id: "gpt-5.4",
+    label: "GPT-5.4",
+    description: "Best general-purpose model",
+    group: "standard",
+  },
+  {
+    id: "gpt-5.4-mini",
+    label: "GPT-5.4 Mini",
+    description: "Fast default model",
+    group: "standard",
+  },
+  {
+    id: "gpt-5.3-codex",
+    label: "GPT-5.3 Codex",
+    description: "Best coding-focused option",
+    group: "standard",
+  },
+]
+
+function buildChatModels(config: AppConfig): ReadonlyArray<ChatModel> {
+  if (BASE_CHAT_MODELS.some((model) => model.id === config.codexModel)) {
+    return BASE_CHAT_MODELS
+  }
+
+  return [
+    {
+      id: config.codexModel,
+      label: config.codexModel,
+      description: "Configured default model",
+      group: "standard",
+    },
+    ...BASE_CHAT_MODELS,
+  ]
 }
 
 function normalizeRootPath(rawRootPath: string): string {
@@ -213,22 +288,124 @@ function mapThreadRow(row: ThreadRow): OrchestrationThread {
     id: row.id as OrchestrationThread["id"],
     workspaceId: row.workspace_id as WorkspaceId,
     title: row.title,
+    accessMode: row.access_mode,
     status: row.status,
     createdAt: row.created_at,
     currentTurnId: row.current_turn_id as OrchestrationThread["currentTurnId"],
   }
 }
 
-function mapTurnRow(row: TurnRow): OrchestrationTurn {
+function mapTurnAttachmentRow(row: TurnAttachmentRow): OrchestrationTurnAttachment {
+  return {
+    id: row.id,
+    path: row.path,
+    name: row.name,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    kind: row.kind,
+  }
+}
+
+function mapTurnRow(
+  row: TurnRow,
+  attachments: readonly OrchestrationTurnAttachment[] = [],
+): OrchestrationTurn {
   return {
     id: row.id as OrchestrationTurn["id"],
     threadId: row.thread_id as OrchestrationTurn["threadId"],
     input: row.input_text,
     output: row.output_text,
+    reasoning: row.reasoning_text,
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    skill: null,
+    attachments: [...attachments],
   }
+}
+
+function readTurnAttachments(
+  database: DatabaseService,
+  turnId: string,
+): readonly OrchestrationTurnAttachment[] {
+  return database.query<TurnAttachmentRow>(
+    `SELECT id, turn_id, path, name, mime_type, size_bytes, kind, position
+     FROM orchestration_turn_attachments
+     WHERE turn_id = ?
+     ORDER BY position ASC`,
+    [turnId],
+  ).map(mapTurnAttachmentRow)
+}
+
+function readTurnAttachmentsByTurnIds(
+  database: DatabaseService,
+  turnIds: readonly string[],
+): ReadonlyMap<string, readonly OrchestrationTurnAttachment[]> {
+  if (turnIds.length === 0) {
+    return new Map()
+  }
+
+  const placeholders = turnIds.map(() => "?").join(", ")
+  const rows = database.query<TurnAttachmentRow>(
+    `SELECT id, turn_id, path, name, mime_type, size_bytes, kind, position
+     FROM orchestration_turn_attachments
+     WHERE turn_id IN (${placeholders})
+     ORDER BY turn_id ASC, position ASC`,
+    [...turnIds],
+  )
+
+  const grouped = new Map<string, OrchestrationTurnAttachment[]>()
+  for (const row of rows) {
+    const entries = grouped.get(row.turn_id) ?? []
+    entries.push(mapTurnAttachmentRow(row))
+    grouped.set(row.turn_id, entries)
+  }
+
+  return grouped
+}
+
+function persistTurnAttachments(
+  database: DatabaseService,
+  turnId: string,
+  attachments: readonly OrchestrationTurnAttachment[],
+): void {
+  attachments.forEach((attachment, index) => {
+    database.execute(
+      `INSERT INTO orchestration_turn_attachments (
+         id, turn_id, path, name, mime_type, size_bytes, kind, position
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        attachment.id,
+        turnId,
+        attachment.path,
+        attachment.name,
+        attachment.mimeType,
+        attachment.sizeBytes,
+        attachment.kind,
+        index,
+      ],
+    )
+  })
+}
+
+function deleteTurnAttachmentsForThreadIds(
+  database: DatabaseService,
+  threadIds: readonly string[],
+): void {
+  if (threadIds.length === 0) {
+    return
+  }
+
+  const placeholders = threadIds.map(() => "?").join(", ")
+  database.execute(
+    `DELETE FROM orchestration_turn_attachments
+     WHERE turn_id IN (
+       SELECT id
+       FROM orchestration_turns
+       WHERE thread_id IN (${placeholders})
+     )`,
+    [...threadIds],
+  )
 }
 
 function appendEvent(
@@ -296,7 +473,7 @@ function readFilesystemWorkspaceByRootPath(
 
 function readThread(database: DatabaseService, threadId: string): OrchestrationThread | null {
   const row = database.get<ThreadRow>(
-    `SELECT id, workspace_id, title, status, current_turn_id, created_at
+    `SELECT id, workspace_id, title, access_mode, status, current_turn_id, created_at
      FROM orchestration_threads
      WHERE id = ?`,
     [threadId],
@@ -306,12 +483,12 @@ function readThread(database: DatabaseService, threadId: string): OrchestrationT
 
 function readTurn(database: DatabaseService, turnId: string): OrchestrationTurn | null {
   const row = database.get<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+    `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
      FROM orchestration_turns
      WHERE id = ?`,
     [turnId],
   )
-  return row ? mapTurnRow(row) : null
+  return row ? mapTurnRow(row, readTurnAttachments(database, turnId)) : null
 }
 
 function readWorkspaceThreadRows(database: DatabaseService, workspaceId: string): readonly WorkspaceThreadRow[] {
@@ -414,6 +591,21 @@ function resetWorkspaceThreadProviderSessions(
        WHERE workspace_id = ?
      )`,
     [cwd, updatedAt, workspaceId],
+  )
+}
+
+function resetThreadProviderSession(
+  database: DatabaseService,
+  threadId: string,
+  updatedAt: string,
+): void {
+  database.execute(
+    `UPDATE provider_runtime_sessions
+     SET provider_thread_id = NULL,
+         last_error = NULL,
+         updated_at = ?
+     WHERE thread_id = ?`,
+    [updatedAt, threadId],
   )
 }
 
@@ -686,7 +878,7 @@ function buildDesktopBootstrap(config: AppConfig): DesktopBootstrap {
   }
 }
 
-function buildServerConfig(): ServerConfig {
+function buildServerConfig(config: AppConfig): ServerConfig {
   return {
     appVersion: "0.1.0",
     platform: process.platform,
@@ -696,6 +888,8 @@ function buildServerConfig(): ServerConfig {
       providerRuntime: true,
       desktopBootstrap: true,
     },
+    defaultChatModel: config.codexModel,
+    chatModels: buildChatModels(config),
     featureFlags: getFeatureFlags(),
   }
 }
@@ -710,46 +904,53 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   ).map(mapWorkspaceRow)
 
   const threads = deps.database.query<ThreadRow>(
-    `SELECT id, workspace_id, title, status, current_turn_id, created_at
+    `SELECT id, workspace_id, title, access_mode, status, current_turn_id, created_at
      FROM orchestration_threads
      ORDER BY created_at ASC`,
   ).map(mapThreadRow)
 
-  const turns = deps.database.query<TurnRow>(
-    `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+  const turnRows = deps.database.query<TurnRow>(
+    `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
      FROM orchestration_turns
      ORDER BY started_at ASC`,
-  ).map(mapTurnRow)
+  )
+  const attachmentsByTurnId = readTurnAttachmentsByTurnIds(
+    deps.database,
+    turnRows.map((row) => row.id),
+  )
+  const turns = turnRows.map((row) => mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []))
 
   const provider = deps.database.get<{
     provider: "stub" | "codex"
     status: OrchestrationSnapshot["providerStatus"]
     auth_state: "unknown" | "authenticated" | "auth_required" | "expired"
-    last_error: string | null
-    updated_at: string
+    last_error_code: string | null
+    last_error_message: string | null
+    last_updated_at: string
   }>(
-    `SELECT provider, status, auth_state, last_error, updated_at
-     FROM provider_runtime_sessions
-     ORDER BY updated_at DESC LIMIT 1`,
+    `SELECT provider, status, auth_state, last_error_code, last_error_message, last_updated_at
+     FROM provider_runtime_state
+     WHERE provider = 'codex'`,
   )
 
   return {
     workspaces,
     threads,
     turns,
+    pendingApprovals: [],
     providerStatus: provider?.status ?? "offline",
     providerRuntime: {
       adapter: provider?.provider === "codex" ? "codex" : "stub",
       status: provider?.status ?? "offline",
       authState: provider?.auth_state ?? "unknown",
-      lastError: provider?.last_error
+      lastError: provider?.last_error_code && provider?.last_error_message
         ? {
-            code: "provider_runtime_error",
-            message: provider.last_error,
+            code: provider.last_error_code,
+            message: provider.last_error_message,
           }
         : null,
       queuedTurnCount: deps.state.workQueue.length,
-      lastUpdatedAt: provider?.updated_at ?? new Date(0).toISOString(),
+      lastUpdatedAt: provider?.last_updated_at ?? new Date(0).toISOString(),
     },
     ready: deps.readiness.isReady(),
     lastSequence: deps.pushBus.getLastSequence(),
@@ -762,6 +963,7 @@ function buildThread(workspaceId: string, title?: string): OrchestrationThread {
     id: createId("thread") as OrchestrationThread["id"],
     workspaceId: workspaceId as WorkspaceId,
     title: title?.trim() || `Session ${new Date().toLocaleTimeString()}`,
+    accessMode: "default",
     status: "idle",
     createdAt: now,
     currentTurnId: null,
@@ -911,6 +1113,7 @@ async function deleteWorkspace(
   deps.database.transaction(() => {
     if (deletedThreadIds.length > 0) {
       const placeholders = buildDeletePlaceholders(deletedThreadIds.length)
+      deleteTurnAttachmentsForThreadIds(deps.database, deletedThreadIds)
       deps.database.execute(
         `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
         deletedThreadIds,
@@ -966,12 +1169,14 @@ async function createThread(
 
   deps.database.transaction(() => {
     deps.database.execute(
-      `INSERT INTO orchestration_threads (id, workspace_id, title, status, current_turn_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orchestration_threads (
+         id, workspace_id, title, access_mode, status, current_turn_id, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         thread.id,
         thread.workspaceId,
         thread.title,
+        thread.accessMode,
         thread.status,
         thread.currentTurnId,
         thread.createdAt,
@@ -1027,6 +1232,50 @@ async function renameThread(
   return { threadId: updatedThread.id }
 }
 
+async function setThreadAccessMode(
+  deps: OrchestrationRuntimeDeps,
+  commandId: string,
+  threadId: string,
+  accessMode: ThreadAccessMode,
+): Promise<SetThreadAccessModeResult> {
+  const thread = readThread(deps.database, threadId)
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`)
+  }
+
+  if (thread.currentTurnId) {
+    throw new Error("Cannot change access mode while a turn is active.")
+  }
+
+  if (thread.accessMode === accessMode) {
+    recordReceipt(deps, commandId, "completed", { threadId, accessMode })
+    await deps.receiptBus.resolve(commandId, { threadId, accessMode })
+    return { threadId: thread.id, accessMode }
+  }
+
+  const now = new Date().toISOString()
+  deps.database.transaction(() => {
+    deps.database.execute(
+      `UPDATE orchestration_threads
+       SET access_mode = ?, updated_at = ?
+       WHERE id = ?`,
+      [accessMode, now, threadId],
+    )
+    resetThreadProviderSession(deps.database, threadId, now)
+  })
+
+  const updatedThread = readThread(deps.database, threadId)
+  if (!updatedThread) {
+    throw new Error(`Thread not found after access mode update: ${threadId}`)
+  }
+
+  appendEvent(deps, "thread.updated", { thread: updatedThread }, { threadId, commandId })
+  recordReceipt(deps, commandId, "completed", { threadId, accessMode })
+  await publishDomainEvent(deps.pushBus, { type: "thread.updated", thread: updatedThread })
+  await deps.receiptBus.resolve(commandId, { threadId, accessMode })
+  return { threadId: updatedThread.id, accessMode }
+}
+
 async function deleteThread(
   deps: OrchestrationRuntimeDeps,
   commandId: string,
@@ -1045,6 +1294,7 @@ async function deleteThread(
   deps.state.workQueue.splice(0, deps.state.workQueue.length, ...remainingQueue)
 
   deps.database.transaction(() => {
+    deleteTurnAttachmentsForThreadIds(deps.database, [threadId])
     deps.database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
     deps.database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
     deps.database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
@@ -1061,16 +1311,36 @@ async function deleteThread(
   return { deleted: true }
 }
 
-function buildStreamingTurn(threadId: string, content: string): OrchestrationTurn {
+function buildTurnAttachments(
+  attachments: readonly TurnAttachmentInput[],
+): readonly OrchestrationTurnAttachment[] {
+  return attachments.map((attachment) => ({
+    id: createId("attachment"),
+    path: attachment.path,
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    sizeBytes: attachment.sizeBytes,
+    kind: attachment.kind,
+  }))
+}
+
+function buildStreamingTurn(
+  threadId: string,
+  content: string,
+  attachments: readonly TurnAttachmentInput[],
+): OrchestrationTurn {
   const now = new Date().toISOString()
   return {
     id: createId("turn") as OrchestrationTurn["id"],
     threadId: threadId as OrchestrationTurn["threadId"],
     input: content,
     output: "",
+    reasoning: "",
     status: "streaming",
     startedAt: now,
     completedAt: null,
+    skill: null,
+    attachments: buildTurnAttachments(attachments),
   }
 }
 
@@ -1079,6 +1349,8 @@ async function sendTurn(
   commandId: string,
   threadId: string,
   content: string,
+  attachments: readonly TurnAttachmentInput[],
+  model?: string | null,
 ): Promise<SendTurnResult> {
   const thread = readThread(deps.database, threadId)
   if (!thread) {
@@ -1091,7 +1363,7 @@ async function sendTurn(
   }
   assertWorkspaceAcceptsChat(workspace)
 
-  const turn = buildStreamingTurn(threadId, content)
+  const turn = buildStreamingTurn(threadId, content, attachments)
   const now = new Date().toISOString()
   const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
   await deps.receiptBus.track(commandId)
@@ -1102,6 +1374,7 @@ async function sendTurn(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, now],
     )
+    persistTurnAttachments(deps.database, turn.id, turn.attachments)
     deps.database.execute(
       `UPDATE orchestration_threads
        SET status = ?, current_turn_id = ?, updated_at = ?
@@ -1126,7 +1399,7 @@ async function sendTurn(
     threadId: threadId as ProviderThreadId,
     turnId: turn.id as ProviderTurnId,
   })
-  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content })
+  deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
   void drainQueue(deps)
   return { turnId: turn.id }
 }
@@ -1162,7 +1435,7 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
 
   return {
     getDesktopBootstrap: async () => buildDesktopBootstrap(deps.config),
-    getServerConfig: async () => buildServerConfig(),
+    getServerConfig: async () => buildServerConfig(deps.config),
     getSnapshot: () => getSnapshot(deps),
     createWorkspace: (commandId, rootPath) => createWorkspace(deps, commandId, rootPath),
     relinkWorkspace: (commandId, workspaceId, rootPath) =>
@@ -1172,12 +1445,19 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
       createThread(deps, commandId, workspaceId, title),
     renameThread: (commandId, threadId, title) =>
       renameThread(deps, commandId, threadId, title),
+    setThreadAccessMode: (commandId, threadId, accessMode) =>
+      setThreadAccessMode(deps, commandId, threadId, accessMode),
     deleteThread: (commandId, threadId) =>
       deleteThread(deps, commandId, threadId),
-    sendTurn: (commandId, threadId, content) => sendTurn(deps, commandId, threadId, content),
+    sendTurn: (commandId, threadId, content, attachments, model) =>
+      sendTurn(deps, commandId, threadId, content, attachments, model),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
     startProviderAuth: async () => ({ started: false }),
     retryProviderInitialize: async () => ({ started: false }),
+    respondToProviderApproval: async (_commandId, approvalRequestId) => ({
+      approvalRequestId,
+      resolved: false,
+    }),
   }
 }
 
@@ -1230,7 +1510,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
     const readThread = (threadId: string): OrchestrationThread | null => {
       const row = database.get<ThreadRow>(
-        `SELECT id, workspace_id, title, status, current_turn_id, created_at
+        `SELECT id, workspace_id, title, access_mode, status, current_turn_id, created_at
          FROM orchestration_threads
          WHERE id = ?`,
         [threadId],
@@ -1240,6 +1520,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         id: row.id as OrchestrationThread["id"],
         workspaceId: row.workspace_id as WorkspaceId,
         title: row.title,
+        accessMode: row.access_mode,
         status: row.status,
         createdAt: row.created_at,
         currentTurnId: row.current_turn_id as OrchestrationThread["currentTurnId"],
@@ -1248,21 +1529,12 @@ export const OrchestrationServiceLive = Layer.scoped(
 
     const readTurn = (turnId: string): OrchestrationTurn | null => {
       const row = database.get<TurnRow>(
-        `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+        `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
          FROM orchestration_turns
          WHERE id = ?`,
         [turnId],
       )
-      if (!row) return null
-      return {
-        id: row.id as OrchestrationTurn["id"],
-        threadId: row.thread_id as OrchestrationTurn["threadId"],
-        input: row.input_text,
-        output: row.output_text,
-        status: row.status,
-        startedAt: row.started_at,
-        completedAt: row.completed_at,
-      }
+      return row ? mapTurnRow(row, readTurnAttachments(database, turnId)) : null
     }
 
     const publishDomainEvent = async (event: OrchestrationDomainEvent): Promise<void> => {
@@ -1470,11 +1742,14 @@ export const OrchestrationServiceLive = Layer.scoped(
         })
 
         const executionCwd = resolveThreadExecutionCwd(database, work.threadId)
+        const thread = readThread(work.threadId)
         await codexCli.streamTurn({
           localThreadId: work.threadId,
           localTurnId: work.turnId,
           content: work.content,
           cwd: executionCwd,
+          accessMode: thread?.accessMode ?? "default",
+          model: work.model,
           onToken: async (token, index) => {
             if (activeTurns.get(work.turnId)?.interrupted) {
               const interrupted = await codexCli.interruptTurn(work.threadId, work.turnId)
@@ -1512,6 +1787,35 @@ export const OrchestrationServiceLive = Layer.scoped(
               await publishDomainEvent({ type: "turn.updated", turn })
             }
           },
+          onReasoning: async (token, index) => {
+            const current = readTurn(work.turnId)
+            const reasoning = `${current?.reasoning ?? ""}${token}`
+
+            database.execute(
+              `UPDATE orchestration_turns
+               SET reasoning_text = ?, updated_at = ?
+               WHERE id = ?`,
+              [reasoning, new Date().toISOString(), work.turnId],
+            )
+
+            await publishRuntimeEvent({
+              type: "provider.reasoning",
+              threadId: work.threadId as never,
+              turnId: work.turnId as never,
+              token,
+              index,
+            })
+
+            const turn = readTurn(work.turnId)
+            if (turn) {
+              appendEvent("turn.updated", { turn }, {
+                threadId: work.threadId,
+                turnId: work.turnId,
+                commandId: work.commandId,
+              })
+              await publishDomainEvent({ type: "turn.updated", turn })
+            }
+          },
           onCompleted: async () => {
             const output = readTurn(work.turnId)?.output ?? ""
             await completeTurn(work.commandId, work.threadId, work.turnId, output, false)
@@ -1525,6 +1829,12 @@ export const OrchestrationServiceLive = Layer.scoped(
           },
           onMcpToolCall: async (event) => {
             await publishRuntimeEvent(event)
+          },
+          onApprovalRequest: async (approval) => {
+            await publishRuntimeEvent({
+              type: "provider.approvalRequested",
+              approval,
+            })
           },
         })
       } catch (error) {
@@ -1595,6 +1905,8 @@ export const OrchestrationServiceLive = Layer.scoped(
           providerRuntime: true,
           desktopBootstrap: true,
         },
+        defaultChatModel: config.codexModel,
+        chatModels: buildChatModels(config),
         featureFlags: getFeatureFlags(),
       }),
       getSnapshot: async () => {
@@ -1606,20 +1918,26 @@ export const OrchestrationServiceLive = Layer.scoped(
            ORDER BY created_at ASC`,
         ).map(mapWorkspaceRow)
         const threads = database.query<ThreadRow>(
-          `SELECT id, workspace_id, title, status, current_turn_id, created_at
+          `SELECT id, workspace_id, title, access_mode, status, current_turn_id, created_at
            FROM orchestration_threads
            ORDER BY created_at ASC`,
         ).map(mapThreadRow)
-        const turns = database.query<TurnRow>(
-          `SELECT id, thread_id, input_text, output_text, status, started_at, completed_at
+        const turnRows = database.query<TurnRow>(
+          `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
            FROM orchestration_turns
            ORDER BY started_at ASC`,
-        ).map(mapTurnRow)
+        )
+        const attachmentsByTurnId = readTurnAttachmentsByTurnIds(
+          database,
+          turnRows.map((row) => row.id),
+        )
+        const turns = turnRows.map((row) => mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []))
         const providerRuntime = await runtimeStore.getState()
         return {
           workspaces,
           threads,
           turns,
+          pendingApprovals: codexCli.listPendingApprovals(),
           providerStatus: providerRuntime.status,
           providerRuntime,
           ready: readiness.isReady(),
@@ -1728,6 +2046,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         database.transaction(() => {
           if (deletedThreadIds.length > 0) {
             const placeholders = deletedThreadIds.map(() => "?").join(", ")
+            deleteTurnAttachmentsForThreadIds(database, deletedThreadIds)
             database.execute(
               `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
               deletedThreadIds,
@@ -1768,9 +2087,19 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         database.transaction(() => {
           database.execute(
-            `INSERT INTO orchestration_threads (id, workspace_id, title, status, current_turn_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [thread.id, thread.workspaceId, thread.title, thread.status, thread.currentTurnId, thread.createdAt, now],
+            `INSERT INTO orchestration_threads (
+               id, workspace_id, title, access_mode, status, current_turn_id, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              thread.id,
+              thread.workspaceId,
+              thread.title,
+              thread.accessMode,
+              thread.status,
+              thread.currentTurnId,
+              thread.createdAt,
+              now,
+            ],
           )
           database.execute(
             `INSERT OR REPLACE INTO provider_runtime_sessions (
@@ -1814,6 +2143,44 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { threadId })
         return { threadId: updatedThread.id }
       },
+      setThreadAccessMode: async (commandId, threadId, accessMode) => {
+        const thread = readThread(threadId)
+        if (!thread) {
+          throw new Error(`Thread not found: ${threadId}`)
+        }
+
+        if (thread.currentTurnId) {
+          throw new Error("Cannot change access mode while a turn is active.")
+        }
+
+        if (thread.accessMode === accessMode) {
+          recordReceipt(commandId, "completed", { threadId, accessMode })
+          await receiptBus.resolve(commandId, { threadId, accessMode })
+          return { threadId: thread.id, accessMode }
+        }
+
+        const now = new Date().toISOString()
+        database.transaction(() => {
+          database.execute(
+            `UPDATE orchestration_threads
+             SET access_mode = ?, updated_at = ?
+             WHERE id = ?`,
+            [accessMode, now, threadId],
+          )
+          resetThreadProviderSession(database, threadId, now)
+        })
+
+        const updatedThread = readThread(threadId)
+        if (!updatedThread) {
+          throw new Error(`Thread not found after access mode update: ${threadId}`)
+        }
+
+        appendEvent("thread.updated", { thread: updatedThread }, { threadId, commandId })
+        recordReceipt(commandId, "completed", { threadId, accessMode })
+        await publishDomainEvent({ type: "thread.updated", thread: updatedThread })
+        await receiptBus.resolve(commandId, { threadId, accessMode })
+        return { threadId: updatedThread.id, accessMode }
+      },
       deleteThread: async (commandId, threadId) => {
         const thread = readThread(threadId)
         if (!thread) {
@@ -1828,6 +2195,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         workQueue.splice(0, workQueue.length, ...remainingQueue)
 
         database.transaction(() => {
+          deleteTurnAttachmentsForThreadIds(database, [threadId])
           database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
@@ -1839,7 +2207,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { deleted: true, threadId })
         return { deleted: true }
       },
-      sendTurn: async (commandId, threadId, content) => {
+      sendTurn: async (commandId, threadId, content, attachments, model) => {
         const thread = readThread(threadId)
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
@@ -1857,9 +2225,12 @@ export const OrchestrationServiceLive = Layer.scoped(
           threadId: threadId as OrchestrationTurn["threadId"],
           input: content,
           output: "",
+          reasoning: "",
           status: "pending",
           startedAt: now,
           completedAt: null,
+          skill: null,
+          attachments: buildTurnAttachments(attachments),
         }
 
         await receiptBus.track(commandId)
@@ -1870,6 +2241,7 @@ export const OrchestrationServiceLive = Layer.scoped(
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, now],
           )
+          persistTurnAttachments(database, turn.id, turn.attachments)
           database.execute(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?
@@ -1888,7 +2260,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         appendEvent("turn.started", { turn }, { threadId, turnId: turn.id, commandId })
         await publishDomainEvent({ type: "turn.started", turn })
-        workQueue.push({ commandId, threadId, turnId: turn.id, content })
+        workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
         void drainQueue()
         return { turnId: turn.id }
       },
@@ -1932,6 +2304,27 @@ export const OrchestrationServiceLive = Layer.scoped(
         recordReceipt(commandId, started ? "completed" : "failed", { started })
         await receiptBus.resolve(commandId, { started })
         return { started }
+      },
+      respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
+        const result = await codexCli.respondToApproval(approvalRequestId, decision)
+        if (result.resolved) {
+          await publishRuntimeEvent({
+            type: "provider.approvalResolved",
+            approvalRequestId: result.approvalRequestId,
+            threadId: result.threadId as never,
+            turnId: result.turnId as never,
+            decision: result.decision,
+          })
+        }
+        recordReceipt(commandId, result.resolved ? "completed" : "failed", {
+          approvalRequestId,
+          resolved: result.resolved,
+        })
+        await receiptBus.resolve(commandId, {
+          approvalRequestId,
+          resolved: result.resolved,
+        })
+        return { approvalRequestId, resolved: result.resolved }
       },
     }
   }),

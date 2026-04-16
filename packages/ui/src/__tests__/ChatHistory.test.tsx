@@ -71,6 +71,7 @@ const snapshot: OrchestrationSnapshot = {
       id: "thread-1" as never,
       workspaceId: "workspace-1" as never,
       title: "Older thread",
+      accessMode: "default",
       status: "completed",
       createdAt: "2026-04-09T00:00:00.000Z",
       currentTurnId: null,
@@ -79,6 +80,7 @@ const snapshot: OrchestrationSnapshot = {
       id: "thread-2" as never,
       workspaceId: "workspace-1" as never,
       title: "Recent thread",
+      accessMode: "default",
       status: "streaming",
       createdAt: "2026-04-09T00:02:00.000Z",
       currentTurnId: "turn-2" as never,
@@ -87,12 +89,14 @@ const snapshot: OrchestrationSnapshot = {
       id: "thread-legacy" as never,
       workspaceId: "workspace-legacy" as never,
       title: "Legacy thread",
+      accessMode: "default",
       status: "completed",
       createdAt: "2026-04-09T00:03:00.000Z",
       currentTurnId: null,
     },
   ],
   turns: [],
+  pendingApprovals: [],
   providerStatus: "idle",
   providerRuntime: {
     adapter: "codex",
@@ -222,6 +226,15 @@ describe("ChatHistory", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
 
     expect(historyMocks.renameThread).toHaveBeenCalledWith("thread-1", "Renamed thread")
+  })
+
+  test("double-clicking a thread starts rename inline", async () => {
+    const user = userEvent.setup()
+    render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    await user.dblClick(screen.getByText("Older thread"))
+
+    expect(screen.getByLabelText("Rename Older thread")).toBeTruthy()
   })
 
   test("deleting the selected thread returns to the workspace route", async () => {

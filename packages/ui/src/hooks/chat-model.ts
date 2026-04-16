@@ -1,9 +1,19 @@
 import type {
   OrchestrationSnapshot,
   OrchestrationThread,
+  OrchestrationTurnAttachment,
   OrchestrationTurn,
   OrchestrationWorkspace,
+  ProviderRuntimeEvent,
 } from "@student-claw/contracts"
+import { extractDisplayContent } from "@/lib/chatAttachments"
+
+export type ProviderGuidance = {
+  title: string
+  detail: string
+  showRetry: boolean
+  showAuth: boolean
+}
 import type { WsConnectionStatus } from "@/rpc/wsConnectionState"
 
 export type ChatStatus =
@@ -14,12 +24,6 @@ export type ChatStatus =
   | "rate-limited"
   | "auth-expired"
   | "error"
-
-export interface ChatStatusPresentation {
-  readonly label: string
-  readonly dotClassName: string
-  readonly pulse: boolean
-}
 
 export interface ToolCallInfo {
   readonly toolName: string
@@ -34,9 +38,61 @@ export interface ChatMessage {
   readonly role: "user" | "assistant"
   readonly content: string
   readonly timestamp: number
+  readonly attachments?: readonly OrchestrationTurnAttachment[]
   readonly isStreaming?: boolean
   readonly toolCalls?: readonly ToolCallInfo[]
   readonly reasoning?: string
+}
+
+export function getChatStatusPresentation(status: ChatStatus): {
+  label: string
+  dotClassName: string
+  pulse: boolean
+} {
+  switch (status) {
+    case "idle":
+      return {
+        label: "Ready",
+        dotClassName: "bg-emerald-500",
+        pulse: false,
+      }
+    case "streaming":
+      return {
+        label: "Streaming",
+        dotClassName: "bg-sky-500",
+        pulse: true,
+      }
+    case "interrupted":
+      return {
+        label: "Interrupted",
+        dotClassName: "bg-amber-500",
+        pulse: false,
+      }
+    case "offline":
+      return {
+        label: "Offline",
+        dotClassName: "bg-red-500",
+        pulse: false,
+      }
+    case "rate-limited":
+      return {
+        label: "Rate limited",
+        dotClassName: "bg-amber-500",
+        pulse: false,
+      }
+    case "auth-expired":
+      return {
+        label: "Auth required",
+        dotClassName: "bg-amber-500",
+        pulse: false,
+      }
+    case "error":
+      return {
+        label: "Error",
+        dotClassName: "bg-red-500",
+        pulse: false,
+      }
+  }
 }
 
 export function resolveCurrentWorkspace(
@@ -120,13 +176,15 @@ export function buildChatMessages(
       {
         id: `${turn.id}:user`,
         role: "user",
-        content: turn.input,
+        content: extractDisplayContent(turn.input, turn.attachments),
         timestamp,
+        attachments: turn.attachments,
       },
       {
         id: `${turn.id}:assistant`,
         role: "assistant",
         content: turn.output,
+        reasoning: turn.reasoning || undefined,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
         isStreaming: turn.status === "pending" || turn.status === "streaming",
         toolCalls: toolCallsByTurnId[turn.id] ?? [],
@@ -206,6 +264,12 @@ export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
       return `Turn interrupted: ${event.turnId}`
     case "provider.mcpToolCall":
       return `${event.status} tool call: ${event.toolName}`
+    case "provider.approvalRequested":
+      return `Approval requested: ${event.approval.kind}`
+    case "provider.approvalResolved":
+      return `Approval ${event.decision}: ${event.approvalRequestId}`
+    default:
+      return ""
   }
 }
 
@@ -241,13 +305,6 @@ export function resolveChatState(
     }
   }
 
-  if (snapshot.providerRuntime.status === "rate_limited") {
-    return {
-      status: "rate-limited",
-      error: guidance?.detail,
-    }
-  }
-
   if (
     !snapshot.ready
     || snapshot.providerStatus === "offline"
@@ -280,56 +337,15 @@ export function resolveChatState(
     }
   }
 
+  if (snapshot.providerRuntime.status === "rate_limited") {
+    return {
+      status: "rate-limited",
+      error: guidance?.detail ?? null,
+    }
+  }
+
   return {
     status: "idle",
     error: null,
-  }
-}
-
-export function getChatStatusPresentation(status: ChatStatus): ChatStatusPresentation {
-  switch (status) {
-    case "streaming":
-      return {
-        label: "Streaming",
-        dotClassName: "bg-emerald-500",
-        pulse: true,
-      }
-    case "interrupted":
-      return {
-        label: "Interrupted",
-        dotClassName: "bg-amber-500",
-        pulse: false,
-      }
-    case "offline":
-      return {
-        label: "Offline",
-        dotClassName: "bg-red-500",
-        pulse: false,
-      }
-    case "rate-limited":
-      return {
-        label: "Rate limited",
-        dotClassName: "bg-orange-500",
-        pulse: false,
-      }
-    case "auth-expired":
-      return {
-        label: "Sign in required",
-        dotClassName: "bg-yellow-500",
-        pulse: false,
-      }
-    case "error":
-      return {
-        label: "Unavailable",
-        dotClassName: "bg-rose-500",
-        pulse: false,
-      }
-    case "idle":
-    default:
-      return {
-        label: "Ready",
-        dotClassName: "bg-slate-400",
-        pulse: false,
-      }
   }
 }

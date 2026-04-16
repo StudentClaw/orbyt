@@ -17,15 +17,19 @@ import {
   type InterruptTurnResult,
   type OnboardingSnapshot,
   type PlannedSession,
+  type RespondToProviderApprovalResult,
   type RelinkWorkspaceResult,
   type RetryProviderInitializeResult,
   type SendTurnResult,
+  type SetThreadAccessModeResult,
   type StartProviderAuthResult,
+  type ThreadAccessMode,
   type SetAiAuthStatusParams,
   type SetOverallStatusParams,
   type SetRoutinesParams,
   type SetStepStatusParams,
   type StudentPreference,
+  type TurnAttachmentInput,
   type UpdatePreferencesParams,
 } from "@student-claw/contracts"
 import type {
@@ -102,8 +106,17 @@ export interface WsRpcClient {
     readonly deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceResult>
     readonly createThread: (workspaceId: string, title?: string) => Promise<CreateThreadResult>
     readonly renameThread: (threadId: string, title: string) => Promise<RenameThreadResult>
+    readonly setThreadAccessMode: (
+      threadId: string,
+      accessMode: ThreadAccessMode,
+    ) => Promise<SetThreadAccessModeResult>
     readonly deleteThread: (threadId: string) => Promise<DeleteThreadResult>
-    readonly sendTurn: (threadId: string, content: string) => Promise<SendTurnResult>
+    readonly sendTurn: (
+      threadId: string,
+      content: string,
+      attachments: readonly TurnAttachmentInput[],
+      model?: string | null,
+    ) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
       listener: (event: OrchestrationDomainEvent, sequence: number) => void,
@@ -113,6 +126,10 @@ export interface WsRpcClient {
   readonly provider: {
     readonly startAuth: () => Promise<StartProviderAuthResult>
     readonly retryInitialize: () => Promise<RetryProviderInitializeResult>
+    readonly respondToApproval: (
+      approvalRequestId: string,
+      decision: "approve" | "deny",
+    ) => Promise<RespondToProviderApprovalResult>
     readonly onRuntimeEvent: (
       listener: (event: ProviderRuntimeEvent, sequence: number) => void,
       options?: StreamSubscriptionOptions,
@@ -213,10 +230,20 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
         threadId,
         title,
       }),
+    setThreadAccessMode: async (threadId, accessMode) =>
+      transport.request<SetThreadAccessModeResult>(RPC_METHODS.ORCHESTRATION_SET_THREAD_ACCESS_MODE, {
+        threadId,
+        accessMode,
+      }),
     deleteThread: async (threadId) =>
       transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
-    sendTurn: async (threadId, content) =>
-      transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, { threadId, content }),
+    sendTurn: async (threadId, content, attachments, model) =>
+      transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, {
+        threadId,
+        content,
+        attachments,
+        ...(model ? { model } : {}),
+      }),
     interruptTurn: async (threadId) =>
       transport.request<InterruptTurnResult>(RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN, { threadId }),
     onDomainEvent: (listener, options) =>
@@ -236,6 +263,11 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
     startAuth: () => transport.request<StartProviderAuthResult>(RPC_METHODS.PROVIDER_START_AUTH, {}),
     retryInitialize: () =>
       transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
+    respondToApproval: (approvalRequestId, decision) =>
+      transport.request<RespondToProviderApprovalResult>(RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL, {
+        approvalRequestId,
+        decision,
+      }),
     onRuntimeEvent: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.PROVIDER_RUNTIME,

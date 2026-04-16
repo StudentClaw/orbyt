@@ -1,4 +1,5 @@
 import { Schema } from "@effect/schema"
+import { SkillId } from "../schemas/ids.js"
 import { DesktopBootstrap } from "./desktop.js"
 import { FeatureFlags } from "./feature-flags.js"
 
@@ -71,12 +72,14 @@ export const RPC_METHODS = {
   ORCHESTRATION_DELETE_WORKSPACE: "orchestration.deleteWorkspace",
   ORCHESTRATION_CREATE_THREAD: "orchestration.createThread",
   ORCHESTRATION_RENAME_THREAD: "orchestration.renameThread",
+  ORCHESTRATION_SET_THREAD_ACCESS_MODE: "orchestration.setThreadAccessMode",
   ORCHESTRATION_DELETE_THREAD: "orchestration.deleteThread",
   ORCHESTRATION_SEND_TURN: "orchestration.sendTurn",
   ORCHESTRATION_INTERRUPT_TURN: "orchestration.interruptTurn",
   ORCHESTRATION_SUBSCRIBE_DOMAIN: "orchestration.subscribeDomain",
   PROVIDER_START_AUTH: "provider.startAuth",
   PROVIDER_RETRY_INITIALIZE: "provider.retryInitialize",
+  PROVIDER_RESPOND_TO_APPROVAL: "provider.respondToApproval",
   PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
   CANVAS_GET_COURSES: "canvas.getCourses",
   CANVAS_SYNC: "canvas.sync",
@@ -122,6 +125,17 @@ export const ServerCapabilities = Schema.Struct({
   desktopBootstrap: Schema.Boolean,
 })
 
+export const ChatModelGroup = Schema.Literal("standard", "reasoning")
+
+export const ChatModelId = Schema.Literal("gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex")
+
+export const ChatModel = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  description: Schema.String,
+  group: ChatModelGroup,
+})
+
 /**
  * Static server configuration snapshot.
  */
@@ -130,6 +144,8 @@ export const ServerConfig = Schema.Struct({
   platform: Schema.String,
   protocolVersion: Schema.String,
   capabilities: ServerCapabilities,
+  defaultChatModel: Schema.String,
+  chatModels: Schema.Array(ChatModel),
   featureFlags: FeatureFlags,
 })
 
@@ -190,9 +206,29 @@ export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   workspaceId: WorkspaceId,
   title: Schema.String,
+  accessMode: Schema.Literal("default", "full"),
   status: Schema.Literal("idle", "streaming", "interrupted", "completed"),
   createdAt: Schema.String,
   currentTurnId: Schema.NullOr(TurnId),
+})
+
+export const TurnAttachmentKind = Schema.Literal("image", "file")
+
+export const TurnAttachmentInput = Schema.Struct({
+  path: Schema.String.pipe(Schema.maxLength(4096)),
+  name: Schema.String.pipe(Schema.maxLength(255)),
+  mimeType: Schema.NullOr(Schema.String),
+  sizeBytes: Schema.NullOr(Schema.Number),
+  kind: TurnAttachmentKind,
+})
+
+export const OrchestrationTurnAttachment = Schema.Struct({
+  id: Schema.String,
+  path: Schema.String,
+  name: Schema.String,
+  mimeType: Schema.NullOr(Schema.String),
+  sizeBytes: Schema.NullOr(Schema.Number),
+  kind: TurnAttachmentKind,
 })
 
 /**
@@ -203,9 +239,12 @@ export const OrchestrationTurn = Schema.Struct({
   threadId: ThreadId,
   input: Schema.String,
   output: Schema.String,
+  reasoning: Schema.String,
   status: Schema.Literal("pending", "streaming", "interrupted", "completed"),
   startedAt: Schema.String,
   completedAt: Schema.NullOr(Schema.String),
+  skill: Schema.NullOr(Schema.Struct({ id: SkillId, name: Schema.String })),
+  attachments: Schema.Array(OrchestrationTurnAttachment),
 })
 
 export const ProviderRuntimeStatus = Schema.Literal(
@@ -240,6 +279,23 @@ export const ProviderRuntimeState = Schema.Struct({
   lastUpdatedAt: Schema.String,
 })
 
+export const ThreadAccessMode = Schema.Literal("default", "full")
+
+export const ProviderApprovalDecision = Schema.Literal("approve", "deny")
+
+export const ProviderPendingApproval = Schema.Struct({
+  id: Schema.String,
+  threadId: ThreadId,
+  turnId: TurnId,
+  kind: Schema.Literal("command", "file-change", "permissions"),
+  itemId: Schema.String,
+  approvalId: Schema.NullOr(Schema.String),
+  reason: Schema.NullOr(Schema.String),
+  command: Schema.NullOr(Schema.String),
+  cwd: Schema.NullOr(Schema.String),
+  availableDecisions: Schema.Array(ProviderApprovalDecision),
+})
+
 /**
  * Full orchestration state returned to the renderer.
  */
@@ -247,6 +303,7 @@ export const OrchestrationSnapshot = Schema.Struct({
   workspaces: Schema.Array(OrchestrationWorkspace),
   threads: Schema.Array(OrchestrationThread),
   turns: Schema.Array(OrchestrationTurn),
+  pendingApprovals: Schema.Array(ProviderPendingApproval),
   providerStatus: ProviderRuntimeStatus,
   providerRuntime: ProviderRuntimeState,
   ready: Schema.Boolean,
@@ -326,6 +383,16 @@ export const RenameThreadResult = Schema.Struct({
   threadId: ThreadId,
 })
 
+export const SetThreadAccessModeParams = Schema.Struct({
+  threadId: ThreadId,
+  accessMode: ThreadAccessMode,
+})
+
+export const SetThreadAccessModeResult = Schema.Struct({
+  threadId: ThreadId,
+  accessMode: ThreadAccessMode,
+})
+
 /**
  * Parameters for deleting an orchestration thread.
  */
@@ -346,6 +413,9 @@ export const DeleteThreadResult = Schema.Struct({
 export const SendTurnParams = Schema.Struct({
   threadId: ThreadId,
   content: Schema.String.pipe(Schema.maxLength(MAX_TURN_CONTENT_LENGTH)),
+  attachments: Schema.Array(TurnAttachmentInput),
+  skillId: Schema.optional(SkillId),
+  model: Schema.optional(ChatModelId),
 })
 
 /**
@@ -381,6 +451,16 @@ export const RetryProviderInitializeResult = Schema.Struct({
   started: Schema.Boolean,
 })
 
+export const RespondToProviderApprovalParams = Schema.Struct({
+  approvalRequestId: Schema.String,
+  decision: ProviderApprovalDecision,
+})
+
+export const RespondToProviderApprovalResult = Schema.Struct({
+  approvalRequestId: Schema.String,
+  resolved: Schema.Boolean,
+})
+
 /**
  * Provider runtime events streamed to the renderer.
  */
@@ -396,6 +476,13 @@ export const ProviderRuntimeEvent = Schema.Union(
   }),
   Schema.Struct({
     type: Schema.Literal("provider.token"),
+    threadId: ThreadId,
+    turnId: TurnId,
+    token: Schema.String,
+    index: Schema.Number,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.reasoning"),
     threadId: ThreadId,
     turnId: TurnId,
     token: Schema.String,
@@ -423,6 +510,17 @@ export const ProviderRuntimeEvent = Schema.Union(
     status: Schema.Literal("pending", "complete", "error"),
     message: Schema.optional(Schema.String),
     error: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.approvalRequested"),
+    approval: ProviderPendingApproval,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.approvalResolved"),
+    approvalRequestId: Schema.String,
+    threadId: ThreadId,
+    turnId: TurnId,
+    decision: ProviderApprovalDecision,
   }),
 )
 
@@ -484,6 +582,10 @@ export type ServerLifecycleEvent = Schema.Schema.Type<typeof ServerLifecycleEven
  */
 export type ServerCapabilities = Schema.Schema.Type<typeof ServerCapabilities>
 
+export type ChatModelGroup = Schema.Schema.Type<typeof ChatModelGroup>
+export type ChatModelId = Schema.Schema.Type<typeof ChatModelId>
+export type ChatModel = Schema.Schema.Type<typeof ChatModel>
+
 /**
  * Runtime type for server configuration.
  */
@@ -508,6 +610,9 @@ export type OrchestrationWorkspace = Schema.Schema.Type<typeof OrchestrationWork
  * Runtime type for thread snapshots.
  */
 export type OrchestrationThread = Schema.Schema.Type<typeof OrchestrationThread>
+export type TurnAttachmentKind = Schema.Schema.Type<typeof TurnAttachmentKind>
+export type TurnAttachmentInput = Schema.Schema.Type<typeof TurnAttachmentInput>
+export type OrchestrationTurnAttachment = Schema.Schema.Type<typeof OrchestrationTurnAttachment>
 
 /**
  * Runtime type for turn snapshots.
@@ -574,6 +679,12 @@ export type RenameThreadParams = Schema.Schema.Type<typeof RenameThreadParams>
 export type RenameThreadResult = Schema.Schema.Type<typeof RenameThreadResult>
 
 /**
+ * Runtime type for thread access mode updates.
+ */
+export type SetThreadAccessModeParams = Schema.Schema.Type<typeof SetThreadAccessModeParams>
+export type SetThreadAccessModeResult = Schema.Schema.Type<typeof SetThreadAccessModeResult>
+
+/**
  * Runtime type for delete-thread parameters.
  */
 export type DeleteThreadParams = Schema.Schema.Type<typeof DeleteThreadParams>
@@ -606,6 +717,11 @@ export type StartProviderAuthParams = Schema.Schema.Type<typeof StartProviderAut
 export type StartProviderAuthResult = Schema.Schema.Type<typeof StartProviderAuthResult>
 export type RetryProviderInitializeParams = Schema.Schema.Type<typeof RetryProviderInitializeParams>
 export type RetryProviderInitializeResult = Schema.Schema.Type<typeof RetryProviderInitializeResult>
+export type ThreadAccessMode = Schema.Schema.Type<typeof ThreadAccessMode>
+export type ProviderApprovalDecision = Schema.Schema.Type<typeof ProviderApprovalDecision>
+export type ProviderPendingApproval = Schema.Schema.Type<typeof ProviderPendingApproval>
+export type RespondToProviderApprovalParams = Schema.Schema.Type<typeof RespondToProviderApprovalParams>
+export type RespondToProviderApprovalResult = Schema.Schema.Type<typeof RespondToProviderApprovalResult>
 
 /**
  * Runtime type for provider events.

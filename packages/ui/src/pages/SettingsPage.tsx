@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTheme, type Theme } from "@/hooks/useTheme"
 import {
   IpcChannel,
   type ExtensionAuthField,
@@ -6,8 +7,14 @@ import {
   type ExtensionRegistryAvailableEntry,
   type ExtensionRegistryEntry,
   type PluginAuthStatus,
+  type ProviderRuntimeState,
 } from "@student-claw/contracts"
-import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRuntime"
+import {
+  useOrchestrationActions,
+  useRuntimeBootstrap,
+  useRuntimeOrchestrationSnapshot,
+  useRuntimeServerConfig,
+} from "@/hooks/useAppRuntime"
 import { DevOnboardingControls } from "@/components/dev/DevOnboardingControls"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -16,8 +23,79 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { connectCodexAccount } from "@/lib/codexAuth"
 
 const MIN_SECRET_LENGTH = 20
+
+interface ThemeOptionProps {
+  mode: Theme
+  label: string
+  selected: boolean
+  onClick: () => void
+}
+
+function ThemeOption({ mode, label, selected, onClick }: ThemeOptionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-2 rounded-xl p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      <div
+        className={`w-[120px] h-[88px] rounded-xl overflow-hidden border-2 transition-colors ${
+          selected ? "border-blue-500" : "border-transparent"
+        }`}
+      >
+        {mode === "light" && (
+          <div className="w-full h-full bg-[#f0efed] flex flex-col p-2 gap-1.5">
+            <div className="flex justify-end">
+              <div className="h-4 w-16 rounded-full bg-[#2a2a2a]" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-2 w-12 rounded bg-[#c0bdb8]" />
+              <div className="h-2 w-16 rounded bg-[#c0bdb8]" />
+            </div>
+            <div className="mt-auto h-6 w-full rounded-md bg-white border border-[#dddbd8]" />
+          </div>
+        )}
+        {mode === "dark" && (
+          <div className="w-full h-full bg-[#2a2a2a] flex flex-col p-2 gap-1.5">
+            <div className="flex justify-end">
+              <div className="h-4 w-16 rounded-full bg-[#1a1a1a]" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-2 w-12 rounded bg-[#444]" />
+              <div className="h-2 w-16 rounded bg-[#444]" />
+            </div>
+            <div className="mt-auto h-6 w-full rounded-md bg-[#3a3a3a] border border-[#444]" />
+          </div>
+        )}
+        {mode === "auto" && (
+          <div className="w-full h-full flex">
+            <div className="w-1/2 h-full bg-white flex flex-col p-2 gap-1.5 overflow-hidden">
+              <div className="space-y-1">
+                <div className="h-2 w-8 rounded bg-[#c0bdb8]" />
+                <div className="h-2 w-10 rounded bg-[#c0bdb8]" />
+              </div>
+              <div className="mt-auto h-5 w-full rounded-l-md bg-[#f0efed] border border-[#dddbd8]" />
+            </div>
+            <div className="w-1/2 h-full bg-[#2a2a2a] flex flex-col p-2 gap-1.5 overflow-hidden">
+              <div className="flex justify-end">
+                <div className="h-4 w-8 rounded-full bg-[#1a1a1a]" />
+              </div>
+              <div className="space-y-1">
+                <div className="h-2 w-6 rounded bg-[#444]" />
+                <div className="h-2 w-8 rounded bg-[#444]" />
+              </div>
+              <div className="mt-auto h-5 w-full rounded-r-md bg-[#3a3a3a] border border-[#444]" />
+            </div>
+          </div>
+        )}
+      </div>
+      <span className="text-sm text-muted-foreground">{label}</span>
+    </button>
+  )
+}
 
 type AuthFormValues = Record<string, string>
 type AuthStatusMap = Record<string, PluginAuthStatus | undefined>
@@ -166,18 +244,117 @@ function validateAuthValues(auth: ExtensionAuthManualTokenSchema, values: AuthFo
   return fieldErrors
 }
 
+function getCodexStatusBadgeVariant(
+  runtime: ProviderRuntimeState | null,
+): "default" | "secondary" | "destructive" | "outline" {
+  if (!runtime) {
+    return "secondary"
+  }
+
+  if (runtime.authState === "authenticated") {
+    return "default"
+  }
+
+  if (runtime.authState === "auth_required" || runtime.authState === "expired") {
+    return "destructive"
+  }
+
+  if (runtime.status === "degraded" || runtime.status === "rate_limited") {
+    return "destructive"
+  }
+
+  return "secondary"
+}
+
+function getCodexStatusLabel(runtime: ProviderRuntimeState | null): string {
+  if (!runtime) {
+    return "Checking runtime"
+  }
+
+  if (runtime.authState === "authenticated") {
+    if (runtime.status === "initializing") {
+      return "Connecting"
+    }
+
+    if (runtime.status === "degraded") {
+      return "Degraded"
+    }
+
+    if (runtime.status === "rate_limited") {
+      return "Rate limited"
+    }
+
+    return "Connected"
+  }
+
+  if (runtime.authState === "expired") {
+    return "Session expired"
+  }
+
+  if (runtime.authState === "auth_required" || runtime.status === "auth_required") {
+    return "Sign-in required"
+  }
+
+  if (runtime.status === "initializing") {
+    return "Initializing"
+  }
+
+  return "Not connected"
+}
+
+function getCodexStatusDescription(runtime: ProviderRuntimeState | null): string {
+  if (!runtime) {
+    return "Waiting for the local runtime to report Codex availability."
+  }
+
+  if (runtime.authState === "authenticated") {
+    return runtime.lastError?.message ?? "Codex is authenticated and available to the chat runtime."
+  }
+
+  if (runtime.lastError?.message) {
+    return runtime.lastError.message
+  }
+
+  if (runtime.authState === "expired") {
+    return "Your Codex session expired. Sign in again to restore chat access."
+  }
+
+  return "Codex is not authenticated in this app runtime yet."
+}
+
 export function SettingsPage() {
+  const { theme, setTheme } = useTheme()
   const bootstrap = useRuntimeBootstrap()
   const serverConfig = useRuntimeServerConfig()
+  const snapshot = useRuntimeOrchestrationSnapshot()
+  const orchestrationActions = useOrchestrationActions()
   const [registryEntries, setRegistryEntries] = useState<ExtensionRegistryEntry[]>([])
   const [registryState, setRegistryState] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const [registryError, setRegistryError] = useState<string | null>(null)
   const [pendingPluginId, setPendingPluginId] = useState<string | null>(null)
   const [pendingAuthPluginId, setPendingAuthPluginId] = useState<string | null>(null)
+  const [pendingCodexAction, setPendingCodexAction] = useState<"connect" | "retry" | null>(null)
+  const [codexActionError, setCodexActionError] = useState<string | null>(null)
   const [authStatuses, setAuthStatuses] = useState<AuthStatusMap>({})
   const [authForms, setAuthForms] = useState<Record<string, AuthFormValues>>({})
   const [authErrors, setAuthErrors] = useState<Record<string, string | null>>({})
   const [authFieldErrors, setAuthFieldErrors] = useState<AuthFieldErrorMap>({})
+
+  const providerRuntime = snapshot?.providerRuntime ?? null
+  const codexNeedsAuth =
+    !providerRuntime
+    || providerRuntime.authState === "unknown"
+    || providerRuntime.authState === "auth_required"
+    || providerRuntime.authState === "expired"
+    || providerRuntime.status === "auth_required"
+  const codexCanRetry =
+    providerRuntime !== null
+    && !codexNeedsAuth
+    && (
+      providerRuntime.status === "offline"
+      || providerRuntime.status === "degraded"
+      || providerRuntime.status === "rate_limited"
+    )
 
   function upsertRegistryEntry(nextEntry: ExtensionRegistryEntry): void {
     setRegistryEntries((current) => {
@@ -382,7 +559,7 @@ export function SettingsPage() {
 
         setAuthStatuses((current) => ({
           ...current,
-          ...Object.fromEntries(nextStatuses.filter(([, status]) => Boolean(status))),
+          ...(Object.fromEntries(nextStatuses.filter(([, status]) => Boolean(status))) as AuthStatusMap),
         }))
       })
       .catch((error: unknown) => {
@@ -423,6 +600,118 @@ export function SettingsPage() {
           ? `${bootstrap.platform} · ${serverConfig.appVersion}`
           : "Waiting for runtime metadata"}
       </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Color mode</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <ThemeOption mode="light" label="Light" selected={theme === "light"} onClick={() => setTheme("light")} />
+            <ThemeOption mode="auto" label="Auto" selected={theme === "auto"} onClick={() => setTheme("auto")} />
+            <ThemeOption mode="dark" label="Dark" selected={theme === "dark"} onClick={() => setTheme("dark")} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="settings-codex-card">
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle>Codex Connection</CardTitle>
+              <CardDescription>
+                This is the account and runtime used by Student Claw chat.
+              </CardDescription>
+            </div>
+            <Badge
+              variant={getCodexStatusBadgeVariant(providerRuntime)}
+              data-testid="settings-codex-status"
+            >
+              {pendingCodexAction === "connect"
+                ? "Connecting"
+                : pendingCodexAction === "retry"
+                  ? "Retrying"
+                  : getCodexStatusLabel(providerRuntime)}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {pendingCodexAction === "connect"
+              ? "Finishing the Codex login flow and reloading the local runtime."
+              : pendingCodexAction === "retry"
+                ? "Retrying the local Codex runtime."
+                : getCodexStatusDescription(providerRuntime)}
+          </p>
+
+          {providerRuntime && (
+            <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+              <div data-testid="settings-codex-auth-state">
+                <span className="font-medium text-foreground">Auth state:</span> {providerRuntime.authState}
+              </div>
+              <div data-testid="settings-codex-runtime-state">
+                <span className="font-medium text-foreground">Runtime state:</span> {providerRuntime.status}
+              </div>
+            </div>
+          )}
+
+          {codexActionError && (
+            <Alert variant="destructive" data-testid="settings-codex-error">
+              <AlertTitle>Codex connection failed</AlertTitle>
+              <AlertDescription>{codexActionError}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {codexNeedsAuth && (
+              <Button
+                disabled={pendingCodexAction !== null}
+                onClick={() => {
+                  setPendingCodexAction("connect")
+                  setCodexActionError(null)
+                  void connectCodexAccount()
+                    .then((result) => {
+                      if (result.status !== "connected") {
+                        setCodexActionError(result.error)
+                      }
+                    })
+                    .catch((error) => {
+                      setCodexActionError(error instanceof Error ? error.message : String(error))
+                    })
+                    .finally(() => {
+                      setPendingCodexAction(null)
+                    })
+                }}
+                data-testid="settings-codex-connect"
+              >
+                Connect Codex
+              </Button>
+            )}
+
+            {codexCanRetry && (
+              <Button
+                variant="outline"
+                disabled={pendingCodexAction !== null}
+                onClick={() => {
+                  setPendingCodexAction("retry")
+                  setCodexActionError(null)
+                  Promise.resolve(orchestrationActions.retryProviderInitialize())
+                    .catch((error) => {
+                      setCodexActionError(error instanceof Error ? error.message : String(error))
+                    })
+                    .finally(() => {
+                      setPendingCodexAction(null)
+                    })
+                }}
+                data-testid="settings-codex-retry"
+              >
+                Retry Runtime
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

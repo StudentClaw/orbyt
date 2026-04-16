@@ -8,10 +8,12 @@ import {
   type SaveDialogOptions,
 } from "electron"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, statSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import {
+  type AttachmentMetadataLookupParams,
+  type TurnAttachmentInput,
   IpcChannel,
   type CodexAuthResult,
   type DesktopBootstrap,
@@ -31,11 +33,60 @@ import {
   type PluginUninstallParams,
 } from "@student-claw/contracts"
 import { IPC_CHANNELS } from "./channels.js"
+import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
+
+const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
+  ".bmp": "image/bmp",
+  ".csv": "text/csv",
+  ".gif": "image/gif",
+  ".heic": "image/heic",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".json": "application/json",
+  ".md": "text/markdown",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain",
+  ".wav": "audio/wav",
+  ".webm": "video/webm",
+  ".webp": "image/webp",
+  ".xml": "application/xml",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+}
+
+function guessMimeType(filePath: string): string | null {
+  return MIME_TYPES_BY_EXTENSION[path.extname(filePath).toLowerCase()] ?? null
+}
+
+function buildAttachmentMetadata(filePath: string): TurnAttachmentInput | null {
+  try {
+    const stat = statSync(filePath)
+    if (!stat.isFile()) {
+      return null
+    }
+
+    const mimeType = guessMimeType(filePath)
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      mimeType,
+      sizeBytes: stat.size,
+      kind: mimeType?.startsWith("image/") ? "image" : "file",
+    }
+  } catch {
+    return null
+  }
+}
 
 function resolveCodexPath(): string {
   const candidates = [
@@ -101,6 +152,36 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle(
+    IPC_CHANNELS.FILE_SELECT_ATTACHMENTS,
+    async (
+      _event,
+      params?: {
+        filters?: Array<{ name: string; extensions: string[] }>
+      },
+    ): Promise<string[] | null> => {
+      const window = BrowserWindow.getFocusedWindow()
+      const dialogOptions: OpenDialogOptions = {
+        properties: ["openFile", "multiSelections"],
+        filters: params?.filters,
+      }
+      const result = window
+        ? await dialog.showOpenDialog(window, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+
+      return result.canceled ? null : result.filePaths
+    },
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_GET_ATTACHMENT_METADATA,
+    (_event, params: AttachmentMetadataLookupParams): TurnAttachmentInput[] => {
+      return params.paths
+        .map((filePath) => buildAttachmentMetadata(filePath))
+        .filter((entry): entry is TurnAttachmentInput => entry !== null)
+    },
+  )
+
+  ipcMain.handle(
     IPC_CHANNELS.FILE_SAVE_DIALOG,
     async (
       _event,
@@ -121,9 +202,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
     const codexPath = resolveCodexPath()
+    const env = buildIsolatedCodexEnv(app.getPath("userData"))
 
     return new Promise((resolve) => {
-      const proc = spawn(codexPath, ["login"], { stdio: "pipe" })
+      const proc = spawn(codexPath, ["login"], {
+        env,
+        stdio: "pipe",
+        shell: process.platform === "win32",
+      })
       const OAUTH_TIMEOUT_MS = 120_000
 
       const timer = setTimeout(() => {

@@ -1,29 +1,55 @@
 import { Context, Effect, Layer } from "effect"
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
 import readline from "node:readline"
-import type { ProviderRuntimeEvent } from "@student-claw/contracts"
+import type { ProviderApprovalDecision, ThreadAccessMode } from "@student-claw/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 import { PluginGateway } from "../mcp/PluginGateway.js"
 import { ProviderRuntimeStore } from "./ProviderRuntimeStore.js"
+import {
+  ActiveTurn,
+  PendingApprovalEntry,
+  ProviderMcpToolCallEvent,
+  ProviderRuntimeFailure,
+  STUDENT_CLAW_GATEWAY_TOKEN_ENV,
+  buildCodexAppServerArgs,
+  buildInitializeParams,
+  emitReasoningText,
+  emitTextByPhase,
+  findActiveTurnByProviderIds,
+  getThreadStartPolicy,
+  isRecord,
+  mapCodexMcpToolCallCompletedEvent,
+  mapCodexMcpToolCallProgressEvent,
+  mapCodexMcpToolCallStartedEvent,
+  mapPendingApprovalEntry,
+  normalizeSessionCwd,
+  readAgentMessageState,
+  readAuthFailure,
+  readErrorMessage,
+  readReasoningItemState,
+  readString,
+} from "./CodexEventParser.js"
+
+// Re-export public API for backward compatibility
+export {
+  ProviderRuntimeFailure,
+  buildCodexAppServerArgs,
+  isReasoningItemType,
+  mapCodexMcpToolCallCompletedEvent,
+  mapCodexMcpToolCallProgressEvent,
+  mapCodexMcpToolCallStartedEvent,
+  normalizeAgentMessagePhase,
+  shouldTreatAgentMessageAsReasoning,
+} from "./CodexEventParser.js"
+
+// ============================================================================
+// Local types (only used within the live layer)
+// ============================================================================
 
 type PendingRequest = {
   readonly timeout: ReturnType<typeof setTimeout>
   readonly resolve: (value: unknown) => void
   readonly reject: (error: Error) => void
-}
-
-type ActiveTurn = {
-  readonly localThreadId: string
-  readonly localTurnId: string
-  readonly providerThreadId: string
-  providerTurnId: string | null
-  readonly onToken: (token: string, index: number) => Promise<void>
-  readonly onCompleted: () => Promise<void>
-  readonly onInterrupted: () => Promise<void>
-  readonly onError: (error: ProviderRuntimeFailure) => Promise<void>
-  readonly onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
-  readonly mcpToolCalls: Map<string, Omit<CodexMcpToolCallSnapshot, "status" | "error">>
-  tokenIndex: number
 }
 
 type ThreadStartResponse = {
@@ -47,18 +73,11 @@ type AccountReadResponse = {
 
 type JsonRpcMessage =
   | { id?: string | number; result?: unknown; error?: { code?: number; message?: string } }
-  | { method?: string; params?: unknown }
+  | { id?: string | number; method?: string; params?: unknown }
 
-export class ProviderRuntimeFailure extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable: boolean,
-  ) {
-    super(message)
-    this.name = "ProviderRuntimeFailure"
-  }
-}
+// ============================================================================
+// Service interface and tag
+// ============================================================================
 
 export interface CodexCliService {
   readonly initialize: () => Promise<void>
@@ -70,228 +89,36 @@ export interface CodexCliService {
     localTurnId: string
     content: string
     cwd?: string | null
+    accessMode?: ThreadAccessMode
+    model?: string | null
     onToken: (token: string, index: number) => Promise<void>
+    onReasoning: (token: string, index: number) => Promise<void>
     onCompleted: () => Promise<void>
     onInterrupted: () => Promise<void>
     onError: (error: ProviderRuntimeFailure) => Promise<void>
     onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
+    onApprovalRequest: (approval: import("@student-claw/contracts").ProviderPendingApproval) => Promise<void>
   }) => Promise<void>
+  readonly listPendingApprovals: () => ReadonlyArray<import("@student-claw/contracts").ProviderPendingApproval>
+  readonly respondToApproval: (
+    approvalRequestId: string,
+    decision: ProviderApprovalDecision,
+  ) => Promise<{
+    approvalRequestId: string
+    threadId: string
+    turnId: string
+    decision: ProviderApprovalDecision
+    resolved: boolean
+  }>
   readonly interruptTurn: (localThreadId: string, localTurnId: string) => Promise<boolean>
   readonly shutdown: () => Promise<void>
 }
 
-export class CodexCli extends Context.Tag("CodexCli")<
-  CodexCli,
-  CodexCliService
->() {}
+export class CodexCli extends Context.Tag("CodexCli")<CodexCli, CodexCliService>() {}
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object"
-}
-
-function readErrorMessage(value: unknown): string | undefined {
-  if (!isRecord(value)) return undefined
-  const error = value.error
-  if (!isRecord(error) || typeof error.message !== "string") return undefined
-  return error.message
-}
-
-function readString(target: unknown, key: string): string | undefined {
-  if (!isRecord(target)) return undefined
-  const value = target[key]
-  return typeof value === "string" ? value : undefined
-}
-
-const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
-
-type ActiveTurnLocator = Pick<ActiveTurn, "localThreadId" | "localTurnId">
-type ProviderMcpToolCallEvent = Extract<ProviderRuntimeEvent, { readonly type: "provider.mcpToolCall" }>
-
-type CodexMcpToolCallSnapshot = {
-  readonly itemId: string
-  readonly serverName: string
-  readonly toolName: string
-  readonly args: unknown
-  readonly status: "inProgress" | "completed" | "failed"
-  readonly error?: string
-}
-
-export function buildCodexAppServerArgs(config: {
-  readonly pluginGatewayMcpServerName: string
-  readonly pluginGatewayMcpUrl?: string
-}): string[] {
-  const args = ["app-server"]
-
-  if (!config.pluginGatewayMcpUrl) {
-    return args
-  }
-
-  const quotedServerName = JSON.stringify(config.pluginGatewayMcpServerName)
-
-  args.push(
-    "-c",
-    `mcp_servers.${quotedServerName}.url="${config.pluginGatewayMcpUrl}"`,
-    "-c",
-    `mcp_servers.${quotedServerName}.bearer_token_env_var="${STUDENT_CLAW_GATEWAY_TOKEN_ENV}"`,
-  )
-
-  return args
-}
-
-function readMcpToolCallItem(item: unknown): CodexMcpToolCallSnapshot | null {
-  if (!isRecord(item) || item.type !== "mcpToolCall") {
-    return null
-  }
-
-  const itemId = readString(item, "id")
-  const serverName = readString(item, "server")
-  const toolName = readString(item, "tool")
-  const status = readString(item, "status")
-  if (
-    !itemId
-    || !serverName
-    || !toolName
-    || (status !== "inProgress" && status !== "completed" && status !== "failed")
-  ) {
-    return null
-  }
-
-  const error = isRecord(item.error) && typeof item.error.message === "string"
-    ? item.error.message
-    : undefined
-
-  return {
-    itemId,
-    serverName,
-    toolName,
-    args: "arguments" in item ? item.arguments : {},
-    status,
-    error,
-  }
-}
-
-export function mapCodexMcpToolCallStartedEvent(
-  params: unknown,
-  activeTurn: ActiveTurnLocator,
-): ProviderMcpToolCallEvent | null {
-  const item = isRecord(params) ? params.item : null
-  const mcpToolCall = readMcpToolCallItem(item)
-  if (!mcpToolCall) {
-    return null
-  }
-
-  const event: ProviderMcpToolCallEvent = {
-    type: "provider.mcpToolCall",
-    threadId: activeTurn.localThreadId as never,
-    turnId: activeTurn.localTurnId as never,
-    itemId: mcpToolCall.itemId,
-    serverName: mcpToolCall.serverName,
-    toolName: mcpToolCall.toolName,
-    args: mcpToolCall.args,
-    status: "pending",
-  }
-
-  return event
-}
-
-export function mapCodexMcpToolCallProgressEvent(
-  params: unknown,
-  activeTurn: ActiveTurnLocator,
-  snapshot?: Omit<CodexMcpToolCallSnapshot, "status" | "error">,
-): ProviderMcpToolCallEvent | null {
-  const itemId = readString(params, "itemId")
-  const message = readString(params, "message")
-  if (!itemId || !message) {
-    return null
-  }
-
-  const serverName = snapshot?.serverName ?? readString(params, "serverName") ?? "student-claw"
-  const toolName = snapshot?.toolName ?? readString(params, "toolName") ?? "unknown"
-  const args = snapshot?.args ?? (isRecord(params) && "arguments" in params ? params.arguments : {})
-
-  const event: ProviderMcpToolCallEvent = {
-    type: "provider.mcpToolCall",
-    threadId: activeTurn.localThreadId as never,
-    turnId: activeTurn.localTurnId as never,
-    itemId,
-    serverName,
-    toolName,
-    args,
-    status: "pending",
-    message,
-  }
-
-  return event
-}
-
-export function mapCodexMcpToolCallCompletedEvent(
-  params: unknown,
-  activeTurn: ActiveTurnLocator,
-  snapshot?: Omit<CodexMcpToolCallSnapshot, "status" | "error">,
-): ProviderMcpToolCallEvent | null {
-  const item = isRecord(params) ? params.item : null
-  const mcpToolCall = readMcpToolCallItem(item)
-  if (!mcpToolCall) {
-    return null
-  }
-
-  const event: ProviderMcpToolCallEvent = {
-    type: "provider.mcpToolCall",
-    threadId: activeTurn.localThreadId as never,
-    turnId: activeTurn.localTurnId as never,
-    itemId: mcpToolCall.itemId,
-    serverName: snapshot?.serverName ?? mcpToolCall.serverName,
-    toolName: snapshot?.toolName ?? mcpToolCall.toolName,
-    args: snapshot?.args ?? mcpToolCall.args,
-    status: mcpToolCall.status === "failed" ? "error" : "complete",
-    error: mcpToolCall.error,
-  }
-
-  return event
-}
-
-function readAuthFailure(stdout: string, stderr: string): ProviderRuntimeFailure | null {
-  const output = `${stdout}\n${stderr}`.toLowerCase()
-  if (output.includes("logged in")) {
-    return null
-  }
-
-  if (
-    output.includes("not logged in") ||
-    output.includes("authentication required") ||
-    output.includes("login required")
-  ) {
-    return new ProviderRuntimeFailure(
-      "codex_auth_required",
-      "Codex CLI is not authenticated. Start the login flow and retry.",
-      false,
-    )
-  }
-
-  return null
-}
-
-function normalizeSessionCwd(cwd: string | null | undefined): string | null {
-  if (typeof cwd !== "string") {
-    return null
-  }
-
-  const normalized = cwd.trim()
-  return normalized.length > 0 ? normalized : null
-}
-
-function buildInitializeParams() {
-  return {
-    clientInfo: {
-      name: "student-claw",
-      title: "Student Claw",
-      version: "0.1.0",
-    },
-    capabilities: {
-      experimentalApi: true,
-    },
-  } as const
-}
+// ============================================================================
+// Live layer
+// ============================================================================
 
 export const CodexCliLive = Layer.effect(
   CodexCli,
@@ -305,6 +132,7 @@ export const CodexCliLive = Layer.effect(
     const processHomePath = config.codexProcessHomePath
     const providerThreadIds = new Map<string, string>()
     const activeProviderTurns = new Map<string, ActiveTurn>()
+    const pendingApprovalRequests = new Map<string, PendingApprovalEntry>()
     let child: ChildProcessWithoutNullStreams | null = null
     let output: readline.Interface | null = null
     let pending = new Map<string, PendingRequest>()
@@ -323,13 +151,17 @@ export const CodexCliLive = Layer.effect(
 
       for (const entry of pending.values()) {
         clearTimeout(entry.timeout)
-        entry.reject(failure ?? new ProviderRuntimeFailure(
-          "codex_process_closed",
-          "Codex app-server stopped unexpectedly.",
-          true,
-        ))
+        entry.reject(
+          failure
+          ?? new ProviderRuntimeFailure(
+            "codex_process_closed",
+            "Codex app-server stopped unexpectedly.",
+            true,
+          ),
+        )
       }
       pending = new Map()
+      pendingApprovalRequests.clear()
 
       if (currentOutput) {
         currentOutput.removeAllListeners()
@@ -409,11 +241,13 @@ export const CodexCliLive = Layer.effect(
       const promise = new Promise<T>((resolve, reject) => {
         const timeout = setTimeout(() => {
           pending.delete(id)
-          reject(new ProviderRuntimeFailure(
-            "codex_request_timeout",
-            `Timed out waiting for Codex response to ${method}.`,
-            true,
-          ))
+          reject(
+            new ProviderRuntimeFailure(
+              "codex_request_timeout",
+              `Timed out waiting for Codex response to ${method}.`,
+              true,
+            ),
+          )
         }, config.codexRequestTimeoutMs)
 
         pending.set(id, {
@@ -427,12 +261,82 @@ export const CodexCliLive = Layer.effect(
       return promise
     }
 
+    const writeMessage = (payload: unknown): void => {
+      if (!child?.stdin.writable) {
+        throw new ProviderRuntimeFailure(
+          "codex_process_unavailable",
+          "Codex app-server is not available.",
+          true,
+        )
+      }
+
+      child.stdin.write(`${JSON.stringify(payload)}\n`)
+    }
+
+    const clearPendingApprovalsForTurn = (localTurnId: string): void => {
+      for (const [approvalRequestId, entry] of pendingApprovalRequests.entries()) {
+        if (entry.approval.turnId === localTurnId) {
+          pendingApprovalRequests.delete(approvalRequestId)
+        }
+      }
+    }
+
+    const handleServerRequest = async (message: JsonRpcMessage): Promise<void> => {
+      const method =
+        "method" in message && typeof message.method === "string" ? message.method : null
+      if (!method || !("id" in message) || message.id == null) {
+        return
+      }
+
+      if (
+        method !== "item/commandExecution/requestApproval"
+        && method !== "item/fileChange/requestApproval"
+        && method !== "item/permissions/requestApproval"
+      ) {
+        writeMessage({
+          id: message.id,
+          error: {
+            code: -32601,
+            message: `Unsupported server request: ${method}`,
+          },
+        })
+        return
+      }
+
+      const params = "params" in message ? message.params : null
+      const providerThreadId = readString(params, "threadId") ?? null
+      const providerTurnId = readString(params, "turnId") ?? null
+      const activeTurn = findActiveTurnByProviderIds(
+        activeProviderTurns,
+        providerThreadId,
+        providerTurnId,
+      )
+
+      if (!activeTurn) {
+        const denialResult =
+          method === "item/permissions/requestApproval"
+            ? { permissions: {}, scope: "turn" }
+            : { decision: "decline" }
+        writeMessage({
+          id: message.id,
+          result: denialResult,
+        })
+        return
+      }
+
+      const entry = mapPendingApprovalEntry(message.id, method, params, activeTurn)
+      pendingApprovalRequests.set(entry.approval.id, entry)
+      await activeTurn.onApprovalRequest(entry.approval)
+    }
+
     const handleNotification = async (message: JsonRpcMessage) => {
-      const method = "method" in message && typeof message.method === "string" ? message.method : null
+      const method =
+        "method" in message && typeof message.method === "string" ? message.method : null
       if (!method) return
 
       if (method === "account/rateLimits/updated") {
-        const params = "params" in message && isRecord(message.params) ? message.params : null
+        const params =
+          "params" in message && isRecord(message.params) ? message.params : null
         const rateLimits = params ? params.rateLimits : null
         const primary = isRecord(rateLimits) ? rateLimits.primary : null
         const usedPercent = isRecord(primary) ? primary.usedPercent : null
@@ -456,8 +360,7 @@ export const CodexCliLive = Layer.effect(
       if (method === "turn/started" && providerTurnId) {
         const activeTurn = Array.from(activeProviderTurns.values()).find(
           (entry) =>
-            entry.providerThreadId === providerThreadId &&
-            entry.providerTurnId === null,
+            entry.providerThreadId === providerThreadId && entry.providerTurnId === null,
         )
         if (activeTurn) {
           activeTurn.providerTurnId = providerTurnId
@@ -465,10 +368,24 @@ export const CodexCliLive = Layer.effect(
         return
       }
 
-      const activeTurn = providerTurnId ? activeProviderTurns.get(providerTurnId) : null
+      const activeTurn = findActiveTurnByProviderIds(
+        activeProviderTurns,
+        providerThreadId ?? null,
+        providerTurnId ?? null,
+      )
       if (!activeTurn) return
 
       if (method === "item/started") {
+        const agentMessage = readAgentMessageState(params)
+        if (agentMessage.itemId) {
+          activeTurn.agentMessagePhases.set(agentMessage.itemId, agentMessage.phase)
+        }
+
+        const reasoningItem = readReasoningItemState(params)
+        if (reasoningItem.reasoningState) {
+          return
+        }
+
         const event = mapCodexMcpToolCallStartedEvent(params, activeTurn)
         if (!event) {
           return
@@ -481,6 +398,20 @@ export const CodexCliLive = Layer.effect(
           args: event.args,
         })
         await activeTurn.onMcpToolCall(event)
+        return
+      }
+
+      if (
+        method === "item/reasoning/textDelta"
+        || method === "item/reasoning/summaryTextDelta"
+      ) {
+        const itemId = readString(params, "itemId") ?? null
+        const delta = readString(params, "delta")
+        if (!delta) {
+          return
+        }
+
+        await emitReasoningText(activeTurn, itemId, delta)
         return
       }
 
@@ -499,16 +430,46 @@ export const CodexCliLive = Layer.effect(
 
       if (method === "item/agentMessage/delta") {
         const delta = readString(params, "delta")
-        if (!delta) return
-        const nextIndex = activeTurn.tokenIndex
-        activeTurn.tokenIndex += 1
-        await activeTurn.onToken(delta, nextIndex)
+        const itemId = readString(params, "itemId") ?? null
+        if (!delta) {
+          return
+        }
+
+        const phase = itemId
+          ? (activeTurn.agentMessagePhases.get(itemId) ?? "unknown")
+          : "unknown"
+        await emitTextByPhase(activeTurn, itemId, delta, phase)
         return
       }
 
       if (method === "item/completed") {
-        const item = isRecord(params) ? params.item : null
-        const itemId = isRecord(item) ? readString(item, "id") : undefined
+        const agentMessage = readAgentMessageState(params)
+        if (agentMessage.itemId && agentMessage.text) {
+          const emittedLength = activeTurn.emittedTextLengths.get(agentMessage.itemId) ?? 0
+          const remainingText = agentMessage.text.slice(emittedLength)
+          await emitTextByPhase(
+            activeTurn,
+            agentMessage.itemId,
+            remainingText,
+            agentMessage.phase,
+          )
+          activeTurn.agentMessagePhases.delete(agentMessage.itemId)
+          activeTurn.emittedTextLengths.delete(agentMessage.itemId)
+        }
+
+        const reasoningItem = readReasoningItemState(params)
+        if (reasoningItem.itemId && reasoningItem.text) {
+          const emittedLength =
+            activeTurn.emittedTextLengths.get(reasoningItem.itemId) ?? 0
+          const remainingText = reasoningItem.text.slice(emittedLength)
+          await emitReasoningText(activeTurn, reasoningItem.itemId, remainingText)
+          activeTurn.emittedTextLengths.delete(reasoningItem.itemId)
+        }
+
+        const itemId = agentMessage.itemId ?? reasoningItem.itemId ?? undefined
+        if (itemId) {
+          activeTurn.agentMessagePhases.delete(itemId)
+        }
         const event = mapCodexMcpToolCallCompletedEvent(
           params,
           activeTurn,
@@ -529,6 +490,7 @@ export const CodexCliLive = Layer.effect(
           return
         }
         activeProviderTurns.delete(resolvedProviderTurnId)
+        clearPendingApprovalsForTurn(activeTurn.localTurnId)
         await runtimeStore.updateState({
           status: "idle",
           lastError: null,
@@ -556,6 +518,16 @@ export const CodexCliLive = Layer.effect(
           return
         }
 
+        if ("method" in parsed && typeof parsed.method === "string") {
+          if ("id" in parsed && parsed.id != null) {
+            void handleServerRequest(parsed)
+            return
+          }
+
+          void handleNotification(parsed)
+          return
+        }
+
         if ("id" in parsed && parsed.id != null) {
           const entry = pending.get(String(parsed.id))
           if (!entry) return
@@ -563,28 +535,30 @@ export const CodexCliLive = Layer.effect(
           pending.delete(String(parsed.id))
           const errorMessage = readErrorMessage(parsed)
           if (errorMessage) {
-            entry.reject(new ProviderRuntimeFailure(
-              "codex_request_failed",
-              errorMessage,
-              !errorMessage.toLowerCase().includes("auth"),
-            ))
+            entry.reject(
+              new ProviderRuntimeFailure(
+                "codex_request_failed",
+                errorMessage,
+                !errorMessage.toLowerCase().includes("auth"),
+              ),
+            )
             return
           }
-          entry.resolve(parsed.result)
+          entry.resolve("result" in parsed ? parsed.result : undefined)
           return
         }
-
-        void handleNotification(parsed)
       })
 
       child.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         if (text.toLowerCase().includes("rate limit")) {
-          void updateFailureState(new ProviderRuntimeFailure(
-            "codex_rate_limited",
-            "Codex rate limit reached. Retry later.",
-            true,
-          ))
+          void updateFailureState(
+            new ProviderRuntimeFailure(
+              "codex_rate_limited",
+              "Codex rate limit reached. Retry later.",
+              true,
+            ),
+          )
         }
       })
 
@@ -702,6 +676,7 @@ export const CodexCliLive = Layer.effect(
     const ensureProviderThread = async (
       localThreadId: string,
       requestedCwd?: string | null,
+      accessMode: ThreadAccessMode = "default",
     ): Promise<string> => {
       const normalizedRequestedCwd = normalizeSessionCwd(requestedCwd)
       const persistedSession = await runtimeStore.getThreadSession(localThreadId)
@@ -728,11 +703,12 @@ export const CodexCliLive = Layer.effect(
         })
       }
 
+      const threadStartPolicy = getThreadStartPolicy(accessMode)
       const response = await sendRequest<ThreadStartResponse>("thread/start", {
         cwd: normalizedRequestedCwd ?? process.cwd(),
         model: config.codexModel,
-        approvalPolicy: "never",
-        sandbox: "danger-full-access",
+        approvalPolicy: threadStartPolicy.approvalPolicy,
+        sandbox: threadStartPolicy.sandbox,
       })
       const providerThreadId = response.thread?.id
       if (!providerThreadId) {
@@ -788,7 +764,11 @@ export const CodexCliLive = Layer.effect(
       streamTurn: async (input) => {
         await initialize()
 
-        const providerThreadId = await ensureProviderThread(input.localThreadId, input.cwd)
+        const providerThreadId = await ensureProviderThread(
+          input.localThreadId,
+          input.cwd,
+          input.accessMode ?? "default",
+        )
         await runtimeStore.updateState({
           status: "streaming",
           authState: "authenticated",
@@ -810,7 +790,7 @@ export const CodexCliLive = Layer.effect(
               text_elements: [],
             },
           ],
-          model: config.codexModel,
+          model: input.model ?? config.codexModel,
         })
 
         const providerTurnId = response.turn?.id
@@ -820,12 +800,17 @@ export const CodexCliLive = Layer.effect(
           providerThreadId,
           providerTurnId: providerTurnId ?? null,
           onToken: input.onToken,
+          onReasoning: input.onReasoning,
           onCompleted: input.onCompleted,
           onInterrupted: input.onInterrupted,
           onError: input.onError,
           onMcpToolCall: input.onMcpToolCall,
+          onApprovalRequest: input.onApprovalRequest,
+          agentMessagePhases: new Map(),
+          emittedTextLengths: new Map(),
           mcpToolCalls: new Map(),
           tokenIndex: 0,
+          reasoningIndex: 0,
         }
 
         if (!providerTurnId) {
@@ -838,9 +823,54 @@ export const CodexCliLive = Layer.effect(
 
         activeProviderTurns.set(providerTurnId, activeTurn)
       },
+      listPendingApprovals: () => {
+        return Array.from(pendingApprovalRequests.values()).map((entry) => entry.approval)
+      },
+      respondToApproval: async (approvalRequestId, decision) => {
+        const entry = pendingApprovalRequests.get(approvalRequestId)
+        if (!entry) {
+          return {
+            approvalRequestId,
+            threadId: "",
+            turnId: "",
+            decision,
+            resolved: false,
+          }
+        }
+
+        const result =
+          entry.method === "item/commandExecution/requestApproval"
+            ? { decision: decision === "approve" ? "accept" : "decline" }
+            : entry.method === "item/fileChange/requestApproval"
+              ? { decision: decision === "approve" ? "accept" : "decline" }
+              : {
+                  permissions:
+                    decision === "approve"
+                    && isRecord(entry.rawParams)
+                    && isRecord(entry.rawParams.permissions)
+                      ? entry.rawParams.permissions
+                      : {},
+                  scope: "turn",
+                }
+
+        writeMessage({
+          id: entry.requestId,
+          result,
+        })
+        pendingApprovalRequests.delete(approvalRequestId)
+
+        return {
+          approvalRequestId,
+          threadId: String(entry.approval.threadId),
+          turnId: String(entry.approval.turnId),
+          decision,
+          resolved: true,
+        }
+      },
       interruptTurn: async (localThreadId, localTurnId) => {
         const activeTurn = Array.from(activeProviderTurns.values()).find(
-          (entry) => entry.localThreadId === localThreadId && entry.localTurnId === localTurnId,
+          (entry) =>
+            entry.localThreadId === localThreadId && entry.localTurnId === localTurnId,
         )
         if (!activeTurn?.providerTurnId) {
           return false

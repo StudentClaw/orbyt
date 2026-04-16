@@ -1,4 +1,5 @@
 import type { DesktopBootstrap } from "./desktop.js"
+import type { TurnAttachmentInput } from "./orchestration.js"
 import type {
   ExtensionLifecycleStatus,
   ExtensionRegistryEntry,
@@ -10,6 +11,8 @@ export const IpcChannel = {
   NOTIFICATION_SHOW: "notification:show",
   TRAY_UPDATE_BADGE: "tray:update-badge",
   FILE_OPEN_DIALOG: "file:open-dialog",
+  FILE_SELECT_ATTACHMENTS: "file:select-attachments",
+  FILE_GET_ATTACHMENT_METADATA: "file:get-attachment-metadata",
   FILE_SAVE_DIALOG: "file:save-dialog",
   CODEX_AUTH_START: "codex:auth-start",
   CODEX_AUTH_STATUS: "codex:auth-status",
@@ -69,6 +72,19 @@ export type PluginGetAuthStatusParams = {
 export type PluginSaveAuthParams = {
   readonly pluginId: string
   readonly values: Record<string, string>
+}
+
+export type FileDialogFilter = {
+  readonly name: string
+  readonly extensions: string[]
+}
+
+export type SelectAttachmentsParams = {
+  readonly filters?: readonly FileDialogFilter[]
+}
+
+export type AttachmentMetadataLookupParams = {
+  readonly paths: readonly string[]
 }
 
 export type PluginManagementFailureReason = "plugin_system_disabled" | "not_implemented"
@@ -152,6 +168,8 @@ export type IpcInvokeArgsMap = {
     filters?: Array<{ name: string; extensions: string[] }>
     directory?: boolean
   }]
+  [IpcChannel.FILE_SELECT_ATTACHMENTS]: [params?: SelectAttachmentsParams]
+  [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: [params: AttachmentMetadataLookupParams]
   [IpcChannel.FILE_SAVE_DIALOG]: [options?: { defaultPath?: string }]
   [IpcChannel.CODEX_AUTH_START]: []
   [IpcChannel.CODEX_AUTH_STATUS]: []
@@ -173,6 +191,8 @@ export type IpcInvokeResultMap = {
   [IpcChannel.NOTIFICATION_SHOW]: void
   [IpcChannel.TRAY_UPDATE_BADGE]: void
   [IpcChannel.FILE_OPEN_DIALOG]: string | null
+  [IpcChannel.FILE_SELECT_ATTACHMENTS]: string[] | null
+  [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: TurnAttachmentInput[]
   [IpcChannel.FILE_SAVE_DIALOG]: string | null
   [IpcChannel.CODEX_AUTH_START]: CodexAuthResult
   [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }

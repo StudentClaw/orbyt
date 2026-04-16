@@ -1,4 +1,9 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useState } from "react"
+import type {
+  ProviderApprovalDecision,
+  ThreadAccessMode,
+  TurnAttachmentInput,
+} from "@student-claw/contracts"
 import {
   useChatUiActions,
   useOrchestrationActions,
@@ -14,15 +19,27 @@ import {
   resolveCurrentThread,
   resolveCurrentWorkspace,
 } from "./chat-model"
+import { buildPromptContent } from "@/lib/chatAttachments"
 
-function buildThreadTitle(content: string): string {
-  return content.trim().slice(0, 40) || "New chat"
+function buildThreadTitle(content: string, attachments: readonly TurnAttachmentInput[]): string {
+  const trimmed = content.trim()
+  if (trimmed.length > 0) {
+    return trimmed.slice(0, 40)
+  }
+
+  return attachments[0]?.name.slice(0, 40) || "New chat"
 }
 
 export interface ChatSelectionInput {
   readonly workspaceId?: string | null
   readonly threadId?: string | null
+  readonly model?: string | null
   readonly onThreadCreated?: (workspaceId: string, threadId: string) => void | Promise<void>
+}
+
+export interface ChatSendInput {
+  readonly content: string
+  readonly attachments: readonly TurnAttachmentInput[]
 }
 
 export function useChat(selection?: ChatSelectionInput) {
@@ -33,6 +50,8 @@ export function useChat(selection?: ChatSelectionInput) {
   const selectedThreadIdFromUi = useRuntimeSelectedThreadId()
   const actions = useOrchestrationActions()
   const uiActions = useChatUiActions()
+  const [accessModeMutationPending, setAccessModeMutationPending] = useState(false)
+  const [approvalDecisionPendingId, setApprovalDecisionPendingId] = useState<string | null>(null)
 
   const selectedWorkspaceId = selection?.workspaceId ?? selectedWorkspaceIdFromUi
   const selectedThreadId = selection?.threadId ?? selectedThreadIdFromUi
@@ -53,6 +72,14 @@ export function useChat(selection?: ChatSelectionInput) {
     return resolveChatState(snapshot, currentThread, connectionStatus)
   }, [connectionStatus, currentThread, snapshot])
 
+  const currentPendingApproval = useMemo(() => {
+    if (!snapshot || !currentThread) {
+      return null
+    }
+
+    return snapshot.pendingApprovals.find((approval) => approval.threadId === currentThread.id) ?? null
+  }, [currentThread, snapshot])
+
   const inputDisabledReason = useMemo(() => {
     if (!currentWorkspace) {
       return "Select a folder to start chatting."
@@ -65,15 +92,21 @@ export function useChat(selection?: ChatSelectionInput) {
     return null
   }, [currentWorkspace])
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async ({ content, attachments }: ChatSendInput) => {
     const trimmed = content.trim()
-    if (!trimmed || connectionStatus.phase !== "connected" || !currentWorkspace || inputDisabledReason) {
+    if (
+      (trimmed.length === 0 && attachments.length === 0)
+      || connectionStatus.phase !== "connected"
+      || !currentWorkspace
+      || inputDisabledReason
+    ) {
       return
     }
 
+    const promptContent = buildPromptContent(trimmed, attachments)
     let threadId = currentThread?.id ?? selectedThreadId
     if (!threadId) {
-      threadId = await actions.createThread(currentWorkspace.id, buildThreadTitle(trimmed))
+      threadId = await actions.createThread(currentWorkspace.id, buildThreadTitle(trimmed, attachments))
       if (selection?.onThreadCreated) {
         await selection.onThreadCreated(currentWorkspace.id, threadId)
       } else {
@@ -81,7 +114,7 @@ export function useChat(selection?: ChatSelectionInput) {
       }
     }
 
-    await actions.sendTurn(threadId, trimmed)
+    await actions.sendTurn(threadId, promptContent, attachments, selection?.model)
   }, [
     actions,
     connectionStatus.phase,
@@ -110,6 +143,32 @@ export function useChat(selection?: ChatSelectionInput) {
     await actions.startProviderAuth()
   }, [actions])
 
+  const setThreadAccessMode = useCallback(async (accessMode: ThreadAccessMode) => {
+    if (!currentThread) {
+      return
+    }
+
+    setAccessModeMutationPending(true)
+    try {
+      await actions.setThreadAccessMode(currentThread.id, accessMode)
+    } finally {
+      setAccessModeMutationPending(false)
+    }
+  }, [actions, currentThread])
+
+  const respondToApproval = useCallback(async (decision: ProviderApprovalDecision) => {
+    if (!currentPendingApproval) {
+      return
+    }
+
+    setApprovalDecisionPendingId(currentPendingApproval.id)
+    try {
+      await actions.respondToApproval(currentPendingApproval.id, decision)
+    } finally {
+      setApprovalDecisionPendingId(null)
+    }
+  }, [actions, currentPendingApproval])
+
   return {
     messages,
     status: chatState.status,
@@ -120,6 +179,13 @@ export function useChat(selection?: ChatSelectionInput) {
     interrupt,
     retry,
     reauth,
+    setThreadAccessMode,
+    respondToApproval,
+    currentPendingApproval,
+    accessModeMutationPending,
+    approvalDecisionPending: currentPendingApproval
+      ? approvalDecisionPendingId === currentPendingApproval.id
+      : false,
     connectionState: connectionStatus.phase,
     inputDisabled: Boolean(inputDisabledReason),
     inputDisabledReason,

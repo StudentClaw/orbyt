@@ -40,6 +40,7 @@ describe("Database migrations", () => {
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(tables).toContain("chat_workspaces")
+    expect(tables).toContain("orchestration_turn_attachments")
 
     db.close()
   })
@@ -52,7 +53,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(7)
+    expect(version?.version).toBe(10)
 
     db.close()
   })
@@ -64,8 +65,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(7)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(rows.length).toBe(10)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -109,12 +110,13 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(7)
+    expect(version?.version).toBe(10)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(tables).toContain("chat_workspaces")
+    expect(tables).toContain("orchestration_turn_attachments")
     expect(tables).toContain("canvas_accounts")
 
     const columns = db
@@ -169,6 +171,7 @@ describe("Database migrations", () => {
       root_path: null,
     })
     expect(threadColumns).toContain("workspace_id")
+    expect(threadColumns).toContain("access_mode")
 
     db.close()
   })
@@ -252,6 +255,18 @@ describe("Database migrations", () => {
       )
     `)
     db.run(`
+      CREATE TABLE orchestration_turns (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES orchestration_threads(id),
+        input_text TEXT NOT NULL,
+        output_text TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL
+      )
+    `)
+    db.run(`
       CREATE TABLE provider_runtime_sessions (
         thread_id TEXT PRIMARY KEY REFERENCES orchestration_threads(id),
         provider TEXT NOT NULL,
@@ -276,13 +291,21 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(7)
+    expect(version?.version).toBe(10)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
     expect(sessionColumns).toContain("auth_state")
     expect(sessionColumns).toContain("runtime_payload")
     expect(sessionColumns).toContain("cwd")
+    expect(tables).toContain("orchestration_turn_attachments")
+
+    const threadColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(orchestration_threads)")
+      .all()
+      .map((column) => column.name)
+
+    expect(threadColumns).toContain("access_mode")
 
     db.close()
   })

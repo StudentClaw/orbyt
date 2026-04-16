@@ -1,0 +1,16 @@
+export {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtSearchResult,
+  ChainOfThoughtSearchResults,
+  ChainOfThoughtStep,
+  DotStepIcon,
+  SearchStepIcon,
+  type ChainOfThoughtContentProps,
+  type ChainOfThoughtHeaderProps,
+  type ChainOfThoughtProps,
+  type ChainOfThoughtSearchResultProps,
+  type ChainOfThoughtSearchResultsProps,
+  type ChainOfThoughtStepProps,
+} from "@/components/ai/chain-of-thought"

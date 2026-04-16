@@ -163,23 +163,30 @@ export function persistOnboardingState(): void {
   }
 }
 
-export function hydrateOnboardingState(): void {
+function readPersistedOnboardingState(): OnboardingWizardState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
+    if (!raw) return null
 
     const parsed = JSON.parse(raw) as OnboardingWizardState
     if (
-      typeof parsed.currentStep !== "number" ||
-      !Array.isArray(parsed.steps) ||
-      parsed.steps.length !== ONBOARDING_STEPS.length
+      typeof parsed.currentStep !== "number"
+      || !Array.isArray(parsed.steps)
+      || parsed.steps.length !== ONBOARDING_STEPS.length
     ) {
-      return
+      return null
     }
 
-    appAtomRegistry.set(onboardingWizardAtom, parsed)
+    return parsed
   } catch {
-    // Corrupted data — leave state as initial
+    return null
+  }
+}
+
+export function hydrateOnboardingState(): void {
+  const persisted = readPersistedOnboardingState()
+  if (persisted) {
+    appAtomRegistry.set(onboardingWizardAtom, persisted)
   }
 }
 
@@ -217,6 +224,7 @@ function syncOverallStatusToServer(status: "in_progress" | "completed"): Promise
  */
 export async function hydrateOnboardingStateFromServer(client: WsRpcClient): Promise<void> {
   try {
+    const persisted = readPersistedOnboardingState()
     const [snapshot, aiAuth] = await Promise.all([
       client.onboarding.getSnapshot(),
       client.onboarding.getAiAuth(),
@@ -232,21 +240,38 @@ export async function hydrateOnboardingStateFromServer(client: WsRpcClient): Pro
       }
     })
 
-    // Derive currentStep as index of first non-completed step
-    const firstPending = steps.findIndex((s) => s.status !== "completed")
-    const currentStep = firstPending === -1 ? ONBOARDING_STEPS.length - 1 : firstPending
+    const persistedCompleted = persisted?.overallStatus === "completed"
+    const persistedAiConnected = persisted?.aiAuthStatus === "connected"
+    const derivedOverallStatus: OnboardingWizardState["overallStatus"] =
+      snapshot.overallStatus === "completed" || persistedCompleted || aiAuth.status === "connected"
+        ? "completed"
+        : "in_progress"
 
-    // Derive flags from step state + ai auth
-    const aiAuthStatus: AiAuthStatus =
-      aiAuth.status === "connected" ? "connected"
+    const derivedAiAuthStatus: AiAuthStatus =
+      aiAuth.status === "connected" || persistedAiConnected ? "connected"
         : aiAuth.status === "skipped" ? "skipped"
           : "pending"
+
+    if (derivedOverallStatus === "completed" && snapshot.overallStatus !== "completed") {
+      void client.onboarding.setOverallStatus({ status: "completed" }).catch(() => undefined)
+    }
+
+    if (derivedAiAuthStatus === "connected" && aiAuth.status !== "connected") {
+      void client.onboarding.setAiAuth({ status: "connected", provider: "codex" }).catch(() => undefined)
+    }
+
+    // Derive currentStep as index of first non-completed step.
+    const firstPending = steps.findIndex((s) => s.status !== "completed")
+    const currentStep =
+      derivedOverallStatus === "completed"
+        ? ONBOARDING_STEPS.length - 1
+        : firstPending === -1 ? ONBOARDING_STEPS.length - 1 : firstPending
 
     appAtomRegistry.set(onboardingWizardAtom, {
       currentStep,
       steps,
-      overallStatus: snapshot.overallStatus,
-      aiAuthStatus,
+      overallStatus: derivedOverallStatus,
+      aiAuthStatus: derivedAiAuthStatus,
     })
   } catch {
     // Server unreachable or method not yet implemented — fall back to localStorage
@@ -308,4 +333,6 @@ export function useIsHydrationComplete(): boolean {
 
 export function resetOnboardingStateForTests(): void {
   appAtomRegistry.set(onboardingWizardAtom, createInitialState())
+  appAtomRegistry.set(serverHydrationCompleteAtom, false)
+  _primaryClient = null
 }

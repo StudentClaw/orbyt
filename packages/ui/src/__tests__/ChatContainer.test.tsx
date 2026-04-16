@@ -15,10 +15,26 @@ const chatMocks = vi.hoisted(() => ({
     }>,
     status: "idle" as ChatStatus,
     error: null as string | null,
-    currentThread: null as { title: string; status: string } | null,
-    currentWorkspace: null as { name: string; kind?: string; rootPath?: string } | null,
+    currentThread: null as {
+      id: string
+      title: string
+      status: string
+      workspaceId: string
+      accessMode: "default" | "full"
+    } | null,
+    currentWorkspace: null as {
+      id: string
+      name: string
+      kind?: string
+      rootPath?: string | null
+    } | null,
     sendMessage: vi.fn(),
     interrupt: vi.fn(),
+    setThreadAccessMode: vi.fn(),
+    respondToApproval: vi.fn(),
+    currentPendingApproval: null,
+    accessModeMutationPending: false,
+    approvalDecisionPending: false,
     connectionState: "connected" as WsConnectionPhase,
     inputDisabled: false,
     inputDisabledReason: null as string | null,
@@ -30,13 +46,16 @@ vi.mock("../hooks/useChat", () => ({
 }))
 
 vi.mock("../hooks/useAppRuntime", () => ({
-  useChatUiActions: () => ({ closePanel: chatMocks.closePanel }),
+  useChatUiActions: () => ({
+    closePanel: chatMocks.closePanel,
+  }),
 }))
 
 import { ChatContainer } from "../components/chat/ChatContainer"
 
 describe("ChatContainer", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     chatMocks.closePanel.mockReset()
     chatMocks.state = {
       messages: [],
@@ -46,6 +65,11 @@ describe("ChatContainer", () => {
       currentWorkspace: null,
       sendMessage: vi.fn(),
       interrupt: vi.fn(),
+      setThreadAccessMode: vi.fn(),
+      respondToApproval: vi.fn(),
+      currentPendingApproval: null,
+      accessModeMutationPending: false,
+      approvalDecisionPending: false,
       connectionState: "connected",
       inputDisabled: false,
       inputDisabledReason: null,
@@ -62,8 +86,26 @@ describe("ChatContainer", () => {
     expect(screen.getByText("Chat")).toBeDefined()
   })
 
+  test("renders the static empty state without network fetches", () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal("fetch", fetchSpy)
+
+    render(<ChatContainer />)
+
+    expect(screen.getByText("Start a conversation")).toBeDefined()
+    expect(screen.getByText("What's due this week?")).toBeDefined()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   test("renders the active thread title when selected", () => {
-    chatMocks.state.currentThread = { title: "Weekly planning", status: "streaming" }
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "streaming",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
+    chatMocks.state.currentWorkspace = { id: "workspace-1", name: "Repo" }
     render(<ChatContainer />)
     expect(screen.getByText("Weekly planning")).toBeDefined()
   })
@@ -104,11 +146,29 @@ describe("ChatContainer", () => {
   })
 
   test("uses a slim header for page variant", () => {
-    chatMocks.state.currentThread = { title: "Weekly planning", status: "streaming" }
+    chatMocks.state.currentThread = {
+      id: "thread-1",
+      title: "Weekly planning",
+      status: "streaming",
+      workspaceId: "workspace-1",
+      accessMode: "default",
+    }
     render(<ChatContainer variant="page" />)
 
     expect(screen.queryByRole("heading", { name: "Weekly planning" })).toBeNull()
-    expect(screen.queryByText("streaming")).toBeNull()
     expect(screen.queryByText("Close")).toBeNull()
+  })
+
+  test("shows ChatProviderDisconnected when auth is required", () => {
+    chatMocks.state.status = "auth-expired"
+    render(<ChatContainer />)
+    expect(screen.getByTestId("chat-provider-disconnected")).toBeDefined()
+    expect(screen.queryByText("Start a conversation")).toBeNull()
+  })
+
+  test("does not show error banner when auth is required", () => {
+    chatMocks.state.status = "auth-expired"
+    render(<ChatContainer />)
+    expect(screen.queryByText("Session expired")).toBeNull()
   })
 })

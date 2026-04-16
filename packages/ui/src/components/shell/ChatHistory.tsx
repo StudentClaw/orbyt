@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   ArrowDown01Icon,
+  Delete01Icon,
   FolderAddIcon,
   MoreHorizontalCircle01Icon,
 } from "@hugeicons/core-free-icons"
@@ -504,7 +505,7 @@ export function ChatHistory() {
 
               return (
                 <div key={workspace.id} className="rounded-md border border-transparent">
-                  <div className="flex items-start gap-1 px-1">
+                  <div className="flex items-start gap-1 px-1 group/folder">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -541,6 +542,16 @@ export function ChatHistory() {
                       aria-label={`Add chat to ${workspace.name}`}
                     >
                       <HugeiconsIcon icon={Add01Icon} size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 shrink-0 px-0 opacity-0 group-hover/folder:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      onClick={() => void handleDeleteWorkspace(workspace.id, workspace.name, workspaceThreads.length)}
+                      disabled={isWorkspaceBusy}
+                      aria-label={`Delete ${workspace.name}`}
+                    >
+                      <HugeiconsIcon icon={Delete01Icon} size={14} />
                     </Button>
                   </div>
 
@@ -629,7 +640,8 @@ export function ChatHistory() {
                                     <SidebarMenuButton
                                       isActive={isThreadSelected}
                                       onClick={() => void focusThread(workspace.id, thread.id, thread.currentTurnId)}
-                                      className="flex h-auto items-center gap-2 py-1 pr-9"
+                                      onDoubleClick={() => startThreadRename(thread)}
+                                      className="flex h-auto items-center gap-2 py-1 pr-11"
                                       disabled={isThreadBusy}
                                     >
                                       <span className="flex size-3 shrink-0 items-center justify-center">
@@ -649,6 +661,7 @@ export function ChatHistory() {
                                           showOnHover
                                           aria-label={`Open actions for ${thread.title}`}
                                           disabled={isThreadBusy}
+                                          className="!right-1.5 !top-1/2 !h-7 !w-7 !-translate-y-1/2 rounded-full"
                                         >
                                           <HugeiconsIcon icon={MoreHorizontalCircle01Icon} size={14} />
                                         </SidebarMenuAction>

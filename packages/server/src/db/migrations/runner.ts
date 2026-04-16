@@ -6,6 +6,9 @@ import * as migration004 from "./004-onboarding-expansion.js"
 import * as migration005 from "./005-chat-workspaces.js"
 import * as migration006 from "./006-provider-runtime-state-repair.js"
 import * as migration007 from "./007-provider-runtime-session-cwd.js"
+import * as migration008 from "./008-reasoning-text.js"
+import * as migration009 from "./009-thread-access-mode.js"
+import * as migration010 from "./010-turn-attachments.js"
 
 const migrations = [
   migration001,
@@ -15,6 +18,9 @@ const migrations = [
   migration005,
   migration006,
   migration007,
+  migration008,
+  migration009,
+  migration010,
 ]
 
 export function runMigrations(db: Database): void {
