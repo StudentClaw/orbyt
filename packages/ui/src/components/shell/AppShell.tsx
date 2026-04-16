@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import {
   useIsOnboardingComplete,
   useIsServerHydrationComplete,
+  useRuntimeConnectionStatus,
+  useRuntimeOrchestrationSnapshot,
 } from "@/hooks/useAppRuntime"
+import { ChatStatusBadge } from "@/components/chat/ChatStatusBadge"
 import { useNativeNotification } from "@/hooks/useNativeNotification"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import {
   SidebarProvider,
   SidebarTrigger,
@@ -21,6 +31,8 @@ import {
   MIN_DESKTOP_SIDEBAR_WIDTH,
   MAX_DESKTOP_SIDEBAR_WIDTH,
 } from "@/lib/sidebarLayout"
+import { resolveChatState, resolveCurrentThread, resolveCurrentWorkspace } from "@/hooks/chat-model"
+import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
 import type { PanelImperativeHandle } from "react-resizable-panels"
 import { AppSidebar, AppSidebarContent } from "./AppSidebar"
 
@@ -125,16 +137,86 @@ function ShellMain({
   showSidebarTrigger?: boolean
   sidebarLabel?: string
 }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const snapshot = useRuntimeOrchestrationSnapshot()
+  const connectionStatus = useRuntimeConnectionStatus()
+  const chatSelection = resolveChatRouteSelection(pathname)
+  const currentThread = useMemo(
+    () => resolveCurrentThread(snapshot, chatSelection.threadId),
+    [chatSelection.threadId, snapshot],
+  )
+  const currentWorkspace = useMemo(
+    () => resolveCurrentWorkspace(snapshot, chatSelection.workspaceId, chatSelection.threadId),
+    [chatSelection.threadId, chatSelection.workspaceId, snapshot],
+  )
+  const chatState = useMemo(
+    () => resolveChatState(snapshot, currentThread, connectionStatus),
+    [connectionStatus, currentThread, snapshot],
+  )
+  const showChatChrome = isChatPath(pathname)
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {showSidebarTrigger && (
+      {(showSidebarTrigger || showChatChrome) && (
         <div className="flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur">
-          <SidebarTrigger aria-label={sidebarLabel} data-testid="shell-sidebar-trigger" />
+          {showSidebarTrigger ? (
+            <SidebarTrigger aria-label={sidebarLabel} data-testid="shell-sidebar-trigger" />
+          ) : null}
+          {showChatChrome ? (
+            <>
+              <ChatBreadcrumb
+                workspaceName={currentWorkspace?.name ?? null}
+                threadTitle={currentThread?.title ?? null}
+                className={showSidebarTrigger ? "ml-3" : undefined}
+              />
+              <ChatStatusBadge className="ml-auto" status={chatState.status} />
+            </>
+          ) : null}
         </div>
       )}
       <main className="min-h-0 flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>
+  )
+}
+
+function ChatBreadcrumb({
+  workspaceName,
+  threadTitle,
+  className,
+}: {
+  workspaceName: string | null
+  threadTitle: string | null
+  className?: string
+}) {
+  return (
+    <Breadcrumb className={`min-w-0 flex-1 ${className ?? ""}`.trim()}>
+      <BreadcrumbList className="min-w-0 flex-nowrap overflow-hidden">
+        <BreadcrumbItem className="shrink-0 text-sm text-muted-foreground">
+          <span>Chat</span>
+        </BreadcrumbItem>
+        {workspaceName ? (
+          <>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem className="min-w-0 shrink">
+              {threadTitle ? (
+                <span className="truncate text-sm text-muted-foreground">{workspaceName}</span>
+              ) : (
+                <BreadcrumbPage className="truncate text-sm">{workspaceName}</BreadcrumbPage>
+              )}
+            </BreadcrumbItem>
+          </>
+        ) : null}
+        {threadTitle ? (
+          <>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem className="min-w-0 shrink">
+              <BreadcrumbPage className="truncate text-sm">{threadTitle}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </>
+        ) : null}
+      </BreadcrumbList>
+    </Breadcrumb>
   )
 }
