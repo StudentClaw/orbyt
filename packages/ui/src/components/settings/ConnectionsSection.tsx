@@ -10,6 +10,7 @@ import {
 } from "@student-claw/contracts"
 import {
   useOrchestrationActions,
+  useRuntimeCanvasSyncProgress,
   useRuntimeBootstrap,
   useRuntimeOrchestrationSnapshot,
 } from "@/hooks/useAppRuntime"
@@ -19,8 +20,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { connectCodexAccount } from "@/lib/codexAuth"
+import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 
 const MIN_SECRET_LENGTH = 20
 
@@ -37,9 +40,6 @@ function getEntryVersion(entry: ExtensionRegistryEntry): string {
 function getEntryPluginId(entry: ExtensionRegistryEntry): string {
   return entry.kind === "available" ? entry.manifest.id : entry.pluginId
 }
-function getEntryError(entry: ExtensionRegistryEntry): string | null {
-  return entry.kind === "invalid" ? entry.lastError : (entry.lastError ?? null)
-}
 function formatInstallSource(entry: ExtensionRegistryEntry): string {
   switch (entry.installSource) {
     case "bundled": return "Bundled"
@@ -52,17 +52,6 @@ function getStatusBadgeVariant(entry: ExtensionRegistryEntry): "default" | "seco
   if (entry.kind === "invalid" || entry.status === "error") return "destructive"
   if (entry.status === "discovered") return "secondary"
   return "outline"
-}
-function canStart(entry: ExtensionRegistryEntry): boolean {
-  return entry.kind === "available"
-    && (entry.status === "discovered" || entry.status === "stopped" || entry.status === "error")
-}
-function canStop(entry: ExtensionRegistryEntry): boolean {
-  return entry.kind === "available"
-    && (entry.status === "starting" || entry.status === "ready" || entry.status === "active")
-}
-function canRetry(entry: ExtensionRegistryEntry): boolean {
-  return entry.kind === "available" && entry.status === "error"
 }
 function hasManualTokenAuth(entry: ExtensionRegistryEntry): entry is ExtensionRegistryAvailableEntry & {
   manifest: ExtensionRegistryAvailableEntry["manifest"] & { auth: ExtensionAuthManualTokenSchema }
@@ -143,6 +132,7 @@ function getCodexStatusDescription(runtime: ProviderRuntimeState | null): string
 export function ConnectionsSection() {
   const bootstrap = useRuntimeBootstrap()
   const snapshot = useRuntimeOrchestrationSnapshot()
+  const syncProgress = useRuntimeCanvasSyncProgress()
   const orchestrationActions = useOrchestrationActions()
   const [registryEntries, setRegistryEntries] = useState<ExtensionRegistryEntry[]>([])
   const [registryState, setRegistryState] = useState<"idle" | "loading" | "ready" | "error">("idle")
@@ -155,6 +145,8 @@ export function ConnectionsSection() {
   const [authForms, setAuthForms] = useState<Record<string, AuthFormValues>>({})
   const [authErrors, setAuthErrors] = useState<Record<string, string | null>>({})
   const [authFieldErrors, setAuthFieldErrors] = useState<AuthFieldErrorMap>({})
+  const [pendingSyncPluginId, setPendingSyncPluginId] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const providerRuntime = snapshot?.providerRuntime ?? null
   const codexNeedsAuth =
@@ -167,6 +159,7 @@ export function ConnectionsSection() {
     providerRuntime !== null
     && !codexNeedsAuth
     && (providerRuntime.status === "offline" || providerRuntime.status === "degraded" || providerRuntime.status === "rate_limited")
+  const isCanvasSyncing = syncProgress?.status === "syncing"
 
   function upsertRegistryEntry(nextEntry: ExtensionRegistryEntry): void {
     setRegistryEntries((current) => {
@@ -201,20 +194,17 @@ export function ConnectionsSection() {
     if (nextEntry) upsertRegistryEntry(nextEntry)
   }
 
-  async function runLifecycleAction(
-    channel: typeof IpcChannel.PLUGIN_START | typeof IpcChannel.PLUGIN_STOP | typeof IpcChannel.PLUGIN_RETRY,
-    pluginId: string,
-  ): Promise<void> {
+  async function togglePlugin(pluginId: string, enabled: boolean): Promise<void> {
     if (!window.electronAPI?.invoke) {
-      setRegistryError("Desktop bridge unavailable for plugin lifecycle actions.")
+      setRegistryError("Desktop bridge unavailable for plugin toggle.")
       return
     }
     setPendingPluginId(pluginId)
     setRegistryError(null)
     try {
-      const result = await window.electronAPI.invoke(channel, { pluginId })
+      const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_SET_ENABLED, { pluginId, enabled })
       await refreshPlugin(pluginId)
-      if (!result.ok) setRegistryError(`Plugin action failed for ${pluginId}: ${result.reason}`)
+      if (!result.ok) setRegistryError(`Failed to ${enabled ? "enable" : "disable"} ${pluginId}: ${result.reason}`)
     } catch (error) {
       setRegistryError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -311,6 +301,18 @@ export function ConnectionsSection() {
       })
     })
   }, [bootstrap])
+
+  async function syncCanvasPlugin(pluginId: string): Promise<void> {
+    setPendingSyncPluginId(pluginId)
+    setSyncError(null)
+    try {
+      await getPrimaryWsRpcClient().canvas.sync()
+    } catch (error: unknown) {
+      setSyncError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPendingSyncPluginId(null)
+    }
+  }
 
   const manualAuthEntries = registryEntries.filter(hasManualTokenAuth)
 
@@ -422,6 +424,12 @@ export function ConnectionsSection() {
               <AlertDescription>{registryError ?? "Unknown registry failure"}</AlertDescription>
             </Alert>
           )}
+          {syncError && (
+            <Alert variant="destructive" data-testid="settings-canvas-sync-error">
+              <AlertTitle>Canvas sync failed</AlertTitle>
+              <AlertDescription>{syncError}</AlertDescription>
+            </Alert>
+          )}
           {bootstrap?.featureFlags.pluginSystem && registryState === "ready" && (
             <div className="space-y-3" data-testid="settings-plugin-registry">
               <p className="text-sm text-muted-foreground">
@@ -434,43 +442,48 @@ export function ConnectionsSection() {
                     <TableHead>Source</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Version</TableHead>
-                    <TableHead>Validation</TableHead>
-                    {import.meta.env.DEV && <TableHead>Lifecycle</TableHead>}
+                    <TableHead>Actions</TableHead>
+                    <TableHead>Enabled</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registryEntries.map((entry) => (
-                    <TableRow key={`${entry.installSource}:${getEntryPluginId(entry)}`}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{getEntryName(entry)}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{getEntryPluginId(entry)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatInstallSource(entry)}</TableCell>
-                      <TableCell><Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge></TableCell>
-                      <TableCell>{getEntryVersion(entry)}</TableCell>
-                      <TableCell className="max-w-sm whitespace-normal text-sm text-muted-foreground">
-                        {getEntryError(entry) ?? "Valid manifest"}
-                      </TableCell>
-                      {import.meta.env.DEV && (
+                  {registryEntries.map((entry) => {
+                    const pluginId = getEntryPluginId(entry)
+                    const isPending = pendingPluginId === pluginId
+                    return (
+                      <TableRow key={`${entry.installSource}:${pluginId}`}>
                         <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {canStart(entry) && (
-                              <Button size="xs" variant="outline" disabled={pendingPluginId === getEntryPluginId(entry)} onClick={() => { void runLifecycleAction(IpcChannel.PLUGIN_START, getEntryPluginId(entry)) }}>Start</Button>
-                            )}
-                            {canStop(entry) && (
-                              <Button size="xs" variant="outline" disabled={pendingPluginId === getEntryPluginId(entry)} onClick={() => { void runLifecycleAction(IpcChannel.PLUGIN_STOP, getEntryPluginId(entry)) }}>Stop</Button>
-                            )}
-                            {canRetry(entry) && (
-                              <Button size="xs" disabled={pendingPluginId === getEntryPluginId(entry)} onClick={() => { void runLifecycleAction(IpcChannel.PLUGIN_RETRY, getEntryPluginId(entry)) }}>Retry</Button>
-                            )}
-                            {entry.kind === "invalid" && <span className="text-xs text-muted-foreground">Manifest invalid</span>}
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">{getEntryName(entry)}</span>
+                            <span className="font-mono text-xs text-muted-foreground">{pluginId}</span>
                           </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                        <TableCell>{formatInstallSource(entry)}</TableCell>
+                        <TableCell><Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge></TableCell>
+                        <TableCell>{getEntryVersion(entry)}</TableCell>
+                        <TableCell>
+                          {pluginId === "canvas-mcp" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={pendingSyncPluginId === pluginId || isCanvasSyncing}
+                              onClick={() => { void syncCanvasPlugin(pluginId) }}
+                            >
+                              {pendingSyncPluginId === pluginId || isCanvasSyncing ? "Syncing..." : "Sync Now"}
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={entry.enabled && entry.kind === "available"}
+                            disabled={isPending || entry.kind === "invalid"}
+                            onCheckedChange={(checked) => { void togglePlugin(pluginId, checked) }}
+                            aria-label={`${entry.enabled ? "Disable" : "Enable"} ${getEntryName(entry)}`}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

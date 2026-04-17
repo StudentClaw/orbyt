@@ -6,10 +6,12 @@ import { Database, DatabaseLive } from "./db/Database.js"
 import { PluginGatewayLive } from "./mcp/PluginGateway.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
+import { ThreadRuntimeManagerLive } from "./orchestration/ThreadRuntimeManager.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
 import { SkillResolverLive } from "./skills/index.js"
 import { PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
+import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
 
 const CoreLive = Layer.mergeAll(
   ConfigServiceLive,
@@ -31,6 +33,11 @@ const ProviderLive = Layer.mergeAll(
     Layer.provideMerge(RuntimeStoreLive),
     Layer.provideMerge(GatewayLive),
   ),
+  ThreadRuntimeManagerLive.pipe(
+    Layer.provideMerge(CoreLive),
+    Layer.provideMerge(RuntimeStoreLive),
+    Layer.provideMerge(GatewayLive),
+  ),
 )
 
 const OrchestrationLive = OrchestrationServiceLive.pipe(
@@ -38,14 +45,21 @@ const OrchestrationLive = OrchestrationServiceLive.pipe(
   Layer.provideMerge(CoreLive),
 )
 
+const CanvasSyncLive = CanvasSyncServiceLive.pipe(
+  Layer.provideMerge(GatewayLive),
+  Layer.provideMerge(CoreLive),
+)
+
 const WebSocketLive = WebSocketServerLive.pipe(
   Layer.provideMerge(OrchestrationLive),
+  Layer.provideMerge(CanvasSyncLive),
   Layer.provideMerge(CoreLive),
 )
 
 const MainLive = Layer.mergeAll(
   CoreLive,
   OrchestrationLive,
+  CanvasSyncLive,
   WebSocketLive,
 )
 
@@ -57,30 +71,49 @@ function writeStderr(message: string): void {
   process.stderr.write(`${message}\n`)
 }
 
+const ONE_HOUR_MS = 60 * 60 * 1000
+
 const program = Effect.gen(function* () {
   const config = yield* ConfigService
   const db = yield* Database
   const readiness = yield* ServerReadiness
-  yield* OrchestrationService
+  const orchestration = yield* OrchestrationService
   const codex = yield* CodexCli
   const ws = yield* WebSocketServerService
+  const canvasSync = yield* CanvasSyncService
 
   readiness.markReady()
 
   writeStdout(`Student Claw server started on :${config.port}`)
   writeStdout(`Database: ${config.dbPath}`)
 
+  // Initial sync at startup so the UI sees fresh data immediately rather than waiting an hour.
+  void canvasSync.sync().catch((error) => {
+    writeStderr(`Initial canvas sync failed: ${String(error)}`)
+  })
+
+  const hourlyTimer = setInterval(() => {
+    void canvasSync.sync().catch((error) => {
+      writeStderr(`Hourly canvas sync failed: ${String(error)}`)
+    })
+  }, ONE_HOUR_MS)
+
   const shutdown = () => {
     writeStdout("")
     writeStdout("Shutting down...")
-    codex.shutdown()
+    clearInterval(hourlyTimer)
+    orchestration.shutdown()
       .catch(() => undefined)
       .finally(() => {
-        db.close()
-        ws.close().then(() => {
-          writeStdout("Server stopped.")
-          process.exit(0)
-        })
+        codex.shutdown()
+          .catch(() => undefined)
+          .finally(() => {
+            db.close()
+            ws.close().then(() => {
+              writeStdout("Server stopped.")
+              process.exit(0)
+            })
+          })
       })
   }
 

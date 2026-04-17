@@ -75,6 +75,7 @@ function makeDependencies() {
       startProviderAuth: async () => ({ started: true }),
       retryProviderInitialize: async () => ({ started: true }),
       respondToProviderApproval: async () => ({ approvalRequestId: "a1", resolved: true }),
+      shutdown: async () => undefined,
     },
     database: {
       db,
@@ -83,6 +84,16 @@ function makeDependencies() {
       execute: (sql: string, params: SQLQueryBindings[] = []) => { db.run(sql, params as never) },
       transaction: <T>(fn: () => T) => fn(),
       close: () => db.close(),
+    },
+    canvasSync: {
+      sync: async () => undefined,
+      getCourses: () => [],
+      getCoursework: () => [],
+      getGrades: () => [],
+    },
+    skillResolver: {
+      resolve: () => null,
+      listAll: () => [],
     },
   }
 }
@@ -124,6 +135,71 @@ describe("onboarding.getPreferences", () => {
     expect(res.result.notificationEnabled).toBe(false)
     expect(res.result.quietHoursStart).toBe("23:00")
     expect(res.result.quietHoursEnd).toBe("07:00")
+  })
+
+  test("legacy onboarding schema is repaired before preferences and routines are read", async () => {
+    const db = new BunDatabase(":memory:")
+    db.run(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      CREATE TABLE onboarding_state (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        step INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'skipped')),
+        completed_at TEXT
+      )
+    `)
+    db.run(`
+      CREATE TABLE user_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        study_times TEXT,
+        course_ranking TEXT,
+        notification_prefs TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      INSERT INTO user_preferences (study_times, notification_prefs)
+      VALUES ('["evening"]', '{"quietHoursStart":"00:00","quietHoursEnd":"06:00"}')
+    `)
+    for (let version = 1; version <= 10; version += 1) {
+      db.run("INSERT INTO schema_version (version) VALUES (?)", [version])
+    }
+    runMigrations(db)
+
+    const baseDeps = makeDependencies()
+    baseDeps.database.close()
+    const deps = {
+      ...baseDeps,
+      database: {
+        db,
+        get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
+        query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
+        execute: (sql: string, params: SQLQueryBindings[] = []) => { db.run(sql, params as never) },
+        transaction: <T>(fn: () => T) => fn(),
+        close: () => db.close(),
+      },
+    }
+
+    const preferences = JSON.parse(
+      (await routeMessage(rpc(RPC_METHODS.ONBOARDING_GET_PREFERENCES, {}), mockWs, deps)).response,
+    )
+    const routines = JSON.parse(
+      (await routeMessage(rpc(RPC_METHODS.ONBOARDING_GET_ROUTINES, {}), mockWs, deps)).response,
+    )
+
+    expect(preferences.ok).toBe(true)
+    expect(preferences.result.studyTimes).toEqual(["evening"])
+    expect(preferences.result.quietHoursStart).toBe("00:00")
+    expect(preferences.result.quietHoursEnd).toBe("06:00")
+    expect(routines.ok).toBe(true)
+    expect(routines.result.cells).toEqual([])
+
+    db.close()
   })
 })
 

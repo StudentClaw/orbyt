@@ -40,6 +40,7 @@ export interface ChatSelectionInput {
 export interface ChatSendInput {
   readonly content: string
   readonly attachments: readonly TurnAttachmentInput[]
+  readonly skillId?: string | null
 }
 
 export function useChat(selection?: ChatSelectionInput) {
@@ -92,7 +93,7 @@ export function useChat(selection?: ChatSelectionInput) {
     return null
   }, [currentWorkspace])
 
-  const sendMessage = useCallback(async ({ content, attachments }: ChatSendInput) => {
+  const sendMessage = useCallback(async ({ content, attachments, skillId }: ChatSendInput) => {
     const trimmed = content.trim()
     if (
       (trimmed.length === 0 && attachments.length === 0)
@@ -114,7 +115,7 @@ export function useChat(selection?: ChatSelectionInput) {
       }
     }
 
-    await actions.sendTurn(threadId, promptContent, attachments, selection?.model)
+    await actions.sendTurn(threadId, promptContent, attachments, selection?.model, skillId)
   }, [
     actions,
     connectionStatus.phase,

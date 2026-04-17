@@ -112,6 +112,7 @@ describe("Server integration", () => {
             startProviderAuth: async () => ({ started: true }),
             retryProviderInitialize: async () => ({ started: true }),
             respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
+            shutdown: async () => undefined,
           },
           database: {
             db,
@@ -120,6 +121,16 @@ describe("Server integration", () => {
             execute: () => undefined,
             transaction: <T>(fn: () => T) => fn(),
             close: () => undefined,
+          },
+          canvasSync: {
+            sync: async () => undefined,
+            getCourses: () => [],
+            getCoursework: () => [],
+            getGrades: () => [],
+          },
+          skillResolver: {
+            resolve: () => null,
+            listAll: () => [],
           },
         })
         ws.send(response.response)

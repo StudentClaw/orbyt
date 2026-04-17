@@ -6,16 +6,12 @@ const mockSetPreferences = vi.fn().mockResolvedValue({})
 const mockSetRoutines = vi.fn().mockResolvedValue({ count: 0 })
 const mockGetPreferences = vi.fn()
 const mockGetRoutines = vi.fn()
+const appRuntimeMocks = vi.hoisted(() => ({
+  waitForPrimaryWsRpcClient: vi.fn(),
+}))
 
 vi.mock("@/rpc/appRuntime", () => ({
-  getPrimaryWsRpcClient: () => ({
-    onboarding: {
-      getPreferences: mockGetPreferences,
-      setPreferences: mockSetPreferences,
-      getRoutines: mockGetRoutines,
-      setRoutines: mockSetRoutines,
-    },
-  }),
+  waitForPrimaryWsRpcClient: appRuntimeMocks.waitForPrimaryWsRpcClient,
 }))
 
 import { SchedulePreferencesSection } from "../components/settings/SchedulePreferencesSection"
@@ -36,6 +32,14 @@ describe("SchedulePreferencesSection", () => {
     vi.clearAllMocks()
     mockGetPreferences.mockResolvedValue(defaultPreferences)
     mockGetRoutines.mockResolvedValue({ cells: [] })
+    appRuntimeMocks.waitForPrimaryWsRpcClient.mockResolvedValue({
+      onboarding: {
+        getPreferences: mockGetPreferences,
+        setPreferences: mockSetPreferences,
+        getRoutines: mockGetRoutines,
+        setRoutines: mockSetRoutines,
+      },
+    })
   })
 
   test("renders a loading state initially", () => {

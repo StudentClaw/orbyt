@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { ExtensionRegistryEntry } from "@student-claw/contracts"
-import { PluginManager } from "../plugins/plugin-manager.js"
+import { PluginManager, applyPluginSandboxEnv } from "../plugins/plugin-manager.js"
 
 const availableEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   kind: "available",
@@ -146,6 +146,16 @@ function createRegistry(entry: FakeRegistryEntry = availableEntry) {
 }
 
 describe("PluginManager", () => {
+  test("marks plugin child processes to run as node under Electron", () => {
+    expect(applyPluginSandboxEnv({ PATH: "/usr/bin" }, true)).toEqual({
+      PATH: "/usr/bin",
+      ELECTRON_RUN_AS_NODE: "1",
+    })
+    expect(applyPluginSandboxEnv({ PATH: "/usr/bin" }, false)).toEqual({
+      PATH: "/usr/bin",
+    })
+  })
+
   test("promotes a healthy plugin to active and overlays registry state", async () => {
     const sandbox = new FakeSandbox()
     const manager = new PluginManager({

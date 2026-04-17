@@ -111,6 +111,25 @@ describe("startAppRuntime", () => {
     socket.open()
     await startPromise
   })
+
+  test("waits for runtime startup before returning the shared rpc client", async () => {
+    window.electronAPI = {
+      getBootstrap: vi.fn().mockResolvedValue(bootstrap),
+      codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
+      invoke: vi.fn(),
+      send: vi.fn(),
+      on: vi.fn(),
+    }
+
+    const { getPrimaryWsRpcClient, waitForPrimaryWsRpcClient } = await import("./appRuntime")
+    const clientPromise = waitForPrimaryWsRpcClient()
+    const socket = await waitForSocket()
+
+    socket.open()
+
+    const client = await clientPromise
+    expect(client).toBe(getPrimaryWsRpcClient())
+  })
 })
 
 async function waitForSocket(): Promise<MockWebSocket> {

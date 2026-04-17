@@ -11,6 +11,8 @@ import {
   type ActivityFeedEntry,
   type AiAuthState,
   type Course,
+  type CourseWorkItem,
+  type Grade,
   type CreateWorkspaceResult,
   type CreateThreadResult,
   type DeleteWorkspaceResult,
@@ -51,29 +53,48 @@ function decode<Value, Encoded>(
   return Schema.decodeUnknownSync(schema)(value)
 }
 
+function tryDecode<Value, Encoded>(
+  schema: Schema.Schema<Value, Encoded, never>,
+  value: unknown,
+  context: string,
+): Value | null {
+  try {
+    return Schema.decodeUnknownSync(schema)(value)
+  } catch (error) {
+    console.error(`Failed to decode ${context} push payload`, error)
+    return null
+  }
+}
+
+const CanvasSyncProgressPayload = Schema.Struct({
+  courseId: Schema.String,
+  progress: Schema.Number,
+  status: Schema.Literal("syncing", "done", "error"),
+})
+
+const DashboardUpdatePayload = Schema.Struct({
+  section: Schema.String,
+})
+
+const PlannerSessionCheckInPayload = Schema.Struct({
+  sessionId: Schema.String,
+  triggeredAt: Schema.String,
+})
+
 /**
  * Canvas sync progress payload emitted over the runtime push channel.
  */
-export interface CanvasSyncProgressEvent {
-  readonly courseId: string
-  readonly progress: number
-  readonly status: "syncing" | "done" | "error"
-}
+export type CanvasSyncProgressEvent = Schema.Schema.Type<typeof CanvasSyncProgressPayload>
 
 /**
  * Dashboard refresh payload emitted over the runtime push channel.
  */
-export interface DashboardUpdateEvent {
-  readonly section: string
-}
+export type DashboardUpdateEvent = Schema.Schema.Type<typeof DashboardUpdatePayload>
 
 /**
  * Planner check-in payload emitted over the runtime push channel.
  */
-export interface PlannerSessionCheckInEvent {
-  readonly sessionId: string
-  readonly triggeredAt: string
-}
+export type PlannerSessionCheckInEvent = Schema.Schema.Type<typeof PlannerSessionCheckInPayload>
 
 /**
  * Activity feed upsert payload emitted over the runtime push channel.
@@ -114,6 +135,7 @@ export interface WsRpcClient {
       content: string,
       attachments: readonly TurnAttachmentInput[],
       model?: string | null,
+      skillId?: string | null,
     ) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
@@ -135,6 +157,8 @@ export interface WsRpcClient {
   }
   readonly canvas: {
     readonly getCourses: () => Promise<ReadonlyArray<Course>>
+    readonly getCoursework: () => Promise<ReadonlyArray<CourseWorkItem>>
+    readonly getGrades: () => Promise<ReadonlyArray<Grade>>
     readonly sync: () => Promise<void>
     readonly onSyncProgress: (
       listener: (event: CanvasSyncProgressEvent) => void,
@@ -177,6 +201,9 @@ export interface WsRpcClient {
   readonly dev: {
     readonly resetSoft: () => Promise<{ ok: boolean }>
     readonly resetHard: () => Promise<{ ok: boolean }>
+  }
+  readonly skills: {
+    readonly list: () => Promise<{ skills: ReadonlyArray<{ id: string; name: string; description: string }> }>
   }
   readonly reconnect: () => Promise<void>
   readonly dispose: () => Promise<void>
@@ -237,12 +264,13 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
       }),
     deleteThread: async (threadId) =>
       transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
-    sendTurn: async (threadId, content, attachments, model) =>
+    sendTurn: async (threadId, content, attachments, model, skillId) =>
       transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, {
         threadId,
         content,
         attachments,
         ...(model ? { model } : {}),
+        ...(skillId ? { skillId } : {}),
       }),
     interruptTurn: async (threadId) =>
       transport.request<InterruptTurnResult>(RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN, { threadId }),
@@ -282,14 +310,23 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
 
 function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
   return {
-    getCourses: () => transport.request(RPC_METHODS.CANVAS_GET_COURSES, {}),
-    sync: () => transport.request(RPC_METHODS.CANVAS_SYNC, {}),
+    getCourses: () =>
+      transport.request<{ courses: ReadonlyArray<Course> }>(RPC_METHODS.CANVAS_GET_COURSES, {})
+        .then((r) => r.courses),
+    getCoursework: () =>
+      transport.request<{ items: ReadonlyArray<CourseWorkItem> }>(RPC_METHODS.CANVAS_GET_COURSEWORK, {})
+        .then((r) => r.items),
+    getGrades: () =>
+      transport.request<{ grades: ReadonlyArray<Grade> }>(RPC_METHODS.CANVAS_GET_GRADES, {})
+        .then((r) => r.grades),
+    sync: () => transport.request(RPC_METHODS.CANVAS_SYNC, {}).then(() => undefined),
     onSyncProgress: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.CANVAS_SYNC_PROGRESS,
         RPC_METHODS.CANVAS_SUBSCRIBE_SYNC_PROGRESS,
         (push) => {
-          listener(push.data as CanvasSyncProgressEvent)
+          const event = tryDecode(CanvasSyncProgressPayload, push.data, "canvas sync progress")
+          if (event) listener(event)
         },
         options,
       ),
@@ -298,13 +335,14 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
 
 function createDashboardApi(transport: WsTransport): WsRpcClient["dashboard"] {
   return {
-    refresh: () => transport.request(RPC_METHODS.DASHBOARD_REFRESH, {}),
+    refresh: () => transport.request(RPC_METHODS.DASHBOARD_REFRESH, {}).then(() => undefined),
     onUpdate: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.DASHBOARD_UPDATE,
         RPC_METHODS.DASHBOARD_SUBSCRIBE_UPDATES,
         (push) => {
-          listener(push.data as DashboardUpdateEvent)
+          const event = tryDecode(DashboardUpdatePayload, push.data, "dashboard update")
+          if (event) listener(event)
         },
         options,
       ),
@@ -321,7 +359,12 @@ function createPlannerApi(transport: WsTransport): WsRpcClient["planner"] {
         PUSH_CHANNELS.PLANNER_SESSION_CHECK_IN,
         RPC_METHODS.PLANNER_SUBSCRIBE_CHECK_INS,
         (push) => {
-          listener(push.data as PlannerSessionCheckInEvent)
+          const event = tryDecode(
+            PlannerSessionCheckInPayload,
+            push.data,
+            "planner session check-in",
+          )
+          if (event) listener(event)
         },
         options,
       ),
@@ -364,6 +407,12 @@ function createDevApi(transport: WsTransport): WsRpcClient["dev"] {
   }
 }
 
+function createSkillsApi(transport: WsTransport): WsRpcClient["skills"] {
+  return {
+    list: () => transport.request(RPC_METHODS.SKILLS_LIST, {}),
+  }
+}
+
 /**
  * Creates a typed RPC client over the authenticated WebSocket transport.
  */
@@ -379,6 +428,7 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
     activity: createActivityApi(transport),
     onboarding: createOnboardingApi(transport),
     dev: createDevApi(transport),
+    skills: createSkillsApi(transport),
     reconnect: () => transport.reconnect(),
     dispose: () => transport.dispose(),
   }

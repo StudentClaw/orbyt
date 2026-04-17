@@ -146,6 +146,20 @@ describe("ChatHistory", () => {
     expect(labels.some((entry) => entry?.includes("Legacy thread"))).toBe(false)
   })
 
+  test("replaces the empty sidebar state after orchestration snapshot hydration", () => {
+    historyMocks.snapshot = null
+
+    const { rerender } = render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    expect(screen.getByText("No folders yet")).toBeTruthy()
+
+    historyMocks.snapshot = snapshot
+    rerender(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    expect(screen.queryByText("No folders yet")).toBeNull()
+    expect(screen.getByText("Repo")).toBeTruthy()
+  })
+
   test("selecting a thread navigates to the chat page", async () => {
     const user = userEvent.setup()
     render(<SidebarProvider><ChatHistory /></SidebarProvider>)
@@ -180,6 +194,49 @@ describe("ChatHistory", () => {
       params: { workspaceId: "workspace-2" },
     })
     expect(historyMocks.createThread).not.toHaveBeenCalled()
+  })
+
+  test("renders a newly added folder after the orchestration snapshot updates", async () => {
+    historyMocks.snapshot = {
+      ...snapshot,
+      workspaces: [snapshot.workspaces[1]!],
+      threads: [snapshot.threads[2]!],
+    }
+    historyMocks.createWorkspace.mockResolvedValue("workspace-2")
+    window.electronAPI = {
+      ...window.electronAPI,
+      invoke: vi.fn().mockResolvedValue("/class-notes"),
+    }
+
+    const user = userEvent.setup()
+    const { rerender } = render(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    expect(screen.getByText("No folders yet")).toBeTruthy()
+
+    await user.click(screen.getByRole("button", { name: "Add folder" }))
+
+    historyMocks.snapshot = {
+      ...historyMocks.snapshot,
+      workspaces: [
+        snapshot.workspaces[1]!,
+        {
+          id: "workspace-2" as never,
+          kind: "filesystem",
+          name: "class-notes",
+          rootPath: "/class-notes",
+          availability: "ready",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+        },
+      ],
+      threads: [snapshot.threads[2]!],
+      lastSequence: 3,
+    }
+    rerender(<SidebarProvider><ChatHistory /></SidebarProvider>)
+
+    expect(historyMocks.createWorkspace).toHaveBeenCalledWith("/class-notes")
+    expect(screen.queryByText("No folders yet")).toBeNull()
+    expect(screen.getByText("class-notes")).toBeTruthy()
   })
 
   test("shows an actionable error when folder picking is unavailable", async () => {

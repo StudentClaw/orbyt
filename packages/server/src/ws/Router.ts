@@ -33,6 +33,8 @@ import type { OrchestrationServiceShape } from "../orchestration/OrchestrationSe
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
 import type { DatabaseService } from "../db/Database.js"
+import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
+import type { SkillResolverService } from "../skills/SkillResolver.js"
 
 type RouteDependencies = {
   readonly config: AppConfig
@@ -40,6 +42,8 @@ type RouteDependencies = {
   readonly pushBus: PushBusService
   readonly readiness: ServerReadinessService
   readonly database: DatabaseService
+  readonly canvasSync: CanvasSyncServiceShape
+  readonly skillResolver: SkillResolverService
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -184,6 +188,42 @@ async function handleActivityMethod(
         database: dependencies.database,
         config: dependencies.config,
       }))
+    default:
+      return null
+  }
+}
+
+async function handleCanvasMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+  switch (method) {
+    case RPC_METHODS.CANVAS_GET_COURSES:
+      return encodeSuccess(id, { courses: dependencies.canvasSync.getCourses() })
+    case RPC_METHODS.CANVAS_GET_COURSEWORK:
+      return encodeSuccess(id, { items: dependencies.canvasSync.getCoursework() })
+    case RPC_METHODS.CANVAS_GET_GRADES:
+      return encodeSuccess(id, { grades: dependencies.canvasSync.getGrades() })
+    case RPC_METHODS.CANVAS_SYNC:
+      void dependencies.canvasSync.sync()
+      return encodeSuccess(id, { queued: true })
+    default:
+      return null
+  }
+}
+
+async function handleDashboardMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+  switch (method) {
+    case RPC_METHODS.DASHBOARD_REFRESH:
+      void dependencies.pushBus.publish(PUSH_CHANNELS.DASHBOARD_UPDATE, {
+        section: "all",
+      })
+      return encodeSuccess(id, { refreshed: true })
     default:
       return null
   }
@@ -360,16 +400,33 @@ async function handleSendTurn(
     return decoded
   }
 
+  const skill = decoded.skillId ? dependencies.skillResolver.resolve(decoded.skillId) : null
+  const effectiveContent = skill
+    ? `${skill.instructions}\n\n${decoded.content}`.trim()
+    : decoded.content
+
   return encodeSuccess(
     id,
     await dependencies.orchestration.sendTurn(
       id,
       decoded.threadId,
-      decoded.content,
+      effectiveContent,
       decoded.attachments,
       decoded.model ?? null,
     ),
   )
+}
+
+async function handleListSkills(
+  id: string,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  const skills = dependencies.skillResolver.listAll().map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+  }))
+  return encodeSuccess(id, { skills })
 }
 
 async function handleInterruptTurn(
@@ -670,6 +727,20 @@ async function handleOnboardingMethod(
 /**
  * Routes a single RPC frame, validating envelopes and params before invoking server handlers.
  */
+async function handleSkillsMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+
+  switch (method) {
+    case RPC_METHODS.SKILLS_LIST:
+      return handleListSkills(id, dependencies)
+    default:
+      return null
+  }
+}
+
 export async function routeMessage(
   raw: string,
   ws: WebSocket,
@@ -684,9 +755,12 @@ export async function routeMessage(
     const response = await handleServerMethod(decoded, ws, dependencies)
       ?? await handleStreamMethod(decoded, ws, dependencies)
       ?? await handleActivityMethod(decoded, dependencies)
+      ?? await handleCanvasMethod(decoded, dependencies)
+      ?? await handleDashboardMethod(decoded, dependencies)
       ?? await handleOrchestrationMethod(decoded, dependencies)
       ?? await handleProviderMethod(decoded, dependencies)
       ?? await handleOnboardingMethod(decoded, dependencies)
+      ?? await handleSkillsMethod(decoded, dependencies)
 
     if (response) {
       return { response }

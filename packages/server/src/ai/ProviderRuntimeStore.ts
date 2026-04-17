@@ -86,6 +86,7 @@ export interface ProviderRuntimeStoreService {
   readonly dequeueTurn: (turnId: string) => Promise<void>
   readonly listQueuedTurns: () => Promise<ReadonlyArray<QueuedProviderTurn>>
   readonly refreshQueuedCount: () => Promise<number>
+  readonly drain: () => Promise<void>
 }
 
 export class ProviderRuntimeStore extends Context.Tag("ProviderRuntimeStore")<
@@ -375,6 +376,7 @@ export const ProviderRuntimeStoreLive = Layer.effect(
         await updateStateUnsafe({ queuedTurnCount })
         return queuedTurnCount
       }),
+      drain: () => writeQueue,
     }
   }),
 )

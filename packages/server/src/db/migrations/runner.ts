@@ -9,8 +9,20 @@ import * as migration007 from "./007-provider-runtime-session-cwd.js"
 import * as migration008 from "./008-reasoning-text.js"
 import * as migration009 from "./009-thread-access-mode.js"
 import * as migration010 from "./010-turn-attachments.js"
+import * as migration011 from "./011-onboarding-schema-repair.js"
+import * as migration012 from "./012-coursework-canvas-fields.js"
 
-const migrations = [
+type SqlMigration = {
+  readonly version: number
+  readonly up: string
+}
+
+type ProgrammaticMigration = {
+  readonly version: number
+  readonly run: (db: Database) => void
+}
+
+const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration001,
   migration002,
   migration003,
@@ -21,6 +33,8 @@ const migrations = [
   migration008,
   migration009,
   migration010,
+  migration011,
+  migration012,
 ]
 
 export function runMigrations(db: Database): void {
@@ -41,13 +55,17 @@ export function runMigrations(db: Database): void {
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
       db.transaction(() => {
-        const statements = migration.up.split(";").filter((s) => s.trim())
-        for (const stmt of statements) {
-          try {
-            db.run(stmt)
-          } catch (error) {
-            if (!isDuplicateColumn(error)) throw error
+        if ("up" in migration) {
+          const statements = migration.up.split(";").filter((statement: string) => statement.trim())
+          for (const stmt of statements) {
+            try {
+              db.run(stmt)
+            } catch (error) {
+              if (!isDuplicateColumn(error)) throw error
+            }
           }
+        } else {
+          migration.run(db)
         }
         db.run("INSERT INTO schema_version (version) VALUES (?)", [migration.version])
       })()

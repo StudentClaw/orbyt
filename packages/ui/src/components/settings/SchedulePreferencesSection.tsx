@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import type { StudentPreference, CalendarIntegration } from "@student-claw/contracts"
-import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -39,9 +39,9 @@ export function SchedulePreferencesSection() {
 
   useEffect(() => {
     let cancelled = false
-    const client = getPrimaryWsRpcClient()
 
-    Promise.all([client.onboarding.getPreferences(), client.onboarding.getRoutines()])
+    void waitForPrimaryWsRpcClient()
+      .then((client) => Promise.all([client.onboarding.getPreferences(), client.onboarding.getRoutines()]))
       .then(([prefs, routines]) => {
         if (cancelled) return
         setStudyTimes(new Set(prefs.studyTimes.map((t) => capitalize(t))))
@@ -61,8 +61,10 @@ export function SchedulePreferencesSection() {
     return () => { cancelled = true }
   }, [])
 
-  function syncPreferences(patch: Parameters<typeof getPrimaryWsRpcClient>["0"] extends never ? never : Partial<StudentPreference>) {
-    void getPrimaryWsRpcClient().onboarding.setPreferences(patch).catch(() => undefined)
+  function syncPreferences(patch: Partial<StudentPreference>) {
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.onboarding.setPreferences(patch))
+      .catch(() => undefined)
   }
 
   function syncRoutines(cells: ReadonlySet<string>) {
@@ -70,7 +72,10 @@ export function SchedulePreferencesSection() {
       const [day, hour] = key.split("-").map(Number)
       return { dayOfWeek: day, hourOfDay: hour }
     })
-    void getPrimaryWsRpcClient().onboarding.setRoutines({ cells: parsed }).catch(() => undefined)
+
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.onboarding.setRoutines({ cells: parsed }))
+      .catch(() => undefined)
   }
 
   const toggleStudyTime = (time: string) => {

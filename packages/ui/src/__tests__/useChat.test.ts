@@ -177,6 +177,79 @@ describe("useChat", () => {
     expect(result.current.status).toBe("offline")
   })
 
+  test("returns queued state for a queued thread without treating it as streaming", () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [
+        {
+          ...baseSnapshot.threads[0],
+          status: "queued",
+        },
+      ],
+      turns: [
+        {
+          ...baseSnapshot.turns[0],
+          status: "queued",
+        },
+      ],
+      providerStatus: "idle",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "idle",
+      },
+    }
+
+    const { result } = renderHook(() => useChat())
+
+    expect(result.current.status).toBe("queued")
+    expect(result.current.messages[1]?.isStreaming).toBe(false)
+  })
+
+  test("keeps the selected idle thread idle when another thread is streaming", () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [
+        {
+          id: "thread-1" as never,
+          workspaceId: "workspace-1" as never,
+          title: "Idle thread",
+          accessMode: "default",
+          status: "completed",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          currentTurnId: null,
+        },
+        {
+          id: "thread-2" as never,
+          workspaceId: "workspace-1" as never,
+          title: "Streaming thread",
+          accessMode: "default",
+          status: "streaming",
+          createdAt: "2026-04-09T00:02:00.000Z",
+          currentTurnId: "turn-2" as never,
+        },
+      ],
+      turns: [
+        {
+          ...baseSnapshot.turns[0],
+          id: "turn-2" as never,
+          threadId: "thread-2" as never,
+          status: "streaming",
+        },
+      ],
+      providerStatus: "streaming",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "streaming",
+      },
+    }
+    hookMocks.selectedThreadId = "thread-1"
+
+    const { result } = renderHook(() => useChat())
+
+    expect(result.current.status).toBe("idle")
+    expect(result.current.messages).toHaveLength(0)
+  })
+
   test("setThreadAccessMode delegates to the runtime for the active thread", async () => {
     const { result } = renderHook(() => useChat())
 

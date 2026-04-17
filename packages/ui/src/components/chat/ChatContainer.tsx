@@ -10,10 +10,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChat } from "@/hooks/useChat"
 import { useChatModel } from "@/hooks/useChatModel"
-import { useChatUiActions, useOrchestrationActions } from "@/hooks/useAppRuntime"
+import { useChatUiActions, useOrchestrationActions, useSkills } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
@@ -38,6 +37,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   const navigate = useNavigate()
   const { selectedModel, setSelectedModel, availableModels } = useChatModel()
   const { renameThread, deleteThread } = useOrchestrationActions()
+  const skills = useSkills()
   const {
     messages,
     status,
@@ -57,7 +57,6 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel, selectChatTarget } = useChatUiActions()
 
-  const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false)
@@ -68,15 +67,14 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   const headerTitle = currentThread?.title ?? currentWorkspace?.name ?? "New chat"
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    const el = scrollContainerRef.current
+    if (el) el.scrollTop = el.scrollHeight
     setUserScrolledUp(false)
   }, [])
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
-    if (!el) {
-      return
-    }
+    if (!el) return
 
     const threshold = 50
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
@@ -84,10 +82,22 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   }, [])
 
   useEffect(() => {
-    if (!userScrolledUp) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [messages, userScrolledUp])
+    if (!userScrolledUp) scrollToBottom()
+  }, [messages, userScrolledUp, scrollToBottom])
+
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver(() => {
+      if (!userScrolledUp) {
+        el.scrollTop = el.scrollHeight
+      }
+    })
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [userScrolledUp])
 
   useEffect(() => {
     if (!currentThread) {
@@ -292,30 +302,27 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
       )}
 
       <div className="relative flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleScroll}
-            className="flex h-full flex-col gap-4 p-4"
-          >
-            {isAuthRequired ? (
-              <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatProviderDisconnected />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-              </>
-            )}
-            <div ref={bottomRef} aria-hidden="true" />
-          </div>
-        </ScrollArea>
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex h-full flex-col gap-4 overflow-y-auto p-4"
+        >
+          {isAuthRequired ? (
+            <div className="flex min-h-[300px] flex-1 items-center justify-center">
+              <ChatProviderDisconnected />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex min-h-[300px] flex-1 items-center justify-center">
+              <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
+            </div>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+            </>
+          )}
+        </div>
 
         {userScrolledUp && messages.length > 0 && (
           <Button
@@ -349,6 +356,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         pendingApproval={currentPendingApproval}
         onRespondToApproval={(decision) => void respondToApproval(decision)}
         approvalDecisionPending={approvalDecisionPending}
+        skills={skills}
       />
     </div>
   )

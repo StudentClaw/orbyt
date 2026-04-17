@@ -9,6 +9,7 @@ async function navigateTo(section: "general" | "connections" | "notifications" |
 
 const runtimeHooks = vi.hoisted(() => ({
   useRuntimeBootstrap: vi.fn(),
+  useRuntimeCanvasSyncProgress: vi.fn(),
   useRuntimeOrchestrationSnapshot: vi.fn(),
   useOrchestrationActions: vi.fn(),
   useRuntimeServerConfig: vi.fn(),
@@ -17,6 +18,7 @@ const runtimeHooks = vi.hoisted(() => ({
 vi.mock("@/hooks/useAppRuntime", () => ({
   useOrchestrationActions: runtimeHooks.useOrchestrationActions,
   useRuntimeBootstrap: runtimeHooks.useRuntimeBootstrap,
+  useRuntimeCanvasSyncProgress: runtimeHooks.useRuntimeCanvasSyncProgress,
   useRuntimeOrchestrationSnapshot: runtimeHooks.useRuntimeOrchestrationSnapshot,
   useRuntimeServerConfig: runtimeHooks.useRuntimeServerConfig,
 }))
@@ -134,6 +136,7 @@ describe("SettingsPage", () => {
     runtimeHooks.useRuntimeServerConfig.mockReturnValue({
       appVersion: "0.1.0",
     })
+    runtimeHooks.useRuntimeCanvasSyncProgress.mockReturnValue(null)
     runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
       providerRuntime: {
         adapter: "codex",
@@ -296,11 +299,33 @@ describe("SettingsPage", () => {
     expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId: "canvas-mcp" })
     expect(screen.getAllByText("Canvas Assistant")).toHaveLength(2)
     expect(screen.getByText("Broken MCP")).toBeDefined()
-    expect(screen.getByText("transport.entry is missing")).toBeDefined()
-    expect(screen.getByRole("button", { name: "Start" })).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-baseUrl")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-token")).toBeDefined()
+  })
+
+  test("disables Canvas sync while a sync is already in progress", async () => {
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+    runtimeHooks.useRuntimeCanvasSyncProgress.mockReturnValue({
+      courseId: "",
+      progress: 25,
+      status: "syncing",
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
+    })
+
+    const syncButton = screen.getByRole("button", { name: "Syncing..." })
+    expect(syncButton.hasAttribute("disabled")).toBe(true)
   })
 
   test("renders phone push settings and starts pairing", async () => {
@@ -476,7 +501,7 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-push-quiet-start")).toBeDefined()
   })
 
-  test("invokes plugin:start from the dev lifecycle controls", async () => {
+  test("invokes plugin:setEnabled when the toggle switch is clicked", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -484,7 +509,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string; enabled?: boolean }) => {
       if (channel === IpcChannel.PLUGIN_LIST) {
         return registryEntries
       }
@@ -496,11 +521,11 @@ describe("SettingsPage", () => {
         }
       }
 
-      if (channel === IpcChannel.PLUGIN_START) {
+      if (channel === IpcChannel.PLUGIN_SET_ENABLED) {
         return {
           ok: true,
           pluginId: params?.pluginId ?? "canvas-mcp",
-          status: "active",
+          enabled: params?.enabled ?? true,
         }
       }
 
@@ -517,14 +542,14 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start" })).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByRole("button", { name: "Start" }))
+    const toggle = await screen.findByRole("switch", { name: /Enable Canvas Assistant|Disable Canvas Assistant/ })
+    fireEvent.click(toggle)
 
     await waitFor(() => {
-      expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_START, { pluginId: "canvas-mcp" })
+      expect(window.electronAPI?.invoke).toHaveBeenCalledWith(
+        IpcChannel.PLUGIN_SET_ENABLED,
+        expect.objectContaining({ pluginId: "canvas-mcp" }),
+      )
     })
   })
 
@@ -580,7 +605,7 @@ describe("SettingsPage", () => {
     })
   })
 
-  test("renders Retry for an available plugin in error state", async () => {
+  test("renders an error-state row for an available plugin in error state", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -613,7 +638,7 @@ describe("SettingsPage", () => {
 
     await navigateTo("connections")
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Retry" })).toBeDefined()
+      expect(screen.getByText("error")).toBeDefined()
     })
   })
 

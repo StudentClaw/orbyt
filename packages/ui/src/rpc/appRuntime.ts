@@ -1,7 +1,7 @@
 import type { DesktopBootstrap } from "@student-claw/contracts"
 import { createWsRpcClient, type WsRpcClient } from "./wsRpcClient"
 import { startActivityStateSync } from "./activityState"
-import { startCanvasStateSync } from "./canvasState"
+import { startCanvasStateSync, loadCanvasData } from "./canvasState"
 import { startDashboardStateSync } from "./dashboardState"
 import { startPlannerStateSync } from "./plannerState"
 import { startOrchestrationStateSync } from "./orchestrationState"
@@ -60,6 +60,17 @@ export function getPrimaryWsRpcClient(bootstrap?: DesktopBootstrap): WsRpcClient
   return primaryClient
 }
 
+/**
+ * Waits for the renderer runtime to finish bootstrapping before returning the shared RPC client.
+ */
+export async function waitForPrimaryWsRpcClient(): Promise<WsRpcClient> {
+  if (!primaryBootstrap) {
+    await startAppRuntime()
+  }
+
+  return getPrimaryWsRpcClient()
+}
+
 async function getRendererBootstrap(): Promise<DesktopBootstrap | null> {
   const electronBootstrap = await (window.electronAPI?.getBootstrap?.().catch(() => null) ?? null)
   return electronBootstrap ?? getStandaloneDevBootstrap()
@@ -111,6 +122,7 @@ export function startAppRuntime(): Promise<void> {
     startDashboardStateSync(client)
     startPlannerStateSync(client)
     startActivityStateSync(client)
+    void loadCanvasData(client)
   })()
 
   runtimeStartPromise.catch(() => {

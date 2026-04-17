@@ -1,11 +1,15 @@
-import { describe, expect, test, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, expect, test, vi, beforeEach } from "vitest"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+
+const mockGetRoutines = vi.fn()
+const mockSetRoutines = vi.fn().mockResolvedValue({})
 
 vi.mock("@/rpc/appRuntime", () => ({
   getPrimaryWsRpcClient: () => ({
     onboarding: {
-      setRoutines: vi.fn().mockResolvedValue({}),
+      getRoutines: mockGetRoutines,
+      setRoutines: mockSetRoutines,
     },
   }),
 }))
@@ -18,6 +22,11 @@ describe("RoutinesStep", () => {
     onBack: vi.fn(),
     onSkip: vi.fn(),
   }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetRoutines.mockResolvedValue({ cells: [] })
+  })
 
   test("renders the routines step", () => {
     render(<RoutinesStep {...defaultProps} />)
@@ -49,5 +58,18 @@ describe("RoutinesStep", () => {
     expect(cell.getAttribute("data-active")).toBe("true")
     await userEvent.click(cell)
     expect(cell.getAttribute("data-active")).toBe("false")
+  })
+
+  test("hydrates saved routines without writing on mount", async () => {
+    mockGetRoutines.mockResolvedValue({
+      cells: [{ dayOfWeek: 2, hourOfDay: 10 }],
+    })
+
+    render(<RoutinesStep {...defaultProps} />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId("routine-cell-2-10").getAttribute("data-active")).toBe("true")
+    })
+    expect(mockSetRoutines).not.toHaveBeenCalled()
   })
 })

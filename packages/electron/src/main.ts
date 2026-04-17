@@ -15,6 +15,11 @@ import { createWindow } from "./window/window-manager.js"
 app.setName("Student Claw")
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
 
 function resolveIconPath(): string {
   const primaryCandidate = path.join(currentDir, "../../resources/icon.png")
@@ -39,48 +44,54 @@ async function ensureServerProcess(): Promise<ServerProcess> {
   }
 
   if (!serverProcessPromise) {
-    const runtime = createPluginRuntime({
-      currentDir,
-      isPackaged: app.isPackaged,
-      userDataPath: app.getPath("userData"),
-      emitLifecycleEvent: (event) => {
-        const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
-        for (const window of windows) {
-          window.webContents.send(IpcChannel.PLUGIN_LIFECYCLE, event)
-        }
+    serverProcessPromise = (async () => {
+      const runtime = createPluginRuntime({
+        currentDir,
+        isPackaged: app.isPackaged,
+        userDataPath: app.getPath("userData"),
+        emitLifecycleEvent: (event) => {
+          const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+          for (const window of windows) {
+            window.webContents.send(IpcChannel.PLUGIN_LIFECYCLE, event)
+          }
 
-        void pluginGateway?.notifyToolInventoryChanged()
-      },
-    })
-    pluginManager = runtime.manager
+          void pluginGateway?.notifyToolInventoryChanged()
+        },
+      })
+      pluginManager = runtime.manager
 
-    serverProcessPromise = createPluginGatewayService({
-      runtime: runtime.manager,
-    })
-      .then((gateway) => {
-        pluginGateway = gateway
-        return spawnServer(gateway.config, {
-          userDataPath: app.getPath("userData"),
-        })
+      await runtime.manager.autoStartEnabled().catch((error) => {
+        process.stderr.write(`Failed to auto-start enabled plugins: ${String(error)}\n`)
       })
-      .then((nextServerProcess) => {
-        serverProcess = nextServerProcess
-        pushManager = createPushManager({
-          userDataPath: app.getPath("userData"),
-          bootstrap: nextServerProcess.bootstrap,
-          relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
-        })
-        pluginManager = registerIpcHandlers(
-          nextServerProcess.bootstrap,
-          {
-            pluginManager: runtime.manager,
-            pluginAuthService: runtime.authService,
-            pushManager,
-          },
-        ).pluginManager
-        void pushManager.start()
-        return nextServerProcess
+
+      const gateway = await createPluginGatewayService({
+        runtime: runtime.manager,
       })
+      pluginGateway = gateway
+
+      const nextServerProcess = await spawnServer(gateway.config, {
+        userDataPath: app.getPath("userData"),
+      })
+      serverProcess = nextServerProcess
+
+      pushManager = createPushManager({
+        userDataPath: app.getPath("userData"),
+        bootstrap: nextServerProcess.bootstrap,
+        relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
+      })
+      pluginManager = registerIpcHandlers(
+        nextServerProcess.bootstrap,
+        {
+          pluginManager: runtime.manager,
+          pluginAuthService: runtime.authService,
+          pluginEnabledStore: runtime.enabledStore,
+          pushManager,
+        },
+      ).pluginManager
+      void pushManager.start()
+
+      return nextServerProcess
+    })()
       .catch(async (error) => {
         await pluginGateway?.close().catch(() => undefined)
         pluginGateway = null
@@ -122,24 +133,42 @@ async function bootstrap(): Promise<void> {
   mainWindow = await createAppWindow()
 }
 
-app.whenReady()
-  .then(async () => {
-    await bootstrap()
-
-    app.on("activate", async () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = await createAppWindow()
-        return
+if (gotSingleInstanceLock) {
+  app.on("second-instance", async () => {
+    const existingWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null
+    if (existingWindow) {
+      if (existingWindow.isMinimized()) {
+        existingWindow.restore()
       }
+      existingWindow.show()
+      existingWindow.focus()
+      return
+    }
 
-      mainWindow?.show()
-      mainWindow?.focus()
+    if (app.isReady()) {
+      mainWindow = await createAppWindow()
+    }
+  })
+
+  app.whenReady()
+    .then(async () => {
+      await bootstrap()
+
+      app.on("activate", async () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          mainWindow = await createAppWindow()
+          return
+        }
+
+        mainWindow?.show()
+        mainWindow?.focus()
+      })
     })
-  })
-  .catch((error) => {
-    process.stderr.write(`Failed to start Electron app: ${String(error)}\n`)
-    app.quit()
-  })
+    .catch((error) => {
+      process.stderr.write(`Failed to start Electron app: ${String(error)}\n`)
+      app.quit()
+    })
+}
 
 app.on("before-quit", () => {
   isQuitting = true

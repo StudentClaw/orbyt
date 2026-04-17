@@ -11,7 +11,7 @@ function getResolvedTheme(theme: Theme): "light" | "dark" {
   return theme
 }
 
-function getInitialTheme(): Theme {
+export function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === "dark" || stored === "light" || stored === "auto") return stored
@@ -21,8 +21,16 @@ function getInitialTheme(): Theme {
   return "auto"
 }
 
-function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", getResolvedTheme(theme) === "dark")
+export function applyTheme(theme: Theme): void {
+  const resolvedTheme = getResolvedTheme(theme)
+  document.documentElement.classList.toggle("dark", resolvedTheme === "dark")
+  document.documentElement.style.colorScheme = resolvedTheme
+}
+
+export function initializeTheme(): Theme {
+  const theme = getInitialTheme()
+  applyTheme(theme)
+  return theme
 }
 
 export function useTheme() {

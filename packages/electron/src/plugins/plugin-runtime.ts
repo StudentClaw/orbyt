@@ -7,12 +7,14 @@ import {
 } from "./plugin-registry.js"
 import { PluginManager } from "./plugin-manager.js"
 import { PluginVault, resolvePluginVaultDir } from "./plugin-vault.js"
+import { PluginEnabledStore } from "./plugin-enabled-store.js"
 
 export type PluginRuntime = {
   readonly registry: PluginRegistry
   readonly manager: PluginManager
   readonly authService: PluginAuthService
   readonly vault: PluginVault
+  readonly enabledStore: PluginEnabledStore
 }
 
 export function createPluginRuntime(options: {
@@ -30,10 +32,12 @@ export function createPluginRuntime(options: {
     registry,
     vault,
   })
+  const enabledStore = new PluginEnabledStore(options.userDataPath)
   const manager = new PluginManager({
     registry,
     emitLifecycleEvent: options.emitLifecycleEvent,
     getCredentialMessage: (pluginId) => authService.getCredentialMessage(pluginId),
+    enabledStore,
   })
 
   return {
@@ -41,5 +45,6 @@ export function createPluginRuntime(options: {
     manager,
     authService,
     vault,
+    enabledStore,
   }
 }

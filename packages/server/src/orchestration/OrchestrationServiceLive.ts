@@ -227,6 +227,16 @@ export const OrchestrationServiceLive = Layer.scoped(
         status: "streaming",
         lastError: null,
       })
+
+      const turn = readTurn(work.turnId)
+      if (turn) {
+        appendEvent("turn.started", { turn }, {
+          threadId: work.threadId,
+          turnId: work.turnId,
+          commandId: work.commandId,
+        })
+        await publishDomainEvent({ type: "turn.started", turn })
+      }
     }
 
     const failTurn = async (
@@ -242,13 +252,13 @@ export const OrchestrationServiceLive = Layer.scoped(
         database.transaction(() => {
           database.execute(
             `UPDATE orchestration_turns
-             SET status = 'pending', updated_at = ?
+             SET status = 'queued', updated_at = ?
              WHERE id = ?`,
             [now, work.turnId],
           )
           database.execute(
             `UPDATE orchestration_threads
-             SET status = 'idle', current_turn_id = ?, updated_at = ?
+             SET status = 'queued', current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
             [work.turnId, now, work.threadId],
           )
@@ -846,7 +856,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           input: content,
           output: "",
           reasoning: "",
-          status: "pending",
+          status: "queued",
           startedAt: now,
           completedAt: null,
           skill: null,
@@ -875,7 +885,7 @@ export const OrchestrationServiceLive = Layer.scoped(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
-            ["idle", turn.id, now, threadId],
+            ["queued", turn.id, now, threadId],
           )
           recordReceipt(commandId, "pending", { threadId, turnId: turn.id })
         })
@@ -887,8 +897,8 @@ export const OrchestrationServiceLive = Layer.scoped(
           authState: runtimeState.authState,
         })
 
-        appendEvent("turn.started", { turn }, { threadId, turnId: turn.id, commandId })
-        await publishDomainEvent({ type: "turn.started", turn })
+        appendEvent("turn.queued", { turn }, { threadId, turnId: turn.id, commandId })
+        await publishDomainEvent({ type: "turn.queued", turn })
         workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
         void drainQueue()
         return { turnId: turn.id }
@@ -960,6 +970,9 @@ export const OrchestrationServiceLive = Layer.scoped(
           resolved: result.resolved,
         })
         return { approvalRequestId, resolved: result.resolved }
+      },
+      shutdown: async () => {
+        await codexCli.shutdown()
       },
     }
   }),

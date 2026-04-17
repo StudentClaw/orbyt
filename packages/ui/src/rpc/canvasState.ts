@@ -139,29 +139,52 @@ export function computeStaleness(
   return hoursSinceSync > 24 ? "stale" : "fresh"
 }
 
+// --- Data loader ---
+
+let loadInFlight: Promise<void> | null = null
+
+export async function loadCanvasData(client: WsRpcClient): Promise<void> {
+  if (loadInFlight) return loadInFlight
+  loadInFlight = (async () => {
+    const [courses, coursework, grades] = await Promise.all([
+      client.canvas.getCourses(),
+      client.canvas.getCoursework(),
+      client.canvas.getGrades(),
+    ])
+    setCourses(courses)
+    setCoursework(coursework)
+    setGrades(grades)
+
+    const latestSync = [...courses]
+      .map((c) => c.lastSyncAt)
+      .filter((s): s is string => Boolean(s))
+      .sort()
+      .at(-1) ?? null
+    setLastSync(latestSync)
+  })().finally(() => {
+    loadInFlight = null
+  })
+  return loadInFlight
+}
+
 // --- Sync starter ---
 
 export function startCanvasStateSync(client: WsRpcClient): () => void {
   let disposed = false
 
-  const cleanups = [
-    client.canvas.onSyncProgress(
-      (event) => {
-        if (!disposed) {
-          applyCanvasSyncProgressEvent(event)
-        }
-      },
-    ),
-    client.dashboard.onUpdate(() => {
-      // Dashboard update events handled by dashboardState
-    }),
-  ]
+  const cleanup = client.canvas.onSyncProgress((event) => {
+    if (disposed) return
+    applyCanvasSyncProgressEvent(event)
+    if (event.status === "done") {
+      loadCanvasData(client).catch((error) => {
+        console.error("Failed to refresh canvas data after sync", error)
+      })
+    }
+  })
 
   return () => {
     disposed = true
-    for (const cleanup of cleanups) {
-      cleanup()
-    }
+    cleanup()
   }
 }
 

@@ -36,6 +36,7 @@ import { IPC_CHANNELS } from "./channels.js"
 import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
+import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "../push/push-manager.js"
 
@@ -135,7 +136,7 @@ function resolvePushManager(
  */
 export function registerIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pushManager?: PushManager },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   registerHandler(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
@@ -277,6 +278,7 @@ export function registerIpcHandlers(
   return registerPluginIpcHandlers(bootstrap, runtime)
 }
 
+
 function buildPluginActionResult(
   bootstrap: DesktopBootstrap,
   pluginId: string,
@@ -322,7 +324,7 @@ function emitPluginLifecycle(payload: { pluginId: string; status: ExtensionRegis
 
 function registerPluginIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pushManager?: PushManager },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   const runtimeServices = runtime ?? (() => {
     const createdRuntime = createPluginRuntime({
@@ -335,10 +337,12 @@ function registerPluginIpcHandlers(
     return {
       pluginManager: createdRuntime.manager,
       pluginAuthService: createdRuntime.authService,
+      pluginEnabledStore: createdRuntime.enabledStore,
     }
   })()
   const pluginManager = runtimeServices.pluginManager
   const pluginAuthService = runtimeServices.pluginAuthService
+  const pluginEnabledStore = runtimeServices.pluginEnabledStore
 
   registerHandler(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
     return pluginManager.list()
@@ -387,7 +391,23 @@ function registerPluginIpcHandlers(
   registerHandler(
     IpcChannel.PLUGIN_SET_ENABLED,
     (_event, params: PluginSetEnabledParams): PluginManagementActionResult => {
-      return buildPluginActionResult(bootstrap, params.pluginId)
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginActionResult(bootstrap, params.pluginId)
+      }
+
+      if (!pluginEnabledStore) {
+        return { ok: false, pluginId: params.pluginId, reason: "not_implemented" }
+      }
+
+      pluginEnabledStore.setEnabled(params.pluginId, params.enabled)
+
+      if (params.enabled) {
+        void pluginManager.start(params.pluginId)
+      } else {
+        void pluginManager.stop(params.pluginId)
+      }
+
+      return { ok: true, pluginId: params.pluginId, status: pluginManager.getStatus(params.pluginId)?.status ?? "discovered" }
     },
   )
 

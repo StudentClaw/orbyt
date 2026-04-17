@@ -26,21 +26,44 @@ export function PreferencesStep(_props: OnboardingStepProps) {
   const [quietStart, setQuietStart] = useState("22:00")
   const [quietEnd, setQuietEnd] = useState("08:00")
 
-  // Fire-and-forget sync to server whenever preferences change
   useEffect(() => {
+    let cancelled = false
+
     try {
-      void getPrimaryWsRpcClient().onboarding.setPreferences({
-        studyTimes: Array.from(studyTimes).map((t) => t.toLowerCase()),
-        maxSessionMins: maxDuration,
-        offLimitDays: Array.from(offDays),
-        notificationEnabled: notificationsEnabled,
-        quietHoursStart: quietStart,
-        quietHoursEnd: quietEnd,
-      }).catch(() => undefined)
+      void getPrimaryWsRpcClient().onboarding.getPreferences()
+        .then((prefs) => {
+          if (cancelled) return
+          setStudyTimes(new Set(prefs.studyTimes.map((time) => capitalize(time))))
+          setMaxDuration(prefs.maxSessionMins)
+          setOffDays(new Set(prefs.offLimitDays))
+          setNotificationsEnabled(prefs.notificationEnabled)
+          setQuietStart(prefs.quietHoursStart)
+          setQuietEnd(prefs.quietHoursEnd)
+        })
+        .catch(() => undefined)
     } catch {
-      // Runtime not yet initialised — skip sync, server will hydrate on connect
+      // Runtime not yet initialised — keep local defaults until the server is available.
     }
-  }, [studyTimes, maxDuration, offDays, notificationsEnabled, quietStart, quietEnd])
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function syncPreferences(patch: {
+    readonly studyTimes?: string[]
+    readonly maxSessionMins?: number
+    readonly offLimitDays?: number[]
+    readonly notificationEnabled?: boolean
+    readonly quietHoursStart?: string
+    readonly quietHoursEnd?: string
+  }): void {
+    try {
+      void getPrimaryWsRpcClient().onboarding.setPreferences(patch).catch(() => undefined)
+    } catch {
+      // Runtime not yet initialised — skip sync, server will hydrate on connect.
+    }
+  }
 
   const toggleStudyTime = (time: string) => {
     const next = new Set(studyTimes)
@@ -50,6 +73,7 @@ export function PreferencesStep(_props: OnboardingStepProps) {
       next.add(time)
     }
     setStudyTimes(next)
+    syncPreferences({ studyTimes: Array.from(next).map((value) => value.toLowerCase()) })
   }
 
   const toggleOffDay = (dayIndex: number) => {
@@ -60,6 +84,7 @@ export function PreferencesStep(_props: OnboardingStepProps) {
       next.add(dayIndex)
     }
     setOffDays(next)
+    syncPreferences({ offLimitDays: Array.from(next) })
   }
 
   return (
@@ -95,7 +120,10 @@ export function PreferencesStep(_props: OnboardingStepProps) {
                 key={d}
                 variant={maxDuration === d ? "default" : "outline"}
                 size="sm"
-                onClick={() => setMaxDuration(d)}
+                onClick={() => {
+                  setMaxDuration(d)
+                  syncPreferences({ maxSessionMins: d })
+                }}
               >
                 {formatDuration(d)}
               </Button>
@@ -123,7 +151,10 @@ export function PreferencesStep(_props: OnboardingStepProps) {
           <div className="flex items-center gap-3" data-testid="pref-notif-switch">
             <Switch
               checked={notificationsEnabled}
-              onCheckedChange={setNotificationsEnabled}
+              onCheckedChange={(checked) => {
+                setNotificationsEnabled(checked)
+                syncPreferences({ notificationEnabled: checked })
+              }}
             />
             <Label>Enable notifications</Label>
           </div>
@@ -133,7 +164,10 @@ export function PreferencesStep(_props: OnboardingStepProps) {
               <Input
                 type="time"
                 value={quietStart}
-                onChange={(e) => setQuietStart(e.target.value)}
+                onChange={(e) => {
+                  setQuietStart(e.target.value)
+                  syncPreferences({ quietHoursStart: e.target.value })
+                }}
                 className="w-28"
                 data-testid="pref-quiet-start"
               />
@@ -141,7 +175,10 @@ export function PreferencesStep(_props: OnboardingStepProps) {
               <Input
                 type="time"
                 value={quietEnd}
-                onChange={(e) => setQuietEnd(e.target.value)}
+                onChange={(e) => {
+                  setQuietEnd(e.target.value)
+                  syncPreferences({ quietHoursEnd: e.target.value })
+                }}
                 className="w-28"
                 data-testid="pref-quiet-end"
               />
@@ -151,4 +188,8 @@ export function PreferencesStep(_props: OnboardingStepProps) {
       </CardContent>
     </Card>
   )
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }

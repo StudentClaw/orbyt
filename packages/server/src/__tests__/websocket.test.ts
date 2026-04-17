@@ -92,6 +92,7 @@ function makeDependencies() {
       startProviderAuth: async () => ({ started: true }),
       retryProviderInitialize: async () => ({ started: true }),
       respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
+      shutdown: async () => undefined,
     },
     database: {
       db,
@@ -102,6 +103,16 @@ function makeDependencies() {
       },
       transaction: <T>(fn: () => T) => fn(),
       close: () => db.close(),
+    },
+    canvasSync: {
+      sync: async () => undefined,
+      getCourses: () => [],
+      getCoursework: () => [],
+      getGrades: () => [],
+    },
+    skillResolver: {
+      resolve: () => null,
+      listAll: () => [],
     },
   }
 }

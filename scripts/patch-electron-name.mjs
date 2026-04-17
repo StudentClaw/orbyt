@@ -20,10 +20,13 @@ if (!plist) {
 }
 
 const pb = (cmd) => execSync(`/usr/libexec/PlistBuddy -c "${cmd}" "${plist}"`, { stdio: "pipe" })
+const APP_NAME = "Student Claw"
+const APP_BUNDLE_ID = "com.studentclaw.dev"
 
 try {
-  pb("Set :CFBundleName 'Student Claw'")
-  pb("Set :CFBundleDisplayName 'Student Claw'")
+  pb(`Set :CFBundleName '${APP_NAME}'`)
+  pb(`Set :CFBundleDisplayName '${APP_NAME}'`)
+  pb(`Set :CFBundleIdentifier '${APP_BUNDLE_ID}'`)
   console.log("[patch-electron-name] Patched Info.plist ->", plist)
 } catch (e) {
   console.warn("[patch-electron-name] PlistBuddy failed:", e.message)

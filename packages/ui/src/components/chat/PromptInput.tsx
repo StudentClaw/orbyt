@@ -1,13 +1,15 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   IpcChannel,
+  classifyShellCommandForApproval,
   type ChatModel,
   type ProviderApprovalDecision,
   type ProviderPendingApproval,
   type ThreadAccessMode,
   type TurnAttachmentInput,
 } from "@student-claw/contracts"
-import { PlusIcon, SquareIcon } from "lucide-react"
+import { PlusIcon, SquareIcon, XIcon } from "lucide-react"
+import { SkillPicker, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
 import {
   PromptInput as RegistryPromptInput,
@@ -42,7 +44,9 @@ interface PromptInputProps {
   readonly onSend: (input: {
     content: string
     attachments: readonly TurnAttachmentInput[]
+    skillId?: string | null
   }) => void | Promise<void>
+  readonly skills?: readonly SkillPickerEntry[]
   readonly onInterrupt: () => void
   readonly status: ChatStatus
   readonly connectionState: WsConnectionPhase
@@ -61,6 +65,12 @@ interface PromptInputProps {
 
 type ComposerAttachment = TurnAttachmentInput & {
   readonly id: string
+}
+
+type ApprovalTechnicalDetail = {
+  readonly label: string
+  readonly value: string
+  readonly code: boolean
 }
 
 function DefaultPermissionsIcon({ className }: { className?: string }) {
@@ -123,14 +133,32 @@ function accessModeLabel(accessMode: ThreadAccessMode | null): string {
   return accessMode === "full" ? "Full access" : "Default permissions"
 }
 
-function approvalTitle(approval: ProviderPendingApproval): string {
-  switch (approval.kind) {
-    case "command":
-      return "Command needs approval"
-    case "file-change":
-      return "File change needs approval"
-    case "permissions":
-      return "Permission request needs approval"
+function approvalTitle(): string {
+  return "Permission needed"
+}
+
+function approvalPromptCopy(approval: ProviderPendingApproval): {
+  readonly question: string
+  readonly detail: string
+} {
+  if (approval.kind === "command") {
+    const classification = classifyShellCommandForApproval(approval.command)
+    return {
+      question: classification.question,
+      detail: classification.detail,
+    }
+  }
+
+  if (approval.kind === "file-change") {
+    return {
+      question: "Can I change project files for this step?",
+      detail: "This would directly update files in the project.",
+    }
+  }
+
+  return {
+    question: "Can I grant this permission for this step?",
+    detail: "This would give the agent extra access for the current task.",
   }
 }
 
@@ -175,16 +203,21 @@ export function PromptInput({
   pendingApproval = null,
   onRespondToApproval,
   approvalDecisionPending = false,
+  skills = [],
 }: PromptInputProps) {
   const [value, setValue] = useState("")
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [fullAccessDialogOpen, setFullAccessDialogOpen] = useState(false)
+  const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
+  const [selectedSkill, setSelectedSkill] = useState<SkillPickerEntry | null>(null)
+  const [showSkillPicker, setShowSkillPicker] = useState(false)
+  const [skillFilter, setSkillFilter] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
-  const canSend = (value.trim().length > 0 || attachments.length > 0) && !isStreaming && isConnected && !disabled
+  const canSend = (value.trim().length > 0 || attachments.length > 0 || selectedSkill !== null) && !isStreaming && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
   const accessControlDisabled =
@@ -194,10 +227,36 @@ export function PromptInput({
     || accessModeUpdatePending
     || pendingApproval !== null
     || approvalDecisionPending
-  const approvalMetadata = [
-    pendingApproval?.cwd ? `cwd: ${pendingApproval.cwd}` : null,
-    pendingApproval?.reason ? pendingApproval.reason : null,
-  ].filter(Boolean)
+  const approvalCopy = pendingApproval ? approvalPromptCopy(pendingApproval) : null
+  const technicalDetails = pendingApproval
+    ? [
+        pendingApproval.command
+          ? {
+              label: "Command",
+              value: pendingApproval.command,
+              code: true,
+            }
+          : null,
+        pendingApproval.cwd
+          ? {
+              label: "Working folder",
+              value: pendingApproval.cwd,
+              code: false,
+            }
+          : null,
+        pendingApproval.reason
+          ? {
+              label: "Reason from Codex",
+              value: pendingApproval.reason,
+              code: false,
+            }
+          : null,
+      ].filter((entry): entry is ApprovalTechnicalDetail => entry !== null)
+    : []
+
+  useEffect(() => {
+    setApprovalTechnicalDetailsOpen(false)
+  }, [pendingApproval?.id])
 
   const resolveAttachmentMetadata = useCallback(async (paths: readonly string[]) => {
     if (!window.electronAPI?.invoke) {
@@ -251,9 +310,34 @@ export function PromptInput({
     return stripComposerAttachmentIds(refreshedAttachments)
   }, [attachments, resolveAttachmentMetadata])
 
+  const handleSkillSelect = useCallback((skill: SkillPickerEntry) => {
+    setSelectedSkill(skill)
+    setShowSkillPicker(false)
+    setSkillFilter("")
+    setValue("")
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSkillDismiss = useCallback(() => {
+    setShowSkillPicker(false)
+    setSkillFilter("")
+  }, [])
+
+  const handleTextareaChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = event.target.value
+    setValue(text)
+    if (text.startsWith("/")) {
+      setSkillFilter(text.slice(1))
+      setShowSkillPicker(true)
+    } else {
+      setShowSkillPicker(false)
+      setSkillFilter("")
+    }
+  }, [])
+
   const handleSubmit = useCallback(async (message: { text: string }) => {
     const text = message.text.trim()
-    if ((!text && attachments.length === 0) || isStreaming || !isConnected || disabled) {
+    if ((!text && attachments.length === 0 && !selectedSkill) || isStreaming || !isConnected || disabled) {
       return
     }
 
@@ -265,13 +349,15 @@ export function PromptInput({
     await onSend({
       content: text,
       attachments: validatedAttachments,
+      skillId: selectedSkill?.id ?? null,
     })
 
     setValue("")
     setAttachments([])
     setAttachmentError(null)
+    setSelectedSkill(null)
     textareaRef.current?.focus()
-  }, [attachments.length, disabled, isConnected, isStreaming, onSend, validateAttachments])
+  }, [attachments.length, disabled, isConnected, isStreaming, onSend, selectedSkill, validateAttachments])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -303,29 +389,52 @@ export function PromptInput({
   }, [onAccessModeChange])
 
   return (
-    <div className="border-t bg-background px-3 py-2.5">
+    <div className="relative border-t bg-background px-3 py-2.5">
       {pendingApproval && (
         <Alert className="mb-3 rounded-3xl border-amber-500/25 bg-amber-500/6 px-4 py-3">
           <ShieldCueIcon className="mt-0.5 size-4 text-amber-500" />
           <AlertTitle className="text-sm text-foreground">
-            {approvalTitle(pendingApproval)}
+            {approvalTitle()}
           </AlertTitle>
           <AlertDescription className="space-y-3 pt-1 text-left">
-            <p>
-              {pendingApproval.kind === "command"
-                ? "Codex paused before running this command in the current thread."
-                : "Codex paused this thread until you approve or deny the next step."}
-            </p>
-            {pendingApproval.command && (
-              <pre className="overflow-x-auto rounded-2xl border border-border/60 bg-background/90 px-3 py-2 text-xs text-foreground">
-                <code>{pendingApproval.command}</code>
-              </pre>
-            )}
-            {approvalMetadata.length > 0 && (
-              <div className="space-y-1 text-xs text-muted-foreground">
-                {approvalMetadata.map((entry) => (
-                  <p key={entry}>{entry}</p>
-                ))}
+            <div className="space-y-1">
+              <p className="text-sm text-foreground">
+                {approvalCopy?.question}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {approvalCopy?.detail}
+              </p>
+            </div>
+            {technicalDetails.length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                  onClick={() => setApprovalTechnicalDetailsOpen((current) => !current)}
+                >
+                  {approvalTechnicalDetailsOpen ? "Hide technical details" : "Show technical details"}
+                </button>
+                {approvalTechnicalDetailsOpen && (
+                  <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-2">
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      {technicalDetails.map((entry) => (
+                        entry.code ? (
+                          <div key={`${entry.label}:${entry.value}`} className="space-y-1">
+                            <p className="font-medium text-foreground/90">{entry.label}</p>
+                            <pre className="overflow-x-auto rounded-2xl border border-border/60 bg-background/90 px-3 py-2 text-xs text-foreground">
+                              <code>{entry.value}</code>
+                            </pre>
+                          </div>
+                        ) : (
+                          <p key={`${entry.label}:${entry.value}`}>
+                            <span className="font-medium text-foreground/90">{entry.label}:</span>{" "}
+                            {entry.value}
+                          </p>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2">
@@ -336,7 +445,7 @@ export function PromptInput({
                 disabled={approvalDecisionPending}
                 onClick={() => void onRespondToApproval("deny")}
               >
-                Deny
+                Don&apos;t allow
               </Button>
               <Button
                 type="button"
@@ -344,13 +453,22 @@ export function PromptInput({
                 disabled={approvalDecisionPending}
                 onClick={() => void onRespondToApproval("approve")}
               >
-                {approvalDecisionPending ? "Waiting..." : "Approve"}
+                {approvalDecisionPending ? "Allowing..." : "Allow"}
               </Button>
             </div>
           </AlertDescription>
         </Alert>
       )}
 
+      <div className="relative">
+        {showSkillPicker && skills.length > 0 && (
+          <SkillPicker
+            skills={skills}
+            filter={skillFilter}
+            onSelect={handleSkillSelect}
+            onDismiss={handleSkillDismiss}
+          />
+        )}
       <RegistryPromptInput
         onSubmit={handleSubmit}
         inputGroupClassName={cn(
@@ -366,10 +484,26 @@ export function PromptInput({
           />
         )}
 
+        {selectedSkill && (
+          <div className="flex items-center gap-1 px-4 pt-2.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+              /{selectedSkill.name}
+              <button
+                type="button"
+                aria-label={`Remove ${selectedSkill.name} skill`}
+                onClick={() => setSelectedSkill(null)}
+                className="ml-0.5 rounded-full opacity-70 hover:opacity-100"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
+          </div>
+        )}
+
         <InputGroupTextarea
           ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={handleTextareaChange}
           onKeyDown={handleKeyDown}
           disabled={!isConnected || disabled}
           name="message"
@@ -460,7 +594,7 @@ export function PromptInput({
               <PromptInputButton
                 aria-label="Stop generating"
                 onClick={onInterrupt}
-                className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className="size-10 rounded-2xl bg-red-600 text-white hover:bg-red-700"
               >
                 <SquareIcon className="size-4 fill-current" />
               </PromptInputButton>
@@ -474,6 +608,7 @@ export function PromptInput({
           </div>
         </PromptInputFooter>
       </RegistryPromptInput>
+      </div>
 
       {attachmentError && (
         <p className="mt-2 px-1 text-xs text-destructive">{attachmentError}</p>

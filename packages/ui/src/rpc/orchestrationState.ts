@@ -151,7 +151,9 @@ function applyTurnEvent(
       ? "completed"
       : turn.status === "interrupted"
         ? "interrupted"
-        : "streaming"
+        : turn.status === "queued"
+          ? "queued"
+          : "streaming"
 
   const threads = current.threads.map((thread) =>
     thread.id === turn.threadId
@@ -259,6 +261,7 @@ function applyDomainEvent(
         ),
         lastSequence: sequence,
       }
+    case "turn.queued":
     case "turn.started":
     case "turn.updated":
     case "turn.completed":
@@ -509,8 +512,9 @@ export async function sendOrchestrationTurn(
   content: string,
   attachments: readonly TurnAttachmentInput[],
   model?: string | null,
+  skillId?: string | null,
 ): Promise<string> {
-  const result = await client.orchestration.sendTurn(threadId, content, attachments, model)
+  const result = await client.orchestration.sendTurn(threadId, content, attachments, model, skillId)
   return result.turnId
 }
 

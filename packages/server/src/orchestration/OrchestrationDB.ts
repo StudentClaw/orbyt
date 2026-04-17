@@ -418,28 +418,46 @@ export function reconcileStaleStreamingState(database: DatabaseService): void {
   const now = new Date().toISOString()
   database.transaction(() => {
     database.execute(
-      `UPDATE orchestration_turns
+      `UPDATE provider_runtime_sessions
        SET status = 'interrupted',
-           completed_at = COALESCE(completed_at, ?),
+           provider_thread_id = NULL,
+           auth_state = COALESCE(auth_state, 'unknown'),
            updated_at = ?
-       WHERE status = 'streaming'`,
-      [now, now],
+       WHERE status IN ('queued', 'streaming')
+          OR thread_id IN (
+            SELECT id
+            FROM orchestration_threads
+            WHERE status IN ('queued', 'streaming')
+               OR current_turn_id IN (
+                 SELECT id
+                 FROM orchestration_turns
+                 WHERE status IN ('pending', 'queued', 'streaming')
+               )
+          )`,
+      [now],
     )
     database.execute(
       `UPDATE orchestration_threads
        SET status = 'interrupted',
            current_turn_id = NULL,
            updated_at = ?
-       WHERE status = 'streaming'`,
+       WHERE status IN ('queued', 'streaming')
+          OR current_turn_id IN (
+            SELECT id
+            FROM orchestration_turns
+            WHERE status IN ('pending', 'queued', 'streaming')
+          )`,
       [now],
     )
     database.execute(
-      `UPDATE provider_runtime_sessions
+      `UPDATE orchestration_turns
        SET status = 'interrupted',
+           completed_at = COALESCE(completed_at, ?),
            updated_at = ?
-       WHERE status = 'streaming'`,
-      [now],
+       WHERE status IN ('pending', 'queued', 'streaming')`,
+      [now, now],
     )
+    database.execute(`DELETE FROM queued_provider_turns`)
   })
 }
 
