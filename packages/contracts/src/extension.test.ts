@@ -42,8 +42,8 @@ const validManifest = {
     ],
   },
   tools: [
-    { name: "get_courses", description: "List Canvas courses available to the student." },
-    { name: "get_coursework", description: "List coursework items across Canvas courses." },
+    { name: "list_courses", description: "List Canvas courses visible to the authenticated student." },
+    { name: "get_my_upcoming_assignments", description: "List upcoming assignments across the student's active Canvas courses." },
   ],
   author: "student-claw",
   homepage: "https://github.com/StudentClaw/student-claw",

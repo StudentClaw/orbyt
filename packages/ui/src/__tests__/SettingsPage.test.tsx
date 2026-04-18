@@ -93,7 +93,7 @@ describe("SettingsPage", () => {
             },
           ],
         },
-        tools: [{ name: "get_courses", description: "List courses" }],
+        tools: [{ name: "list_courses", description: "List courses" }],
         author: "student-claw",
         homepage: "https://github.com/StudentClaw/student-claw",
       },

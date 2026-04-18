@@ -1,4 +1,4 @@
-# Student Claw — Project Summary
+# Orbyt — Project Summary
 
 ## What It Is
 
@@ -42,7 +42,7 @@ Codex CLI subprocess, JSON-RPC protocol, streaming responses, session lifecycle 
 
 ### 2. Canvas Integration
 
-Implemented as a Student Claw-owned TypeScript MCP plugin plus server-side sync orchestration. Course discovery, normalized `CourseWorkItem` tracking, grade retrieval, announcement scraping, and professor-pattern learning. Adaptive background sync (15min active / 1hr tray) with cache-first reads, freshness policy, and typed change events (`AssignmentAdded`, `GradePosted`, etc.) that feed the planner, notifications, and autonomous workflows.
+Implemented as a Orbyt-owned TypeScript MCP plugin plus server-side sync orchestration. Course discovery, normalized `CourseWorkItem` tracking, grade retrieval, announcement scraping, and professor-pattern learning. Adaptive background sync (15min active / 1hr tray) with cache-first reads, freshness policy, and typed change events (`AssignmentAdded`, `GradePosted`, etc.) that feed the planner, notifications, and autonomous workflows.
 
 ### 3. Skill System
 
@@ -139,7 +139,7 @@ When the user sends a message in the Chat UI, the following sequence occurs:
 1. **Intent Recognition** — The AI (via the Codex harness) determines if a tool is needed (e.g., "What assignments are due?").
 2. **Plugin Activation** — The Orchestrator checks if `canvas-mcp` is running. If not, it spawns the process.
 3. **Credential Handshake** — The Orchestrator retrieves encrypted credentials from the Vault and sends a one-time secure runtime payload to the plugin after startup.
-4. **Tool Call** — The Orchestrator sends a JSON-RPC request to the Plugin, for example `callTool("get_coursework")`.
+4. **Tool Call** — The Orchestrator sends a JSON-RPC request to the Plugin, for example `callTool("list_courses")`.
 5. **Result Routing** — The Plugin returns the data; the Orchestrator passes it to the AI to format a natural response for the student.
 
 ### Security & Isolation Standards

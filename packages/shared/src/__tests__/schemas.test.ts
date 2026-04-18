@@ -215,7 +215,7 @@ describe("Extension schema", () => {
           type: "none",
         },
         tools: [
-          { name: "get_courses", description: "List courses" },
+          { name: "list_courses", description: "List courses" },
         ],
         author: "student-claw",
         homepage: "https://github.com/StudentClaw/student-claw",

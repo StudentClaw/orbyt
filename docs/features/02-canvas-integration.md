@@ -108,9 +108,9 @@ Canvas data should not refresh only when the student asks. It should stay curren
 
 **Read model:**
 
-- `get_coursework` is **cache-first** by default
-- The tool can optionally refresh based on arguments like `refresh: "never" | "if_stale" | "force"`
-- Normal reminder-style chat queries should usually stay local and cheap
+- The student-facing Canvas MCP now uses direct student-safe reads for self workflows such as upcoming work, submission status, grades, todo items, discussions, and conversations
+- Self-scoped tools prefer `/users/self/...` style endpoints and assignment reads with embedded submission data instead of enrollment-heavy gradebook patterns
+- Course pages, modules, files, discussions, and messaging are treated as capability-scoped reads that may vary by course or institution
 
 **Freshness policy:**
 
@@ -172,12 +172,37 @@ Canvas Integration is an MCP server, meaning it exposes tools that the AI can ca
 
 | Tool | Description | Parameters |
 | --- | --- | --- |
-| `get_courses` | List all active courses | none |
-| `get_coursework` | Get normalized `CourseWorkItem`s from cache-backed Canvas data | `courseId?`, `sources?`, `dueAfter?`, `dueBefore?`, `includeCompleted?`, `refresh?` |
-| `get_coursework_detail` | Get full detail for a specific coursework item or source object | `courseWorkItemId` |
-| `get_grades` | Get grades for a course | `courseId` |
-| `get_announcements` | Get recent announcements | `courseId?`, `limit?` |
-| `sync_now` | Trigger an immediate full sync | none |
+| `get_my_upcoming_assignments` | List upcoming assignments across the student's active Canvas courses | `days?` |
+| `get_my_submission_status` | Show submitted, pending, and overdue assignment status | `courseId?` |
+| `get_my_course_grades` | Show current grades across active Canvas courses | none |
+| `get_my_todo_items` | List current Canvas todo items | none |
+| `get_my_peer_reviews_todo` | List peer reviews the student still needs to complete | `courseId?` |
+| `list_courses` | List Canvas courses visible to the authenticated student | none |
+| `get_course_details` | Fetch detailed information for one Canvas course | `courseId` |
+| `get_course_content_overview` | Summarize pages, modules, and front-page content for a course | `courseId` |
+| `list_pages` | List readable pages in a Canvas course | `courseId` |
+| `get_page_content` | Fetch the readable content for a Canvas page | `courseId`, `pageId` |
+| `get_page_details` | Fetch metadata for a Canvas page | `courseId`, `pageId` |
+| `get_front_page` | Fetch the course front page when visible | `courseId` |
+| `list_assignments` | List assignments visible to the student in a course | `courseId`, `includeCompleted?` |
+| `get_assignment_details` | Fetch details for a visible assignment | `courseId`, `assignmentId` |
+| `list_modules` | List readable modules in a course | `courseId` |
+| `list_module_items` | List readable items for one module | `courseId`, `moduleId` |
+| `get_course_structure` | Return the readable module and item structure for a course | `courseId` |
+| `list_course_files` | List Canvas files visible to the student in a course | `courseId` |
+| `list_discussion_topics` | List discussion topics visible to the student in a course | `courseId` |
+| `get_discussion_topic_details` | Fetch metadata for a readable discussion topic | `courseId`, `topicId` |
+| `list_discussion_entries` | List readable entries for a discussion topic | `courseId`, `topicId` |
+| `get_discussion_entry_details` | Fetch details for a readable discussion entry | `courseId`, `topicId`, `entryId` |
+| `get_discussion_with_replies` | Fetch a discussion topic with visible replies | `courseId`, `topicId` |
+| `list_conversations` | List Canvas conversations visible to the student | `scope?` |
+| `get_conversation_details` | Fetch details for a conversation visible to the student | `conversationId` |
+| `get_unread_count` | Fetch the student's unread conversation count | none |
+| `search_canvas_tools` | Discover the student-facing Canvas MCP tool surface | `query?`, `category?` |
+| `post_discussion_entry` | Post a new entry to a discussion when participation is allowed | `courseId`, `topicId`, `message` |
+| `reply_to_discussion_entry` | Reply to a discussion entry when participation is allowed | `courseId`, `topicId`, `entryId`, `message` |
+| `mark_conversations_read` | Mark one or more conversations as read | `conversationIds[]` |
+| `download_course_file` | Download a readable Canvas file into the active workspace or another allowed writable path | `courseId`, `fileId`, `destinationPath?` |
 
 ### MCP Protocol
 

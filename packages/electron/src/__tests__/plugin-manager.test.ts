@@ -58,7 +58,7 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
         },
       ],
     },
-    tools: [{ name: "get_courses", description: "List courses" }],
+    tools: [{ name: "list_courses", description: "List courses" }],
     author: "student-claw",
     homepage: "https://github.com/StudentClaw/student-claw",
   },
@@ -182,7 +182,7 @@ describe("PluginManager", () => {
 
   test("delivers stored credentials to a plugin after startup", async () => {
     const sandbox = new FakeSandbox()
-    sandbox.listedTools = [{ name: "get_courses", description: "List courses" }]
+    sandbox.listedTools = [{ name: "list_courses", description: "List courses" }]
     const manager = new PluginManager({
       registry: createRegistry(canvasEntry),
       createSandbox: () => sandbox,
