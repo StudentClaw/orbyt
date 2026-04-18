@@ -1,6 +1,10 @@
 import { Schema } from "@effect/schema"
 import {
   type ActivityFeedEntry,
+  CanvasAssignmentDetailsParams,
+  CanvasCourseContentOverviewParams,
+  CanvasCourseStructureParams,
+  CanvasDownloadCourseFileParams,
   CreateWorkspaceParams,
   CreateThreadParams,
   DeleteThreadParams,
@@ -12,6 +16,10 @@ import {
   RespondToProviderApprovalParams,
   RetryProviderInitializeParams,
   RPC_METHODS,
+  CanvasGetMySubmissionStatusParams,
+  CanvasGetMyPeerReviewsTodoParams,
+  CanvasGetMyUpcomingAssignmentsParams,
+  CanvasListAssignmentsParams,
   RelinkWorkspaceParams,
   RpcErrorResponseEnvelope,
   RpcRequestEnvelope,
@@ -197,14 +205,96 @@ async function handleCanvasMethod(
   request: RpcRequest,
   dependencies: RouteDependencies,
 ): Promise<string | null> {
-  const { id, method } = request
+  const { id, method, params } = request
   switch (method) {
-    case RPC_METHODS.CANVAS_GET_COURSES:
-      return encodeSuccess(id, { courses: dependencies.canvasSync.getCourses() })
-    case RPC_METHODS.CANVAS_GET_COURSEWORK:
-      return encodeSuccess(id, { items: dependencies.canvasSync.getCoursework() })
-    case RPC_METHODS.CANVAS_GET_GRADES:
-      return encodeSuccess(id, { grades: dependencies.canvasSync.getGrades() })
+    case RPC_METHODS.CANVAS_LIST_COURSES:
+      return encodeSuccess(id, { courses: dependencies.canvasSync.listCourses() })
+    case RPC_METHODS.CANVAS_GET_MY_UPCOMING_ASSIGNMENTS: {
+      const decoded = decodeParams(
+        CanvasGetMyUpcomingAssignmentsParams,
+        params,
+        id,
+        "Invalid Canvas upcoming-assignment request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, {
+        items: dependencies.canvasSync.getMyUpcomingAssignments(decoded.days),
+      })
+    }
+    case RPC_METHODS.CANVAS_GET_MY_SUBMISSION_STATUS: {
+      const decoded = decodeParams(
+        CanvasGetMySubmissionStatusParams,
+        params,
+        id,
+        "Invalid Canvas submission-status request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, dependencies.canvasSync.getMySubmissionStatus(decoded.courseId))
+    }
+    case RPC_METHODS.CANVAS_GET_MY_COURSE_GRADES:
+      return encodeSuccess(id, { courses: dependencies.canvasSync.getMyCourseGrades() })
+    case RPC_METHODS.CANVAS_GET_MY_TODO_ITEMS:
+      return encodeSuccess(id, { items: dependencies.canvasSync.getMyTodoItems() })
+    case RPC_METHODS.CANVAS_GET_MY_PEER_REVIEWS_TODO: {
+      const decoded = decodeParams(
+        CanvasGetMyPeerReviewsTodoParams,
+        params,
+        id,
+        "Invalid Canvas peer-review request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, { items: dependencies.canvasSync.getMyPeerReviewsTodo(decoded.courseId) })
+    }
+    case RPC_METHODS.CANVAS_GET_ASSIGNMENT_DETAILS: {
+      const decoded = decodeParams(
+        CanvasAssignmentDetailsParams,
+        params,
+        id,
+        "Invalid Canvas assignment-detail request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, await dependencies.canvasSync.getAssignmentDetails(decoded))
+    }
+    case RPC_METHODS.CANVAS_LIST_ASSIGNMENTS: {
+      const decoded = decodeParams(
+        CanvasListAssignmentsParams,
+        params,
+        id,
+        "Invalid Canvas assignment-list request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, await dependencies.canvasSync.listAssignments(decoded))
+    }
+    case RPC_METHODS.CANVAS_GET_COURSE_CONTENT_OVERVIEW: {
+      const decoded = decodeParams(
+        CanvasCourseContentOverviewParams,
+        params,
+        id,
+        "Invalid Canvas content-overview request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, await dependencies.canvasSync.getCourseContentOverview(decoded))
+    }
+    case RPC_METHODS.CANVAS_GET_COURSE_STRUCTURE: {
+      const decoded = decodeParams(
+        CanvasCourseStructureParams,
+        params,
+        id,
+        "Invalid Canvas course-structure request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, await dependencies.canvasSync.getCourseStructure(decoded))
+    }
+    case RPC_METHODS.CANVAS_DOWNLOAD_COURSE_FILE: {
+      const decoded = decodeParams(
+        CanvasDownloadCourseFileParams,
+        params,
+        id,
+        "Invalid Canvas file-download request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      return encodeSuccess(id, await dependencies.canvasSync.downloadCourseFile(decoded))
+    }
     case RPC_METHODS.CANVAS_SYNC:
       void dependencies.canvasSync.sync()
       return encodeSuccess(id, { queued: true })

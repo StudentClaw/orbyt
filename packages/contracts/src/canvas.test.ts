@@ -3,20 +3,40 @@ import { Schema } from "@effect/schema"
 import {
   Announcement,
   CanvasAnnouncement,
+  CanvasAssignmentDetailsResult,
   CanvasChangeEvent,
   CanvasCourse,
   CanvasCourseworkDetail,
+  CanvasCourseStructureResult,
+  CanvasDownloadCourseFileResult,
   CanvasEnrollment,
-  CanvasGetAnnouncements,
-  CanvasGetCoursework,
-  CanvasGetCourseworkDetail,
-  CanvasGetGrades,
-  CanvasModule,
-  CanvasModuleItem,
-  CanvasPage,
+  CanvasGetAssignmentDetails,
+  CanvasGetCourseContentOverview,
+  CanvasGetMyCourseGrades,
+  CanvasGetMyPeerReviewsTodo,
+  CanvasGetMySubmissionStatus,
+  CanvasGetMyTodoItems,
+  CanvasGetMyUpcomingAssignments,
+  CanvasGetMyUpcomingAssignmentsResult,
+  CanvasGetMySubmissionStatusResult,
+  CanvasGetMyCourseGradesResult,
+  CanvasGetMyTodoItemsResult,
+  CanvasGetMyPeerReviewsTodoResult,
+  CanvasListAssignments,
+  CanvasListAssignmentsResult,
+  CanvasListCourses,
+  CanvasListCoursesResult,
+  CanvasStudentCourseGradeSummary,
+  CanvasStudentTodoItem,
   CanvasSyncProgress,
   CanvasSyncState,
   CanvasSubmission,
+  CanvasCourseContentOverviewResult,
+  CanvasCourseStructureResult,
+  CanvasDownloadCourseFileResult,
+  CanvasModule,
+  CanvasModuleItem,
+  CanvasPage,
   CourseWorkItem,
 } from "./index.js"
 
@@ -273,54 +293,70 @@ describe("canvas contracts", () => {
   })
 
   test("decodes Canvas protocol messages and events", () => {
-    const coursework = Schema.decodeUnknownSync(CanvasGetCoursework)({
-      method: "canvas.getCoursework",
+    const listCourses = Schema.decodeUnknownSync(CanvasListCourses)({
+      method: "canvas.listCourses",
       id: "req-1",
-      params: {
-        courseId: "course_42",
-        sources: ["assignment", "module"],
-        dueAfter: "2026-04-09T00:00:00Z",
-        includeCompleted: false,
-        refresh: "if_stale",
-      },
+      params: {},
     })
 
-    const grades = Schema.decodeUnknownSync(CanvasGetGrades)({
-      method: "canvas.getGrades",
+    const upcoming = Schema.decodeUnknownSync(CanvasGetMyUpcomingAssignments)({
+      method: "canvas.getMyUpcomingAssignments",
       id: "req-2",
       params: {
-        courseId: "course_42",
-        refresh: "force",
+        days: 14,
       },
     })
 
-    const announcements = Schema.decodeUnknownSync(CanvasGetAnnouncements)({
-      method: "canvas.getAnnouncements",
+    const submissionStatus = Schema.decodeUnknownSync(CanvasGetMySubmissionStatus)({
+      method: "canvas.getMySubmissionStatus",
       id: "req-3",
       params: {
         courseId: "course_42",
-        limit: 10,
       },
     })
 
-    const detail = Schema.decodeUnknownSync(CanvasGetCourseworkDetail)({
-      method: "canvas.getCourseworkDetail",
+    const grades = Schema.decodeUnknownSync(CanvasGetMyCourseGrades)({
+      method: "canvas.getMyCourseGrades",
       id: "req-4",
+      params: {},
+    })
+
+    const todoItems = Schema.decodeUnknownSync(CanvasGetMyTodoItems)({
+      method: "canvas.getMyTodoItems",
+      id: "req-5",
+      params: {},
+    })
+
+    const peerReviews = Schema.decodeUnknownSync(CanvasGetMyPeerReviewsTodo)({
+      method: "canvas.getMyPeerReviewsTodo",
+      id: "req-6",
       params: {
-        sourceType: "assignment",
-        sourceId: "101",
         courseId: "course_42",
       },
     })
 
-    const moduleDetail = Schema.decodeUnknownSync(CanvasGetCourseworkDetail)({
-      method: "canvas.getCourseworkDetail",
-      id: "req-5",
+    const assignments = Schema.decodeUnknownSync(CanvasListAssignments)({
+      method: "canvas.listAssignments",
+      id: "req-7",
       params: {
-        sourceType: "module",
-        sourceId: "768",
         courseId: "course_42",
-        moduleId: "123",
+        includeCompleted: false,
+      },
+    })
+
+    const overview = Schema.decodeUnknownSync(CanvasGetCourseContentOverview)({
+      method: "canvas.getCourseContentOverview",
+      id: "req-8",
+      params: {
+        courseId: "course_42",
+      },
+    })
+
+    const detail = Schema.decodeUnknownSync(CanvasGetAssignmentDetails)({
+      method: "canvas.getAssignmentDetails",
+      id: "req-9",
+      params: {
+        assignmentUrl: "https://canvas.example.edu/courses/42/assignments/101",
       },
     })
 
@@ -334,12 +370,172 @@ describe("canvas contracts", () => {
       },
     })
 
-    expect(coursework.params.refresh).toBe("if_stale")
-    expect(grades.params.refresh).toBe("force")
-    expect(announcements.params.limit).toBe(10)
-    expect("sourceType" in detail.params).toBe(true)
-    expect("courseId" in detail.params && detail.params.courseId).toBe("course_42")
-    expect("moduleId" in moduleDetail.params && moduleDetail.params.moduleId).toBe("123")
+    expect(listCourses.method).toBe("canvas.listCourses")
+    expect(upcoming.params.days).toBe(14)
+    expect(submissionStatus.params.courseId).toBe("course_42")
+    expect(grades.method).toBe("canvas.getMyCourseGrades")
+    expect(todoItems.method).toBe("canvas.getMyTodoItems")
+    expect(peerReviews.params.courseId).toBe("course_42")
+    expect(assignments.params.includeCompleted).toBe(false)
+    expect(overview.params.courseId).toBe("course_42")
+    expect(detail.params.assignmentUrl).toContain("/assignments/101")
     expect(syncProgress.data.progress).toBe(0.75)
+  })
+
+  test("decodes student-first Canvas runtime result shapes", () => {
+    const course = {
+      id: "course_42",
+      name: "Biology 101",
+      code: "BIO101",
+      professor: "Dr. Ada Lovelace",
+      canvasId: "42",
+      term: "Spring 2026",
+      lastSyncAt: "2026-04-09T12:00:00Z",
+    }
+
+    const item = {
+      id: "cw_101",
+      courseId: "course_42",
+      title: "Problem Set 3",
+      effectiveDueAt: "2026-04-12T23:59:00Z",
+      sourceType: "assignment",
+      sourceId: "101",
+      freshnessStatus: "fresh",
+      htmlUrl: "https://canvas.example.edu/courses/42/assignments/101",
+      pointsPossible: 20,
+      submissionStatus: "submitted",
+      grade: "18/20",
+    }
+
+    const listCourses = Schema.decodeUnknownSync(CanvasListCoursesResult)({
+      courses: [course],
+    })
+
+    const upcoming = Schema.decodeUnknownSync(CanvasGetMyUpcomingAssignmentsResult)({
+      items: [item],
+    })
+
+    const submissionStatus = Schema.decodeUnknownSync(CanvasGetMySubmissionStatusResult)({
+      submitted: [item],
+      pending: [],
+      overdue: [],
+    })
+
+    const grades = Schema.decodeUnknownSync(CanvasGetMyCourseGradesResult)({
+      courses: [
+        {
+          course,
+          currentScore: 91.2,
+          currentGrade: "A-",
+          finalScore: 92.5,
+          finalGrade: "A-",
+        } satisfies CanvasStudentCourseGradeSummary,
+      ],
+    })
+
+    const todo = Schema.decodeUnknownSync(CanvasGetMyTodoItemsResult)({
+      items: [
+        {
+          courseId: "course_42",
+          title: "Read chapter 6",
+          type: "assignment",
+          dueAt: "2026-04-10T10:00:00Z",
+          htmlUrl: "https://canvas.example.edu/courses/42/assignments/102",
+        } satisfies CanvasStudentTodoItem,
+      ],
+    })
+
+    const peerReviews = Schema.decodeUnknownSync(CanvasGetMyPeerReviewsTodoResult)({
+      items: [{
+        courseId: "course_42",
+        assignmentId: "101",
+        assignmentName: "Problem Set 3",
+        workflowState: "assigned",
+      }],
+    })
+
+    const assignments = Schema.decodeUnknownSync(CanvasListAssignmentsResult)({
+      course,
+      items: [item],
+    })
+
+    const overview = Schema.decodeUnknownSync(CanvasCourseContentOverviewResult)({
+      course,
+      pageCount: 2,
+      moduleCount: 1,
+      moduleItemCount: 3,
+      frontPage: undefined,
+    })
+
+    const detail = Schema.decodeUnknownSync(CanvasAssignmentDetailsResult)({
+      course,
+      item,
+      source: {
+        id: 101,
+        course_id: 42,
+        name: "Problem Set 3",
+        due_at: "2026-04-12T23:59:00Z",
+        points_possible: 20,
+        submission_types: ["online_upload"],
+        published: true,
+      },
+      grade: {
+        courseId: "course_42",
+        assignmentId: "101",
+        score: 18,
+        maxScore: 20,
+        letterGrade: "A-",
+      },
+    })
+
+    const structure = Schema.decodeUnknownSync(CanvasCourseStructureResult)({
+      course,
+      modules: [
+        {
+          module: {
+            id: 5,
+            name: "Week 3",
+            position: 1,
+            require_sequential_progress: false,
+            published: true,
+            items_count: 1,
+            items_url: "https://canvas.example.edu/api/v1/courses/42/modules/5/items",
+          },
+          items: [
+            {
+              id: 768,
+              module_id: 5,
+              position: 1,
+              title: "Square Roots",
+              type: "Assignment",
+              content_id: 101,
+              html_url: "https://canvas.example.edu/courses/42/modules/items/768",
+            },
+          ],
+        },
+      ],
+    })
+
+    const download = Schema.decodeUnknownSync(CanvasDownloadCourseFileResult)({
+      success: true,
+      courseId: "course_42",
+      fileId: "file_1",
+      filename: "linkedlist.c",
+      savedPath: "/tmp/linkedlist.c",
+      overwritten: false,
+      message: "Saved linkedlist.c",
+    })
+
+    expect(listCourses.courses).toHaveLength(1)
+    expect(upcoming.items[0].title).toBe("Problem Set 3")
+    expect(submissionStatus.submitted).toHaveLength(1)
+    expect(grades.courses[0].currentGrade).toBe("A-")
+    expect(todo.items[0].title).toContain("Read chapter")
+    expect(peerReviews.items[0].assignmentId).toBe("101")
+    expect(assignments.items[0].sourceId).toBe("101")
+    expect(overview.pageCount).toBe(2)
+    expect(detail.item.title).toBe("Problem Set 3")
+    expect(structure.modules[0].items[0].title).toBe("Square Roots")
+    expect(download.savedPath).toBe("/tmp/linkedlist.c")
   })
 })

@@ -1,4 +1,4 @@
-import type { Course, Grade } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course } from "@student-claw/contracts"
 import {
   computeGradeTrend,
   computeCourseGradePercentage,
@@ -7,7 +7,7 @@ import {
 
 interface GradeOverviewProps {
   readonly courses: ReadonlyArray<Course>
-  readonly grades: ReadonlyArray<Grade>
+  readonly grades: ReadonlyArray<CanvasStudentCourseGradeSummary>
 }
 
 function percentageToLetter(pct: number): string {

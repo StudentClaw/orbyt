@@ -1,26 +1,48 @@
 import { Context, Effect, Layer } from "effect"
 import { Schema } from "@effect/schema"
 import {
-  CanvasGetCoursesResult,
-  CanvasGetCourseworkResult,
-  CanvasGetGradesResult,
+  CanvasAssignmentDetailsParams,
+  CanvasAssignmentDetailsResult,
+  CanvasCourseContentOverviewParams,
+  CanvasCourseContentOverviewResult,
+  CanvasCourseStructureParams,
+  CanvasCourseStructureResult,
+  CanvasDownloadCourseFileParams,
+  CanvasDownloadCourseFileResult,
+  CanvasGetMyCourseGradesResult,
+  CanvasGetMyPeerReviewsTodoResult,
+  CanvasGetMySubmissionStatusParams,
+  CanvasGetMySubmissionStatusResult,
+  CanvasGetMyTodoItemsResult,
+  CanvasGetMyUpcomingAssignmentsResult,
+  CanvasListAssignmentsParams,
+  CanvasListAssignmentsResult,
+  CanvasListCoursesResult,
   PUSH_CHANNELS,
-  type GatewayToolCallFailure,
+  type CanvasStudentCourseGradeSummary,
+  type CanvasStudentPeerReviewTodo,
+  type CanvasStudentTodoItem,
   type Course,
   type CourseWorkItem,
-  type Grade,
+  type GatewayToolCallFailure,
 } from "@student-claw/contracts"
 import { PluginGateway, type PluginGatewayService } from "../mcp/PluginGateway.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
 
-const TOOL_GET_COURSES = "canvas.get_courses"
-const TOOL_GET_COURSEWORK = "canvas.get_coursework"
-const TOOL_GET_GRADES = "canvas.get_grades"
+const TOOL_LIST_COURSES = "canvas.list_courses"
+const TOOL_GET_MY_UPCOMING_ASSIGNMENTS = "canvas.get_my_upcoming_assignments"
+const TOOL_GET_MY_SUBMISSION_STATUS = "canvas.get_my_submission_status"
+const TOOL_GET_MY_COURSE_GRADES = "canvas.get_my_course_grades"
+const TOOL_GET_MY_TODO_ITEMS = "canvas.get_my_todo_items"
+const TOOL_GET_MY_PEER_REVIEWS_TODO = "canvas.get_my_peer_reviews_todo"
+const TOOL_GET_ASSIGNMENT_DETAILS = "canvas.get_assignment_details"
+const TOOL_LIST_ASSIGNMENTS = "canvas.list_assignments"
+const TOOL_GET_COURSE_CONTENT_OVERVIEW = "canvas.get_course_content_overview"
+const TOOL_GET_COURSE_STRUCTURE = "canvas.get_course_structure"
+const TOOL_DOWNLOAD_COURSE_FILE = "canvas.download_course_file"
 
-const ALL_SOURCES = ["assignment", "module", "page", "announcement"] as const
-const COURSE_ID_PREFIX = "canvas-course:"
-const COURSEWORK_ID_PREFIX = "canvas-coursework:"
+type SubmissionBucket = "submitted" | "pending" | "overdue"
 
 type CourseRow = {
   id: string
@@ -44,24 +66,58 @@ type CourseworkRow = {
   grade: string | null
   html_url: string | null
   canvas_assignment_id: string | null
+  is_upcoming: number | null
+  status_bucket: SubmissionBucket | null
 }
 
-type GradeRow = {
-  id: string
+type CourseGradeSummaryRow = {
   course_id: string
+  current_score: number | null
+  current_grade: string | null
+  final_score: number | null
+  final_grade: string | null
+}
+
+type TodoItemRow = {
+  course_id: string | null
   title: string
-  grade: string | null
-  points_possible: number | null
-  points_earned: number | null
-  submission_status: string | null
-  canvas_assignment_id: string | null
+  type: string
+  due_at: string | null
+  html_url: string | null
+}
+
+type PeerReviewTodoRow = {
+  course_id: string
+  assignment_id: string
+  assignment_name: string
+  reviewee_user_id: string | null
+  assessor_user_id: string | null
+  workflow_state: string | null
+}
+
+type SyncedAssignmentRecord = {
+  item: CourseWorkItem
+  isUpcoming: boolean
+  statusBucket?: SubmissionBucket
 }
 
 export interface CanvasSyncServiceShape {
   readonly sync: () => Promise<void>
-  readonly getCourses: () => Course[]
-  readonly getCoursework: () => CourseWorkItem[]
-  readonly getGrades: () => Grade[]
+  readonly listCourses: () => Course[]
+  readonly getMyUpcomingAssignments: (days?: number) => CourseWorkItem[]
+  readonly getMySubmissionStatus: (courseId?: string) => {
+    submitted: CourseWorkItem[]
+    pending: CourseWorkItem[]
+    overdue: CourseWorkItem[]
+  }
+  readonly getMyCourseGrades: () => CanvasStudentCourseGradeSummary[]
+  readonly getMyTodoItems: () => CanvasStudentTodoItem[]
+  readonly getMyPeerReviewsTodo: (courseId?: string) => CanvasStudentPeerReviewTodo[]
+  readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<CanvasAssignmentDetailsResult>
+  readonly listAssignments: (params: CanvasListAssignmentsParams) => Promise<CanvasListAssignmentsResult>
+  readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<CanvasCourseContentOverviewResult>
+  readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<CanvasCourseStructureResult>
+  readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<CanvasDownloadCourseFileResult>
 }
 
 export class CanvasSyncService extends Context.Tag("CanvasSyncService")<
@@ -96,12 +152,6 @@ function readToolText(result: unknown): string | null {
   return null
 }
 
-function decodeCanvasCourseId(encodedCourseId: string): string {
-  return encodedCourseId.startsWith(COURSE_ID_PREFIX)
-    ? encodedCourseId.slice(COURSE_ID_PREFIX.length)
-    : encodedCourseId
-}
-
 function readStructuredToolResult(
   toolName: string,
   result: unknown,
@@ -133,35 +183,187 @@ function readStructuredToolResult(
   }
 }
 
-function tryDecodeCoursesResult(raw: unknown): { ok: true; courses: Course[] } | { ok: false } {
-  try {
-    const decoded = Schema.decodeUnknownSync(CanvasGetCoursesResult)(raw)
-    return { ok: true, courses: [...decoded.courses] }
-  } catch (error) {
-    logError("failed to decode canvas.get_courses result", error)
-    return { ok: false }
-  }
-}
-
-function tryDecodeCourseworkResult(
+function decodeResult<A>(
+  schema: Schema.Schema<A, any, never>,
+  toolName: string,
   raw: unknown,
-): { ok: true; items: CourseWorkItem[] } | { ok: false } {
+): A {
   try {
-    const decoded = Schema.decodeUnknownSync(CanvasGetCourseworkResult)(raw)
-    return { ok: true, items: [...decoded.items] }
+    return Schema.decodeUnknownSync(schema)(raw)
   } catch (error) {
-    logError("failed to decode canvas.get_coursework result", error)
-    return { ok: false }
+    logError(`failed to decode ${toolName} result`, error)
+    throw error
   }
 }
 
-function tryDecodeGradesResult(raw: unknown): { ok: true; grades: Grade[] } | { ok: false } {
-  try {
-    const decoded = Schema.decodeUnknownSync(CanvasGetGradesResult)(raw)
-    return { ok: true, grades: [...decoded.grades] }
-  } catch (error) {
-    logError("failed to decode canvas.get_grades result", error)
-    return { ok: false }
+function toNullableNumber(value: number | undefined): number | null {
+  return value ?? null
+}
+
+function courseSort(left: Course, right: Course): number {
+  return left.name.localeCompare(right.name)
+}
+
+function courseworkSort(left: CourseWorkItem, right: CourseWorkItem): number {
+  const leftDue = left.effectiveDueAt ? new Date(left.effectiveDueAt).getTime() : Number.POSITIVE_INFINITY
+  const rightDue = right.effectiveDueAt ? new Date(right.effectiveDueAt).getTime() : Number.POSITIVE_INFINITY
+  if (leftDue !== rightDue) {
+    return leftDue - rightDue
+  }
+  return left.title.localeCompare(right.title)
+}
+
+function mergeItem(base: CourseWorkItem | undefined, next: CourseWorkItem): CourseWorkItem {
+  if (!base) return next
+  return {
+    ...base,
+    title: next.title || base.title,
+    effectiveDueAt: next.effectiveDueAt ?? base.effectiveDueAt,
+    sourceType: next.sourceType ?? base.sourceType,
+    sourceId: next.sourceId ?? base.sourceId,
+    freshnessStatus: next.freshnessStatus ?? base.freshnessStatus,
+    pointsPossible: next.pointsPossible ?? base.pointsPossible,
+    submissionStatus: next.submissionStatus ?? base.submissionStatus,
+    grade: next.grade ?? base.grade,
+    htmlUrl: next.htmlUrl ?? base.htmlUrl,
+  }
+}
+
+function extractAssignmentMap(
+  upcoming: readonly CourseWorkItem[],
+  submissionStatus: CanvasGetMySubmissionStatusResult,
+): Map<string, SyncedAssignmentRecord> {
+  const records = new Map<string, SyncedAssignmentRecord>()
+
+  for (const item of upcoming) {
+    records.set(item.id, {
+      item,
+      isUpcoming: true,
+    })
+  }
+
+  const buckets: ReadonlyArray<readonly [SubmissionBucket, readonly CourseWorkItem[]]> = [
+    ["submitted", submissionStatus.submitted],
+    ["pending", submissionStatus.pending],
+    ["overdue", submissionStatus.overdue],
+  ]
+
+  for (const [bucket, items] of buckets) {
+    for (const item of items) {
+      const existing = records.get(item.id)
+      records.set(item.id, {
+        item: mergeItem(existing?.item, item),
+        isUpcoming: existing?.isUpcoming ?? false,
+        statusBucket: bucket,
+      })
+    }
+  }
+
+  return records
+}
+
+function replaceAssignmentState(
+  database: DatabaseService,
+  records: ReadonlyMap<string, SyncedAssignmentRecord>,
+): void {
+  database.execute("DELETE FROM coursework_items")
+
+  for (const record of records.values()) {
+    const item = record.item
+    database.execute(
+      `INSERT INTO coursework_items
+         (id, course_id, title, effective_due_at, source_type, freshness_status,
+          points_possible, submission_status, grade, html_url, canvas_assignment_id, is_upcoming, status_bucket)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        item.id,
+        item.courseId,
+        item.title,
+        item.effectiveDueAt ?? null,
+        item.sourceType,
+        item.freshnessStatus,
+        item.pointsPossible ?? null,
+        item.submissionStatus ?? null,
+        item.grade ?? null,
+        item.htmlUrl ?? null,
+        item.sourceId,
+        record.isUpcoming ? 1 : 0,
+        record.statusBucket ?? null,
+      ],
+    )
+  }
+}
+
+function replaceCourseGradeSummaries(
+  database: DatabaseService,
+  summaries: readonly CanvasStudentCourseGradeSummary[],
+): void {
+  database.execute("DELETE FROM canvas_course_grade_summaries")
+  for (const summary of summaries) {
+    database.execute(
+      `INSERT INTO canvas_course_grade_summaries
+         (course_id, current_score, current_grade, final_score, final_grade)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        summary.course.id,
+        toNullableNumber(summary.currentScore),
+        summary.currentGrade ?? null,
+        toNullableNumber(summary.finalScore),
+        summary.finalGrade ?? null,
+      ],
+    )
+  }
+}
+
+function replaceTodoItems(
+  database: DatabaseService,
+  items: readonly CanvasStudentTodoItem[],
+): void {
+  database.execute("DELETE FROM canvas_todo_items")
+  for (const item of items) {
+    database.execute(
+      `INSERT INTO canvas_todo_items (course_id, title, type, due_at, html_url)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        item.courseId ?? null,
+        item.title,
+        item.type,
+        item.dueAt ?? null,
+        item.htmlUrl ?? null,
+      ],
+    )
+  }
+}
+
+function buildPeerReviewRowId(item: CanvasStudentPeerReviewTodo): string {
+  return [
+    item.courseId,
+    item.assignmentId,
+    item.revieweeUserId ?? "none",
+    item.assessorUserId ?? "none",
+  ].join(":")
+}
+
+function replacePeerReviewTodo(
+  database: DatabaseService,
+  items: readonly CanvasStudentPeerReviewTodo[],
+): void {
+  database.execute("DELETE FROM canvas_peer_review_todo")
+  for (const item of items) {
+    database.execute(
+      `INSERT INTO canvas_peer_review_todo
+         (id, course_id, assignment_id, assignment_name, reviewee_user_id, assessor_user_id, workflow_state)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        buildPeerReviewRowId(item),
+        item.courseId,
+        item.assignmentId,
+        item.assignmentName,
+        item.revieweeUserId ?? null,
+        item.assessorUserId ?? null,
+        item.workflowState ?? null,
+      ],
+    )
   }
 }
 
@@ -178,65 +380,125 @@ function upsertCourses(database: DatabaseService, courses: readonly Course[]): v
         course.professor ?? null,
         course.canvasId ?? null,
         course.term ?? null,
-        syncedAt,
+        course.lastSyncAt ?? syncedAt,
       ],
     )
   }
 }
 
-function extractCanvasAssignmentId(item: CourseWorkItem): string | null {
-  if (item.sourceType !== "assignment") return null
-  return item.sourceId || null
+async function callDecodedTool<A>(
+  gateway: PluginGatewayService,
+  toolName: string,
+  args: Record<string, unknown>,
+  schema: Schema.Schema<A, any, never>,
+): Promise<A> {
+  const callResult = await gateway.callTool(toolName, args)
+  if (!callResult.ok) {
+    logGatewayFailure(`${toolName} call failed`, callResult)
+    throw new Error(callResult.message)
+  }
+
+  const toolResult = readStructuredToolResult(toolName, callResult.result)
+  if (!toolResult.ok) {
+    throw new Error(toolResult.message)
+  }
+
+  return decodeResult(schema, toolName, toolResult.data)
 }
 
-function upsertCoursework(database: DatabaseService, items: readonly CourseWorkItem[]): void {
-  for (const item of items) {
-    database.execute(
-      `INSERT OR REPLACE INTO coursework_items
-         (id, course_id, title, effective_due_at, source_type, freshness_status,
-          points_possible, submission_status, grade, html_url, canvas_assignment_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        item.id,
-        item.courseId,
-        item.title,
-        item.effectiveDueAt ?? null,
-        item.sourceType,
-        item.freshnessStatus,
-        item.pointsPossible ?? null,
-        item.submissionStatus ?? null,
-        item.grade ?? null,
-        item.htmlUrl ?? null,
-        extractCanvasAssignmentId(item),
-      ],
-    )
-  }
+function readCourses(database: DatabaseService): Course[] {
+  const rows = database.query<CourseRow>(
+    `SELECT id, name, code, professor, canvas_id, term, last_sync_at FROM courses ORDER BY name ASC`,
+  )
+  return rows.map<Course>((row) => ({
+    id: row.id as Course["id"],
+    name: row.name,
+    code: row.code,
+    professor: row.professor ?? undefined,
+    canvasId: row.canvas_id ?? undefined,
+    term: row.term ?? undefined,
+    lastSyncAt: row.last_sync_at ?? undefined,
+  }))
 }
 
-function upsertGrades(database: DatabaseService, grades: readonly Grade[]): void {
-  for (const grade of grades) {
-    const canvasCourseId = decodeCanvasCourseId(grade.courseId)
-    const expectedId = `${COURSEWORK_ID_PREFIX}assignment:${canvasCourseId}:${grade.assignmentId}`
-    database.execute(
-      `UPDATE coursework_items
-       SET grade = ?,
-           points_earned = ?,
-           points_possible = ?,
-           submission_status = 'graded',
-           canvas_assignment_id = COALESCE(canvas_assignment_id, ?)
-       WHERE id = ?
-         AND source_type = 'assignment'
-         AND course_id = ?`,
-      [
-        grade.letterGrade ?? String(grade.score),
-        grade.score,
-        grade.maxScore,
-        grade.assignmentId,
-        expectedId,
-        grade.courseId,
-      ],
-    )
-  }
+function readAssignments(database: DatabaseService): Array<CourseWorkItem & {
+  readonly isUpcoming: boolean
+  readonly statusBucket?: SubmissionBucket
+}> {
+  const rows = database.query<CourseworkRow>(
+    `SELECT id, course_id, title, effective_due_at, source_type, freshness_status,
+            points_possible, submission_status, grade, html_url, canvas_assignment_id,
+            is_upcoming, status_bucket
+     FROM coursework_items
+     WHERE source_type = 'assignment'
+     ORDER BY effective_due_at ASC NULLS LAST`,
+  )
+
+  return rows.map((row) => ({
+    id: row.id as CourseWorkItem["id"],
+    courseId: row.course_id as CourseWorkItem["courseId"],
+    title: row.title,
+    effectiveDueAt: row.effective_due_at ?? undefined,
+    sourceType: "assignment" as const,
+    sourceId: row.canvas_assignment_id ?? row.id,
+    freshnessStatus: row.freshness_status as CourseWorkItem["freshnessStatus"],
+    pointsPossible: row.points_possible ?? undefined,
+    submissionStatus: row.submission_status ?? undefined,
+    grade: row.grade ?? undefined,
+    htmlUrl: row.html_url ?? undefined,
+    isUpcoming: row.is_upcoming === 1,
+    statusBucket: row.status_bucket ?? undefined,
+  })).sort(courseworkSort)
+}
+
+function readCourseGradeSummaries(database: DatabaseService): CanvasStudentCourseGradeSummary[] {
+  const courses = new Map(readCourses(database).map((course) => [course.id, course]))
+  const rows = database.query<CourseGradeSummaryRow>(
+    `SELECT course_id, current_score, current_grade, final_score, final_grade
+     FROM canvas_course_grade_summaries
+     ORDER BY course_id ASC`,
+  )
+
+  return rows.flatMap<CanvasStudentCourseGradeSummary>((row) => {
+    const course = courses.get(row.course_id as Course["id"])
+    if (!course) return []
+    return [{
+      course,
+      currentScore: row.current_score ?? undefined,
+      currentGrade: row.current_grade ?? undefined,
+      finalScore: row.final_score ?? undefined,
+      finalGrade: row.final_grade ?? undefined,
+    }]
+  })
+}
+
+function readTodoItems(database: DatabaseService): CanvasStudentTodoItem[] {
+  const rows = database.query<TodoItemRow>(
+    `SELECT course_id, title, type, due_at, html_url FROM canvas_todo_items ORDER BY due_at ASC NULLS LAST`,
+  )
+  return rows.map<CanvasStudentTodoItem>((row) => ({
+    courseId: row.course_id ? (row.course_id as CanvasStudentTodoItem["courseId"]) : undefined,
+    title: row.title,
+    type: row.type,
+    dueAt: row.due_at ?? undefined,
+    htmlUrl: row.html_url ?? undefined,
+  }))
+}
+
+function readPeerReviewTodo(database: DatabaseService): CanvasStudentPeerReviewTodo[] {
+  const rows = database.query<PeerReviewTodoRow>(
+    `SELECT course_id, assignment_id, assignment_name, reviewee_user_id, assessor_user_id, workflow_state
+     FROM canvas_peer_review_todo
+     ORDER BY assignment_name ASC`,
+  )
+  return rows.map<CanvasStudentPeerReviewTodo>((row) => ({
+    courseId: row.course_id as CanvasStudentPeerReviewTodo["courseId"],
+    assignmentId: row.assignment_id,
+    assignmentName: row.assignment_name,
+    revieweeUserId: row.reviewee_user_id ?? undefined,
+    assessorUserId: row.assessor_user_id ?? undefined,
+    workflowState: row.workflow_state ?? undefined,
+  }))
 }
 
 export function createSyncService(
@@ -254,130 +516,66 @@ export function createSyncService(
     })
 
     try {
-      const coursesCallResult = await gateway.callTool(TOOL_GET_COURSES, {})
-      if (!coursesCallResult.ok) {
-        logGatewayFailure("canvas.get_courses call failed", coursesCallResult)
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
+      const courses = [...(await callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult)).courses]
+        .sort(courseSort)
+      const upcomingAssignments = await callDecodedTool(
+        gateway,
+        TOOL_GET_MY_UPCOMING_ASSIGNMENTS,
+        {},
+        CanvasGetMyUpcomingAssignmentsResult,
+      )
+      const submissionStatus = await callDecodedTool(
+        gateway,
+        TOOL_GET_MY_SUBMISSION_STATUS,
+        {},
+        CanvasGetMySubmissionStatusResult,
+      )
+      const courseGrades = await callDecodedTool(
+        gateway,
+        TOOL_GET_MY_COURSE_GRADES,
+        {},
+        CanvasGetMyCourseGradesResult,
+      )
+
+      void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
+        courseId: "",
+        progress: 65,
+        status: "syncing",
+      })
+
+      let todoItems: CanvasStudentTodoItem[] = []
+      try {
+        todoItems = (await callDecodedTool(
+          gateway,
+          TOOL_GET_MY_TODO_ITEMS,
+          {},
+          CanvasGetMyTodoItemsResult,
+        )).items.slice()
+      } catch (error) {
+        logError("optional canvas todo sync failed", error)
       }
 
-      const coursesToolResult = readStructuredToolResult(TOOL_GET_COURSES, coursesCallResult.result)
-      if (!coursesToolResult.ok) {
-        logError("canvas.get_courses tool error", coursesToolResult.message)
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
+      let peerReviewsTodo: CanvasStudentPeerReviewTodo[] = []
+      try {
+        peerReviewsTodo = (await callDecodedTool(
+          gateway,
+          TOOL_GET_MY_PEER_REVIEWS_TODO,
+          {},
+          CanvasGetMyPeerReviewsTodoResult,
+        )).items.slice()
+      } catch (error) {
+        logError("optional canvas peer review sync failed", error)
       }
 
-      const coursesDecode = tryDecodeCoursesResult(coursesToolResult.data)
-      if (!coursesDecode.ok) {
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
-      }
+      const assignmentRecords = extractAssignmentMap(upcomingAssignments.items, submissionStatus)
 
-      const courses = coursesDecode.courses
-      if (courses.length > 0) {
+      database.transaction(() => {
         upsertCourses(database, courses)
-      }
-
-      void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-        courseId: "",
-        progress: 10,
-        status: "syncing",
+        replaceAssignmentState(database, assignmentRecords)
+        replaceCourseGradeSummaries(database, courseGrades.courses)
+        replaceTodoItems(database, todoItems)
+        replacePeerReviewTodo(database, peerReviewsTodo)
       })
-
-      const courseworkCallResult = await gateway.callTool(TOOL_GET_COURSEWORK, {
-        sources: ALL_SOURCES,
-        includeCompleted: true,
-      })
-
-      if (!courseworkCallResult.ok) {
-        logGatewayFailure("canvas.get_coursework call failed", courseworkCallResult)
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
-      }
-
-      const courseworkToolResult = readStructuredToolResult(
-        TOOL_GET_COURSEWORK,
-        courseworkCallResult.result,
-      )
-      if (!courseworkToolResult.ok) {
-        logError("canvas.get_coursework tool error", courseworkToolResult.message)
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
-      }
-
-      const courseworkDecode = tryDecodeCourseworkResult(courseworkToolResult.data)
-      if (!courseworkDecode.ok) {
-        void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-          courseId: "",
-          progress: 0,
-          status: "error",
-        })
-        return
-      }
-
-      if (courseworkDecode.items.length > 0) {
-        upsertCoursework(database, courseworkDecode.items)
-      }
-
-      void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
-        courseId: "",
-        progress: 70,
-        status: "syncing",
-      })
-
-      const gradesCallResults = await Promise.allSettled(
-        courses.map((course) => gateway.callTool(TOOL_GET_GRADES, { courseId: course.id })),
-      )
-
-      for (const [index, result] of gradesCallResults.entries()) {
-        if (result.status === "rejected") {
-          logError(`canvas.get_grades rejected for course ${courses[index]?.id ?? "?"}`, result.reason)
-          continue
-        }
-        if (!result.value.ok) {
-          logGatewayFailure(
-            `canvas.get_grades failed for course ${courses[index]?.id ?? "?"}`,
-            result.value,
-          )
-          continue
-        }
-        const gradeToolResult = readStructuredToolResult(
-          TOOL_GET_GRADES,
-          result.value.result,
-        )
-        if (!gradeToolResult.ok) {
-          logError(
-            `canvas.get_grades tool error for course ${courses[index]?.id ?? "?"}`,
-            gradeToolResult.message,
-          )
-          continue
-        }
-        const gradesDecode = tryDecodeGradesResult(gradeToolResult.data)
-        if (gradesDecode.ok && gradesDecode.grades.length > 0) {
-          upsertGrades(database, gradesDecode.grades)
-        }
-      }
 
       void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
         courseId: "",
@@ -402,62 +600,95 @@ export function createSyncService(
     return inFlight
   }
 
-  function getCourses(): Course[] {
-    const rows = database.query<CourseRow>(
-      `SELECT id, name, code, professor, canvas_id, term, last_sync_at FROM courses ORDER BY name ASC`,
-    )
-    return rows.map<Course>((row) => ({
-      id: row.id as Course["id"],
-      name: row.name,
-      code: row.code,
-      professor: row.professor ?? undefined,
-      canvasId: row.canvas_id ?? undefined,
-      term: row.term ?? undefined,
-      lastSyncAt: row.last_sync_at ?? undefined,
-    }))
+  function listCourses(): Course[] {
+    return readCourses(database)
   }
 
-  function getCoursework(): CourseWorkItem[] {
-    const rows = database.query<CourseworkRow>(
-      `SELECT id, course_id, title, effective_due_at, source_type, freshness_status,
-              points_possible, submission_status, grade, html_url, canvas_assignment_id
-       FROM coursework_items
-       ORDER BY effective_due_at ASC NULLS LAST`,
-    )
-    return rows.map<CourseWorkItem>((row) => ({
-      id: row.id as CourseWorkItem["id"],
-      courseId: row.course_id as CourseWorkItem["courseId"],
-      title: row.title,
-      effectiveDueAt: row.effective_due_at ?? undefined,
-      sourceType: row.source_type as CourseWorkItem["sourceType"],
-      sourceId: row.canvas_assignment_id ?? row.id,
-      freshnessStatus: row.freshness_status as CourseWorkItem["freshnessStatus"],
-      pointsPossible: row.points_possible ?? undefined,
-      submissionStatus: row.submission_status ?? undefined,
-      grade: row.grade ?? undefined,
-      htmlUrl: row.html_url ?? undefined,
-    }))
+  function getMyUpcomingAssignments(days?: number): CourseWorkItem[] {
+    const all = readAssignments(database).filter((item) => item.isUpcoming)
+    if (days === undefined) return all
+
+    const cutoff = Date.now() + days * 24 * 60 * 60 * 1000
+    return all.filter((item) => {
+      if (!item.effectiveDueAt) return false
+      return new Date(item.effectiveDueAt).getTime() <= cutoff
+    })
   }
 
-  function getGrades(): Grade[] {
-    const rows = database.query<GradeRow>(
-      `SELECT id, course_id, title, grade, points_possible, points_earned,
-              submission_status, canvas_assignment_id
-       FROM coursework_items
-       WHERE (points_earned IS NOT NULL OR grade IS NOT NULL)
-         AND source_type = 'assignment'
-       ORDER BY course_id ASC`,
-    )
-    return rows.map<Grade>((row) => ({
-      courseId: row.course_id as Grade["courseId"],
-      assignmentId: row.canvas_assignment_id ?? row.id,
-      score: row.points_earned ?? 0,
-      maxScore: row.points_possible ?? 0,
-      letterGrade: row.grade ?? undefined,
-    }))
+  function getMySubmissionStatus(courseId?: string): {
+    submitted: CourseWorkItem[]
+    pending: CourseWorkItem[]
+    overdue: CourseWorkItem[]
+  } {
+    const items = readAssignments(database).filter((item) => !courseId || item.courseId === courseId)
+    return {
+      submitted: items.filter((item) => item.statusBucket === "submitted"),
+      pending: items.filter((item) => item.statusBucket === "pending"),
+      overdue: items.filter((item) => item.statusBucket === "overdue"),
+    }
   }
 
-  return { sync, getCourses, getCoursework, getGrades }
+  function getMyCourseGrades(): CanvasStudentCourseGradeSummary[] {
+    return readCourseGradeSummaries(database)
+  }
+
+  function getMyTodoItems(): CanvasStudentTodoItem[] {
+    return readTodoItems(database)
+  }
+
+  function getMyPeerReviewsTodo(courseId?: string): CanvasStudentPeerReviewTodo[] {
+    return readPeerReviewTodo(database).filter((item) => !courseId || item.courseId === courseId)
+  }
+
+  async function getAssignmentDetails(
+    params: CanvasAssignmentDetailsParams,
+  ): Promise<CanvasAssignmentDetailsResult> {
+    return callDecodedTool(gateway, TOOL_GET_ASSIGNMENT_DETAILS, params, CanvasAssignmentDetailsResult)
+  }
+
+  async function listAssignments(
+    params: CanvasListAssignmentsParams,
+  ): Promise<CanvasListAssignmentsResult> {
+    return callDecodedTool(gateway, TOOL_LIST_ASSIGNMENTS, params, CanvasListAssignmentsResult)
+  }
+
+  async function getCourseContentOverview(
+    params: CanvasCourseContentOverviewParams,
+  ): Promise<CanvasCourseContentOverviewResult> {
+    return callDecodedTool(
+      gateway,
+      TOOL_GET_COURSE_CONTENT_OVERVIEW,
+      params,
+      CanvasCourseContentOverviewResult,
+    )
+  }
+
+  async function getCourseStructure(
+    params: CanvasCourseStructureParams,
+  ): Promise<CanvasCourseStructureResult> {
+    return callDecodedTool(gateway, TOOL_GET_COURSE_STRUCTURE, params, CanvasCourseStructureResult)
+  }
+
+  async function downloadCourseFile(
+    params: CanvasDownloadCourseFileParams,
+  ): Promise<CanvasDownloadCourseFileResult> {
+    return callDecodedTool(gateway, TOOL_DOWNLOAD_COURSE_FILE, params, CanvasDownloadCourseFileResult)
+  }
+
+  return {
+    sync,
+    listCourses,
+    getMyUpcomingAssignments,
+    getMySubmissionStatus,
+    getMyCourseGrades,
+    getMyTodoItems,
+    getMyPeerReviewsTodo,
+    getAssignmentDetails,
+    listAssignments,
+    getCourseContentOverview,
+    getCourseStructure,
+    downloadCourseFile,
+  }
 }
 
 export const CanvasSyncServiceLive = Layer.effect(

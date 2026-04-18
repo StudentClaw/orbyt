@@ -1,4 +1,10 @@
-import type { Course, CourseWorkItem, Grade } from "@student-claw/contracts"
+import type {
+  CanvasStudentCourseGradeSummary,
+  CanvasStudentPeerReviewTodo,
+  CanvasStudentTodoItem,
+  Course,
+  CourseWorkItem,
+} from "@student-claw/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 
@@ -8,32 +14,41 @@ export interface CanvasSyncProgress {
   readonly status: "syncing" | "done" | "error"
 }
 
-const canvasCoursesAtom = createAtom<ReadonlyArray<Course>>(
-  "canvas-courses",
+export interface CanvasSubmissionStatusBuckets {
+  readonly submitted: ReadonlyArray<CourseWorkItem>
+  readonly pending: ReadonlyArray<CourseWorkItem>
+  readonly overdue: ReadonlyArray<CourseWorkItem>
+}
+
+const EMPTY_SUBMISSION_STATUS: CanvasSubmissionStatusBuckets = {
+  submitted: [],
+  pending: [],
+  overdue: [],
+}
+
+const canvasCoursesAtom = createAtom<ReadonlyArray<Course>>("canvas-courses", [])
+const canvasUpcomingAssignmentsAtom = createAtom<ReadonlyArray<CourseWorkItem>>(
+  "canvas-upcoming-assignments",
   [],
 )
-
-const canvasCourseworkAtom = createAtom<ReadonlyArray<CourseWorkItem>>(
-  "canvas-coursework",
+const canvasSubmissionStatusAtom = createAtom<CanvasSubmissionStatusBuckets>(
+  "canvas-submission-status",
+  EMPTY_SUBMISSION_STATUS,
+)
+const canvasCourseGradesAtom = createAtom<ReadonlyArray<CanvasStudentCourseGradeSummary>>(
+  "canvas-course-grade-summaries",
   [],
 )
-
-const canvasGradesAtom = createAtom<ReadonlyArray<Grade>>(
-  "canvas-grades",
+const canvasTodoItemsAtom = createAtom<ReadonlyArray<CanvasStudentTodoItem>>(
+  "canvas-todo-items",
   [],
 )
-
-const canvasSyncProgressAtom = createAtom<CanvasSyncProgress | null>(
-  "canvas-sync-progress",
-  null,
+const canvasPeerReviewTodoAtom = createAtom<ReadonlyArray<CanvasStudentPeerReviewTodo>>(
+  "canvas-peer-review-todo",
+  [],
 )
-
-const canvasLastSyncAtom = createAtom<string | null>(
-  "canvas-last-sync",
-  null,
-)
-
-// --- Imperative getters/setters ---
+const canvasSyncProgressAtom = createAtom<CanvasSyncProgress | null>("canvas-sync-progress", null)
+const canvasLastSyncAtom = createAtom<string | null>("canvas-last-sync", null)
 
 export function getCourses(): ReadonlyArray<Course> {
   return appAtomRegistry.get(canvasCoursesAtom)
@@ -43,20 +58,44 @@ export function setCourses(courses: ReadonlyArray<Course>): void {
   appAtomRegistry.set(canvasCoursesAtom, courses)
 }
 
-export function getCoursework(): ReadonlyArray<CourseWorkItem> {
-  return appAtomRegistry.get(canvasCourseworkAtom)
+export function getUpcomingAssignments(): ReadonlyArray<CourseWorkItem> {
+  return appAtomRegistry.get(canvasUpcomingAssignmentsAtom)
 }
 
-export function setCoursework(items: ReadonlyArray<CourseWorkItem>): void {
-  appAtomRegistry.set(canvasCourseworkAtom, items)
+export function setUpcomingAssignments(items: ReadonlyArray<CourseWorkItem>): void {
+  appAtomRegistry.set(canvasUpcomingAssignmentsAtom, items)
 }
 
-export function getGrades(): ReadonlyArray<Grade> {
-  return appAtomRegistry.get(canvasGradesAtom)
+export function getSubmissionStatus(): CanvasSubmissionStatusBuckets {
+  return appAtomRegistry.get(canvasSubmissionStatusAtom)
 }
 
-export function setGrades(grades: ReadonlyArray<Grade>): void {
-  appAtomRegistry.set(canvasGradesAtom, grades)
+export function setSubmissionStatus(status: CanvasSubmissionStatusBuckets): void {
+  appAtomRegistry.set(canvasSubmissionStatusAtom, status)
+}
+
+export function getCourseGrades(): ReadonlyArray<CanvasStudentCourseGradeSummary> {
+  return appAtomRegistry.get(canvasCourseGradesAtom)
+}
+
+export function setCourseGrades(grades: ReadonlyArray<CanvasStudentCourseGradeSummary>): void {
+  appAtomRegistry.set(canvasCourseGradesAtom, grades)
+}
+
+export function getTodoItems(): ReadonlyArray<CanvasStudentTodoItem> {
+  return appAtomRegistry.get(canvasTodoItemsAtom)
+}
+
+export function setTodoItems(items: ReadonlyArray<CanvasStudentTodoItem>): void {
+  appAtomRegistry.set(canvasTodoItemsAtom, items)
+}
+
+export function getPeerReviewTodo(): ReadonlyArray<CanvasStudentPeerReviewTodo> {
+  return appAtomRegistry.get(canvasPeerReviewTodoAtom)
+}
+
+export function setPeerReviewTodo(items: ReadonlyArray<CanvasStudentPeerReviewTodo>): void {
+  appAtomRegistry.set(canvasPeerReviewTodoAtom, items)
 }
 
 export function getSyncProgress(): CanvasSyncProgress | null {
@@ -71,34 +110,15 @@ export function setLastSync(timestamp: string | null): void {
   appAtomRegistry.set(canvasLastSyncAtom, timestamp)
 }
 
-// --- Event application ---
-
-export function applyCanvasSyncProgressEvent(data: {
-  readonly courseId: string
-  readonly progress: number
-  readonly status: "syncing" | "done" | "error"
-}): void {
-  appAtomRegistry.set(canvasSyncProgressAtom, {
-    courseId: data.courseId,
-    progress: data.progress,
-    status: data.status,
-  })
+export function applyCanvasSyncProgressEvent(data: CanvasSyncProgress): void {
+  appAtomRegistry.set(canvasSyncProgressAtom, data)
 
   if (data.status === "done") {
     appAtomRegistry.set(canvasLastSyncAtom, new Date().toISOString())
   }
 }
 
-// --- Pure derivation functions ---
-
-export function getCourseGrades(
-  grades: ReadonlyArray<Grade>,
-  courseId: string,
-): ReadonlyArray<Grade> {
-  return grades.filter((g) => g.courseId === courseId)
-}
-
-export function getCourseworkForCourse(
+export function getAssignmentsForCourse(
   items: ReadonlyArray<CourseWorkItem>,
   courseId: string,
 ): ReadonlyArray<CourseWorkItem> {
@@ -139,21 +159,27 @@ export function computeStaleness(
   return hoursSinceSync > 24 ? "stale" : "fresh"
 }
 
-// --- Data loader ---
-
 let loadInFlight: Promise<void> | null = null
 
 export async function loadCanvasData(client: WsRpcClient): Promise<void> {
   if (loadInFlight) return loadInFlight
   loadInFlight = (async () => {
-    const [courses, coursework, grades] = await Promise.all([
-      client.canvas.getCourses(),
-      client.canvas.getCoursework(),
-      client.canvas.getGrades(),
-    ])
+    const [courses, upcomingAssignments, submissionStatus, courseGrades, todoItems, peerReviewTodo] =
+      await Promise.all([
+        client.canvas.listCourses(),
+        client.canvas.getMyUpcomingAssignments(),
+        client.canvas.getMySubmissionStatus(),
+        client.canvas.getMyCourseGrades(),
+        client.canvas.getMyTodoItems(),
+        client.canvas.getMyPeerReviewsTodo(),
+      ])
+
     setCourses(courses)
-    setCoursework(coursework)
-    setGrades(grades)
+    setUpcomingAssignments(upcomingAssignments)
+    setSubmissionStatus(submissionStatus)
+    setCourseGrades(courseGrades)
+    setTodoItems(todoItems)
+    setPeerReviewTodo(peerReviewTodo)
 
     const latestSync = [...courses]
       .map((c) => c.lastSyncAt)
@@ -166,8 +192,6 @@ export async function loadCanvasData(client: WsRpcClient): Promise<void> {
   })
   return loadInFlight
 }
-
-// --- Sync starter ---
 
 export function startCanvasStateSync(client: WsRpcClient): () => void {
   let disposed = false
@@ -188,18 +212,28 @@ export function startCanvasStateSync(client: WsRpcClient): () => void {
   }
 }
 
-// --- React hooks ---
-
 export function useCanvasCourses(): ReadonlyArray<Course> {
   return useAtomValue(canvasCoursesAtom)
 }
 
-export function useCanvasCoursework(): ReadonlyArray<CourseWorkItem> {
-  return useAtomValue(canvasCourseworkAtom)
+export function useCanvasUpcomingAssignments(): ReadonlyArray<CourseWorkItem> {
+  return useAtomValue(canvasUpcomingAssignmentsAtom)
 }
 
-export function useCanvasGrades(): ReadonlyArray<Grade> {
-  return useAtomValue(canvasGradesAtom)
+export function useCanvasSubmissionStatus(): CanvasSubmissionStatusBuckets {
+  return useAtomValue(canvasSubmissionStatusAtom)
+}
+
+export function useCanvasCourseGrades(): ReadonlyArray<CanvasStudentCourseGradeSummary> {
+  return useAtomValue(canvasCourseGradesAtom)
+}
+
+export function useCanvasTodoItems(): ReadonlyArray<CanvasStudentTodoItem> {
+  return useAtomValue(canvasTodoItemsAtom)
+}
+
+export function useCanvasPeerReviewTodo(): ReadonlyArray<CanvasStudentPeerReviewTodo> {
+  return useAtomValue(canvasPeerReviewTodoAtom)
 }
 
 export function useCanvasSyncProgress(): CanvasSyncProgress | null {
@@ -210,12 +244,13 @@ export function useCanvasLastSync(): string | null {
   return useAtomValue(canvasLastSyncAtom)
 }
 
-// --- Test reset ---
-
 export function resetCanvasStateForTests(): void {
   appAtomRegistry.set(canvasCoursesAtom, [])
-  appAtomRegistry.set(canvasCourseworkAtom, [])
-  appAtomRegistry.set(canvasGradesAtom, [])
+  appAtomRegistry.set(canvasUpcomingAssignmentsAtom, [])
+  appAtomRegistry.set(canvasSubmissionStatusAtom, EMPTY_SUBMISSION_STATUS)
+  appAtomRegistry.set(canvasCourseGradesAtom, [])
+  appAtomRegistry.set(canvasTodoItemsAtom, [])
+  appAtomRegistry.set(canvasPeerReviewTodoAtom, [])
   appAtomRegistry.set(canvasSyncProgressAtom, null)
   appAtomRegistry.set(canvasLastSyncAtom, null)
 }

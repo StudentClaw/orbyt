@@ -7,10 +7,17 @@ interface ToolCallIndicatorProps {
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  "canvas.getCourses": "Fetching courses...",
-  "canvas.getCoursework": "Fetching assignments...",
-  "canvas.getGrades": "Fetching grades...",
-  "canvas.getAnnouncements": "Fetching announcements...",
+  "canvas.listCourses": "Fetching courses...",
+  "canvas.getMyUpcomingAssignments": "Fetching upcoming assignments...",
+  "canvas.getMySubmissionStatus": "Fetching submission status...",
+  "canvas.getMyCourseGrades": "Fetching course grades...",
+  "canvas.getMyTodoItems": "Fetching Canvas to-do items...",
+  "canvas.getMyPeerReviewsTodo": "Fetching peer reviews...",
+  "canvas.getAssignmentDetails": "Fetching assignment details...",
+  "canvas.listAssignments": "Fetching assignments...",
+  "canvas.getCourseContentOverview": "Fetching course content...",
+  "canvas.getCourseStructure": "Fetching course structure...",
+  "canvas.downloadCourseFile": "Downloading course file...",
   "canvas.sync": "Syncing Canvas data...",
   "planner.createPlan": "Creating study plan...",
   "planner.reschedule": "Rescheduling sessions...",

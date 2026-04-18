@@ -18,7 +18,7 @@ export function ChatEmptyState({ onSuggestionClick }: ChatEmptyStateProps) {
       <EmptyHeader>
         <EmptyTitle>Start a conversation</EmptyTitle>
         <EmptyDescription>
-          Ask about your assignments, plan your week, or get help with coursework.
+          Ask about your assignments, upcoming deadlines, or plan your week.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

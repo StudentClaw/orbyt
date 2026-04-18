@@ -1,4 +1,4 @@
-import type { CourseWorkItem, Grade } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, CourseWorkItem } from "@student-claw/contracts"
 
 export type GradeTrend = "up" | "stable" | "down"
 export type UrgencyZone = "calm" | "attention" | "urgent" | "overdue"
@@ -8,46 +8,33 @@ export type UrgencyZone = "calm" | "attention" | "urgent" | "overdue"
  * up (>+1%), stable (±1%), down (<-1%).
  */
 export function computeGradeTrend(
-  grades: ReadonlyArray<Grade>,
+  grades: ReadonlyArray<CanvasStudentCourseGradeSummary>,
   courseId: string,
 ): GradeTrend {
-  const courseGrades = grades
-    .filter((g) => g.courseId === courseId && g.postedAt)
-    .toSorted((a, b) => new Date(a.postedAt!).getTime() - new Date(b.postedAt!).getTime())
+  const summary = grades.find((grade) => grade.course.id === courseId)
+  if (!summary) return "stable"
 
-  if (courseGrades.length < 2) return "stable"
+  const baseline = summary.currentScore
+  const comparison = summary.finalScore
+  if (baseline === undefined || comparison === undefined) return "stable"
 
-  const recent = courseGrades.slice(-4)
-  if (recent.length < 2) return "stable"
-
-  const firstHalf = recent.slice(0, Math.ceil(recent.length / 2))
-  const secondHalf = recent.slice(Math.ceil(recent.length / 2))
-
-  const avgFirst = weightedAverage(firstHalf)
-  const avgSecond = weightedAverage(secondHalf)
-  const movement = avgSecond - avgFirst
+  const movement = comparison - baseline
 
   if (movement > 1) return "up"
   if (movement < -1) return "down"
   return "stable"
 }
 
-function weightedAverage(grades: ReadonlyArray<Grade>): number {
-  const totalScore = grades.reduce((sum, g) => sum + g.score, 0)
-  const totalMax = grades.reduce((sum, g) => sum + g.maxScore, 0)
-  return totalMax === 0 ? 0 : (totalScore / totalMax) * 100
-}
-
 /**
  * Weighted average score/maxScore for all grades in a course.
  */
 export function computeCourseGradePercentage(
-  grades: ReadonlyArray<Grade>,
+  grades: ReadonlyArray<CanvasStudentCourseGradeSummary>,
   courseId: string,
 ): number {
-  const courseGrades = grades.filter((g) => g.courseId === courseId)
-  if (courseGrades.length === 0) return 0
-  return weightedAverage(courseGrades)
+  const summary = grades.find((grade) => grade.course.id === courseId)
+  if (!summary) return 0
+  return summary.currentScore ?? summary.finalScore ?? 0
 }
 
 /**

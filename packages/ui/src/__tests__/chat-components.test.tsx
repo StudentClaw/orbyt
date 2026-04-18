@@ -119,20 +119,20 @@ describe("ChainOfThought", () => {
 
 describe("ToolCallIndicator", () => {
   test("shows spinner for pending tool call", () => {
-    const toolCall: ToolCallInfo = { toolName: "canvas.getCourses", args: "{}", status: "pending" }
+    const toolCall: ToolCallInfo = { toolName: "canvas.listCourses", args: "{}", status: "pending" }
     const { container } = render(<ToolCallIndicator toolCall={toolCall} />)
     expect(screen.getByText("Fetching courses...")).toBeDefined()
     expect(container.querySelector("[role='status']")).not.toBeNull()
   })
 
   test("shows check for complete tool call", () => {
-    const toolCall: ToolCallInfo = { toolName: "canvas.getCourses", args: "{}", status: "complete" }
+    const toolCall: ToolCallInfo = { toolName: "canvas.listCourses", args: "{}", status: "complete" }
     render(<ToolCallIndicator toolCall={toolCall} />)
     expect(screen.getByText("Fetching courses...")).toBeDefined()
   })
 
   test("shows failed badge for error tool call", () => {
-    const toolCall: ToolCallInfo = { toolName: "canvas.getCourses", args: "{}", status: "error" }
+    const toolCall: ToolCallInfo = { toolName: "canvas.listCourses", args: "{}", status: "error" }
     render(<ToolCallIndicator toolCall={toolCall} />)
     expect(screen.getByText("Failed")).toBeDefined()
   })
@@ -257,7 +257,7 @@ describe("MessageBubble", () => {
       role: "assistant",
       content: "Here are your courses:",
       timestamp: now,
-      toolCalls: [{ toolName: "canvas.getCourses", args: "{}", status: "complete" }],
+      toolCalls: [{ toolName: "canvas.listCourses", args: "{}", status: "complete" }],
     }
     render(<MessageBubble message={message} />)
     expect(screen.getByText("Fetching courses...")).toBeDefined()

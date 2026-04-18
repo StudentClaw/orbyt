@@ -1,4 +1,4 @@
-import type { Course, Grade } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course } from "@student-claw/contracts"
 import {
   ChartContainer,
   ChartTooltip,
@@ -9,7 +9,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } fro
 
 interface GradeChartProps {
   readonly courses: ReadonlyArray<Course>
-  readonly grades: ReadonlyArray<Grade>
+  readonly grades: ReadonlyArray<CanvasStudentCourseGradeSummary>
 }
 
 // Use CSS variable colors from the theme (oklch via Tailwind)
@@ -28,46 +28,29 @@ interface ChartDataPoint {
 
 function buildChartData(
   courses: ReadonlyArray<Course>,
-  grades: ReadonlyArray<Grade>,
+  grades: ReadonlyArray<CanvasStudentCourseGradeSummary>,
 ): ReadonlyArray<ChartDataPoint> {
-  const gradesByCourse = new Map<string, Grade[]>()
-  for (const grade of grades) {
-    const existing = gradesByCourse.get(grade.courseId) ?? []
-    gradesByCourse.set(grade.courseId, [...existing, grade])
-  }
+  const dataPoints: Array<Record<string, number | string>> = [
+    { label: "Current" },
+    { label: "Final" },
+  ]
+  const courseMap = new Map<string, Course>(courses.map((course) => [course.id, course]))
 
-  for (const [courseId, courseGrades] of gradesByCourse) {
-    gradesByCourse.set(
-      courseId,
-      courseGrades
-        .filter((g) => g.postedAt)
-        .sort(
-          (a, b) =>
-            new Date(a.postedAt!).getTime() - new Date(b.postedAt!).getTime(),
-        ),
-    )
-  }
+  for (const summary of grades) {
+    const course = courseMap.get(summary.course.id)
+    if (!course) continue
 
-  const maxItems = Math.max(
-    ...Array.from(gradesByCourse.values()).map((g) => g.length),
-    0,
-  )
-
-  const courseMap = new Map<string, Course>(courses.map((c) => [c.id, c]))
-  const dataPoints: ChartDataPoint[] = []
-
-  for (let i = 0; i < maxItems; i++) {
-    const point: Record<string, number | string> = { label: `#${i + 1}` }
-    for (const [courseId, courseGrades] of gradesByCourse) {
-      const course = courseMap.get(courseId)
-      if (!course || i >= courseGrades.length) continue
-      const g = courseGrades[i]
-      point[course.code] = g.maxScore > 0 ? (g.score / g.maxScore) * 100 : 0
+    const current = summary.currentScore ?? summary.finalScore
+    const final = summary.finalScore ?? summary.currentScore
+    if (current !== undefined) {
+      dataPoints[0][course.code] = current
     }
-    dataPoints.push(point as ChartDataPoint)
+    if (final !== undefined) {
+      dataPoints[1][course.code] = final
+    }
   }
 
-  return dataPoints
+  return dataPoints as unknown as ReadonlyArray<ChartDataPoint>
 }
 
 export function GradeChart({ courses, grades }: GradeChartProps) {
@@ -75,7 +58,7 @@ export function GradeChart({ courses, grades }: GradeChartProps) {
 
   const data = buildChartData(courses, grades)
   const coursesWithGrades = courses.filter((c) =>
-    grades.some((g) => g.courseId === c.id),
+    grades.some((g) => g.course.id === c.id),
   )
 
   const chartConfig: ChartConfig = Object.fromEntries(

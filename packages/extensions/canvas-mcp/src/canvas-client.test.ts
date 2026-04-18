@@ -148,6 +148,44 @@ describe("CanvasClient", () => {
     expect(requestedUrl).toContain("include%5B%5D=current_grading_period_scores")
   })
 
+  test("accepts course enrollments that omit enrollment ids in student course listings", async () => {
+    const client = new CanvasClient(
+      { baseUrl: "https://canvas.example.edu", token: "token" },
+      {
+        fetchImpl: async () => new Response(JSON.stringify([
+          {
+            id: 18832,
+            name: "C Programming - 31296",
+            course_code: "CS 36",
+            enrollments: [
+              {
+                type: "student",
+                role: "StudentEnrollment",
+                user_id: 60080000000279830,
+                enrollment_state: "active",
+                has_grading_periods: false,
+                totals_for_all_grading_periods_option: false,
+                computed_current_grade: null,
+                computed_current_score: 103.07,
+                computed_final_grade: null,
+                computed_final_score: 90.64,
+                current_period_computed_current_score: null,
+                current_period_computed_final_score: null,
+                current_period_computed_current_grade: null,
+                current_period_computed_final_grade: null,
+              },
+            ],
+          },
+        ]), { status: 200 }),
+      },
+    )
+
+    const courses = await client.getCoursesWithEnrollments()
+    expect(courses[0]?.id).toBe(18832)
+    expect(courses[0]?.enrollments?.[0]?.computed_current_score).toBe(103.07)
+    expect(courses[0]?.enrollments?.[0]?.computed_final_score).toBe(90.64)
+  })
+
   test("requests assignments with embedded submission data for student status flows", async () => {
     let requestedUrl = ""
 

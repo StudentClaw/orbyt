@@ -27,11 +27,14 @@ import {
   useProviderToolCallsByTurnId,
 } from "@/rpc/orchestrationState"
 import {
+  useCanvasCourseGrades,
   useCanvasCourses,
-  useCanvasCoursework,
-  useCanvasGrades,
+  useCanvasPeerReviewTodo,
   useCanvasSyncProgress,
   useCanvasLastSync,
+  useCanvasSubmissionStatus,
+  useCanvasTodoItems,
+  useCanvasUpcomingAssignments,
 } from "@/rpc/canvasState"
 import { useDashboardSections } from "@/rpc/dashboardState"
 import {
@@ -79,12 +82,24 @@ export function useRuntimeCourses() {
   return useCanvasCourses()
 }
 
-export function useRuntimeCoursework() {
-  return useCanvasCoursework()
+export function useRuntimeUpcomingAssignments() {
+  return useCanvasUpcomingAssignments()
 }
 
-export function useRuntimeGrades() {
-  return useCanvasGrades()
+export function useRuntimeSubmissionStatus() {
+  return useCanvasSubmissionStatus()
+}
+
+export function useRuntimeCourseGrades() {
+  return useCanvasCourseGrades()
+}
+
+export function useRuntimeTodoItems() {
+  return useCanvasTodoItems()
+}
+
+export function useRuntimePeerReviewTodo() {
+  return useCanvasPeerReviewTodo()
 }
 
 export function useRuntimeCanvasSyncProgress() {
