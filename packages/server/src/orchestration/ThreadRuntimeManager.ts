@@ -124,8 +124,16 @@ export function createThreadRuntimeManager(
   const now = options.now ?? (() => Date.now())
   const slots = new Map<string, ThreadRuntimeSlot>()
   const queuedTurns: ManagedTurnInput[] = []
+  const inFlightTurnTasks = new Set<Promise<void>>()
   let admitting = false
   let shuttingDown = false
+
+  const trackInFlightTurn = (task: Promise<void>): void => {
+    inFlightTurnTasks.add(task)
+    void task.finally(() => {
+      inFlightTurnTasks.delete(task)
+    })
+  }
 
   const getWarmestReusableSlot = (threadId: string): ThreadRuntimeSlot | null => {
     const slot = slots.get(threadId)
@@ -245,7 +253,7 @@ export function createThreadRuntimeManager(
   const tryAdmitTurn = async (input: ManagedTurnInput): Promise<boolean> => {
     const warmSlot = getWarmestReusableSlot(input.threadId)
     if (warmSlot) {
-      void startTurnOnSlot(warmSlot, input)
+      trackInFlightTurn(startTurnOnSlot(warmSlot, input))
       return true
     }
 
@@ -265,7 +273,7 @@ export function createThreadRuntimeManager(
       lastUsedAt: now(),
     }
     slots.set(input.threadId, slot)
-    void startTurnOnSlot(slot, input)
+    trackInFlightTurn(startTurnOnSlot(slot, input))
     return true
   }
 
@@ -410,6 +418,7 @@ export function createThreadRuntimeManager(
       const runtimes = Array.from(slots.values())
       slots.clear()
       await Promise.allSettled(runtimes.map((slot) => slot.runtime.shutdown()))
+      await Promise.allSettled(Array.from(inFlightTurnTasks))
     },
   }
 }

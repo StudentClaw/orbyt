@@ -2086,6 +2086,10 @@ export const OrchestrationServiceLive = Layer.scoped(
             const placeholders = deletedThreadIds.map(() => "?").join(", ")
             deleteTurnAttachmentsForThreadIds(database, deletedThreadIds)
             database.execute(
+              `DELETE FROM queued_provider_turns WHERE thread_id IN (${placeholders})`,
+              deletedThreadIds,
+            )
+            database.execute(
               `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
               deletedThreadIds,
             )
@@ -2229,6 +2233,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         database.transaction(() => {
           deleteTurnAttachmentsForThreadIds(database, [threadId])
+          database.execute(`DELETE FROM queued_provider_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
@@ -2308,6 +2313,15 @@ export const OrchestrationServiceLive = Layer.scoped(
             onStart: async () => {
               await runtimeStore.dequeueTurn(turn.id)
               await markTurnStreaming(work)
+              const startedTurn = readTurn(turn.id)
+              if (startedTurn) {
+                appendEvent("turn.started", { turn: startedTurn }, {
+                  threadId,
+                  turnId: turn.id,
+                  commandId,
+                })
+                await publishDomainEvent({ type: "turn.started", turn: startedTurn })
+              }
               await publishRuntimeEvent({
                 type: "provider.turnStarted",
                 threadId: threadId as ProviderThreadId,

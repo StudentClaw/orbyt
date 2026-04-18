@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 import {
   Command,
   CommandEmpty,
@@ -27,21 +27,6 @@ export function SkillPicker({ skills, filter, onSelect, onDismiss }: SkillPicker
     const q = filter.toLowerCase()
     return q === "" || s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
   })
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault()
-        onDismiss()
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [onDismiss])
-
-  if (visible.length === 0 && filter !== "") {
-    return null
-  }
 
   return (
     <div

@@ -17,7 +17,8 @@ export class SkillResolver extends Context.Tag("SkillResolver")<
 export const SkillResolverLive = Layer.effect(
   SkillResolver,
   Effect.sync(() => {
-    const skillsRoot = path.join(process.cwd(), "skills")
+    // Navigate from packages/server/src/skills/ up to the monorepo root, then into skills/
+    const skillsRoot = path.resolve(import.meta.dir, "../../../../skills")
     const registry = buildSkillRegistry(skillsRoot)
 
     return {

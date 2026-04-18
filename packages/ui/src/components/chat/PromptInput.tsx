@@ -8,10 +8,12 @@ import {
   type ThreadAccessMode,
   type TurnAttachmentInput,
 } from "@student-claw/contracts"
-import { PlusIcon, SquareIcon, XIcon } from "lucide-react"
+import { PlusIcon, SquareIcon } from "lucide-react"
+import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
 import { SkillPicker, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
 import {
+  type PromptInputMessage,
   PromptInput as RegistryPromptInput,
   PromptInputButton,
   PromptInputFooter,
@@ -34,7 +36,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { InputGroupTextarea } from "@/components/ui/input-group"
 import type { ChatStatus } from "@/hooks/chat-model"
 import type { WsConnectionPhase } from "@/rpc/wsConnectionState"
 import { cn } from "@/lib/utils"
@@ -205,19 +206,18 @@ export function PromptInput({
   approvalDecisionPending = false,
   skills = [],
 }: PromptInputProps) {
-  const [value, setValue] = useState("")
+  const [isComposerEmpty, setIsComposerEmpty] = useState(true)
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [fullAccessDialogOpen, setFullAccessDialogOpen] = useState(false)
   const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
-  const [selectedSkill, setSelectedSkill] = useState<SkillPickerEntry | null>(null)
   const [showSkillPicker, setShowSkillPicker] = useState(false)
   const [skillFilter, setSkillFilter] = useState("")
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const composerRef = useRef<RichComposerHandle>(null)
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
-  const canSend = (value.trim().length > 0 || attachments.length > 0 || selectedSkill !== null) && !isStreaming && isConnected && !disabled
+  const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
   const accessControlDisabled =
@@ -310,66 +310,72 @@ export function PromptInput({
     return stripComposerAttachmentIds(refreshedAttachments)
   }, [attachments, resolveAttachmentMetadata])
 
-  const handleSkillSelect = useCallback((skill: SkillPickerEntry) => {
-    setSelectedSkill(skill)
-    setShowSkillPicker(false)
-    setSkillFilter("")
-    setValue("")
-    textareaRef.current?.focus()
-  }, [])
-
   const handleSkillDismiss = useCallback(() => {
     setShowSkillPicker(false)
     setSkillFilter("")
+    composerRef.current?.focus()
   }, [])
 
-  const handleTextareaChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = event.target.value
-    setValue(text)
-    if (text.startsWith("/")) {
-      setSkillFilter(text.slice(1))
-      setShowSkillPicker(true)
-    } else {
-      setShowSkillPicker(false)
-      setSkillFilter("")
-    }
+  const handleSkillSelect = useCallback((skill: SkillPickerEntry) => {
+    composerRef.current?.insertSkill(skill)
+    setShowSkillPicker(false)
+    setSkillFilter("")
   }, [])
 
-  const handleSubmit = useCallback(async (message: { text: string }) => {
-    const text = message.text.trim()
-    if ((!text && attachments.length === 0 && !selectedSkill) || isStreaming || !isConnected || disabled) {
+  const handleSkillTrigger = useCallback((filter: string, show: boolean) => {
+    setShowSkillPicker(show)
+    setSkillFilter(show ? filter : "")
+  }, [])
+
+  const handleActualSubmit = useCallback(async () => {
+    const text = composerRef.current?.getText() ?? ""
+    const skillId = composerRef.current?.getSkillId() ?? null
+    if ((!text && attachments.length === 0 && !skillId) || isStreaming || !isConnected || disabled) {
       return
     }
 
     const validatedAttachments = await validateAttachments()
-    if (validatedAttachments === null) {
-      return
-    }
+    if (validatedAttachments === null) return
 
-    await onSend({
-      content: text,
-      attachments: validatedAttachments,
-      skillId: selectedSkill?.id ?? null,
-    })
+    await onSend({ content: text, attachments: validatedAttachments, skillId })
 
-    setValue("")
+    composerRef.current?.clear()
     setAttachments([])
     setAttachmentError(null)
-    setSelectedSkill(null)
-    textareaRef.current?.focus()
-  }, [attachments.length, disabled, isConnected, isStreaming, onSend, selectedSkill, validateAttachments])
+  }, [attachments.length, disabled, isConnected, isStreaming, onSend, validateAttachments])
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+  const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
+    await handleActualSubmit()
+  }, [handleActualSubmit])
+
+  const handleComposerSubmit = useCallback(() => {
+    if (!canSend) return
+    void handleActualSubmit()
+  }, [canSend, handleActualSubmit])
+
+  const handleComposerKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (showSkillPicker && (event.key === "Enter" || event.key === "Tab")) {
         event.preventDefault()
-        if (!canSend) {
-          return
+        const q = skillFilter.toLowerCase()
+        const firstMatch = skills.find(
+          (s) => q === "" || s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q),
+        )
+        if (firstMatch) {
+          composerRef.current?.insertSkill(firstMatch)
+          setShowSkillPicker(false)
+          setSkillFilter("")
+        } else {
+          handleSkillDismiss()
         }
-        event.currentTarget.form?.requestSubmit()
+        return
+      }
+      if (event.key === "Escape" && showSkillPicker) {
+        event.preventDefault()
+        handleSkillDismiss()
       }
     },
-    [canSend],
+    [showSkillPicker, skillFilter, skills, handleSkillDismiss],
   )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
@@ -461,7 +467,7 @@ export function PromptInput({
       )}
 
       <div className="relative">
-        {showSkillPicker && skills.length > 0 && (
+        {showSkillPicker && (
           <SkillPicker
             skills={skills}
             filter={skillFilter}
@@ -472,7 +478,7 @@ export function PromptInput({
       <RegistryPromptInput
         onSubmit={handleSubmit}
         inputGroupClassName={cn(
-          "rounded-[2rem] border-border/60 bg-card/85 shadow-sm backdrop-blur-sm dark:bg-card/80",
+          "h-auto rounded-[2rem] border-border/60 bg-card/85 shadow-sm backdrop-blur-sm dark:bg-card/80",
           disabled && "opacity-70",
         )}
       >
@@ -480,34 +486,13 @@ export function PromptInput({
           <ChatAttachments
             attachments={attachments}
             onRemove={handleRemoveAttachment}
-            className="max-w-full px-4 pt-3"
+            className="w-full px-4 pt-3"
           />
         )}
 
-        {selectedSkill && (
-          <div className="flex items-center gap-1 px-4 pt-2.5">
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-              /{selectedSkill.name}
-              <button
-                type="button"
-                aria-label={`Remove ${selectedSkill.name} skill`}
-                onClick={() => setSelectedSkill(null)}
-                className="ml-0.5 rounded-full opacity-70 hover:opacity-100"
-              >
-                <XIcon className="size-3" />
-              </button>
-            </span>
-          </div>
-        )}
-
-        <InputGroupTextarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleTextareaChange}
-          onKeyDown={handleKeyDown}
+        <RichComposer
+          ref={composerRef}
           disabled={!isConnected || disabled}
-          name="message"
-          aria-label="Chat message input"
           placeholder={
             connectionState === "connecting"
               ? "Connecting to Student Claw..."
@@ -519,10 +504,11 @@ export function PromptInput({
                 ? "Wait for response..."
                 : "What would you like to know?"
           }
-          className={cn(
-            "min-h-24 px-4 pb-2.5 text-sm",
-            attachments.length > 0 ? "pt-2.5" : "pt-3.5",
-          )}
+          className={cn("px-4 pb-2.5", attachments.length > 0 ? "pt-2.5" : "pt-3.5")}
+          onContentChange={setIsComposerEmpty}
+          onSkillTrigger={handleSkillTrigger}
+          onSubmit={handleComposerSubmit}
+          onKeyDown={handleComposerKeyDown}
         />
 
         <PromptInputFooter className="flex-col items-stretch gap-2.5 pt-0">
