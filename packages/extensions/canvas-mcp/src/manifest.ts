@@ -3,6 +3,7 @@ import {
   parseExtensionManifestSync,
   type ExtensionManifest as CanvasManifest,
 } from "@student-claw/contracts"
+import { canvasStudentReplacementToolInventory } from "./student-tool-contract.js"
 
 export const CanvasManifestSchema = ExtensionManifest
 
@@ -11,13 +12,13 @@ export type { CanvasManifest }
 export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
   id: "canvas-mcp",
   name: "Canvas Assistant",
-  description: "Connects to Canvas coursework, grades, announcements, modules, and pages",
+  description: "Student-facing Canvas tools for assignments, grades, discussions, messages, and course content",
   version: "0.1.0",
   transport: {
     type: "local_stdio",
     entry: "dist/index.js",
   },
-  permissions: ["assignments", "grades", "announcements", "modules", "pages"],
+  permissions: ["assignments", "grades", "announcements", "modules", "pages", "files", "discussions", "messages"],
   auth: {
     type: "manual_token",
     instructions:
@@ -39,14 +40,7 @@ export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
       },
     ],
   },
-  tools: [
-    { name: "get_courses", description: "List Canvas courses available to the student." },
-    { name: "get_coursework", description: "List coursework items across Canvas courses." },
-    { name: "get_coursework_detail", description: "Fetch detailed information for a single coursework item." },
-    { name: "get_grades", description: "Fetch current Canvas grade information." },
-    { name: "get_announcements", description: "List recent Canvas announcements." },
-    { name: "sync_now", description: "Trigger an immediate Canvas refresh read." },
-  ],
+  tools: canvasStudentReplacementToolInventory.map(({ name, description }) => ({ name, description })),
   author: "student-claw",
   homepage: "https://github.com/StudentClaw/student-claw",
 })
