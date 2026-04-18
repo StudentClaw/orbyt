@@ -8,6 +8,7 @@ import {
   buildCodexAppServerArgs,
   CodexCli,
   CodexCliLive,
+  createCodexRuntimeInstance,
   isReasoningItemType,
   mapCodexMcpToolCallCompletedEvent,
   mapCodexMcpToolCallProgressEvent,
@@ -60,6 +61,7 @@ function createProviderRuntimeStore(): ProviderRuntimeStoreService {
     dequeueTurn: async () => undefined,
     listQueuedTurns: async () => [],
     refreshQueuedCount: async () => 0,
+    drain: async () => undefined,
   }
 }
 
@@ -142,7 +144,12 @@ async function loadCodexCli(options: {
   }
 }
 
-function createFakeCodexBinary(logPath: string): string {
+function createFakeCodexBinary(
+  logPath: string,
+  options?: {
+    readonly approvalCommand?: string
+  },
+): string {
   const dir = createTempDir()
   const scriptPath = path.join(dir, "fake-codex.cjs")
   const script = `#!/usr/bin/env node
@@ -163,6 +170,9 @@ if (args[0] === "app-server") {
     args,
     gatewayToken: process.env.STUDENT_CLAW_GATEWAY_BEARER_TOKEN ?? null,
   })
+  const approvalCommand = ${JSON.stringify(options?.approvalCommand ?? null)}
+  const providerThreadId = "provider_thread_1"
+  const providerTurnId = "provider_turn_1"
 
   const rl = readline.createInterface({ input: process.stdin })
   rl.on("line", (line) => {
@@ -172,6 +182,7 @@ if (args[0] === "app-server") {
 
     const message = JSON.parse(line)
     if (!message.method) {
+      log({ type: "response", id: message.id, result: message.result ?? null })
       return
     }
 
@@ -181,11 +192,32 @@ if (args[0] === "app-server") {
       return
     }
 
-    const result = message.method === "account/read"
-      ? { account: { type: "chatgpt" } }
-      : {}
+    const result =
+      message.method === "account/read"
+        ? { account: { type: "chatgpt" } }
+        : message.method === "thread/start"
+          ? { thread: { id: providerThreadId } }
+          : message.method === "turn/start"
+            ? { turn: { id: providerTurnId } }
+            : {}
 
     process.stdout.write(JSON.stringify({ id: message.id, result }) + "\\n")
+
+    if (message.method === "turn/start" && approvalCommand) {
+      setTimeout(() => {
+        process.stdout.write(JSON.stringify({
+          id: "approval-1",
+          method: "item/commandExecution/requestApproval",
+          params: {
+            threadId: providerThreadId,
+            turnId: providerTurnId,
+            command: approvalCommand,
+            cwd: "/repo",
+            availableDecisions: ["accept", "decline"],
+          },
+        }) + "\\n")
+      }, 20)
+    }
   })
 
   return
@@ -362,6 +394,174 @@ describe("CodexCli gateway wiring", () => {
       expect(requestMethods).toContain("config/mcpServer/reload")
     } finally {
       await codex.shutdown()
+    }
+  })
+
+  test("auto-approves balanced safe commands without surfacing an approval card", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      approvalCommand: "bun run build",
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const { codex, readLogs } = await loadCodexCli({
+      codexBinaryPath: fakeCodexBinary,
+      logPath,
+      pluginGatewayHarness,
+    })
+
+    const approvals: string[] = []
+
+    try {
+      await codex.streamTurn({
+        localThreadId: "thread_1",
+        localTurnId: "turn_1",
+        content: "Run the project checks",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async (approval) => {
+          approvals.push(approval.command ?? "")
+        },
+      })
+      await sleep(100)
+
+      expect(approvals).toEqual([])
+      expect(readLogs()).toContainEqual({
+        type: "response",
+        id: "approval-1",
+        result: { decision: "accept" },
+      })
+    } finally {
+      await codex.shutdown()
+    }
+  })
+
+  test("auto-approves safe shell-wrapped inspection commands", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      approvalCommand: "/bin/zsh -lc \"pdftotext 'Math 26/26old_exams2_S26.pdf' - | sed -n '240,520p'\"",
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const { codex, readLogs } = await loadCodexCli({
+      codexBinaryPath: fakeCodexBinary,
+      logPath,
+      pluginGatewayHarness,
+    })
+
+    const approvals: string[] = []
+
+    try {
+      await codex.streamTurn({
+        localThreadId: "thread_1",
+        localTurnId: "turn_1",
+        content: "Inspect the PDF contents",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async (approval) => {
+          approvals.push(approval.command ?? "")
+        },
+      })
+      await sleep(100)
+
+      expect(approvals).toEqual([])
+      expect(readLogs()).toContainEqual({
+        type: "response",
+        id: "approval-1",
+        result: { decision: "accept" },
+      })
+    } finally {
+      await codex.shutdown()
+    }
+  })
+
+  test("keeps pending approvals isolated per runtime instance", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      approvalCommand: "rm -rf ./tmp",
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const runtimeA = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore: createProviderRuntimeStore(),
+    })
+    const runtimeB = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore: createProviderRuntimeStore(),
+    })
+
+    try {
+      await runtimeA.streamTurn({
+        localThreadId: "thread_A",
+        localTurnId: "turn_A",
+        content: "Do the first thing",
+        cwd: "/repo-a",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+
+      await runtimeB.streamTurn({
+        localThreadId: "thread_B",
+        localTurnId: "turn_B",
+        content: "Do the second thing",
+        cwd: "/repo-b",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+
+      await sleep(80)
+
+      const approvalsA = runtimeA.listPendingApprovals()
+      const approvalsB = runtimeB.listPendingApprovals()
+
+      expect(approvalsA).toHaveLength(1)
+      expect(approvalsB).toHaveLength(1)
+      expect(String(approvalsA[0]?.threadId)).toBe("thread_A")
+      expect(String(approvalsA[0]?.turnId)).toBe("turn_A")
+      expect(String(approvalsB[0]?.threadId)).toBe("thread_B")
+      expect(String(approvalsB[0]?.turnId)).toBe("turn_B")
+    } finally {
+      await runtimeA.shutdown()
+      await runtimeB.shutdown()
     }
   })
 })

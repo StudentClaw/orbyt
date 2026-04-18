@@ -1,5 +1,7 @@
 import { Schema } from "@effect/schema"
 import { SkillId } from "../schemas/ids.js"
+import { ActivityFeedEntry } from "../schemas/activity-feed-entry.js"
+import { WeeklyInsight } from "../schemas/weekly-insight.js"
 import { DesktopBootstrap } from "./desktop.js"
 import { FeatureFlags } from "./feature-flags.js"
 
@@ -82,6 +84,8 @@ export const RPC_METHODS = {
   PROVIDER_RESPOND_TO_APPROVAL: "provider.respondToApproval",
   PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
   CANVAS_GET_COURSES: "canvas.getCourses",
+  CANVAS_GET_COURSEWORK: "canvas.getCoursework",
+  CANVAS_GET_GRADES: "canvas.getGrades",
   CANVAS_SYNC: "canvas.sync",
   CANVAS_SUBSCRIBE_SYNC_PROGRESS: "canvas.subscribeSyncProgress",
   DASHBOARD_REFRESH: "dashboard.refresh",
@@ -90,14 +94,17 @@ export const RPC_METHODS = {
   PLANNER_CHECK_IN: "planner.checkIn",
   PLANNER_SUBSCRIBE_CHECK_INS: "planner.subscribeCheckIns",
   ACTIVITY_SUBSCRIBE_FEED: "activity.subscribeFeed",
+  ACTIVITY_GENERATE_WEEKLY_INSIGHT: "activity.generateWeeklyInsight",
   ONBOARDING_GET_SNAPSHOT: "onboarding.getSnapshot",
   ONBOARDING_SET_STEP_STATUS: "onboarding.setStepStatus",
   ONBOARDING_SET_OVERALL_STATUS: "onboarding.setOverallStatus",
   ONBOARDING_GET_PREFERENCES: "onboarding.getPreferences",
   ONBOARDING_SET_PREFERENCES: "onboarding.setPreferences",
+  ONBOARDING_GET_ROUTINES: "onboarding.getRoutines",
   ONBOARDING_SET_ROUTINES: "onboarding.setRoutines",
   ONBOARDING_GET_AI_AUTH: "onboarding.getAiAuth",
   ONBOARDING_SET_AI_AUTH: "onboarding.setAiAuth",
+  SKILLS_LIST: "skills.list",
   DEV_RESET_SOFT: "dev.resetSoft",
   DEV_RESET_HARD: "dev.resetHard",
 } as const
@@ -175,6 +182,8 @@ export const ServerConfigStreamEvent = Schema.Union(
   }),
 )
 
+export { ActivityFeedEntry, WeeklyInsight }
+
 /**
  * Snapshot of a persisted chat workspace.
  */
@@ -207,7 +216,7 @@ export const OrchestrationThread = Schema.Struct({
   workspaceId: WorkspaceId,
   title: Schema.String,
   accessMode: Schema.Literal("default", "full"),
-  status: Schema.Literal("idle", "streaming", "interrupted", "completed"),
+  status: Schema.Literal("idle", "queued", "streaming", "interrupted", "completed"),
   createdAt: Schema.String,
   currentTurnId: Schema.NullOr(TurnId),
 })
@@ -240,7 +249,7 @@ export const OrchestrationTurn = Schema.Struct({
   input: Schema.String,
   output: Schema.String,
   reasoning: Schema.String,
-  status: Schema.Literal("pending", "streaming", "interrupted", "completed"),
+  status: Schema.Literal("queued", "streaming", "interrupted", "completed"),
   startedAt: Schema.String,
   completedAt: Schema.NullOr(Schema.String),
   skill: Schema.NullOr(Schema.Struct({ id: SkillId, name: Schema.String })),
@@ -439,6 +448,18 @@ export const InterruptTurnResult = Schema.Struct({
   interrupted: Schema.Boolean,
 })
 
+export const SkillEntry = Schema.Struct({
+  id: SkillId,
+  name: Schema.String,
+  description: Schema.String,
+})
+export type SkillEntry = Schema.Schema.Type<typeof SkillEntry>
+
+export const ListSkillsResult = Schema.Struct({
+  skills: Schema.Array(SkillEntry),
+})
+export type ListSkillsResult = Schema.Schema.Type<typeof ListSkillsResult>
+
 export const StartProviderAuthParams = Schema.Struct({})
 
 export const StartProviderAuthResult = Schema.Struct({
@@ -553,6 +574,10 @@ export const OrchestrationDomainEvent = Schema.Union(
     type: Schema.Literal("thread.deleted"),
     threadId: ThreadId,
     workspaceId: WorkspaceId,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("turn.queued"),
+    turn: OrchestrationTurn,
   }),
   Schema.Struct({
     type: Schema.Literal("turn.started"),

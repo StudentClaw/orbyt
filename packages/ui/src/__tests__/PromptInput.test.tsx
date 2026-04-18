@@ -135,9 +135,9 @@ describe("PromptInput", () => {
   test("clears input after sending", async () => {
     const user = userEvent.setup()
     render(<PromptInput {...defaultProps} onSend={vi.fn()} />)
-    const textarea = screen.getByLabelText("Chat message input") as HTMLTextAreaElement
+    const textarea = screen.getByLabelText("Chat message input")
     await user.type(textarea, "Hello{Enter}")
-    expect(textarea.value).toBe("")
+    expect(textarea.textContent).toBe("")
   })
 
   test("shows Stop button during streaming", () => {
@@ -305,7 +305,7 @@ describe("PromptInput", () => {
     expect(screen.getByLabelText("Select permissions").hasAttribute("disabled")).toBe(true)
   })
 
-  test("renders the approval card and forwards approval decisions", async () => {
+  test("renders a beginner-friendly approval card and hides technical details by default", async () => {
     const onRespondToApproval = vi.fn()
     const user = userEvent.setup()
     render(
@@ -327,7 +327,11 @@ describe("PromptInput", () => {
       />,
     )
 
-    expect(screen.getByText("Command needs approval")).toBeDefined()
+    expect(screen.getByText("Permission needed")).toBeDefined()
+    expect(screen.getByText("Can I delete this item?")).toBeDefined()
+    expect(screen.queryByText("rm -rf ./tmp")).toBeNull()
+
+    await user.click(screen.getByText("Show technical details"))
     expect(screen.getByText("rm -rf ./tmp")).toBeDefined()
     expect(screen.getByTestId("pending-approval-surface")).toBeDefined()
     expect(screen.queryByLabelText("Chat message input")).toBeNull()
@@ -336,7 +340,7 @@ describe("PromptInput", () => {
     expect(screen.getByTestId("approval-command").className).toContain("overflow-y-auto")
     expect(screen.getByRole("button", { name: "Approve" }).textContent).toContain("↵")
 
-    await user.click(screen.getByRole("button", { name: "Deny" }))
+    await user.click(screen.getByRole("button", { name: "Don't allow" }))
     expect(onRespondToApproval).toHaveBeenCalledWith("deny")
   })
 

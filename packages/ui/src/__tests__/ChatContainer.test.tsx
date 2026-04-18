@@ -49,6 +49,7 @@ vi.mock("../hooks/useAppRuntime", () => ({
   useChatUiActions: () => ({
     closePanel: chatMocks.closePanel,
   }),
+  useSkills: () => [],
 }))
 
 import { ChatContainer } from "../components/chat/ChatContainer"

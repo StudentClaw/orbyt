@@ -3,8 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event"
 import { IpcChannel } from "@student-claw/contracts"
 
+async function navigateTo(section: "general" | "connections" | "notifications" | "schedule") {
+  await userEvent.click(screen.getByTestId(`settings-nav-${section}`))
+}
+
 const runtimeHooks = vi.hoisted(() => ({
   useRuntimeBootstrap: vi.fn(),
+  useRuntimeCanvasSyncProgress: vi.fn(),
   useRuntimeOrchestrationSnapshot: vi.fn(),
   useOrchestrationActions: vi.fn(),
   useRuntimeServerConfig: vi.fn(),
@@ -13,6 +18,7 @@ const runtimeHooks = vi.hoisted(() => ({
 vi.mock("@/hooks/useAppRuntime", () => ({
   useOrchestrationActions: runtimeHooks.useOrchestrationActions,
   useRuntimeBootstrap: runtimeHooks.useRuntimeBootstrap,
+  useRuntimeCanvasSyncProgress: runtimeHooks.useRuntimeCanvasSyncProgress,
   useRuntimeOrchestrationSnapshot: runtimeHooks.useRuntimeOrchestrationSnapshot,
   useRuntimeServerConfig: runtimeHooks.useRuntimeServerConfig,
 }))
@@ -25,13 +31,35 @@ const codexAuthMocks = vi.hoisted(() => ({
   connectCodexAccount: vi.fn(),
 }))
 
+const notificationMocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  requestPermission: vi.fn<() => Promise<NotificationPermission>>(),
+}))
+
 vi.mock("@/lib/codexAuth", () => ({
   connectCodexAccount: codexAuthMocks.connectCodexAccount,
+}))
+
+vi.mock("qrcode", () => ({
+  toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qr"),
 }))
 
 import { SettingsPage } from "../pages/SettingsPage"
 
 describe("SettingsPage", () => {
+  const defaultPushSettings = {
+    enabled: true,
+    workflowEventsEnabled: true,
+    weeklyInsightsEnabled: true,
+    quietHoursStart: "22:00",
+    quietHoursEnd: "08:00",
+    weeklyInsightsDay: 1,
+    weeklyInsightsTime: "08:00",
+    relayBaseUrl: "https://push.example.com",
+    linkedDevice: null,
+    activePairing: null,
+  } as const
+
   const registryEntries = [
     {
       kind: "available",
@@ -88,9 +116,27 @@ describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
+    notificationMocks.requestPermission.mockResolvedValue("granted")
+
+    class MockNotification {
+      static permission: NotificationPermission = "default"
+      static requestPermission = notificationMocks.requestPermission
+
+      constructor(title: string, options?: NotificationOptions) {
+        notificationMocks.create(title, options)
+      }
+    }
+
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      writable: true,
+      value: MockNotification,
+    })
+
     runtimeHooks.useRuntimeServerConfig.mockReturnValue({
       appVersion: "0.1.0",
     })
+    runtimeHooks.useRuntimeCanvasSyncProgress.mockReturnValue(null)
     runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
       providerRuntime: {
         adapter: "codex",
@@ -109,6 +155,41 @@ describe("SettingsPage", () => {
       getBootstrap: vi.fn().mockResolvedValue(null),
       codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
       invoke: vi.fn(async (channel: string, params?: { pluginId: string }) => {
+        if (channel === IpcChannel.PUSH_GET_SETTINGS) {
+          return defaultPushSettings
+        }
+
+        if (channel === IpcChannel.PUSH_GET_PAIRING_STATUS) {
+          return {
+            linkedDevice: null,
+            activePairing: null,
+          }
+        }
+
+        if (channel === IpcChannel.PUSH_SEND_TEST) {
+          return { ok: true }
+        }
+
+        if (channel === IpcChannel.PUSH_UNLINK_DEVICE || channel === IpcChannel.PUSH_CANCEL_PAIRING) {
+          return defaultPushSettings
+        }
+
+        if (channel === IpcChannel.PUSH_UPDATE_SETTINGS) {
+          return {
+            ...defaultPushSettings,
+            ...(params ?? {}),
+          }
+        }
+
+        if (channel === IpcChannel.PUSH_START_PAIRING) {
+          return {
+            sessionId: "session_1",
+            qrUrl: "https://push.example.com/pair/session_1",
+            expiresAt: "2026-04-15T13:00:00.000Z",
+            state: "pending" as const,
+          }
+        }
+
         if (channel === IpcChannel.PLUGIN_LIST) {
           return registryEntries
         }
@@ -131,7 +212,7 @@ describe("SettingsPage", () => {
     }
   })
 
-  test("shows the disabled message when the plugin flag is off", () => {
+  test("shows the disabled message when the plugin flag is off", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -141,12 +222,18 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
     expect(screen.getByTestId("settings-plugin-disabled")).toBeDefined()
-    expect(window.electronAPI?.invoke).not.toHaveBeenCalled()
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-card")).toBeDefined()
+    })
+    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_GET_SETTINGS)
   })
 
-  test("shows Codex connection status from the runtime snapshot", () => {
+  test("shows Codex connection status from the runtime snapshot", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -156,6 +243,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     expect(screen.getByTestId("settings-codex-card")).toBeDefined()
     expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
     expect(screen.getByTestId("settings-codex-auth-state").textContent).toContain("authenticated")
@@ -186,6 +274,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await user.click(screen.getByTestId("settings-codex-connect"))
 
     expect(codexAuthMocks.connectCodexAccount).toHaveBeenCalledOnce()
@@ -201,6 +290,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
     })
@@ -209,14 +299,209 @@ describe("SettingsPage", () => {
     expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId: "canvas-mcp" })
     expect(screen.getAllByText("Canvas Assistant")).toHaveLength(2)
     expect(screen.getByText("Broken MCP")).toBeDefined()
-    expect(screen.getByText("transport.entry is missing")).toBeDefined()
-    expect(screen.getByRole("button", { name: "Start" })).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-baseUrl")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-token")).toBeDefined()
   })
 
-  test("invokes plugin:start from the dev lifecycle controls", async () => {
+  test("disables Canvas sync while a sync is already in progress", async () => {
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+    runtimeHooks.useRuntimeCanvasSyncProgress.mockReturnValue({
+      courseId: "",
+      progress: 25,
+      status: "syncing",
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
+    })
+
+    const syncButton = screen.getByRole("button", { name: "Syncing..." })
+    expect(syncButton.hasAttribute("disabled")).toBe(true)
+  })
+
+  test("renders phone push settings and starts pairing", async () => {
+    const user = userEvent.setup()
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-card")).toBeDefined()
+    })
+
+    expect(screen.getByTestId("settings-push-status").textContent).toBe("Not linked")
+    expect(screen.getByTestId("settings-push-admin-tools")).toBeDefined()
+    expect(screen.getByTestId("settings-push-main-flow")).toBeDefined()
+    expect(within(screen.getByTestId("settings-push-main-flow")).getByText("Get alerts on your phone when work finishes.")).toBeDefined()
+    expect(screen.getByTestId("settings-push-send-test").hasAttribute("disabled")).toBe(true)
+    expect(screen.queryByTestId("settings-push-weekly-day")).toBeNull()
+    expect((within(screen.getByTestId("settings-push-admin-tools")).getByTestId("settings-push-relay") as HTMLInputElement).value)
+      .toBe("https://push.example.com")
+
+    await user.click(screen.getByTestId("settings-push-pair"))
+
+    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_START_PAIRING)
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-pairing")).toBeDefined()
+      expect(screen.getByTestId("settings-push-qr")).toBeDefined()
+    })
+  })
+
+  test("sends a desktop test notification from settings without requiring phone pairing", async () => {
+    const user = userEvent.setup()
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-desktop-send-test")).toBeDefined()
+    })
+
+    expect(screen.getByTestId("settings-desktop-send-test").hasAttribute("disabled")).toBe(false)
+
+    await user.click(screen.getByTestId("settings-desktop-send-test"))
+
+    expect(notificationMocks.requestPermission).toHaveBeenCalledOnce()
+    expect(notificationMocks.create).toHaveBeenCalledWith("Student Claw test notification", {
+      body: "Desktop notifications are enabled for this app.",
+    })
+    expect(window.electronAPI?.invoke).not.toHaveBeenCalledWith(IpcChannel.NOTIFICATION_SHOW, expect.anything())
+  })
+
+  test("shows a friendly setup-required state before admin configuration is complete", async () => {
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    window.electronAPI!.invoke = vi.fn(async (channel: string) => {
+      if (channel === IpcChannel.PUSH_GET_SETTINGS) {
+        return {
+          ...defaultPushSettings,
+          relayBaseUrl: "",
+        }
+      }
+
+      return null
+    }) as any
+
+    render(<SettingsPage />)
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-card")).toBeDefined()
+    })
+
+    expect(screen.getByTestId("settings-push-status").textContent).toBe("Setup required")
+    expect(screen.getByTestId("settings-push-setup-state")).toBeDefined()
+    expect(screen.getByText("Phone notifications are not configured on this desktop yet.")).toBeDefined()
+    expect(screen.getByTestId("settings-push-pair").hasAttribute("disabled")).toBe(true)
+    expect(screen.queryByTestId("settings-push-error")).toBeNull()
+  })
+
+  test("cancels an active phone pairing session", async () => {
+    const user = userEvent.setup()
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-pair")).toBeDefined()
+    })
+
+    await user.click(screen.getByTestId("settings-push-pair"))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-pairing")).toBeDefined()
+    })
+
+    await user.click(screen.getByTestId("settings-push-cancel"))
+
+    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_CANCEL_PAIRING)
+    await waitFor(() => {
+      expect(screen.queryByTestId("settings-push-pairing")).toBeNull()
+    })
+  })
+
+  test("keeps preferences hidden until a phone is linked", async () => {
+    const user = userEvent.setup()
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: false,
+      },
+    })
+
+    window.electronAPI!.invoke = vi.fn(async (channel: string) => {
+      if (channel === IpcChannel.PUSH_GET_SETTINGS) {
+        return {
+          ...defaultPushSettings,
+          linkedDevice: {
+            endpoint: "https://push.example.com/subscription",
+            platform: "ios" as const,
+            linkedAt: "2026-04-16T10:00:00.000Z",
+          },
+        }
+      }
+
+      if (channel === IpcChannel.PUSH_SEND_TEST) {
+        return { ok: true }
+      }
+
+      if (channel === IpcChannel.PUSH_UNLINK_DEVICE) {
+        return defaultPushSettings
+      }
+
+      return null
+    }) as any
+
+    render(<SettingsPage />)
+
+    await navigateTo("notifications")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-push-status").textContent).toContain("Linked")
+    })
+
+    expect(screen.getByTestId("settings-push-linked-state")).toBeDefined()
+    expect(screen.getByTestId("settings-push-send-test").hasAttribute("disabled")).toBe(false)
+    expect(screen.queryByTestId("settings-push-weekly-day")).toBeNull()
+
+    await user.click(screen.getByTestId("settings-push-preferences-toggle"))
+
+    expect(screen.getByTestId("settings-push-weekly-day")).toBeDefined()
+    expect(screen.getByTestId("settings-push-quiet-start")).toBeDefined()
+  })
+
+  test("invokes plugin:setEnabled when the toggle switch is clicked", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -224,7 +509,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string; enabled?: boolean }) => {
       if (channel === IpcChannel.PLUGIN_LIST) {
         return registryEntries
       }
@@ -236,11 +521,11 @@ describe("SettingsPage", () => {
         }
       }
 
-      if (channel === IpcChannel.PLUGIN_START) {
+      if (channel === IpcChannel.PLUGIN_SET_ENABLED) {
         return {
           ok: true,
           pluginId: params?.pluginId ?? "canvas-mcp",
-          status: "active",
+          enabled: params?.enabled ?? true,
         }
       }
 
@@ -256,14 +541,15 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start" })).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByRole("button", { name: "Start" }))
+    await navigateTo("connections")
+    const toggle = await screen.findByRole("switch", { name: /Enable Canvas Assistant|Disable Canvas Assistant/ })
+    fireEvent.click(toggle)
 
     await waitFor(() => {
-      expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_START, { pluginId: "canvas-mcp" })
+      expect(window.electronAPI?.invoke).toHaveBeenCalledWith(
+        IpcChannel.PLUGIN_SET_ENABLED,
+        expect.objectContaining({ pluginId: "canvas-mcp" }),
+      )
     })
   })
 
@@ -307,6 +593,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
       expect(screen.getByText("discovered")).toBeDefined()
     })
@@ -318,7 +605,7 @@ describe("SettingsPage", () => {
     })
   })
 
-  test("renders Retry for an available plugin in error state", async () => {
+  test("renders an error-state row for an available plugin in error state", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -349,8 +636,9 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Retry" })).toBeDefined()
+      expect(screen.getByText("error")).toBeDefined()
     })
   })
 
@@ -397,6 +685,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })
@@ -433,6 +722,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })
@@ -485,6 +775,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />)
 
+    await navigateTo("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })

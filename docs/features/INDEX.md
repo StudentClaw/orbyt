@@ -10,7 +10,7 @@ Use this list while running the [grill-me skill](../../.agents/skills/grill-me/S
 
 Toggle a line from `[ ]` to `[x]` only after that broader context review has happened and you have finished a grilling pass for the target spec.
 
-**Progress:** 10 / 10 — update the numerator as you go.
+**Progress:** 10 / 11 — update the numerator as you go.
 
 - [x] **01** — [AI Harness](01-ai-harness.md)
 - [x] **02** — [Canvas Integration](02-canvas-integration.md)
@@ -22,3 +22,4 @@ Toggle a line from `[ ]` to `[x]` only after that broader context review has hap
 - [x] **08** — [Onboarding](08-onboarding.md)
 - [x] **09** — [Smart Planner](09-smart-planner.md)
 - [x] **10** — [Proactive Notification Service](10-notification-service.md)
+- [ ] **11** — [Phone Push Notifications](11-phone-push-notifications.md)

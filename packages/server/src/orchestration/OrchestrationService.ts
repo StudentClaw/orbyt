@@ -35,6 +35,7 @@ import type {
   SetThreadAccessModeResult,
 } from "@student-claw/contracts"
 import { createId } from "@student-claw/shared-runtime"
+import { recordWorkflowCompletionActivity } from "../activity/feed.js"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import type { AppConfig } from "../config/defaults.js"
@@ -44,6 +45,10 @@ import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerR
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
 import { tokenizeStubResponse } from "./StubProvider.js"
+import {
+  ThreadRuntimeBusyError,
+  ThreadRuntimeManager,
+} from "./ThreadRuntimeManager.js"
 
 const LEGACY_WORKSPACE_ID = "workspace_legacy" as WorkspaceId
 type ProviderThreadScopedEvent = Extract<ProviderRuntimeEvent, { readonly threadId: unknown; readonly turnId: unknown }>
@@ -160,6 +165,7 @@ export interface OrchestrationServiceShape {
     approvalRequestId: string,
     decision: ProviderApprovalDecision,
   ) => Promise<RespondToProviderApprovalResult>
+  readonly shutdown: () => Promise<void>
 }
 
 /**
@@ -627,28 +633,46 @@ function reconcileStaleStreamingState(database: DatabaseService): void {
   const now = new Date().toISOString()
   database.transaction(() => {
     database.execute(
-      `UPDATE orchestration_turns
+      `UPDATE provider_runtime_sessions
        SET status = 'interrupted',
-           completed_at = COALESCE(completed_at, ?),
+           provider_thread_id = NULL,
+           auth_state = COALESCE(auth_state, 'unknown'),
            updated_at = ?
-       WHERE status = 'streaming'`,
-      [now, now],
+       WHERE status IN ('queued', 'streaming')
+          OR thread_id IN (
+            SELECT id
+            FROM orchestration_threads
+            WHERE status IN ('queued', 'streaming')
+               OR current_turn_id IN (
+                 SELECT id
+                 FROM orchestration_turns
+                 WHERE status IN ('pending', 'queued', 'streaming')
+               )
+          )`,
+      [now],
     )
     database.execute(
       `UPDATE orchestration_threads
        SET status = 'interrupted',
            current_turn_id = NULL,
            updated_at = ?
-       WHERE status = 'streaming'`,
+       WHERE status IN ('queued', 'streaming')
+          OR current_turn_id IN (
+            SELECT id
+            FROM orchestration_turns
+            WHERE status IN ('pending', 'queued', 'streaming')
+          )`,
       [now],
     )
     database.execute(
-      `UPDATE provider_runtime_sessions
+      `UPDATE orchestration_turns
        SET status = 'interrupted',
+           completed_at = COALESCE(completed_at, ?),
            updated_at = ?
-       WHERE status = 'streaming'`,
-      [now],
+       WHERE status IN ('pending', 'queued', 'streaming')`,
+      [now, now],
     )
+    database.execute(`DELETE FROM queued_provider_turns`)
   })
 }
 
@@ -716,6 +740,19 @@ async function publishCompletedTurn(
     turnId: work.turnId as ProviderTurnId,
     output,
   })
+  try {
+    await recordWorkflowCompletionActivity({
+      database: deps.database,
+      pushBus: deps.pushBus,
+      turn: {
+        id: turn.id,
+        threadId: turn.threadId,
+        output,
+      },
+    })
+  } catch (error) {
+    process.stderr.write(`Failed to record workflow activity: ${String(error)}\n`)
+  }
   await publishDomainEvent(deps.pushBus, { type: "turn.completed", turn })
 }
 
@@ -826,6 +863,39 @@ async function processWork(
   work: WorkItem,
 ): Promise<void> {
   try {
+    const now = new Date().toISOString()
+    deps.database.transaction(() => {
+      deps.database.execute(
+        `UPDATE orchestration_turns
+         SET status = 'streaming', updated_at = ?
+         WHERE id = ?`,
+        [now, work.turnId],
+      )
+      deps.database.execute(
+        `UPDATE orchestration_threads
+         SET status = 'streaming', current_turn_id = ?, updated_at = ?
+         WHERE id = ?`,
+        [work.turnId, now, work.threadId],
+      )
+      deps.database.execute(
+        `UPDATE provider_runtime_sessions
+         SET status = ?, last_error = NULL, updated_at = ?
+         WHERE thread_id = ?`,
+        ["streaming", now, work.threadId],
+      )
+    })
+
+    const startedTurn = readTurn(deps.database, work.turnId)
+    if (startedTurn) {
+      appendEvent(deps, "turn.started", { turn: startedTurn }, work)
+      await publishDomainEvent(deps.pushBus, { type: "turn.started", turn: startedTurn })
+    }
+    await publishRuntimeEvent(deps.pushBus, {
+      type: "provider.turnStarted",
+      threadId: work.threadId as ProviderThreadId,
+      turnId: work.turnId as ProviderTurnId,
+    })
+
     let output = ""
 
     for (const [index, token] of tokenizeStubResponse(work.content).entries()) {
@@ -1324,7 +1394,7 @@ function buildTurnAttachments(
   }))
 }
 
-function buildStreamingTurn(
+function buildQueuedTurn(
   threadId: string,
   content: string,
   attachments: readonly TurnAttachmentInput[],
@@ -1336,7 +1406,7 @@ function buildStreamingTurn(
     input: content,
     output: "",
     reasoning: "",
-    status: "streaming",
+    status: "queued",
     startedAt: now,
     completedAt: null,
     skill: null,
@@ -1356,6 +1426,9 @@ async function sendTurn(
   if (!thread) {
     throw new Error(`Thread not found: ${threadId}`)
   }
+  if (thread.currentTurnId && (thread.status === "queued" || thread.status === "streaming")) {
+    throw new Error("Wait for the current turn to finish before sending another message.")
+  }
 
   const workspace = readWorkspace(deps.database, thread.workspaceId)
   if (!workspace) {
@@ -1363,7 +1436,7 @@ async function sendTurn(
   }
   assertWorkspaceAcceptsChat(workspace)
 
-  const turn = buildStreamingTurn(threadId, content, attachments)
+  const turn = buildQueuedTurn(threadId, content, attachments)
   const now = new Date().toISOString()
   const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
   await deps.receiptBus.track(commandId)
@@ -1379,26 +1452,21 @@ async function sendTurn(
       `UPDATE orchestration_threads
        SET status = ?, current_turn_id = ?, updated_at = ?
        WHERE id = ?`,
-      ["streaming", turn.id, now, threadId],
+      ["queued", turn.id, now, threadId],
     )
     deps.database.execute(
       `INSERT OR REPLACE INTO provider_runtime_sessions (
          thread_id, provider, status, last_error, updated_at,
          provider_thread_id, auth_state, runtime_payload, cwd
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [threadId, "stub", "streaming", null, now, null, "unknown", null, sessionCwd],
+      [threadId, "stub", "idle", null, now, null, "unknown", null, sessionCwd],
     )
     recordReceipt(deps, commandId, "pending", { threadId, turnId: turn.id })
   })
 
   deps.state.activeTurns.set(turn.id, { interrupted: false })
-  appendEvent(deps, "turn.started", { turn }, { threadId, turnId: turn.id, commandId })
-  await publishDomainEvent(deps.pushBus, { type: "turn.started", turn })
-  await publishRuntimeEvent(deps.pushBus, {
-    type: "provider.turnStarted",
-    threadId: threadId as ProviderThreadId,
-    turnId: turn.id as ProviderTurnId,
-  })
+  appendEvent(deps, "turn.queued", { turn }, { threadId, turnId: turn.id, commandId })
+  await publishDomainEvent(deps.pushBus, { type: "turn.queued", turn })
   deps.state.workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
   void drainQueue(deps)
   return { turnId: turn.id }
@@ -1458,6 +1526,7 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
       approvalRequestId,
       resolved: false,
     }),
+    shutdown: async () => undefined,
   }
 }
 
@@ -1474,6 +1543,7 @@ export const OrchestrationServiceLive = Layer.scoped(
     const receiptBus = yield* RuntimeReceiptBus
     const runtimeStore = yield* ProviderRuntimeStore
     const codexCli = yield* CodexCli
+    const threadRuntimeManager = yield* ThreadRuntimeManager
     const activeTurns = new Map<string, { interrupted: boolean }>()
     const workQueue: WorkItem[] = []
     let drainingQueue = false
@@ -1545,36 +1615,6 @@ export const OrchestrationServiceLive = Layer.scoped(
       await pushBus.publish(PUSH_CHANNELS.PROVIDER_RUNTIME, event)
     }
 
-    const reconcileStaleStreamingState = (): void => {
-      const now = new Date().toISOString()
-      database.transaction(() => {
-        database.execute(
-          `UPDATE orchestration_turns
-           SET status = 'interrupted',
-               completed_at = COALESCE(completed_at, ?),
-               updated_at = ?
-           WHERE status = 'streaming'`,
-          [now, now],
-        )
-        database.execute(
-          `UPDATE orchestration_threads
-           SET status = 'interrupted',
-               current_turn_id = NULL,
-               updated_at = ?
-           WHERE status = 'streaming'`,
-          [now],
-        )
-        database.execute(
-          `UPDATE provider_runtime_sessions
-           SET status = 'interrupted',
-               auth_state = COALESCE(auth_state, 'unknown'),
-               updated_at = ?
-           WHERE status = 'streaming'`,
-          [now],
-        )
-      })
-    }
-
     const completeTurn = async (
       commandId: string,
       threadId: string,
@@ -1626,6 +1666,19 @@ export const OrchestrationServiceLive = Layer.scoped(
           turnId: turnId as never,
           output,
         })
+        try {
+          await recordWorkflowCompletionActivity({
+            database,
+            pushBus,
+            turn: {
+              id: turn.id,
+              threadId: turn.threadId,
+              output,
+            },
+          })
+        } catch (error) {
+          process.stderr.write(`Failed to record workflow activity: ${String(error)}\n`)
+        }
         await publishDomainEvent({ type: "turn.completed", turn })
       }
 
@@ -1677,13 +1730,13 @@ export const OrchestrationServiceLive = Layer.scoped(
         database.transaction(() => {
           database.execute(
             `UPDATE orchestration_turns
-             SET status = 'pending', updated_at = ?
+             SET status = 'queued', updated_at = ?
              WHERE id = ?`,
             [now, work.turnId],
           )
           database.execute(
             `UPDATE orchestration_threads
-             SET status = 'idle', current_turn_id = ?, updated_at = ?
+             SET status = 'queued', current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
             [work.turnId, now, work.threadId],
           )
@@ -1874,19 +1927,8 @@ export const OrchestrationServiceLive = Layer.scoped(
       }
     }
 
-    reconcileStaleStreamingState()
-    void runtimeStore.listQueuedTurns().then((persistedQueuedTurns) => {
-      workQueue.push(...persistedQueuedTurns.map((entry) => ({
-        commandId: `queued_${entry.turnId}`,
-        threadId: entry.threadId,
-        turnId: entry.turnId,
-        content: entry.content,
-      })))
-      void runtimeStore.refreshQueuedCount()
-      void codexCli.initialize().then(() => {
-        void drainQueue()
-      }).catch(() => undefined)
-    })
+    reconcileStaleStreamingState(database)
+    void runtimeStore.refreshQueuedCount()
 
     return {
       getDesktopBootstrap: async () => ({
@@ -1937,7 +1979,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           workspaces,
           threads,
           turns,
-          pendingApprovals: codexCli.listPendingApprovals(),
+          pendingApprovals: threadRuntimeManager.listPendingApprovals(),
           providerStatus: providerRuntime.status,
           providerRuntime,
           ready: readiness.isReady(),
@@ -2005,6 +2047,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           throw new Error(`Workspace already exists for folder: ${normalized}`)
         }
 
+        const workspaceThreads = readWorkspaceThreadRows(database, workspaceId)
         const now = new Date().toISOString()
         database.execute(
           `UPDATE chat_workspaces
@@ -2013,6 +2056,9 @@ export const OrchestrationServiceLive = Layer.scoped(
           [deriveWorkspaceName(normalized), normalized, "ready", now, workspaceId],
         )
         resetWorkspaceThreadProviderSessions(database, workspaceId, normalized, now)
+        await Promise.allSettled(
+          workspaceThreads.map((row) => threadRuntimeManager.disposeThread(row.id)),
+        )
 
         const updatedWorkspace = readWorkspace(database, workspaceId)
         if (!updatedWorkspace) {
@@ -2033,20 +2079,16 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         const threadRows = readWorkspaceThreadRows(database, workspaceId)
         const deletedThreadIds = threadRows.map((row) => row.id as OrchestrationThread["id"])
-        const deletedThreadIdSet = new Set(threadRows.map((row) => row.id))
-        const activeTurnIds = threadRows.flatMap((row) => row.current_turn_id ? [row.current_turn_id] : [])
-
-        for (const turnId of activeTurnIds) {
-          activeTurns.delete(turnId)
-        }
-
-        const remainingQueue = workQueue.filter((item) => !deletedThreadIdSet.has(item.threadId))
-        workQueue.splice(0, workQueue.length, ...remainingQueue)
+        await Promise.allSettled(threadRows.map((row) => threadRuntimeManager.disposeThread(row.id)))
 
         database.transaction(() => {
           if (deletedThreadIds.length > 0) {
             const placeholders = deletedThreadIds.map(() => "?").join(", ")
             deleteTurnAttachmentsForThreadIds(database, deletedThreadIds)
+            database.execute(
+              `DELETE FROM queued_provider_turns WHERE thread_id IN (${placeholders})`,
+              deletedThreadIds,
+            )
             database.execute(
               `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
               deletedThreadIds,
@@ -2169,6 +2211,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           )
           resetThreadProviderSession(database, threadId, now)
         })
+        await threadRuntimeManager.disposeThread(threadId)
 
         const updatedThread = readThread(threadId)
         if (!updatedThread) {
@@ -2186,16 +2229,11 @@ export const OrchestrationServiceLive = Layer.scoped(
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
         }
-
-        if (thread.currentTurnId) {
-          activeTurns.delete(thread.currentTurnId)
-        }
-
-        const remainingQueue = workQueue.filter((item) => item.threadId !== threadId)
-        workQueue.splice(0, workQueue.length, ...remainingQueue)
+        await threadRuntimeManager.disposeThread(threadId)
 
         database.transaction(() => {
           deleteTurnAttachmentsForThreadIds(database, [threadId])
+          database.execute(`DELETE FROM queued_provider_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
@@ -2212,6 +2250,9 @@ export const OrchestrationServiceLive = Layer.scoped(
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
         }
+        if (thread.currentTurnId && (thread.status === "queued" || thread.status === "streaming")) {
+          throw new Error("Wait for the current turn to finish before sending another message.")
+        }
 
         const runtimeState = await runtimeStore.getState()
         if (runtimeState.authState === "auth_required" || runtimeState.status === "auth_required") {
@@ -2226,7 +2267,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           input: content,
           output: "",
           reasoning: "",
-          status: "pending",
+          status: "queued",
           startedAt: now,
           completedAt: null,
           skill: null,
@@ -2246,22 +2287,164 @@ export const OrchestrationServiceLive = Layer.scoped(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?
              WHERE id = ?`,
-            ["idle", turn.id, now, threadId],
+            ["queued", turn.id, now, threadId],
           )
           recordReceipt(commandId, "pending", { threadId, turnId: turn.id })
         })
 
-        activeTurns.set(turn.id, { interrupted: false })
         await runtimeStore.enqueueTurn(turn.id, threadId, content)
         await runtimeStore.upsertThreadSession(threadId, {
           status: runtimeState.status,
           authState: runtimeState.authState,
         })
 
-        appendEvent("turn.started", { turn }, { threadId, turnId: turn.id, commandId })
-        await publishDomainEvent({ type: "turn.started", turn })
-        workQueue.push({ commandId, threadId, turnId: turn.id, content, model })
-        void drainQueue()
+        appendEvent("turn.queued", { turn }, { threadId, turnId: turn.id, commandId })
+        await publishDomainEvent({ type: "turn.queued", turn })
+        const work: WorkItem = { commandId, threadId, turnId: turn.id, content, model }
+
+        try {
+          await threadRuntimeManager.submitTurn({
+            threadId,
+            turnId: turn.id,
+            content,
+            cwd: resolveThreadExecutionCwd(database, threadId),
+            accessMode: thread.accessMode,
+            model,
+            onStart: async () => {
+              await runtimeStore.dequeueTurn(turn.id)
+              await markTurnStreaming(work)
+              const startedTurn = readTurn(turn.id)
+              if (startedTurn) {
+                appendEvent("turn.started", { turn: startedTurn }, {
+                  threadId,
+                  turnId: turn.id,
+                  commandId,
+                })
+                await publishDomainEvent({ type: "turn.started", turn: startedTurn })
+              }
+              await publishRuntimeEvent({
+                type: "provider.turnStarted",
+                threadId: threadId as ProviderThreadId,
+                turnId: turn.id as ProviderTurnId,
+              })
+            },
+            onToken: async (token, index) => {
+              const current = readTurn(turn.id)
+              const output = `${current?.output ?? ""}${token}`
+
+              database.execute(
+                `UPDATE orchestration_turns
+                 SET output_text = ?, updated_at = ?
+                 WHERE id = ?`,
+                [output, new Date().toISOString(), turn.id],
+              )
+
+              await publishRuntimeEvent({
+                type: "provider.token",
+                threadId: threadId as ProviderThreadId,
+                turnId: turn.id as ProviderTurnId,
+                token,
+                index,
+              })
+
+              const updatedTurn = readTurn(turn.id)
+              if (updatedTurn) {
+                appendEvent("turn.updated", { turn: updatedTurn }, {
+                  threadId,
+                  turnId: turn.id,
+                  commandId,
+                })
+                await publishDomainEvent({ type: "turn.updated", turn: updatedTurn })
+              }
+            },
+            onReasoning: async (token, index) => {
+              const current = readTurn(turn.id)
+              const reasoning = `${current?.reasoning ?? ""}${token}`
+
+              database.execute(
+                `UPDATE orchestration_turns
+                 SET reasoning_text = ?, updated_at = ?
+                 WHERE id = ?`,
+                [reasoning, new Date().toISOString(), turn.id],
+              )
+
+              await publishRuntimeEvent({
+                type: "provider.reasoning",
+                threadId: threadId as ProviderThreadId,
+                turnId: turn.id as ProviderTurnId,
+                token,
+                index,
+              })
+
+              const updatedTurn = readTurn(turn.id)
+              if (updatedTurn) {
+                appendEvent("turn.updated", { turn: updatedTurn }, {
+                  threadId,
+                  turnId: turn.id,
+                  commandId,
+                })
+                await publishDomainEvent({ type: "turn.updated", turn: updatedTurn })
+              }
+            },
+            onCompleted: async () => {
+              const output = readTurn(turn.id)?.output ?? ""
+              await completeTurn(commandId, threadId, turn.id, output, false)
+            },
+            onInterrupted: async () => {
+              const output = readTurn(turn.id)?.output ?? ""
+              await completeTurn(commandId, threadId, turn.id, output, true)
+            },
+            onError: async (error) => {
+              const message = error.message || "Unknown orchestration error"
+              if (error.retryable) {
+                const now = new Date().toISOString()
+                database.transaction(() => {
+                  database.execute(
+                    `UPDATE orchestration_turns
+                     SET status = 'queued', updated_at = ?
+                     WHERE id = ?`,
+                    [now, turn.id],
+                  )
+                  database.execute(
+                    `UPDATE orchestration_threads
+                     SET status = 'queued', current_turn_id = ?, updated_at = ?
+                     WHERE id = ?`,
+                    [turn.id, now, threadId],
+                  )
+                })
+                await runtimeStore.enqueueTurn(turn.id, threadId, content)
+                await runtimeStore.upsertThreadSession(threadId, {
+                  status: "offline",
+                  lastError: message,
+                })
+                return "retry"
+              }
+
+              await runtimeStore.dequeueTurn(turn.id)
+              const output = readTurn(turn.id)?.output ?? ""
+              await completeTurn(commandId, threadId, turn.id, output, true)
+              await runtimeStore.upsertThreadSession(threadId, {
+                status: "interrupted",
+                lastError: message,
+              })
+              return "interrupt"
+            },
+            onMcpToolCall: async (event) => {
+              await publishRuntimeEvent(event)
+            },
+            onApprovalRequest: async (approval) => {
+              await publishRuntimeEvent({
+                type: "provider.approvalRequested",
+                approval,
+              })
+            },
+          })
+        } catch (error) {
+          if (error instanceof ThreadRuntimeBusyError) {
+            throw new Error("Wait for the current turn to finish before sending another message.")
+          }
+          throw error
+        }
         return { turnId: turn.id }
       },
       interruptTurn: async (commandId, threadId) => {
@@ -2272,7 +2455,23 @@ export const OrchestrationServiceLive = Layer.scoped(
           return { interrupted: false }
         }
 
-        if (!activeTurns.has(thread.currentTurnId)) {
+        const interruptResult = await threadRuntimeManager.interruptTurn(
+          threadId,
+          thread.currentTurnId,
+        )
+        if (interruptResult.disposition === "queued" || interruptResult.disposition === "missing") {
+          await runtimeStore.dequeueTurn(thread.currentTurnId)
+          const persistedTurn = readTurn(thread.currentTurnId)
+          await completeTurn(
+            commandId,
+            threadId,
+            thread.currentTurnId,
+            persistedTurn?.output ?? "",
+            true,
+          )
+          return { interrupted: true }
+        }
+        if (!interruptResult.interrupted) {
           const persistedTurn = readTurn(thread.currentTurnId)
           await completeTurn(
             commandId,
@@ -2284,8 +2483,6 @@ export const OrchestrationServiceLive = Layer.scoped(
           return { interrupted: true }
         }
 
-        activeTurns.set(thread.currentTurnId, { interrupted: true })
-        await codexCli.interruptTurn(threadId, thread.currentTurnId).catch(() => false)
         recordReceipt(commandId, "completed", { interrupted: true, turnId: thread.currentTurnId })
         await receiptBus.resolve(commandId, { interrupted: true, turnId: thread.currentTurnId })
         return { interrupted: true }
@@ -2298,15 +2495,12 @@ export const OrchestrationServiceLive = Layer.scoped(
       },
       retryProviderInitialize: async (commandId) => {
         const started = await codexCli.retryInitialize()
-        if (started) {
-          void drainQueue()
-        }
         recordReceipt(commandId, started ? "completed" : "failed", { started })
         await receiptBus.resolve(commandId, { started })
         return { started }
       },
       respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
-        const result = await codexCli.respondToApproval(approvalRequestId, decision)
+        const result = await threadRuntimeManager.respondToApproval(approvalRequestId, decision)
         if (result.resolved) {
           await publishRuntimeEvent({
             type: "provider.approvalResolved",
@@ -2325,6 +2519,31 @@ export const OrchestrationServiceLive = Layer.scoped(
           resolved: result.resolved,
         })
         return { approvalRequestId, resolved: result.resolved }
+      },
+      shutdown: async () => {
+        const snapshot = threadRuntimeManager.getSnapshot()
+        for (const queued of snapshot.queuedTurns) {
+          await runtimeStore.dequeueTurn(queued.turnId)
+          const persistedTurn = readTurn(queued.turnId)
+          await completeTurn(
+            `shutdown_${queued.turnId}`,
+            queued.threadId,
+            queued.turnId,
+            persistedTurn?.output ?? "",
+            true,
+          )
+        }
+        for (const active of snapshot.activeTurns) {
+          const persistedTurn = readTurn(active.turnId)
+          await completeTurn(
+            `shutdown_${active.turnId}`,
+            active.threadId,
+            active.turnId,
+            persistedTurn?.output ?? "",
+            true,
+          )
+        }
+        await threadRuntimeManager.shutdown()
       },
     }
   }),

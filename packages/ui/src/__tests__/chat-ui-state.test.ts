@@ -172,4 +172,81 @@ describe("chat UI state", () => {
 
     expect(getOrchestrationSnapshot()?.pendingApprovals).toHaveLength(0)
   })
+
+  test("treats queued and started turn events as different thread states", () => {
+    setOrchestrationSnapshot({
+      workspaces: [
+        {
+          id: "workspace-1" as never,
+          kind: "filesystem",
+          name: "Repo",
+          rootPath: "/repo",
+          availability: "ready",
+          createdAt: "2026-04-11T00:00:00.000Z",
+          updatedAt: "2026-04-11T00:00:00.000Z",
+        },
+      ],
+      threads: [
+        {
+          id: "thread-1" as never,
+          workspaceId: "workspace-1" as never,
+          title: "Chat",
+          accessMode: "default",
+          status: "idle",
+          createdAt: "2026-04-11T00:01:00.000Z",
+          currentTurnId: null,
+        },
+      ],
+      turns: [],
+      pendingApprovals: [],
+      providerStatus: "idle",
+      providerRuntime: {
+        adapter: "codex",
+        status: "idle",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-11T00:02:01.000Z",
+      },
+      ready: true,
+      lastSequence: 1,
+    })
+
+    applyOrchestrationDomainEvent({
+      type: "turn.queued",
+      turn: {
+        id: "turn-1" as never,
+        threadId: "thread-1" as never,
+        input: "Hello",
+        output: "",
+        reasoning: "",
+        status: "queued",
+        startedAt: "2026-04-11T00:02:00.000Z",
+        completedAt: null,
+        skill: null,
+        attachments: [],
+      },
+    }, 2)
+
+    expect(getOrchestrationSnapshot()?.threads[0]?.status).toBe("queued")
+    expect(getOrchestrationSnapshot()?.threads[0]?.currentTurnId).toBe("turn-1")
+
+    applyOrchestrationDomainEvent({
+      type: "turn.started",
+      turn: {
+        id: "turn-1" as never,
+        threadId: "thread-1" as never,
+        input: "Hello",
+        output: "",
+        reasoning: "",
+        status: "streaming",
+        startedAt: "2026-04-11T00:02:00.000Z",
+        completedAt: null,
+        skill: null,
+        attachments: [],
+      },
+    }, 3)
+
+    expect(getOrchestrationSnapshot()?.threads[0]?.status).toBe("streaming")
+  })
 })

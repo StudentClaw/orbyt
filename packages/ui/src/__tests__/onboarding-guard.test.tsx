@@ -11,15 +11,25 @@ const hookMocks = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", () => ({
   Outlet: () => <div data-testid="outlet">outlet</div>,
-  useRouterState: () => ({
-    location: { pathname: hookMocks.pathname },
-  }),
+  useRouterState: (options?: { select?: (state: { location: { pathname: string } }) => unknown }) => {
+    const state = {
+      location: { pathname: hookMocks.pathname },
+    }
+    return options?.select ? options.select(state) : state
+  },
   useNavigate: () => hookMocks.navigateFn,
 }))
 
 vi.mock("@/hooks/useAppRuntime", () => ({
   useIsOnboardingComplete: () => hookMocks.onboardingComplete,
   useIsServerHydrationComplete: () => hookMocks.hydrationComplete,
+  useRuntimeConnectionStatus: () => ({
+    phase: "connected" as const,
+    wsUrl: "ws://127.0.0.1:8787",
+    lastSequence: 0,
+    lastError: null,
+  }),
+  useRuntimeOrchestrationSnapshot: () => null,
 }))
 
 vi.mock("@/hooks/use-mobile", () => ({

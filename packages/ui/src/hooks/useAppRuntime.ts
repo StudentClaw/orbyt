@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import {
   clearChatSelection,
@@ -169,8 +169,9 @@ export function useOrchestrationActions() {
         content: string,
         attachments: readonly TurnAttachmentInput[],
         model?: string | null,
+        skillId?: string | null,
       ) =>
-        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, attachments, model),
+        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, attachments, model, skillId),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
       startProviderAuth: () =>
         getPrimaryWsRpcClient().provider.startAuth(),
@@ -194,4 +195,24 @@ export function useChatUiActions() {
       setPanelWidth: (width: number) => setChatPanelWidth(width),
     }
   }, [])
+}
+
+export type SkillEntry = {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+}
+
+export function useSkills(): readonly SkillEntry[] {
+  const [skills, setSkills] = useState<readonly SkillEntry[]>([])
+
+  useEffect(() => {
+    void getPrimaryWsRpcClient().skills.list().then((result) => {
+      setSkills(result.skills)
+    }).catch(() => {
+      // skills unavailable — leave empty
+    })
+  }, [])
+
+  return skills
 }

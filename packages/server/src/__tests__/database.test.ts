@@ -53,7 +53,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(10)
+    expect(version?.version).toBe(12)
 
     db.close()
   })
@@ -65,8 +65,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(10)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(rows.length).toBe(12)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -110,7 +110,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(10)
+    expect(version?.version).toBe(12)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -291,7 +291,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(10)
+    expect(version?.version).toBe(12)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -306,6 +306,121 @@ describe("Database migrations", () => {
       .map((column) => column.name)
 
     expect(threadColumns).toContain("access_mode")
+
+    db.close()
+  })
+
+  test("repair migration upgrades legacy onboarding tables for fully versioned databases", () => {
+    const db = new BunDatabase(":memory:")
+    db.run(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      CREATE TABLE onboarding_state (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        step INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'skipped')),
+        completed_at TEXT
+      )
+    `)
+    db.run(`
+      CREATE TABLE user_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        study_times TEXT,
+        course_ranking TEXT,
+        notification_prefs TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      CREATE TABLE ai_auth_state (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        status TEXT NOT NULL DEFAULT 'pending',
+        provider TEXT,
+        connected_at TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        api_key TEXT
+      )
+    `)
+    db.run(`
+      INSERT INTO user_preferences (study_times, course_ranking, notification_prefs, updated_at)
+      VALUES (
+        '["morning"]',
+        '["course-a"]',
+        '{"notificationEnabled":false,"quietHoursStart":"23:00","quietHoursEnd":"07:00"}',
+        '2026-04-16T00:00:00.000Z'
+      )
+    `)
+    db.run(`
+      INSERT INTO onboarding_state (step, status, completed_at)
+      VALUES (2, 'completed', '2026-04-16T00:00:00.000Z')
+    `)
+    for (let version = 1; version <= 10; version += 1) {
+      db.run("INSERT INTO schema_version (version) VALUES (?)", [version])
+    }
+
+    runMigrations(db)
+
+    const userPreferenceColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(user_preferences)")
+      .all()
+      .map((column) => column.name)
+    const onboardingColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(onboarding_state)")
+      .all()
+      .map((column) => column.name)
+    const userPreferenceRow = db
+      .query<{
+        id: number
+        study_times: string
+        course_ranking: string
+        max_session_mins: number
+        off_limit_days: string
+        notification_enabled: number
+        quiet_hours_start: string
+        quiet_hours_end: string
+        calendar_integration: string
+      }, []>("SELECT * FROM user_preferences WHERE id = 1")
+      .get()
+    const onboardingRow = db
+      .query<{ step_name: string; status: string }, []>(
+        "SELECT step_name, status FROM onboarding_state WHERE step_name = 'ai-auth'",
+      )
+      .get()
+    const overallStatus = db
+      .query<{ value: string }, []>(
+        "SELECT value FROM onboarding_meta WHERE key = 'overall_status'",
+      )
+      .get()
+    const version = db
+      .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
+      .get()
+
+    expect(version?.version).toBe(12)
+    expect(userPreferenceColumns).toContain("max_session_mins")
+    expect(userPreferenceColumns).toContain("quiet_hours_start")
+    expect(onboardingColumns).toContain("step_name")
+    expect(onboardingColumns).not.toContain("step")
+    expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'routines'").get()).toBeDefined()
+    expect(userPreferenceRow).toEqual(expect.objectContaining({
+      id: 1,
+      study_times: "[\"morning\"]",
+      course_ranking: "[\"course-a\"]",
+      max_session_mins: 90,
+      off_limit_days: "[]",
+      notification_enabled: 0,
+      quiet_hours_start: "23:00",
+      quiet_hours_end: "07:00",
+      calendar_integration: "none",
+    }))
+    expect(onboardingRow).toEqual({
+      step_name: "ai-auth",
+      status: "completed",
+    })
+    expect(overallStatus?.value).toBe("in_progress")
 
     db.close()
   })

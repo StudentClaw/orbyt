@@ -36,9 +36,12 @@ import { IPC_CHANNELS } from "./channels.js"
 import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
+import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
+import { createPushManager, type PushManager } from "../push/push-manager.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
+let defaultPushManager: PushManager | null = null
 
 const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
   ".bmp": "image/bmp",
@@ -101,22 +104,49 @@ function resolveCodexPath(): string {
   return candidates.find(existsSync) ?? "codex"
 }
 
+function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]): void {
+  if ("removeHandler" in ipcMain && typeof ipcMain.removeHandler === "function") {
+    ipcMain.removeHandler(channel)
+  }
+
+  ipcMain.handle(channel, handler)
+}
+
+function resolvePushManager(
+  bootstrap: DesktopBootstrap,
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pushManager?: PushManager },
+): PushManager {
+  if (runtime?.pushManager) {
+    return runtime.pushManager
+  }
+
+  if (!defaultPushManager) {
+    defaultPushManager = createPushManager({
+      userDataPath: app.getPath("userData"),
+      bootstrap,
+      relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
+    })
+  }
+
+  return defaultPushManager
+}
+
 /**
  * Registers the Electron main-process IPC handlers needed by the renderer runtime.
  */
 export function registerIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
-  ipcMain.handle(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
+  registerHandler(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
   })
 
-  ipcMain.handle(IPC_CHANNELS.APP_GET_BOOTSTRAP, () => {
+  registerHandler(IPC_CHANNELS.APP_GET_BOOTSTRAP, () => {
     return bootstrap
   })
 
-  ipcMain.handle(IPC_CHANNELS.NOTIFICATION_SHOW, (_event, options: { title: string; body: string }) => {
+  registerHandler(IPC_CHANNELS.NOTIFICATION_SHOW, (_event, options: { title: string; body: string }) => {
     if (Notification.isSupported()) {
       const notification = new Notification({
         title: options.title,
@@ -126,7 +156,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
+  registerHandler(
     IPC_CHANNELS.FILE_OPEN_DIALOG,
     async (
       _event,
@@ -151,7 +181,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IPC_CHANNELS.FILE_SELECT_ATTACHMENTS,
     async (
       _event,
@@ -172,7 +202,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IPC_CHANNELS.FILE_GET_ATTACHMENT_METADATA,
     (_event, params: AttachmentMetadataLookupParams): TurnAttachmentInput[] => {
       return params.paths
@@ -181,7 +211,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IPC_CHANNELS.FILE_SAVE_DIALOG,
     async (
       _event,
@@ -200,7 +230,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
+  registerHandler(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
     const codexPath = resolveCodexPath()
     const env = buildIsolatedCodexEnv(app.getPath("userData"))
 
@@ -236,8 +266,18 @@ export function registerIpcHandlers(
     })
   })
 
+  const pushManager = resolvePushManager(bootstrap, runtime)
+  registerHandler(IpcChannel.PUSH_GET_SETTINGS, () => pushManager.getSettings())
+  registerHandler(IpcChannel.PUSH_UPDATE_SETTINGS, (_event, params) => pushManager.updateSettings(params))
+  registerHandler(IpcChannel.PUSH_START_PAIRING, () => pushManager.startPairing())
+  registerHandler(IpcChannel.PUSH_GET_PAIRING_STATUS, () => pushManager.getPairingStatus())
+  registerHandler(IpcChannel.PUSH_CANCEL_PAIRING, () => pushManager.cancelPairing())
+  registerHandler(IpcChannel.PUSH_SEND_TEST, () => pushManager.sendTest())
+  registerHandler(IpcChannel.PUSH_UNLINK_DEVICE, () => pushManager.unlinkDevice())
+
   return registerPluginIpcHandlers(bootstrap, runtime)
 }
+
 
 function buildPluginActionResult(
   bootstrap: DesktopBootstrap,
@@ -284,7 +324,7 @@ function emitPluginLifecycle(payload: { pluginId: string; status: ExtensionRegis
 
 function registerPluginIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   const runtimeServices = runtime ?? (() => {
     const createdRuntime = createPluginRuntime({
@@ -297,16 +337,18 @@ function registerPluginIpcHandlers(
     return {
       pluginManager: createdRuntime.manager,
       pluginAuthService: createdRuntime.authService,
+      pluginEnabledStore: createdRuntime.enabledStore,
     }
   })()
   const pluginManager = runtimeServices.pluginManager
   const pluginAuthService = runtimeServices.pluginAuthService
+  const pluginEnabledStore = runtimeServices.pluginEnabledStore
 
-  ipcMain.handle(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
+  registerHandler(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
     return pluginManager.list()
   })
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_START,
     (_event, params: PluginStartParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
       if (!bootstrap.featureFlags.pluginSystem) {
@@ -317,7 +359,7 @@ function registerPluginIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_STOP,
     (_event, params: PluginStopParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
       if (!bootstrap.featureFlags.pluginSystem) {
@@ -328,7 +370,7 @@ function registerPluginIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_RETRY,
     (_event, params: PluginRetryParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
       if (!bootstrap.featureFlags.pluginSystem) {
@@ -339,35 +381,51 @@ function registerPluginIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_INSTALL_BUNDLED,
     (_event, params: PluginInstallBundledParams): PluginManagementActionResult => {
       return buildPluginActionResult(bootstrap, params.pluginId)
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_SET_ENABLED,
     (_event, params: PluginSetEnabledParams): PluginManagementActionResult => {
-      return buildPluginActionResult(bootstrap, params.pluginId)
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return buildPluginActionResult(bootstrap, params.pluginId)
+      }
+
+      if (!pluginEnabledStore) {
+        return { ok: false, pluginId: params.pluginId, reason: "not_implemented" }
+      }
+
+      pluginEnabledStore.setEnabled(params.pluginId, params.enabled)
+
+      if (params.enabled) {
+        void pluginManager.start(params.pluginId)
+      } else {
+        void pluginManager.stop(params.pluginId)
+      }
+
+      return { ok: true, pluginId: params.pluginId, status: pluginManager.getStatus(params.pluginId)?.status ?? "discovered" }
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_UNINSTALL,
     (_event, params: PluginUninstallParams): PluginManagementActionResult => {
       return buildPluginActionResult(bootstrap, params.pluginId)
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_GET_STATUS,
     (_event, params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
       return pluginManager.getStatus(params.pluginId)
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_GET_AUTH_STATUS,
     (_event, params: PluginGetAuthStatusParams): PluginAuthStatus | null => {
       if (!bootstrap.featureFlags.pluginSystem) {
@@ -382,7 +440,7 @@ function registerPluginIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     IpcChannel.PLUGIN_SAVE_AUTH,
     (_event, params: PluginSaveAuthParams): PluginSaveAuthResult => {
       if (!bootstrap.featureFlags.pluginSystem) {

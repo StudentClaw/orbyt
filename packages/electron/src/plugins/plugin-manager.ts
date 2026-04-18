@@ -10,6 +10,7 @@ import {
   type AvailablePluginRegistryRecord,
 } from "./plugin-registry.js"
 import { PluginSandbox, type PluginSandboxOptions } from "./plugin-sandbox.js"
+import type { PluginEnabledStore } from "./plugin-enabled-store.js"
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>
 
@@ -39,6 +40,7 @@ export type PluginManagerOptions = {
   now?: () => Date
   scheduleTimeout?: typeof globalThis.setTimeout
   clearScheduledTimeout?: typeof globalThis.clearTimeout
+  enabledStore?: PluginEnabledStore
 }
 
 function isRunningStatus(status: ExtensionLifecycleStatus): boolean {
@@ -51,7 +53,18 @@ function formatUnexpectedExitMessage(pluginId: string, pid: number | null): stri
     : `Plugin ${pluginId} exited unexpectedly`
 }
 
-function buildSandboxOptions(record: AvailablePluginRegistryRecord): PluginSandboxOptions {
+export function applyPluginSandboxEnv(baseEnv: Record<string, string>, isElectronRuntime = Boolean(process.versions.electron)): Record<string, string> {
+  if (!isElectronRuntime) {
+    return baseEnv
+  }
+
+  return {
+    ...baseEnv,
+    ELECTRON_RUN_AS_NODE: "1",
+  }
+}
+
+export function buildSandboxOptions(record: AvailablePluginRegistryRecord): PluginSandboxOptions {
   const extensionDir = path.dirname(record.manifestPath)
   const entryPath = path.resolve(extensionDir, record.entry.manifest.transport.entry)
 
@@ -59,9 +72,9 @@ function buildSandboxOptions(record: AvailablePluginRegistryRecord): PluginSandb
     throw new Error(`Runtime entry not found for ${record.entry.manifest.id}: ${entryPath}`)
   }
 
-  const env = Object.fromEntries(
+  const env = applyPluginSandboxEnv(Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-  )
+  ))
 
   return {
     pluginId: record.entry.manifest.id,
@@ -207,6 +220,11 @@ export class PluginManager {
     return result
   }
 
+  async autoStartEnabled(): Promise<void> {
+    const enabled = this.list().filter((entry) => entry.kind === "available" && entry.enabled)
+    await Promise.all(enabled.map((entry) => this.start(entry.kind === "available" ? entry.manifest.id : entry.pluginId)))
+  }
+
   async dispose(): Promise<void> {
     const pluginIds = [...this.runtimes.keys()]
     await Promise.all(pluginIds.map((pluginId) => this.disposeRuntime(pluginId)))
@@ -347,13 +365,17 @@ export class PluginManager {
       return entry
     }
 
-    const runtime = this.runtimes.get(entry.manifest.id)
+    const pluginId = entry.manifest.id
+    const runtime = this.runtimes.get(pluginId)
+    const enabled = this.options.enabledStore?.isEnabled(pluginId) ?? entry.enabled
+
     if (!runtime) {
-      return entry
+      return { ...entry, enabled }
     }
 
     return {
       ...entry,
+      enabled,
       status: runtime.status,
       lastError: runtime.lastError,
     }

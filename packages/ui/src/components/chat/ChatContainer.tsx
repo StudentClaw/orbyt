@@ -1,9 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChat } from "@/hooks/useChat"
 import { useChatModel } from "@/hooks/useChatModel"
-import { useChatUiActions } from "@/hooks/useAppRuntime"
+import { useChatUiActions, useSkills } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
@@ -18,6 +17,7 @@ interface ChatContainerProps {
 
 export function ChatContainer({ variant = "panel", selection }: ChatContainerProps) {
   const { selectedModel, setSelectedModel, availableModels } = useChatModel()
+  const skills = useSkills()
   const {
     messages,
     status,
@@ -37,7 +37,6 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
 
-  const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
   const title = currentThread?.title ?? currentWorkspace?.name ?? "Chat"
@@ -48,26 +47,45 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     : "Add or choose a folder to start chatting"
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    const element = scrollContainerRef.current
+    if (element) {
+      element.scrollTop = element.scrollHeight
+    }
     setUserScrolledUp(false)
   }, [])
 
   const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current
-    if (!el) {
+    const element = scrollContainerRef.current
+    if (!element) {
       return
     }
 
     const threshold = 50
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < threshold
     setUserScrolledUp(!atBottom)
   }, [])
 
   useEffect(() => {
     if (!userScrolledUp) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+      scrollToBottom()
     }
-  }, [messages, userScrolledUp])
+  }, [messages, userScrolledUp, scrollToBottom])
+
+  useEffect(() => {
+    const element = scrollContainerRef.current
+    if (!element) {
+      return
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (!userScrolledUp) {
+        element.scrollTop = element.scrollHeight
+      }
+    })
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [userScrolledUp])
 
   const isAuthRequired = status === "auth-expired"
 
@@ -77,15 +95,11 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         <div className="border-b">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
-              <h2 className="font-heading text-base font-medium">
-                {title}
-              </h2>
-              <p className="truncate text-xs text-muted-foreground">
-                {detail}
-              </p>
+              <h2 className="font-heading text-base font-medium">{title}</h2>
+              <p className="truncate text-xs text-muted-foreground">{detail}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {connectionState !== "connected" && (
+              {connectionState !== "connected" ? (
                 <span className="text-xs text-muted-foreground">
                   {connectionState === "connecting"
                     ? "Connecting..."
@@ -93,7 +107,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
                       ? "Reconnecting..."
                       : "Disconnected"}
                 </span>
-              )}
+              ) : null}
               <Button variant="ghost" size="sm" onClick={closePanel}>
                 Close
               </Button>
@@ -102,42 +116,36 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         </div>
       ) : null}
 
-      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" && (
+      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" ? (
         <div className="px-4 pt-3">
-          <ErrorBanner
-            status={status}
-            error={error}
-          />
+          <ErrorBanner status={status} error={error} />
         </div>
-      )}
+      ) : null}
 
       <div className="relative flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleScroll}
-            className="flex h-full flex-col gap-4 p-4"
-          >
-            {isAuthRequired ? (
-              <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatProviderDisconnected />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex min-h-[300px] flex-1 items-center justify-center">
-                <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-              </>
-            )}
-            <div ref={bottomRef} aria-hidden="true" />
-          </div>
-        </ScrollArea>
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex h-full flex-col gap-4 overflow-y-auto p-4"
+        >
+          {isAuthRequired ? (
+            <div className="flex min-h-[300px] flex-1 items-center justify-center">
+              <ChatProviderDisconnected />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex min-h-[300px] flex-1 items-center justify-center">
+              <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
+            </div>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+            </>
+          )}
+        </div>
 
-        {userScrolledUp && messages.length > 0 && (
+        {userScrolledUp && messages.length > 0 ? (
           <Button
             variant="outline"
             size="sm"
@@ -150,7 +158,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
             </svg>
             New messages
           </Button>
-        )}
+        ) : null}
       </div>
 
       <PromptInput
@@ -169,6 +177,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         pendingApproval={currentPendingApproval}
         onRespondToApproval={(decision) => void respondToApproval(decision)}
         approvalDecisionPending={approvalDecisionPending}
+        skills={skills}
       />
     </div>
   )

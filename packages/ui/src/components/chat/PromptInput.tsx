@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   IpcChannel,
+  classifyShellCommandForApproval,
   type ChatModel,
   type ProviderApprovalDecision,
   type ProviderPendingApproval,
@@ -8,8 +9,11 @@ import {
   type TurnAttachmentInput,
 } from "@student-claw/contracts"
 import { PlusIcon, SquareIcon } from "lucide-react"
+import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
+import { SkillPicker, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
 import {
+  type PromptInputMessage,
   PromptInput as RegistryPromptInput,
   PromptInputButton,
   PromptInputFooter,
@@ -31,7 +35,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { InputGroupTextarea } from "@/components/ui/input-group"
 import type { ChatStatus } from "@/hooks/chat-model"
 import type { WsConnectionPhase } from "@/rpc/wsConnectionState"
 import { cn } from "@/lib/utils"
@@ -41,7 +44,9 @@ interface PromptInputProps {
   readonly onSend: (input: {
     content: string
     attachments: readonly TurnAttachmentInput[]
+    skillId?: string | null
   }) => void | Promise<void>
+  readonly skills?: readonly SkillPickerEntry[]
   readonly onInterrupt: () => void
   readonly status: ChatStatus
   readonly connectionState: WsConnectionPhase
@@ -60,6 +65,12 @@ interface PromptInputProps {
 
 type ComposerAttachment = TurnAttachmentInput & {
   readonly id: string
+}
+
+type ApprovalTechnicalDetail = {
+  readonly label: string
+  readonly value: string
+  readonly code: boolean
 }
 
 function DefaultPermissionsIcon({ className }: { className?: string }) {
@@ -122,21 +133,33 @@ function accessModeLabel(accessMode: ThreadAccessMode | null): string {
   return accessMode === "full" ? "Full access" : "Default permissions"
 }
 
-function approvalTitle(approval: ProviderPendingApproval): string {
-  switch (approval.kind) {
-    case "command":
-      return "Command needs approval"
-    case "file-change":
-      return "File change needs approval"
-    case "permissions":
-      return "Permission request needs approval"
-  }
+function approvalTitle(): string {
+  return "Permission needed"
 }
 
-function approvalDescription(approval: ProviderPendingApproval): string {
-  return approval.kind === "command"
-    ? "Codex paused before running this command in the current thread."
-    : "Codex paused this thread until you approve or deny the next step."
+function approvalPromptCopy(approval: ProviderPendingApproval): {
+  readonly question: string
+  readonly detail: string
+} {
+  if (approval.kind === "command") {
+    const classification = classifyShellCommandForApproval(approval.command)
+    return {
+      question: classification.question,
+      detail: classification.detail,
+    }
+  }
+
+  if (approval.kind === "file-change") {
+    return {
+      question: "Can I change project files for this step?",
+      detail: "This would directly update files in the project.",
+    }
+  }
+
+  return {
+    question: "Can I grant this permission for this step?",
+    detail: "This would give the agent extra access for the current task.",
+  }
 }
 
 function toComposerAttachment(attachment: TurnAttachmentInput): ComposerAttachment {
@@ -165,15 +188,19 @@ function stripComposerAttachmentIds(
 }
 
 function ApprovalSurface({
-  pendingApproval,
+  approvalCopy,
   approvalDecisionPending,
-  approvalMetadata,
+  approvalTechnicalDetailsOpen,
+  technicalDetails,
   onRespondToApproval,
+  onToggleTechnicalDetails,
 }: {
-  pendingApproval: ProviderPendingApproval
+  approvalCopy: { readonly question: string; readonly detail: string }
   approvalDecisionPending: boolean
-  approvalMetadata: readonly string[]
+  approvalTechnicalDetailsOpen: boolean
+  technicalDetails: readonly ApprovalTechnicalDetail[]
   onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
+  onToggleTechnicalDetails: () => void
 }) {
   return (
     <form
@@ -193,32 +220,45 @@ function ApprovalSurface({
             <ShieldCueIcon className="size-4" />
           </div>
           <div className="min-w-0 space-y-1.5">
-            <h3 className="text-sm font-semibold text-foreground">{approvalTitle(pendingApproval)}</h3>
-            <p className="text-sm text-muted-foreground">{approvalDescription(pendingApproval)}</p>
+            <h3 className="text-sm font-semibold text-foreground">{approvalTitle()}</h3>
+            <p className="text-sm text-foreground">{approvalCopy.question}</p>
+            <p className="text-sm text-muted-foreground">{approvalCopy.detail}</p>
           </div>
         </div>
 
-        {pendingApproval.command ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Requested command
-            </p>
-            <pre
-              className="max-h-40 overflow-x-hidden overflow-y-auto rounded-2xl border border-border/60 bg-background/90 px-3 py-2.5 text-xs leading-5 text-foreground whitespace-pre-wrap break-words"
-              data-testid="approval-command"
+        {technicalDetails.length > 0 ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="w-fit text-xs text-muted-foreground underline-offset-4 hover:underline"
+              onClick={onToggleTechnicalDetails}
             >
-              <code>{pendingApproval.command}</code>
-            </pre>
-          </div>
-        ) : null}
-
-        {approvalMetadata.length > 0 ? (
-          <div className="space-y-1 text-xs text-muted-foreground">
-            {approvalMetadata.map((entry) => (
-              <p key={entry} className="break-words">
-                {entry}
-              </p>
-            ))}
+              {approvalTechnicalDetailsOpen ? "Hide technical details" : "Show technical details"}
+            </button>
+            {approvalTechnicalDetailsOpen ? (
+              <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-2">
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  {technicalDetails.map((entry) => (
+                    entry.code ? (
+                      <div key={`${entry.label}:${entry.value}`} className="space-y-1">
+                        <p className="font-medium text-foreground/90">{entry.label}</p>
+                        <pre
+                          className="max-h-40 overflow-x-auto overflow-y-auto rounded-2xl border border-border/60 bg-background/90 px-3 py-2 text-xs text-foreground whitespace-pre-wrap break-words"
+                          data-testid={entry.label === "Command" ? "approval-command" : undefined}
+                        >
+                          <code>{entry.value}</code>
+                        </pre>
+                      </div>
+                    ) : (
+                      <p key={`${entry.label}:${entry.value}`}>
+                        <span className="font-medium text-foreground/90">{entry.label}:</span>{" "}
+                        {entry.value}
+                      </p>
+                    )
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -230,7 +270,7 @@ function ApprovalSurface({
             disabled={approvalDecisionPending}
             onClick={() => void onRespondToApproval("deny")}
           >
-            Deny
+            Don&apos;t allow
           </Button>
           <Button
             type="submit"
@@ -274,16 +314,20 @@ export function PromptInput({
   pendingApproval = null,
   onRespondToApproval,
   approvalDecisionPending = false,
+  skills = [],
 }: PromptInputProps) {
-  const [value, setValue] = useState("")
+  const [isComposerEmpty, setIsComposerEmpty] = useState(true)
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [fullAccessDialogOpen, setFullAccessDialogOpen] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
+  const [showSkillPicker, setShowSkillPicker] = useState(false)
+  const [skillFilter, setSkillFilter] = useState("")
+  const composerRef = useRef<RichComposerHandle>(null)
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
-  const canSend = (value.trim().length > 0 || attachments.length > 0) && !isStreaming && isConnected && !disabled
+  const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
   const accessControlDisabled =
@@ -293,10 +337,36 @@ export function PromptInput({
     || accessModeUpdatePending
     || pendingApproval !== null
     || approvalDecisionPending
-  const approvalMetadata = [
-    pendingApproval?.cwd ? `cwd: ${pendingApproval.cwd}` : null,
-    pendingApproval?.reason ? pendingApproval.reason : null,
-  ].filter((entry): entry is string => entry !== null)
+  const approvalCopy = pendingApproval ? approvalPromptCopy(pendingApproval) : null
+  const technicalDetails = pendingApproval
+    ? [
+        pendingApproval.command
+          ? {
+              label: "Command",
+              value: pendingApproval.command,
+              code: true,
+            }
+          : null,
+        pendingApproval.cwd
+          ? {
+              label: "Working folder",
+              value: pendingApproval.cwd,
+              code: false,
+            }
+          : null,
+        pendingApproval.reason
+          ? {
+              label: "Reason from Codex",
+              value: pendingApproval.reason,
+              code: false,
+            }
+          : null,
+      ].filter((entry): entry is ApprovalTechnicalDetail => entry !== null)
+    : []
+
+  useEffect(() => {
+    setApprovalTechnicalDetailsOpen(false)
+  }, [pendingApproval?.id])
 
   const resolveAttachmentMetadata = useCallback(async (paths: readonly string[]) => {
     if (!window.electronAPI?.invoke) {
@@ -350,9 +420,27 @@ export function PromptInput({
     return stripComposerAttachmentIds(refreshedAttachments)
   }, [attachments, resolveAttachmentMetadata])
 
-  const handleSubmit = useCallback(async (message: { text: string }) => {
-    const text = message.text.trim()
-    if ((!text && attachments.length === 0) || isStreaming || !isConnected || disabled) {
+  const handleSkillDismiss = useCallback(() => {
+    setShowSkillPicker(false)
+    setSkillFilter("")
+    composerRef.current?.focus()
+  }, [])
+
+  const handleSkillSelect = useCallback((skill: SkillPickerEntry) => {
+    composerRef.current?.insertSkill(skill)
+    setShowSkillPicker(false)
+    setSkillFilter("")
+  }, [])
+
+  const handleSkillTrigger = useCallback((filter: string, show: boolean) => {
+    setShowSkillPicker(show)
+    setSkillFilter(show ? filter : "")
+  }, [])
+
+  const handleActualSubmit = useCallback(async () => {
+    const text = composerRef.current?.getText() ?? ""
+    const skillId = composerRef.current?.getSkillId() ?? null
+    if ((!text && attachments.length === 0 && !skillId) || isStreaming || !isConnected || disabled) {
       return
     }
 
@@ -364,25 +452,54 @@ export function PromptInput({
     await onSend({
       content: text,
       attachments: validatedAttachments,
+      ...(skillId ? { skillId } : {}),
     })
 
-    setValue("")
+    composerRef.current?.clear()
     setAttachments([])
     setAttachmentError(null)
-    textareaRef.current?.focus()
   }, [attachments.length, disabled, isConnected, isStreaming, onSend, validateAttachments])
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+  const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
+    await handleActualSubmit()
+  }, [handleActualSubmit])
+
+  const handleComposerSubmit = useCallback(() => {
+    if (!canSend) {
+      return
+    }
+
+    void handleActualSubmit()
+  }, [canSend, handleActualSubmit])
+
+  const handleComposerKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (showSkillPicker && (event.key === "Enter" || event.key === "Tab")) {
         event.preventDefault()
-        if (!canSend) {
-          return
+        const query = skillFilter.toLowerCase()
+        const firstMatch = skills.find(
+          (skill) =>
+            query === ""
+            || skill.id.toLowerCase().includes(query)
+            || skill.name.toLowerCase().includes(query),
+        )
+
+        if (firstMatch) {
+          composerRef.current?.insertSkill(firstMatch)
+          setShowSkillPicker(false)
+          setSkillFilter("")
+        } else {
+          handleSkillDismiss()
         }
-        event.currentTarget.form?.requestSubmit()
+        return
+      }
+
+      if (event.key === "Escape" && showSkillPicker) {
+        event.preventDefault()
+        handleSkillDismiss()
       }
     },
-    [canSend],
+    [showSkillPicker, skillFilter, skills, handleSkillDismiss],
   )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
@@ -402,143 +519,152 @@ export function PromptInput({
   }, [onAccessModeChange])
 
   return (
-    <div className="border-t bg-background px-3 py-2.5">
-      {pendingApproval ? (
+    <div className="relative border-t bg-background px-3 py-2.5">
+      {pendingApproval && approvalCopy ? (
         <ApprovalSurface
-          pendingApproval={pendingApproval}
+          approvalCopy={approvalCopy}
           approvalDecisionPending={approvalDecisionPending}
-          approvalMetadata={approvalMetadata}
+          approvalTechnicalDetailsOpen={approvalTechnicalDetailsOpen}
+          technicalDetails={technicalDetails}
           onRespondToApproval={onRespondToApproval}
+          onToggleTechnicalDetails={() => setApprovalTechnicalDetailsOpen((current) => !current)}
         />
       ) : (
-        <RegistryPromptInput
-          onSubmit={handleSubmit}
-          inputGroupClassName={cn(
-            "rounded-[2rem] border-border/60 bg-card/85 shadow-sm backdrop-blur-sm dark:bg-card/80",
-            disabled && "opacity-70",
-          )}
-        >
-          {attachments.length > 0 && (
-            <ChatAttachments
-              attachments={attachments}
-              onRemove={handleRemoveAttachment}
-              className="max-w-full px-4 pt-3"
+        <div className="relative">
+          {showSkillPicker ? (
+            <SkillPicker
+              skills={skills}
+              filter={skillFilter}
+              onSelect={handleSkillSelect}
+              onDismiss={handleSkillDismiss}
             />
-          )}
+          ) : null}
 
-          <InputGroupTextarea
-            ref={textareaRef}
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={!isConnected || disabled}
-            name="message"
-            aria-label="Chat message input"
-            placeholder={
-              connectionState === "connecting"
-                ? "Connecting to Student Claw..."
-                : !isConnected
-                  ? "Reconnecting..."
-                : disabled && disabledReason
-                  ? disabledReason
-                : isStreaming
-                  ? "Wait for response..."
-                  : "What would you like to know?"
-            }
-            className={cn(
-              "min-h-24 px-4 pb-2.5 text-sm",
-              attachments.length > 0 ? "pt-2.5" : "pt-3.5",
+          <RegistryPromptInput
+            onSubmit={handleSubmit}
+            inputGroupClassName={cn(
+              "h-auto rounded-[2rem] border-border/60 bg-card/85 shadow-sm backdrop-blur-sm dark:bg-card/80",
+              disabled && "opacity-70",
             )}
-          />
+          >
+            {attachments.length > 0 ? (
+              <ChatAttachments
+                attachments={attachments}
+                onRemove={handleRemoveAttachment}
+                className="w-full px-4 pt-3"
+              />
+            ) : null}
 
-          <PromptInputFooter className="flex-col items-stretch gap-2.5 pt-0">
-            <div className="flex items-center justify-between gap-3">
-              <PromptInputTools className="gap-1.5">
-                <PromptInputButton
-                  aria-label="Add attachments"
-                  disabled={attachmentControlsDisabled}
-                  onClick={() => void handleAddAttachments()}
-                  className="rounded-full text-muted-foreground hover:text-foreground"
-                >
-                  <PlusIcon className="size-4" />
-                </PromptInputButton>
+            <RichComposer
+              ref={composerRef}
+              disabled={!isConnected || disabled}
+              placeholder={
+                connectionState === "connecting"
+                  ? "Connecting to Student Claw..."
+                  : !isConnected
+                    ? "Reconnecting..."
+                  : disabled && disabledReason
+                    ? disabledReason
+                  : isStreaming
+                    ? "Wait for response..."
+                    : "What would you like to know?"
+              }
+              className={cn("px-4 pb-2.5", attachments.length > 0 ? "pt-2.5" : "pt-3.5")}
+              onContentChange={setIsComposerEmpty}
+              onSkillTrigger={handleSkillTrigger}
+              onSubmit={handleComposerSubmit}
+              onKeyDown={handleComposerKeyDown}
+            />
 
-                <ModelSelector
-                  models={availableModels}
-                  selectedModel={selectedModel}
-                  onModelChange={onModelChange}
-                  disabled={!isConnected || isStreaming}
-                />
+            <PromptInputFooter className="flex-col items-stretch gap-2.5 pt-0">
+              <div className="flex items-center justify-between gap-3">
+                <PromptInputTools className="gap-1.5">
+                  <PromptInputButton
+                    aria-label="Add attachments"
+                    disabled={attachmentControlsDisabled}
+                    onClick={() => void handleAddAttachments()}
+                    className="rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <PlusIcon className="size-4" />
+                  </PromptInputButton>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      disabled={accessControlDisabled}
-                      aria-label="Select permissions"
-                      className={cn(
-                        "h-8 rounded-full border border-border/70 bg-muted/45 px-2.5 text-xs hover:bg-muted/70",
-                        accessMode === "full"
-                          ? "text-amber-500 hover:text-amber-500"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {accessMode === "full" ? (
-                        <FullAccessIcon className="size-3.5" />
-                      ) : (
-                        <DefaultPermissionsIcon className="size-3.5" />
-                      )}
-                      <span>{accessModeLabel(accessMode)}</span>
-                      <ChevronDownIcon className="size-3.5 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64 rounded-3xl p-1.5">
-                    <DropdownMenuItem onSelect={handleDefaultAccessSelect} className="rounded-2xl py-2.5">
-                      <DefaultPermissionsIcon className="size-4 text-muted-foreground" />
-                      <span className="flex-1">Default permissions</span>
-                      {accessMode === "default" && <CheckIcon className="size-4 text-foreground" />}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        if (accessMode !== "full") {
-                          setFullAccessDialogOpen(true)
-                        }
-                      }}
-                      className="rounded-2xl py-2.5"
-                    >
-                      <FullAccessIcon className="size-4 text-amber-500" />
-                      <span className="flex-1">Full access</span>
-                      {accessMode === "full" && <CheckIcon className="size-4 text-foreground" />}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </PromptInputTools>
+                  <ModelSelector
+                    models={availableModels}
+                    selectedModel={selectedModel}
+                    onModelChange={onModelChange}
+                    disabled={!isConnected || isStreaming}
+                  />
 
-              {isStreaming ? (
-                <PromptInputButton
-                  aria-label="Stop generating"
-                  onClick={onInterrupt}
-                  className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  <SquareIcon className="size-4 fill-current" />
-                </PromptInputButton>
-              ) : (
-                <PromptInputSubmit
-                  aria-label="Send message"
-                  disabled={!canSend}
-                  className="size-10 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90"
-                />
-              )}
-            </div>
-          </PromptInputFooter>
-        </RegistryPromptInput>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        disabled={accessControlDisabled}
+                        aria-label="Select permissions"
+                        className={cn(
+                          "h-8 rounded-full border border-border/70 bg-muted/45 px-2.5 text-xs hover:bg-muted/70",
+                          accessMode === "full"
+                            ? "text-amber-500 hover:text-amber-500"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {accessMode === "full" ? (
+                          <FullAccessIcon className="size-3.5" />
+                        ) : (
+                          <DefaultPermissionsIcon className="size-3.5" />
+                        )}
+                        <span>{accessModeLabel(accessMode)}</span>
+                        <ChevronDownIcon className="size-3.5 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64 rounded-3xl p-1.5">
+                      <DropdownMenuItem onSelect={handleDefaultAccessSelect} className="rounded-2xl py-2.5">
+                        <DefaultPermissionsIcon className="size-4 text-muted-foreground" />
+                        <span className="flex-1">Default permissions</span>
+                        {accessMode === "default" ? <CheckIcon className="size-4 text-foreground" /> : null}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          if (accessMode !== "full") {
+                            setFullAccessDialogOpen(true)
+                          }
+                        }}
+                        className="rounded-2xl py-2.5"
+                      >
+                        <FullAccessIcon className="size-4 text-amber-500" />
+                        <span className="flex-1">Full access</span>
+                        {accessMode === "full" ? <CheckIcon className="size-4 text-foreground" /> : null}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </PromptInputTools>
+
+                {isStreaming ? (
+                  <PromptInputButton
+                    aria-label="Stop generating"
+                    onClick={onInterrupt}
+                    className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    <SquareIcon className="size-4 fill-current" />
+                  </PromptInputButton>
+                ) : (
+                  <PromptInputSubmit
+                    aria-label="Send message"
+                    disabled={!canSend}
+                    className="size-10 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  />
+                )}
+              </div>
+            </PromptInputFooter>
+          </RegistryPromptInput>
+        </div>
       )}
 
-      {attachmentError && (
+      {attachmentError ? (
         <p className="mt-2 px-1 text-xs text-destructive">{attachmentError}</p>
-      )}
+      ) : null}
 
       <AlertDialog open={fullAccessDialogOpen} onOpenChange={setFullAccessDialogOpen}>
         <AlertDialogContent size="sm">
@@ -565,7 +691,7 @@ export function PromptInput({
               type="button"
               onClick={() => void handleConfirmFullAccess()}
               disabled={accessModeUpdatePending}
-              className="bg-amber-500 text-[13px] text-black hover:bg-amber-400"
+              className="bg-amber-500 text-[13px] text-amber-950 hover:bg-amber-400"
             >
               {accessModeUpdatePending ? "Switching..." : "Enable full access"}
             </Button>

@@ -7,8 +7,14 @@ interface ChatStatusBadgeProps {
   readonly className?: string
 }
 
+const FALLBACK_PRESENTATION = {
+  label: "Unknown",
+  dotClassName: "bg-muted-foreground/60",
+  pulse: false,
+} as const
+
 export function ChatStatusBadge({ status, className }: ChatStatusBadgeProps) {
-  const presentation = getChatStatusPresentation(status)
+  const presentation = getChatStatusPresentation(status) ?? FALLBACK_PRESENTATION
 
   return (
     <div

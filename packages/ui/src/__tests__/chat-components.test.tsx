@@ -430,9 +430,20 @@ describe("ChatStatusBadge", () => {
     expect(screen.getByTestId("chat-status-badge").textContent).toContain("Ready")
   })
 
+  test("renders a queued state label without crashing", () => {
+    const { container } = render(<ChatStatusBadge status="queued" />)
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Queued")
+    expect(container.querySelector(".animate-pulse")).toBeNull()
+  })
+
   test("renders a streaming state label", () => {
     const { container } = render(<ChatStatusBadge status="streaming" />)
     expect(screen.getByTestId("chat-status-badge").textContent).toContain("Streaming")
     expect(container.querySelector(".animate-pulse")).not.toBeNull()
+  })
+
+  test("falls back to an unknown label when a status mapping is missing", () => {
+    render(<ChatStatusBadge status={"missing-status" as never} />)
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Unknown")
   })
 })

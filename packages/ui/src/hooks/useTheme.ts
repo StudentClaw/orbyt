@@ -49,12 +49,18 @@ function getResolvedTheme(theme: Theme): "light" | "dark" {
   return theme === "auto" ? getSystemTheme() : theme
 }
 
-function applyTheme(theme: Theme) {
+export function getInitialTheme(): Theme {
+  return getStoredTheme()
+}
+
+export function applyTheme(theme: Theme): void {
   if (typeof document === "undefined") {
     return
   }
 
-  document.documentElement.classList.toggle("dark", getResolvedTheme(theme) === "dark")
+  const resolvedTheme = getResolvedTheme(theme)
+  document.documentElement.classList.toggle("dark", resolvedTheme === "dark")
+  document.documentElement.style.colorScheme = resolvedTheme
 }
 
 function detachSystemThemeListener() {
@@ -151,7 +157,7 @@ function getThemeSnapshot(): Theme {
 }
 
 export function initializeTheme(): Theme {
-  const theme = getStoredTheme()
+  const theme = getInitialTheme()
   applyTheme(theme)
   syncSystemThemeListener(theme)
   return theme

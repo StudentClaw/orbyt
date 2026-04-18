@@ -53,26 +53,41 @@ export function setActivityEntries(entries: ReadonlyArray<ActivityFeedEntryWithM
 // --- Event application ---
 
 export function applyActivityFeedUpsertEvent(data: {
-  readonly entryId: string
+  readonly id: ActivityFeedEntry["id"]
+  readonly category: ActivityCategory
+  readonly type: string
   readonly title: string
-  readonly category: string
+  readonly body?: string
+  readonly priority?: number
+  readonly deepLink?: string
 }): void {
   const current = appAtomRegistry.get(activityEntriesAtom)
-  const existingIndex = current.findIndex((e) => e.id === data.entryId)
+  const existingIndex = current.findIndex((e) => e.id === data.id)
 
   if (existingIndex >= 0) {
     const updated = current.map((entry, i) =>
       i === existingIndex
-        ? { ...entry, title: data.title, category: data.category as ActivityCategory }
+        ? {
+            ...entry,
+            category: data.category,
+            type: data.type,
+            title: data.title,
+            ...(data.body === undefined ? {} : { body: data.body }),
+            ...(data.priority === undefined ? {} : { priority: data.priority }),
+            ...(data.deepLink === undefined ? {} : { deepLink: data.deepLink }),
+          }
         : entry,
     )
     appAtomRegistry.set(activityEntriesAtom, updated)
   } else {
     const newEntry: ActivityFeedEntryWithMeta = {
-      id: data.entryId as ActivityFeedEntry["id"],
-      category: data.category as ActivityCategory,
-      type: data.category,
+      id: data.id,
+      category: data.category,
+      type: data.type,
       title: data.title,
+      ...(data.body === undefined ? {} : { body: data.body }),
+      ...(data.priority === undefined ? {} : { priority: data.priority }),
+      ...(data.deepLink === undefined ? {} : { deepLink: data.deepLink }),
       receivedAt: new Date().toISOString(),
     }
     appAtomRegistry.set(activityEntriesAtom, [newEntry, ...current])

@@ -8,6 +8,8 @@ import { OrchestrationService, type OrchestrationServiceShape } from "../orchest
 import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerReadiness.js"
 import { PushBus, type PushBusService } from "./PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
+import { CanvasSyncService, type CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
+import { SkillResolver, type SkillResolverService } from "../skills/SkillResolver.js"
 import { selectWebSocketProtocol, validateWebSocketHandshake } from "./handshake.js"
 import { routeMessage, type RouteMessageResult } from "./Router.js"
 
@@ -38,8 +40,10 @@ export const WebSocketServerLive = Layer.effect(
     const pushBus = yield* PushBus
     const orchestration = yield* OrchestrationService
     const database = yield* Database
+    const canvasSync = yield* CanvasSyncService
+    const skillResolver = yield* SkillResolver
 
-    return createWebSocketService(config, readiness, pushBus, orchestration, database)
+    return createWebSocketService(config, readiness, pushBus, orchestration, database, canvasSync, skillResolver)
   }),
 )
 
@@ -56,6 +60,8 @@ function createWebSocketService(
   pushBus: PushBusService,
   orchestration: OrchestrationServiceShape,
   database: DatabaseService,
+  canvasSync: CanvasSyncServiceShape,
+  skillResolver: SkillResolverService,
 ): WebSocketService {
   const wss = new WsServer({
     port: config.port,
@@ -69,7 +75,7 @@ function createWebSocketService(
   })
 
   wss.on("connection", (ws) => {
-    registerSocketHandlers(ws as WebSocket, readiness, pushBus, orchestration, database)
+    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database, canvasSync, skillResolver)
   })
 
   return {
@@ -83,10 +89,13 @@ function createWebSocketService(
 
 function registerSocketHandlers(
   ws: WebSocket,
+  config: AppConfig,
   readiness: ServerReadinessService,
   pushBus: PushBusService,
   orchestration: OrchestrationServiceShape,
   database: DatabaseService,
+  canvasSync: CanvasSyncServiceShape,
+  skillResolver: SkillResolverService,
 ): void {
   pushBus.registerClient(ws)
 
@@ -97,10 +106,13 @@ function registerSocketHandlers(
     }
 
     const result = await routeMessage(data.toString(), ws, {
+      config,
       orchestration,
       pushBus,
       readiness,
       database,
+      canvasSync,
+      skillResolver,
     })
     sendRouteResponse(ws, result)
   })

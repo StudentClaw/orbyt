@@ -86,6 +86,7 @@ export interface ProviderRuntimeStoreService {
   readonly dequeueTurn: (turnId: string) => Promise<void>
   readonly listQueuedTurns: () => Promise<ReadonlyArray<QueuedProviderTurn>>
   readonly refreshQueuedCount: () => Promise<number>
+  readonly drain: () => Promise<void>
 }
 
 export class ProviderRuntimeStore extends Context.Tag("ProviderRuntimeStore")<
@@ -342,14 +343,25 @@ export const ProviderRuntimeStoreLive = Layer.effect(
       }),
       enqueueTurn: async (turnId, threadId, content) => serializeWrite(async () => {
         const now = new Date().toISOString()
-        await runWriteWithRetry(() => {
-          database.execute(
-            `INSERT OR REPLACE INTO queued_provider_turns (
-               turn_id, thread_id, content, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?)`,
-            [turnId, threadId, content, now, now],
-          )
-        })
+        try {
+          await runWriteWithRetry(() => {
+            database.execute(
+              `INSERT OR REPLACE INTO queued_provider_turns (
+                 turn_id, thread_id, content, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?)`,
+              [turnId, threadId, content, now, now],
+            )
+          })
+        } catch (err) {
+          // Thread or turn was deleted between sendTurn and this deferred write — silently drop.
+          if (
+            err instanceof Error &&
+            err.message.includes("FOREIGN KEY constraint failed")
+          ) {
+            return
+          }
+          throw err
+        }
         await updateStateUnsafe({ queuedTurnCount: getQueuedCount() })
       }),
       dequeueTurn: async (turnId) => serializeWrite(async () => {
@@ -375,6 +387,7 @@ export const ProviderRuntimeStoreLive = Layer.effect(
         await updateStateUnsafe({ queuedTurnCount })
         return queuedTurnCount
       }),
+      drain: () => writeQueue,
     }
   }),
 )

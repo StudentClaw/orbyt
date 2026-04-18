@@ -18,6 +18,7 @@ import type { WsConnectionStatus } from "@/rpc/wsConnectionState"
 
 export type ChatStatus =
   | "idle"
+  | "queued"
   | "streaming"
   | "interrupted"
   | "offline"
@@ -48,12 +49,18 @@ export function getChatStatusPresentation(status: ChatStatus): {
   label: string
   dotClassName: string
   pulse: boolean
-} {
+} | undefined {
   switch (status) {
     case "idle":
       return {
         label: "Ready",
         dotClassName: "bg-emerald-500",
+        pulse: false,
+      }
+    case "queued":
+      return {
+        label: "Queued",
+        dotClassName: "bg-sky-500",
         pulse: false,
       }
     case "streaming":
@@ -186,7 +193,7 @@ export function buildChatMessages(
         content: turn.output,
         reasoning: turn.reasoning || undefined,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
-        isStreaming: turn.status === "pending" || turn.status === "streaming",
+        isStreaming: turn.status === "streaming",
         toolCalls: toolCallsByTurnId[turn.id] ?? [],
       },
     ] satisfies ReadonlyArray<ChatMessage>
@@ -325,11 +332,16 @@ export function resolveChatState(
     }
   }
 
+  if (thread?.status === "queued" || currentTurn?.status === "queued") {
+    return {
+      status: "queued",
+      error: null,
+    }
+  }
+
   if (
     thread?.status === "streaming"
-    || currentTurn?.status === "pending"
     || currentTurn?.status === "streaming"
-    || snapshot.providerStatus === "streaming"
   ) {
     return {
       status: "streaming",

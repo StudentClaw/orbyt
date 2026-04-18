@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useActivityEntries } from "@/rpc/activityState"
+import { showDesktopNotification } from "@/lib/nativeNotification"
 
 const HIGH_PRIORITY_THRESHOLD = 3
 
@@ -18,10 +19,10 @@ export function useNativeNotification(): void {
 
     for (const entry of newEntries) {
       if (entry.priority !== undefined && entry.priority >= HIGH_PRIORITY_THRESHOLD) {
-        window.electronAPI?.invoke("notification:show", {
+        void showDesktopNotification({
           title: entry.title,
           body: entry.body ?? "",
-        })
+        }).catch(() => undefined)
       }
     }
 
