@@ -1,10 +1,16 @@
 import { Schema } from "@effect/schema"
 import {
-  CanvasGetAnnouncementsParams,
-  CanvasGetCourseworkDetailParams,
-  CanvasGetCourseworkParams,
-  CanvasGetCoursesParams,
-  CanvasGetGradesParams,
+  CanvasAssignmentDetailsParams,
+  CanvasCourseContentOverviewParams,
+  CanvasCourseStructureParams,
+  CanvasDownloadCourseFileParams,
+  CanvasGetMyCourseGradesParams,
+  CanvasGetMyPeerReviewsTodoParams,
+  CanvasGetMySubmissionStatusParams,
+  CanvasGetMyTodoItemsParams,
+  CanvasGetMyUpcomingAssignmentsParams,
+  CanvasListAssignmentsParams,
+  CanvasListCoursesParams,
   CanvasSyncParams,
 } from "./canvas.js"
 
@@ -29,34 +35,70 @@ export const CanvasSync = Schema.Struct({
   params: CanvasSyncParams,
 })
 
-export const CanvasGetCourses = Schema.Struct({
-  method: Schema.Literal("canvas.getCourses"),
+export const CanvasListCourses = Schema.Struct({
+  method: Schema.Literal("canvas.listCourses"),
   id: Schema.String,
-  params: CanvasGetCoursesParams,
+  params: CanvasListCoursesParams,
 })
 
-export const CanvasGetCoursework = Schema.Struct({
-  method: Schema.Literal("canvas.getCoursework"),
+export const CanvasGetMyUpcomingAssignments = Schema.Struct({
+  method: Schema.Literal("canvas.getMyUpcomingAssignments"),
   id: Schema.String,
-  params: CanvasGetCourseworkParams,
+  params: CanvasGetMyUpcomingAssignmentsParams,
 })
 
-export const CanvasGetCourseworkDetail = Schema.Struct({
-  method: Schema.Literal("canvas.getCourseworkDetail"),
+export const CanvasGetMySubmissionStatus = Schema.Struct({
+  method: Schema.Literal("canvas.getMySubmissionStatus"),
   id: Schema.String,
-  params: CanvasGetCourseworkDetailParams,
+  params: CanvasGetMySubmissionStatusParams,
 })
 
-export const CanvasGetGrades = Schema.Struct({
-  method: Schema.Literal("canvas.getGrades"),
+export const CanvasGetMyCourseGrades = Schema.Struct({
+  method: Schema.Literal("canvas.getMyCourseGrades"),
   id: Schema.String,
-  params: CanvasGetGradesParams,
+  params: CanvasGetMyCourseGradesParams,
 })
 
-export const CanvasGetAnnouncements = Schema.Struct({
-  method: Schema.Literal("canvas.getAnnouncements"),
+export const CanvasGetMyTodoItems = Schema.Struct({
+  method: Schema.Literal("canvas.getMyTodoItems"),
   id: Schema.String,
-  params: CanvasGetAnnouncementsParams,
+  params: CanvasGetMyTodoItemsParams,
+})
+
+export const CanvasGetMyPeerReviewsTodo = Schema.Struct({
+  method: Schema.Literal("canvas.getMyPeerReviewsTodo"),
+  id: Schema.String,
+  params: CanvasGetMyPeerReviewsTodoParams,
+})
+
+export const CanvasGetAssignmentDetails = Schema.Struct({
+  method: Schema.Literal("canvas.getAssignmentDetails"),
+  id: Schema.String,
+  params: CanvasAssignmentDetailsParams,
+})
+
+export const CanvasListAssignments = Schema.Struct({
+  method: Schema.Literal("canvas.listAssignments"),
+  id: Schema.String,
+  params: CanvasListAssignmentsParams,
+})
+
+export const CanvasGetCourseContentOverview = Schema.Struct({
+  method: Schema.Literal("canvas.getCourseContentOverview"),
+  id: Schema.String,
+  params: CanvasCourseContentOverviewParams,
+})
+
+export const CanvasGetCourseStructure = Schema.Struct({
+  method: Schema.Literal("canvas.getCourseStructure"),
+  id: Schema.String,
+  params: CanvasCourseStructureParams,
+})
+
+export const CanvasDownloadCourseFile = Schema.Struct({
+  method: Schema.Literal("canvas.downloadCourseFile"),
+  id: Schema.String,
+  params: CanvasDownloadCourseFileParams,
 })
 
 export const DashboardRefresh = Schema.Struct({
@@ -75,11 +117,17 @@ export const ClientMessage = Schema.Union(
   ChatSendMessage,
   ChatInterrupt,
   CanvasSync,
-  CanvasGetCourses,
-  CanvasGetCoursework,
-  CanvasGetCourseworkDetail,
-  CanvasGetGrades,
-  CanvasGetAnnouncements,
+  CanvasListCourses,
+  CanvasGetMyUpcomingAssignments,
+  CanvasGetMySubmissionStatus,
+  CanvasGetMyCourseGrades,
+  CanvasGetMyTodoItems,
+  CanvasGetMyPeerReviewsTodo,
+  CanvasGetAssignmentDetails,
+  CanvasListAssignments,
+  CanvasGetCourseContentOverview,
+  CanvasGetCourseStructure,
+  CanvasDownloadCourseFile,
   DashboardRefresh,
   HealthPing,
 )

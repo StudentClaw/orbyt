@@ -1,11 +1,22 @@
-import type { Course, CourseWorkItem, Grade, PlannedSession } from "@student-claw/contracts"
+import type {
+  CanvasStudentCourseGradeSummary,
+  CanvasStudentPeerReviewTodo,
+  CanvasStudentTodoItem,
+  Course,
+  CourseWorkItem,
+  PlannedSession,
+} from "@student-claw/contracts"
 import {
+  useCanvasCourseGrades,
   useCanvasCourses,
-  useCanvasCoursework,
-  useCanvasGrades,
   useCanvasSyncProgress,
   useCanvasLastSync,
+  useCanvasSubmissionStatus,
+  useCanvasTodoItems,
+  useCanvasPeerReviewTodo,
+  useCanvasUpcomingAssignments,
   type CanvasSyncProgress,
+  type CanvasSubmissionStatusBuckets,
 } from "@/rpc/canvasState"
 import {
   useDashboardSections,
@@ -22,8 +33,11 @@ import {
 
 export interface DashboardData {
   readonly courses: ReadonlyArray<Course>
-  readonly coursework: ReadonlyArray<CourseWorkItem>
-  readonly grades: ReadonlyArray<Grade>
+  readonly upcomingAssignments: ReadonlyArray<CourseWorkItem>
+  readonly submissionStatus: CanvasSubmissionStatusBuckets
+  readonly courseGrades: ReadonlyArray<CanvasStudentCourseGradeSummary>
+  readonly todoItems: ReadonlyArray<CanvasStudentTodoItem>
+  readonly peerReviewTodo: ReadonlyArray<CanvasStudentPeerReviewTodo>
   readonly syncProgress: CanvasSyncProgress | null
   readonly lastSync: string | null
   readonly sections: DashboardSectionsMap
@@ -36,8 +50,11 @@ export interface DashboardData {
 export function useDashboard(): DashboardData {
   return {
     courses: useCanvasCourses(),
-    coursework: useCanvasCoursework(),
-    grades: useCanvasGrades(),
+    upcomingAssignments: useCanvasUpcomingAssignments(),
+    submissionStatus: useCanvasSubmissionStatus(),
+    courseGrades: useCanvasCourseGrades(),
+    todoItems: useCanvasTodoItems(),
+    peerReviewTodo: useCanvasPeerReviewTodo(),
     syncProgress: useCanvasSyncProgress(),
     lastSync: useCanvasLastSync(),
     sections: useDashboardSections(),

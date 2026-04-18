@@ -14,12 +14,62 @@ import { InsightStrip } from "@/components/dashboard/InsightStrip"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { WeeklyCalendar } from "@/components/dashboard/WeeklyCalendar"
 import { PlannerStreamOverlay } from "@/components/dashboard/PlannerStreamOverlay"
-import { MOCK_PRIORITY_ITEMS, MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
+import { type PrioritizedItem } from "@/components/dashboard/priority-model"
+import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
+
+function derivePriorityItems(
+  courses: ReadonlyArray<{ id: string; code: string }>,
+  upcomingAssignments: ReadonlyArray<{
+    id: string
+    courseId: string
+    title: string
+    effectiveDueAt?: string
+  }>,
+  submissionStatus: {
+    pending: ReadonlyArray<{
+      id: string
+      courseId: string
+      title: string
+      effectiveDueAt?: string
+    }>
+    overdue: ReadonlyArray<{
+      id: string
+      courseId: string
+      title: string
+      effectiveDueAt?: string
+    }>
+  },
+): ReadonlyArray<PrioritizedItem> {
+  const coursePriority = new Map(courses.map((course, index) => [course.id, courses.length - index]))
+  const courseCode = new Map(courses.map((course) => [course.id, course.code]))
+  const buckets = [
+    ...submissionStatus.overdue.map((item) => ({ item, impactScore: 1.0 })),
+    ...submissionStatus.pending.map((item) => ({ item, impactScore: 0.8 })),
+    ...upcomingAssignments.map((item) => ({ item, impactScore: 0.6 })),
+  ]
+  const seen = new Set<string>()
+
+  return buckets.flatMap(({ item, impactScore }) => {
+    if (!item.effectiveDueAt || seen.has(item.id)) return []
+    seen.add(item.id)
+    return [{
+      id: item.id,
+      title: item.title,
+      courseCode: courseCode.get(item.courseId) ?? "Canvas",
+      effectiveDueAt: item.effectiveDueAt,
+      estimatedMinutes: 60,
+      impactScore,
+      coursePriority: coursePriority.get(item.courseId) ?? 1,
+    }]
+  })
+}
 
 export function DashboardPage() {
   const {
     courses,
-    grades,
+    courseGrades,
+    upcomingAssignments,
+    submissionStatus,
     syncProgress,
     lastSync,
     plannerStreaming,
@@ -29,6 +79,7 @@ export function DashboardPage() {
 
   const now = new Date()
   const isSyncing = syncProgress?.status === "syncing"
+  const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
   // Use local date (not UTC) so sessions on today always fall in the current week
   const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
   const weekStart = calendarViewWeek || todayLocal
@@ -39,8 +90,8 @@ export function DashboardPage() {
         case "priorityQueue":
           return {
             id,
-            label: "Coursework",
-            content: <PriorityQueue items={MOCK_PRIORITY_ITEMS} now={now} />,
+            label: "Assignments",
+            content: <PriorityQueue items={priorityItems} now={now} />,
           }
         case "insights":
           return {
@@ -59,7 +110,7 @@ export function DashboardPage() {
                   title: s.assignmentTitle ?? "Study session",
                 }))}
                 weekStart={weekStart}
-                deadlines={MOCK_PRIORITY_ITEMS}
+                deadlines={priorityItems}
                 onWeekChange={setCalendarViewWeek}
               />
             ),
@@ -74,8 +125,8 @@ export function DashboardPage() {
                   <h2 className="text-base font-semibold">Grades</h2>
                 </div>
                 <div className="flex flex-col gap-4 px-5 pb-5">
-                  <GradeChart courses={courses} grades={grades} />
-                  <GradeOverview courses={courses} grades={grades} />
+                  <GradeChart courses={courses} grades={courseGrades} />
+                  <GradeOverview courses={courses} grades={courseGrades} />
                 </div>
               </div>
             ),

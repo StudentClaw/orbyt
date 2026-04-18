@@ -57,9 +57,9 @@ export const CanvasEnrollmentGrade = Schema.Struct({
 export type CanvasEnrollmentGrade = Schema.Schema.Type<typeof CanvasEnrollmentGrade>
 
 export const CanvasEnrollment = Schema.Struct({
-  id: Schema.Number,
-  course_id: Schema.Number,
-  user_id: Schema.Number,
+  id: Schema.optional(Schema.Number),
+  course_id: Schema.optional(Schema.Number),
+  user_id: Schema.optional(Schema.Number),
   type: Schema.String,
   role: Schema.optional(Schema.String),
   enrollment_state: Schema.String,

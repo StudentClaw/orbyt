@@ -11,6 +11,7 @@ import * as migration009 from "./009-thread-access-mode.js"
 import * as migration010 from "./010-turn-attachments.js"
 import * as migration011 from "./011-onboarding-schema-repair.js"
 import * as migration012 from "./012-coursework-canvas-fields.js"
+import * as migration013 from "./013-canvas-student-runtime.js"
 
 type SqlMigration = {
   readonly version: number
@@ -35,6 +36,7 @@ const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration010,
   migration011,
   migration012,
+  migration013,
 ]
 
 export function runMigrations(db: Database): void {

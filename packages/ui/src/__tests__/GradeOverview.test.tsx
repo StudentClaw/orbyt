@@ -1,26 +1,24 @@
 import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { GradeOverview } from "../components/dashboard/GradeOverview"
-import type { Course, Grade } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course } from "@student-claw/contracts"
 
 function makeCourse(id: string, code: string, name: string): Course {
   return { id: id as any, name, code }
 }
 
-function makeGrade(
-  courseId: string,
-  assignmentId: string,
-  score: number,
-  maxScore: number,
-  postedAt?: string,
-): Grade {
-  return { courseId: courseId as any, assignmentId, score, maxScore, postedAt }
-}
-
-function daysAgo(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return d.toISOString()
+function makeGradeSummary(
+  course: Course,
+  currentScore?: number,
+  finalScore?: number,
+): CanvasStudentCourseGradeSummary {
+  return {
+    course,
+    currentScore,
+    finalScore,
+    currentGrade: undefined,
+    finalGrade: undefined,
+  }
 }
 
 describe("GradeOverview", () => {
@@ -31,8 +29,8 @@ describe("GradeOverview", () => {
 
   test("renders a pill for each course with grades", () => {
     const grades = [
-      makeGrade("c1", "a1", 90, 100),
-      makeGrade("c2", "a1", 80, 100),
+      makeGradeSummary(courses[0], 90),
+      makeGradeSummary(courses[1], 80),
     ]
 
     render(<GradeOverview courses={courses} grades={grades} />)
@@ -44,7 +42,7 @@ describe("GradeOverview", () => {
   })
 
   test("shows letter grade for course (90% → A−)", () => {
-    const grades = [makeGrade("c1", "a1", 90, 100)]
+    const grades = [makeGradeSummary(courses[0], 90)]
 
     render(<GradeOverview courses={courses} grades={grades} />)
 
@@ -54,8 +52,7 @@ describe("GradeOverview", () => {
 
   test("shows up trend arrow for improving grades", () => {
     const grades = [
-      makeGrade("c1", "a1", 70, 100, daysAgo(14)),
-      makeGrade("c1", "a2", 90, 100, daysAgo(7)),
+      makeGradeSummary(courses[0], 70, 90),
     ]
 
     render(<GradeOverview courses={courses} grades={grades} />)
@@ -72,7 +69,7 @@ describe("GradeOverview", () => {
   })
 
   test("does not render a pill for courses with no grades", () => {
-    const grades = [makeGrade("c1", "a1", 90, 100)]
+    const grades = [makeGradeSummary(courses[0], 90)]
 
     render(<GradeOverview courses={courses} grades={grades} />)
 
@@ -81,7 +78,7 @@ describe("GradeOverview", () => {
   })
 
   test("shows GPA projection row", () => {
-    const grades = [makeGrade("c1", "a1", 90, 100)]
+    const grades = [makeGradeSummary(courses[0], 90)]
 
     render(<GradeOverview courses={courses} grades={grades} />)
 

@@ -14,8 +14,8 @@ export function WelcomeStep({ onNext }: OnboardingStepProps) {
       <CardContent className="space-y-6 text-center">
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Student Claw connects to your Canvas LMS, understands your coursework,
-            and helps you plan your study sessions intelligently.
+            Student Claw connects to your Canvas LMS, understands your assignments,
+            deadlines, and course progress, and helps you plan your study sessions intelligently.
           </p>
           <p>
             Your data stays on your machine. We never share your academic information

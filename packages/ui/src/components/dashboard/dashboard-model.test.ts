@@ -6,21 +6,27 @@ import {
   formatCountdown,
   groupDeadlinesByDay,
 } from "./dashboard-model"
-import type { CourseWorkItem, Grade } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course, CourseWorkItem } from "@student-claw/contracts"
 
-function makeGrade(
-  courseId: string,
-  assignmentId: string,
-  score: number,
-  maxScore: number,
-  postedAt?: string,
-): Grade {
+function makeCourse(id: string, code = "CS 101"): Course {
   return {
-    courseId: courseId as any,
-    assignmentId,
-    score,
-    maxScore,
-    postedAt,
+    id: id as any,
+    code,
+    name: code,
+  }
+}
+
+function makeGradeSummary(
+  courseId: string,
+  currentScore?: number,
+  finalScore?: number,
+): CanvasStudentCourseGradeSummary {
+  return {
+    course: makeCourse(courseId, courseId.toUpperCase()),
+    currentScore,
+    finalScore,
+    currentGrade: undefined,
+    finalGrade: undefined,
   }
 }
 
@@ -46,54 +52,31 @@ function daysFromNow(days: number, from: Date = new Date()): string {
   return d.toISOString()
 }
 
-function daysAgo(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return d.toISOString()
-}
-
 describe("computeGradeTrend", () => {
   test("returns 'up' when weighted grade movement exceeds +1%", () => {
-    const grades = [
-      makeGrade("c1", "a1", 80, 100, daysAgo(21)),
-      makeGrade("c1", "a2", 82, 100, daysAgo(14)),
-      makeGrade("c1", "a3", 88, 100, daysAgo(7)),
-      makeGrade("c1", "a4", 95, 100, daysAgo(0)),
-    ]
+    const grades = [makeGradeSummary("c1", 80, 95)]
     expect(computeGradeTrend(grades, "c1")).toBe("up")
   })
 
   test("returns 'down' when weighted grade movement is below -1%", () => {
-    const grades = [
-      makeGrade("c1", "a1", 95, 100, daysAgo(21)),
-      makeGrade("c1", "a2", 90, 100, daysAgo(14)),
-      makeGrade("c1", "a3", 82, 100, daysAgo(7)),
-      makeGrade("c1", "a4", 75, 100, daysAgo(0)),
-    ]
+    const grades = [makeGradeSummary("c1", 95, 75)]
     expect(computeGradeTrend(grades, "c1")).toBe("down")
   })
 
   test("returns 'stable' when movement is within ±1%", () => {
-    const grades = [
-      makeGrade("c1", "a1", 85, 100, daysAgo(21)),
-      makeGrade("c1", "a2", 85, 100, daysAgo(14)),
-      makeGrade("c1", "a3", 86, 100, daysAgo(7)),
-      makeGrade("c1", "a4", 85, 100, daysAgo(0)),
-    ]
+    const grades = [makeGradeSummary("c1", 85, 85.5)]
     expect(computeGradeTrend(grades, "c1")).toBe("stable")
   })
 
-  test("returns 'stable' with fewer than 2 grades", () => {
-    const grades = [makeGrade("c1", "a1", 90, 100)]
+  test("returns 'stable' without both current and final scores", () => {
+    const grades = [makeGradeSummary("c1", 90)]
     expect(computeGradeTrend(grades, "c1")).toBe("stable")
   })
 
   test("only considers grades for the specified course", () => {
     const grades = [
-      makeGrade("c1", "a1", 80, 100, daysAgo(14)),
-      makeGrade("c1", "a2", 95, 100, daysAgo(7)),
-      makeGrade("c2", "a1", 95, 100, daysAgo(14)),
-      makeGrade("c2", "a2", 60, 100, daysAgo(7)),
+      makeGradeSummary("c1", 80, 95),
+      makeGradeSummary("c2", 95, 60),
     ]
     expect(computeGradeTrend(grades, "c1")).toBe("up")
     expect(computeGradeTrend(grades, "c2")).toBe("down")
@@ -101,12 +84,8 @@ describe("computeGradeTrend", () => {
 })
 
 describe("computeCourseGradePercentage", () => {
-  test("computes weighted average across assignments", () => {
-    const grades = [
-      makeGrade("c1", "a1", 90, 100),
-      makeGrade("c1", "a2", 40, 50),
-    ]
-    // (90 + 40) / (100 + 50) = 130/150 ≈ 86.67
+  test("uses current score when present", () => {
+    const grades = [makeGradeSummary("c1", 86.67, 88)]
     expect(computeCourseGradePercentage(grades, "c1")).toBeCloseTo(86.67, 1)
   })
 
@@ -116,8 +95,8 @@ describe("computeCourseGradePercentage", () => {
 
   test("only considers grades for the specified course", () => {
     const grades = [
-      makeGrade("c1", "a1", 90, 100),
-      makeGrade("c2", "a1", 50, 100),
+      makeGradeSummary("c1", 90),
+      makeGradeSummary("c2", 50),
     ]
     expect(computeCourseGradePercentage(grades, "c1")).toBeCloseTo(90, 1)
   })

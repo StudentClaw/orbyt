@@ -1,5 +1,16 @@
 import { Schema } from "@effect/schema"
 import {
+  CanvasAssignmentDetailsResult,
+  CanvasCourseContentOverviewResult,
+  CanvasCourseStructureResult,
+  CanvasDownloadCourseFileResult,
+  CanvasGetMyCourseGradesResult,
+  CanvasGetMyPeerReviewsTodoResult,
+  CanvasGetMySubmissionStatusResult,
+  CanvasGetMyTodoItemsResult,
+  CanvasGetMyUpcomingAssignmentsResult,
+  CanvasListAssignmentsResult,
+  CanvasListCoursesResult,
   OrchestrationDomainEvent,
   OrchestrationSnapshot,
   ProviderRuntimeEvent,
@@ -10,9 +21,15 @@ import {
   ServerLifecycleEvent,
   type ActivityFeedEntry,
   type AiAuthState,
+  type CanvasAssignmentDetailsParams,
+  type CanvasCourseContentOverviewParams,
+  type CanvasCourseStructureParams,
+  type CanvasDownloadCourseFileParams,
+  type CanvasStudentCourseGradeSummary,
+  type CanvasStudentPeerReviewTodo,
+  type CanvasStudentTodoItem,
   type Course,
   type CourseWorkItem,
-  type Grade,
   type CreateWorkspaceResult,
   type CreateThreadResult,
   type DeleteWorkspaceResult,
@@ -156,9 +173,23 @@ export interface WsRpcClient {
     ) => () => void
   }
   readonly canvas: {
-    readonly getCourses: () => Promise<ReadonlyArray<Course>>
-    readonly getCoursework: () => Promise<ReadonlyArray<CourseWorkItem>>
-    readonly getGrades: () => Promise<ReadonlyArray<Grade>>
+    readonly listCourses: () => Promise<ReadonlyArray<Course>>
+    readonly getMyUpcomingAssignments: (days?: number) => Promise<ReadonlyArray<CourseWorkItem>>
+    readonly getMySubmissionStatus: (
+      courseId?: string,
+    ) => Promise<{
+      readonly submitted: ReadonlyArray<CourseWorkItem>
+      readonly pending: ReadonlyArray<CourseWorkItem>
+      readonly overdue: ReadonlyArray<CourseWorkItem>
+    }>
+    readonly getMyCourseGrades: () => Promise<ReadonlyArray<CanvasStudentCourseGradeSummary>>
+    readonly getMyTodoItems: () => Promise<ReadonlyArray<CanvasStudentTodoItem>>
+    readonly getMyPeerReviewsTodo: (courseId?: string) => Promise<ReadonlyArray<CanvasStudentPeerReviewTodo>>
+    readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<Schema.Schema.Type<typeof CanvasAssignmentDetailsResult>>
+    readonly listAssignments: (params: { courseId?: string; includeCompleted?: boolean }) => Promise<Schema.Schema.Type<typeof CanvasListAssignmentsResult>>
+    readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<Schema.Schema.Type<typeof CanvasCourseContentOverviewResult>>
+    readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
+    readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
     readonly sync: () => Promise<void>
     readonly onSyncProgress: (
       listener: (event: CanvasSyncProgressEvent) => void,
@@ -310,15 +341,67 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
 
 function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
   return {
-    getCourses: () =>
-      transport.request<{ courses: ReadonlyArray<Course> }>(RPC_METHODS.CANVAS_GET_COURSES, {})
-        .then((r) => r.courses),
-    getCoursework: () =>
-      transport.request<{ items: ReadonlyArray<CourseWorkItem> }>(RPC_METHODS.CANVAS_GET_COURSEWORK, {})
-        .then((r) => r.items),
-    getGrades: () =>
-      transport.request<{ grades: ReadonlyArray<Grade> }>(RPC_METHODS.CANVAS_GET_GRADES, {})
-        .then((r) => r.grades),
+    listCourses: async () =>
+      decode(
+        CanvasListCoursesResult,
+        await transport.request(RPC_METHODS.CANVAS_LIST_COURSES, {}),
+      ).courses,
+    getMyUpcomingAssignments: async (days) =>
+      decode(
+        CanvasGetMyUpcomingAssignmentsResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_MY_UPCOMING_ASSIGNMENTS, days === undefined ? {} : { days }),
+      ).items,
+    getMySubmissionStatus: async (courseId) =>
+      decode(
+        CanvasGetMySubmissionStatusResult,
+        await transport.request(
+          RPC_METHODS.CANVAS_GET_MY_SUBMISSION_STATUS,
+          courseId ? { courseId } : {},
+        ),
+      ),
+    getMyCourseGrades: async () =>
+      decode(
+        CanvasGetMyCourseGradesResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_MY_COURSE_GRADES, {}),
+      ).courses,
+    getMyTodoItems: async () =>
+      decode(
+        CanvasGetMyTodoItemsResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_MY_TODO_ITEMS, {}),
+      ).items,
+    getMyPeerReviewsTodo: async (courseId) =>
+      decode(
+        CanvasGetMyPeerReviewsTodoResult,
+        await transport.request(
+          RPC_METHODS.CANVAS_GET_MY_PEER_REVIEWS_TODO,
+          courseId ? { courseId } : {},
+        ),
+      ).items,
+    getAssignmentDetails: async (params) =>
+      decode(
+        CanvasAssignmentDetailsResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_ASSIGNMENT_DETAILS, params),
+      ),
+    listAssignments: async (params) =>
+      decode(
+        CanvasListAssignmentsResult,
+        await transport.request(RPC_METHODS.CANVAS_LIST_ASSIGNMENTS, params),
+      ),
+    getCourseContentOverview: async (params) =>
+      decode(
+        CanvasCourseContentOverviewResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_COURSE_CONTENT_OVERVIEW, params),
+      ),
+    getCourseStructure: async (params) =>
+      decode(
+        CanvasCourseStructureResult,
+        await transport.request(RPC_METHODS.CANVAS_GET_COURSE_STRUCTURE, params),
+      ),
+    downloadCourseFile: async (params) =>
+      decode(
+        CanvasDownloadCourseFileResult,
+        await transport.request(RPC_METHODS.CANVAS_DOWNLOAD_COURSE_FILE, params),
+      ),
     sync: () => transport.request(RPC_METHODS.CANVAS_SYNC, {}).then(() => undefined),
     onSyncProgress: (listener, options) =>
       transport.subscribe(

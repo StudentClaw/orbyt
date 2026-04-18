@@ -24,6 +24,9 @@ describe("Database migrations", () => {
     expect(tables).toContain("canvas_accounts")
     expect(tables).toContain("courses")
     expect(tables).toContain("coursework_items")
+    expect(tables).toContain("canvas_course_grade_summaries")
+    expect(tables).toContain("canvas_todo_items")
+    expect(tables).toContain("canvas_peer_review_todo")
     expect(tables).toContain("canvas_sync_log")
     expect(tables).toContain("tasks")
     expect(tables).toContain("planned_sessions")
@@ -53,7 +56,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(12)
+    expect(version?.version).toBe(13)
 
     db.close()
   })
@@ -65,8 +68,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(12)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(rows.length).toBe(13)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -110,7 +113,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(12)
+    expect(version?.version).toBe(13)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -291,7 +294,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(12)
+    expect(version?.version).toBe(13)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -399,7 +402,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(12)
+    expect(version?.version).toBe(13)
     expect(userPreferenceColumns).toContain("max_session_mins")
     expect(userPreferenceColumns).toContain("quiet_hours_start")
     expect(onboardingColumns).toContain("step_name")
