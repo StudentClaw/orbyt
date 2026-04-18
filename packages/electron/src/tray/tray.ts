@@ -1,21 +1,42 @@
 import { Tray, Menu, app, nativeImage, type BrowserWindow } from "electron"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
-function resolveTrayIcon(): Electron.NativeImage {
+function resolveResourcePath(fileName: string): string | null {
   const candidates = [
-    path.join(currentDir, "../../resources/icon.png"),
-    path.join(currentDir, "../../../resources/icon.png"),
+    path.join(currentDir, `../../resources/${fileName}`),
+    path.join(currentDir, `../../../resources/${fileName}`),
   ]
-  const iconPath = candidates.find(existsSync)
+
+  return candidates.find(existsSync) ?? null
+}
+
+function resolveTrayIcon(): Electron.NativeImage {
+  const iconPath = resolveResourcePath("tray-icon.png") ?? resolveResourcePath("icon.png")
   if (!iconPath) {
     return nativeImage.createEmpty()
   }
-  // Tray icons on macOS should be 16x16 or 32x32 (template images work best)
-  return nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+
+  const icon = nativeImage.createFromPath(iconPath)
+  const retinaPath = resolveResourcePath("tray-icon@2x.png")
+
+  if (retinaPath) {
+    icon.addRepresentation({
+      scaleFactor: 2,
+      width: 32,
+      height: 32,
+      buffer: readFileSync(retinaPath),
+    })
+  }
+
+  if (process.platform === "darwin") {
+    icon.setTemplateImage(true)
+  }
+
+  return icon
 }
 
 let tray: Tray | null = null
