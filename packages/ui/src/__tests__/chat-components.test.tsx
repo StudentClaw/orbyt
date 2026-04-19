@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, afterEach } from "vitest"
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { IpcChannel } from "@student-claw/contracts"
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -18,6 +19,7 @@ import type { ChatMessage, ToolCallInfo } from "../hooks/chat-model"
 
 afterEach(() => {
   vi.useRealTimers()
+  Reflect.deleteProperty(window, "electronAPI")
 })
 
 describe("MarkdownContent", () => {
@@ -45,6 +47,30 @@ describe("MarkdownContent", () => {
     render(<MarkdownContent content="Visit [here](https://example.com)" />)
     const link = screen.getByText("here")
     expect(link.closest("a")).toBeDefined()
+  })
+
+  test("reveals local file links through Electron instead of treating them as web links", async () => {
+    const invoke = vi.fn().mockResolvedValue(true)
+    window.electronAPI = {
+      getBootstrap: vi.fn().mockResolvedValue(null),
+      codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" }),
+      invoke,
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      getPathForFile: vi.fn(),
+    }
+
+    const user = userEvent.setup()
+    render(<MarkdownContent content="Created [notes.md](/Users/rereynrd/Desktop/notes.md:12)." />)
+
+    const link = screen.getByText("notes.md").closest("a")
+    expect(link?.getAttribute("target")).toBeNull()
+
+    await user.click(screen.getByText("notes.md"))
+
+    expect(invoke).toHaveBeenCalledWith(IpcChannel.FILE_REVEAL_IN_FOLDER, {
+      path: "/Users/rereynrd/Desktop/notes.md",
+    })
   })
 
   test("renders lists", () => {

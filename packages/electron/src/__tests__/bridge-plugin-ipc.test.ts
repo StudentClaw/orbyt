@@ -103,6 +103,9 @@ describe("registerIpcHandlers plugin reads", () => {
           return false
         }
       },
+      shell: {
+        showItemInFolder: () => undefined,
+      },
       powerMonitor: {
         on: () => undefined,
         removeListener: () => undefined,
@@ -216,6 +219,9 @@ describe("registerIpcHandlers plugin reads", () => {
           return false
         }
       },
+      shell: {
+        showItemInFolder: () => undefined,
+      },
       powerMonitor: {
         on: () => undefined,
         removeListener: () => undefined,
@@ -310,6 +316,9 @@ describe("registerIpcHandlers plugin reads", () => {
           return false
         }
       },
+      shell: {
+        showItemInFolder: () => undefined,
+      },
       powerMonitor: {
         on: () => undefined,
         removeListener: () => undefined,
@@ -332,6 +341,68 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(spawnOptions).not.toBeNull()
     expect((spawnOptions?.env as Record<string, string>).CODEX_HOME).toBe(path.join(userDataRoot, "codex-home"))
     expect((spawnOptions?.env as Record<string, string>).HOME).toBe(path.join(userDataRoot, "codex-user-home"))
+  })
+
+  test("reveals saved files through file:reveal-in-folder IPC", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+    const artifactPath = path.join(userDataRoot, "notes.md")
+    let revealedPath: string | null = null
+
+    writeFileSync(artifactPath, "# Notes\n", "utf8")
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: true,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      shell: {
+        showItemInFolder: (filePath: string) => {
+          revealedPath = filePath
+        },
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?reveal-file-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap)
+
+    const revealHandler = handlers.get(IpcChannel.FILE_REVEAL_IN_FOLDER)
+    expect(revealHandler).toBeDefined()
+    expect(await revealHandler?.({}, { path: artifactPath })).toBe(true)
+    expect(revealedPath).toBe(artifactPath)
   })
 
   test("registers phone push IPC handlers when a push manager is provided", async () => {
@@ -429,6 +500,9 @@ describe("registerIpcHandlers plugin reads", () => {
         static isSupported(): boolean {
           return false
         }
+      },
+      shell: {
+        showItemInFolder: () => undefined,
       },
       powerMonitor: {
         on: () => undefined,

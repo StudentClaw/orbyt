@@ -21,6 +21,7 @@ export const IpcChannel = {
   FILE_SELECT_ATTACHMENTS: "file:select-attachments",
   FILE_GET_ATTACHMENT_METADATA: "file:get-attachment-metadata",
   FILE_SAVE_DIALOG: "file:save-dialog",
+  FILE_REVEAL_IN_FOLDER: "file:reveal-in-folder",
   CODEX_AUTH_START: "codex:auth-start",
   CODEX_AUTH_STATUS: "codex:auth-status",
   PUSH_GET_SETTINGS: "push:get-settings",
@@ -99,6 +100,10 @@ export type SelectAttachmentsParams = {
 
 export type AttachmentMetadataLookupParams = {
   readonly paths: readonly string[]
+}
+
+export type RevealFileInFolderParams = {
+  readonly path: string
 }
 
 export type PluginManagementFailureReason = "plugin_system_disabled" | "not_implemented"
@@ -185,6 +190,7 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.FILE_SELECT_ATTACHMENTS]: [params?: SelectAttachmentsParams]
   [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: [params: AttachmentMetadataLookupParams]
   [IpcChannel.FILE_SAVE_DIALOG]: [options?: { defaultPath?: string }]
+  [IpcChannel.FILE_REVEAL_IN_FOLDER]: [params: RevealFileInFolderParams]
   [IpcChannel.CODEX_AUTH_START]: []
   [IpcChannel.CODEX_AUTH_STATUS]: []
   [IpcChannel.PUSH_GET_SETTINGS]: []
@@ -215,6 +221,7 @@ export type IpcInvokeResultMap = {
   [IpcChannel.FILE_SELECT_ATTACHMENTS]: string[] | null
   [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: TurnAttachmentInput[]
   [IpcChannel.FILE_SAVE_DIALOG]: string | null
+  [IpcChannel.FILE_REVEAL_IN_FOLDER]: boolean
   [IpcChannel.CODEX_AUTH_START]: CodexAuthResult
   [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }
   [IpcChannel.PUSH_GET_SETTINGS]: PhonePushSettings

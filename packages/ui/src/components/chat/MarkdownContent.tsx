@@ -1,5 +1,6 @@
 import { Children, Fragment, isValidElement } from "react"
 import type { ReactNode } from "react"
+import { IpcChannel } from "@student-claw/contracts"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -15,6 +16,8 @@ interface MarkdownContentProps {
 }
 
 const SENTINEL_REGEX = /\[\[ARTIFACT:([^\]]+)\]\]/g
+const URL_SCHEME_REGEX = /^[A-Za-z][A-Za-z\d+.-]*:/
+const APP_ROUTE_PREFIXES = ["/chat", "/settings", "/activity", "/onboarding"] as const
 
 function renderWithChips(children: ReactNode, enabled: boolean): ReactNode {
   if (!enabled) return children
@@ -45,6 +48,76 @@ function renderWithChips(children: ReactNode, enabled: boolean): ReactNode {
     }
   })
   return out
+}
+
+function stripHrefSuffixes(href: string): string {
+  let end = href.length
+  const hashIndex = href.indexOf("#")
+  if (hashIndex !== -1) {
+    end = Math.min(end, hashIndex)
+  }
+  const queryIndex = href.indexOf("?")
+  if (queryIndex !== -1) {
+    end = Math.min(end, queryIndex)
+  }
+  return href.slice(0, end)
+}
+
+function decodeHrefPath(pathname: string): string {
+  try {
+    return decodeURIComponent(pathname)
+  } catch {
+    return pathname
+  }
+}
+
+function normalizeLocalFilePath(pathname: string): string | null {
+  const withoutLine = pathname.replace(/:\d+$/, "")
+  if (withoutLine.length === 0) {
+    return null
+  }
+
+  if (/^\/[A-Za-z]:\//.test(withoutLine)) {
+    return withoutLine.slice(1)
+  }
+
+  return withoutLine
+}
+
+function isAppRouteHref(href: string): boolean {
+  const pathOnly = stripHrefSuffixes(href)
+  return pathOnly === "/"
+    || APP_ROUTE_PREFIXES.some((prefix) => pathOnly === prefix || pathOnly.startsWith(`${prefix}/`))
+}
+
+function localFilePathFromHref(href?: string): string | null {
+  if (!href) {
+    return null
+  }
+
+  const trimmed = href.trim()
+  if (trimmed.length === 0 || trimmed.startsWith("#")) {
+    return null
+  }
+
+  if (trimmed.startsWith("file://")) {
+    try {
+      const url = new URL(trimmed)
+      return normalizeLocalFilePath(decodeHrefPath(url.pathname))
+    } catch {
+      return normalizeLocalFilePath(decodeHrefPath(trimmed.slice("file://".length)))
+    }
+  }
+
+  if (trimmed.startsWith("//") || URL_SCHEME_REGEX.test(trimmed)) {
+    return null
+  }
+
+  if (!trimmed.startsWith("/") || isAppRouteHref(trimmed)) {
+    return null
+  }
+
+  return normalizeLocalFilePath(decodeHrefPath(stripHrefSuffixes(trimmed)))
 }
 
 function useComponents(withChips: boolean): Components {
@@ -83,11 +156,27 @@ function useComponents(withChips: boolean): Components {
         {children}
       </blockquote>
     ),
-    a: ({ children, href }) => (
-      <a href={href} className="text-primary underline underline-offset-2" target="_blank" rel="noopener noreferrer">
-        {children}
-      </a>
-    ),
+    a: ({ children, href }) => {
+      const localFilePath = localFilePathFromHref(href)
+      return (
+        <a
+          href={href}
+          className="text-primary underline underline-offset-2"
+          target={localFilePath ? undefined : "_blank"}
+          rel={localFilePath ? undefined : "noopener noreferrer"}
+          onClick={(event) => {
+            if (!localFilePath || !window.electronAPI?.invoke) {
+              return
+            }
+
+            event.preventDefault()
+            void window.electronAPI.invoke(IpcChannel.FILE_REVEAL_IN_FOLDER, { path: localFilePath })
+          }}
+        >
+          {children}
+        </a>
+      )
+    },
     table: ({ children }) => (
       <div className="mb-3 overflow-x-auto last:mb-0">
         <table className="w-full border-collapse text-sm">{children}</table>
