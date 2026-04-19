@@ -13,10 +13,10 @@ Last updated: 2026-04-19
   [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md)
 - Constraints and boundaries:
   - the graph is rooted at `MEMORY.md`
-  - top-level branches stay fixed, but heartbeat may add child nodes below them
+  - top-level branches stay fixed, but memorize may add child nodes below them
   - promotion requires repeated evidence by default
   - explicit high-confidence facts may promote immediately
-  - heartbeat must prefer updating existing nodes over creating new ones
+  - memorize must prefer updating existing nodes over creating new ones
 - Acceptance criteria for this increment:
   - promotion rules are decision-complete
   - the graph can represent both course-specific strategy and cross-course
@@ -75,7 +75,7 @@ through the semester rather than becoming a dump of old events.
    - explicit high-confidence facts from either layer
 2. Define the graph-writing rule that durable memories should be phrased as
    guidance rather than events.
-3. Define node-selection rules so heartbeat chooses between:
+3. Define node-selection rules so memorize chooses between:
    - existing node update
    - existing branch child creation
    - no promotion yet
@@ -89,8 +89,8 @@ through the semester rather than becoming a dump of old events.
 ### Primary Directories
 
 - `packages/server/src/`
-- `packages/electron/src/` if heartbeat execution helpers live there
-- `docs/implementation/memory-heartbeat-rollout/`
+- `packages/electron/src/` if memorize execution helpers live there
+- `docs/implementation/memorize/`
 
 ### Verification Gates
 
@@ -99,7 +99,7 @@ through the semester rather than becoming a dump of old events.
   - durable-fact tests can prove an explicit Canvas layout fact can promote
     immediately
 - Integration:
-  - one heartbeat run can update an existing course node and an existing
+  - one memorize run can update an existing course node and an existing
     assignment-playbook node without creating unnecessary duplicate pages
 - Manual smoke:
   - a reviewer can compare an event-style daily note to a lesson-style graph

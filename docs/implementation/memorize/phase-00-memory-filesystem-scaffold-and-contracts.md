@@ -22,7 +22,7 @@ Last updated: 2026-04-19
     - `relationships`
     - `personality`
     - `routine`
-  - allow heartbeat to add important child nodes below the fixed scaffold
+  - allow memorize to add important child nodes below the fixed scaffold
   - do not design vector search, mem0, or semantic-storage dependencies in this
     phase
 - Acceptance criteria for this increment:
@@ -60,7 +60,7 @@ organized.
 
 - The memory root is fixed to:
   - `~/.student-claw/memory/MEMORY.md`
-  - `~/.student-claw/memory/heartbeat-state.json`
+  - `~/.student-claw/memory/memorize-state.json`
   - `~/.student-claw/memory/daily/YYYY-MM-DD.md`
   - `~/.student-claw/memory/weekly/YYYY-Www.md`
   - `~/.student-claw/memory/graph/**`
@@ -80,7 +80,7 @@ organized.
    weekly, and graph files.
 2. Define the fixed root graph scaffold and the stable landing-page files for
    each root branch.
-3. Define the standard graph file sections so heartbeat can update them safely,
+3. Define the standard graph file sections so memorize can update them safely,
    especially:
    - title and purpose
    - linked child nodes
@@ -99,7 +99,7 @@ organized.
 
 ### Primary Directories
 
-- `docs/implementation/memory-heartbeat-rollout/`
+- `docs/implementation/memorize/`
 - `packages/server/src/`
 - `packages/electron/src/`
 - `packages/contracts/src/` if typed filesystem helpers or state schemas are
@@ -111,13 +111,13 @@ organized.
   - filesystem helpers or schema tests can prove that daily, weekly, and graph
     paths resolve to the expected layout
 - Integration:
-  - one end-to-end heartbeat prototype can enumerate the root layout and update
+  - one end-to-end memorize prototype can enumerate the root layout and update
     a course node without inventing extra directories
 - Manual smoke:
   - one reviewer can read the phase doc and reconstruct the full memory tree
     without consulting other documents
 - Failure path:
-  - ambiguous placement of state between markdown and `heartbeat-state.json` is
+  - ambiguous placement of state between markdown and `memorize-state.json` is
     surfaced and resolved before implementation begins
 
 ### Evidence To Capture
@@ -137,7 +137,7 @@ organized.
 
 ### Handoff To Next Phase
 
-Phase 01 can now build the isolated heartbeat scheduler and checkpointing
+Phase 01 can now build the isolated memorize scheduler and checkpointing
 behavior against one stable filesystem target.
 
 ### Risks To Carry Forward
@@ -149,4 +149,4 @@ behavior against one stable filesystem target.
 
 ### First Recommended Next Step
 
-Start [Phase 01 - Heartbeat Scheduler And Run Checkpointing](phase-01-heartbeat-scheduler-and-run-checkpointing.md).
+Start [Phase 01 - Memorize Scheduler And Run Checkpointing](phase-01-memorize-scheduler-and-run-checkpointing.md).

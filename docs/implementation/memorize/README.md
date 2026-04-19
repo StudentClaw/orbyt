@@ -1,9 +1,9 @@
-# Memory Heartbeat Rollout Plans
+# Memorize Plans
 
 Last updated: 2026-04-19
 
 This docs package is the implementation source of truth for the markdown-based
-memory graph and isolated heartbeat system in Student Claw.
+memory graph and isolated memorize system in Student Claw.
 
 It is intentionally separate from
 [docs/features/04-memory-system.md](../../features/04-memory-system.md), which
@@ -24,7 +24,7 @@ as part of creating this rollout package.
 ## Phase Order
 
 - [Phase 00 - Memory Filesystem Scaffold And Contracts](phase-00-memory-filesystem-scaffold-and-contracts.md)
-- [Phase 01 - Heartbeat Scheduler And Run Checkpointing](phase-01-heartbeat-scheduler-and-run-checkpointing.md)
+- [Phase 01 - Memorize Scheduler And Run Checkpointing](phase-01-memorize-scheduler-and-run-checkpointing.md)
 - [Phase 02 - Daily And Weekly Distillation Pipeline](phase-02-daily-and-weekly-distillation-pipeline.md)
 - [Phase 03 - Graph Promotion And Node Evolution](phase-03-graph-promotion-and-node-evolution.md)
 - [Phase 04 - Integration With Threads, Canvas Context, And Memory Reads](phase-04-integration-with-threads-canvas-context-and-memory-reads.md)
@@ -32,7 +32,7 @@ as part of creating this rollout package.
 
 ## Planning Principles For This Rollout
 
-- Heartbeat always runs in its own isolated thread rather than the active chat
+- Memorize always runs in its own isolated thread rather than the active chat
   thread.
 - Memory is markdown-first in v1. The filesystem is the public interface, while
   any structured helper state remains subordinate to that filesystem contract.
@@ -46,7 +46,7 @@ as part of creating this rollout package.
   - `relationships`
   - `personality`
   - `routine`
-- Heartbeat may add important child nodes under that scaffold, but it must
+- Memorize may add important child nodes under that scaffold, but it must
   prefer updating existing nodes over creating new ones.
 - `school` must support both:
   - course-specific strategy
@@ -63,7 +63,7 @@ as part of creating this rollout package.
 ## Filesystem Contract For This Rollout
 
 - `~/.student-claw/memory/MEMORY.md`
-- `~/.student-claw/memory/heartbeat-state.json`
+- `~/.student-claw/memory/memorize-state.json`
 - `~/.student-claw/memory/daily/YYYY-MM-DD.md`
 - `~/.student-claw/memory/weekly/YYYY-Www.md`
 - `~/.student-claw/memory/graph/**`
@@ -71,7 +71,7 @@ as part of creating this rollout package.
 ## Deliverables Across The Full Rollout
 
 - A stable on-disk memory layout rooted at `MEMORY.md`
-- A twice-daily isolated heartbeat runner with reliable checkpointing and
+- A twice-daily isolated memorize runner with reliable checkpointing and
   catch-up behavior
 - Incremental daily summary generation and weekly distillation with bounded
   rolling retention

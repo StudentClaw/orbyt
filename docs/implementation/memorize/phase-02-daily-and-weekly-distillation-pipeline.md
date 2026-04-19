@@ -4,15 +4,15 @@ Last updated: 2026-04-19
 
 ## Orientation Note
 
-- Target feature: define how heartbeat reads unprocessed chat activity and turns
+- Target feature: define how memorize reads unprocessed chat activity and turns
   it into rolling daily and weekly memory layers
 - Key dependencies: [PLAN.md](../../../PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
   [phase-00-memory-filesystem-scaffold-and-contracts.md](phase-00-memory-filesystem-scaffold-and-contracts.md),
-  [phase-01-heartbeat-scheduler-and-run-checkpointing.md](phase-01-heartbeat-scheduler-and-run-checkpointing.md),
+  [phase-01-memorize-scheduler-and-run-checkpointing.md](phase-01-memorize-scheduler-and-run-checkpointing.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)
 - Constraints and boundaries:
-  - heartbeat reads workspace-wide thread history incrementally
+  - memorize reads workspace-wide thread history incrementally
   - daily memory is a rolling `7`-file layer
   - weekly memory is a rolling `4`-file layer
   - daily and weekly files may be rewritten as long as updates remain
@@ -20,7 +20,7 @@ Last updated: 2026-04-19
   - do not promote graph nodes in this phase beyond naming promotion
     candidates
 - Acceptance criteria for this increment:
-  - the read window for each heartbeat run is fixed
+  - the read window for each memorize run is fixed
   - daily file contents and weekly file contents are clearly distinct
   - retention pruning behavior is decision-complete
   - the phase encodes the no-duplication rule for two runs in one day
@@ -29,7 +29,7 @@ Last updated: 2026-04-19
 
 ### Objective
 
-Define how heartbeat turns raw recent chats into bounded short-term memory
+Define how memorize turns raw recent chats into bounded short-term memory
 layers that later promotion logic can trust.
 
 ### Current State
@@ -39,7 +39,7 @@ layers that later promotion logic can trust.
   - `weekly = what it means recently`
   - `graph = what the student should keep learning from`
 - Thread history already exists in the local orchestration data model.
-- The checkpoint phase establishes that heartbeat should only process content
+- The checkpoint phase establishes that memorize should only process content
   since the last successful boundary.
 
 ### Out Of Scope
@@ -50,13 +50,13 @@ layers that later promotion logic can trust.
 
 ### Acceptance Criteria
 
-- The doc defines exactly what heartbeat reads on each run:
+- The doc defines exactly what memorize reads on each run:
   - chat turns created or updated since the last successful checkpoint
   - the active daily and weekly files needed for context
   - the current graph root and relevant graph nodes only if needed for
     duplicate-prevention or context
 - Daily files are event-oriented and weekly files are pattern-oriented.
-- A second heartbeat run on the same day updates the day's file without
+- A second memorize run on the same day updates the day's file without
   duplicating already-processed content.
 - Retention rules are explicit:
   - prune day `N-8` while keeping the newest `7`
@@ -67,7 +67,7 @@ layers that later promotion logic can trust.
 ### Implementation Slices
 
 1. Define the incremental read window for recent thread activity and what thread
-   metadata the heartbeat needs to inspect.
+   metadata the memorize needs to inspect.
 2. Define the daily file structure, including:
    - key events
    - assignment and course observations
@@ -89,7 +89,7 @@ layers that later promotion logic can trust.
 - `packages/server/src/orchestration/`
 - `packages/server/src/db/`
 - `packages/electron/src/` if scheduling needs retention hooks
-- `docs/implementation/memory-heartbeat-rollout/`
+- `docs/implementation/memorize/`
 
 ### Verification Gates
 
@@ -99,7 +99,7 @@ layers that later promotion logic can trust.
   - update tests can prove two runs in one day do not duplicate prior
     distillation output
 - Integration:
-  - one heartbeat run can read new thread activity, update the correct daily
+  - one memorize run can read new thread activity, update the correct daily
     file, and refresh the correct weekly file from the checkpoint boundary
 - Manual smoke:
   - a reviewer can compare a raw chat window to the daily and weekly outputs and

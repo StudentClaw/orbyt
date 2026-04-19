@@ -5,11 +5,11 @@ Last updated: 2026-04-19
 ## Orientation Note
 
 - Target feature: define failure handling, recovery behavior, duplicate
-  prevention, and the end-to-end verification contract for the memory heartbeat
+  prevention, and the end-to-end verification contract for the memorize
   rollout
 - Key dependencies: [PLAN.md](../../../PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
-  [phase-01-heartbeat-scheduler-and-run-checkpointing.md](phase-01-heartbeat-scheduler-and-run-checkpointing.md),
+  [phase-01-memorize-scheduler-and-run-checkpointing.md](phase-01-memorize-scheduler-and-run-checkpointing.md),
   [phase-02-daily-and-weekly-distillation-pipeline.md](phase-02-daily-and-weekly-distillation-pipeline.md),
   [phase-03-graph-promotion-and-node-evolution.md](phase-03-graph-promotion-and-node-evolution.md),
   [phase-04-integration-with-threads-canvas-context-and-memory-reads.md](phase-04-integration-with-threads-canvas-context-and-memory-reads.md)
@@ -38,7 +38,7 @@ app restarts, partial failures, and semester-long graph growth.
 
 - The approved product decisions already call out:
   - catch-up after missed runs
-  - no duplication when heartbeat runs twice in one day
+  - no duplication when memorize runs twice in one day
   - rolling retention for daily and weekly layers
   - durable graph promotion rules
 - Earlier phases define the layout, checkpointing, distillation, promotion, and
@@ -53,7 +53,7 @@ app restarts, partial failures, and semester-long graph growth.
 ### Acceptance Criteria
 
 - The phase encodes these end-to-end scenarios explicitly:
-  - heartbeat runs twice in one day without duplicating prior distillation
+  - memorize runs twice in one day without duplicating prior distillation
     output
   - app restart after a missed run triggers a catch-up pass from the saved
     checkpoint
@@ -78,13 +78,13 @@ app restarts, partial failures, and semester-long graph growth.
    - checkpoint writes
 2. Define retry and rerun expectations after:
    - scheduler wake failure
-   - isolated heartbeat runtime failure
+   - isolated memorize runtime failure
    - partial file-write or file-commit failure
 3. Define duplicate-prevention checks across:
    - repeated same-day runs
    - reruns from the same checkpoint boundary
    - overlapping weekly evidence
-4. Define stale-node review rules so heartbeat can mark nodes as `active`,
+4. Define stale-node review rules so memorize can mark nodes as `active`,
    `watch`, or `stale` without deleting graph pages automatically.
 5. Define the end-to-end verification matrix for the rollout:
    - one automated/unit gate per phase
@@ -97,7 +97,7 @@ app restarts, partial failures, and semester-long graph growth.
 - `packages/electron/src/`
 - `packages/server/src/`
 - `packages/server/src/__tests__/`
-- `docs/implementation/memory-heartbeat-rollout/`
+- `docs/implementation/memorize/`
 
 ### Verification Gates
 
@@ -105,7 +105,7 @@ app restarts, partial failures, and semester-long graph growth.
   - write-order and duplicate-prevention tests can prove retries do not produce
     extra promotions or checkpoint drift
 - Integration:
-  - one end-to-end heartbeat test can simulate new chat turns, course-memory
+  - one end-to-end memorize test can simulate new chat turns, course-memory
     promotion, retention pruning, and a saved checkpoint boundary
 - Manual smoke:
   - a developer can inspect the memory folder after multiple runs and verify the

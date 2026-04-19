@@ -1,10 +1,10 @@
-# Phase 01 - Heartbeat Scheduler And Run Checkpointing
+# Phase 01 - Memorize Scheduler And Run Checkpointing
 
 Last updated: 2026-04-19
 
 ## Orientation Note
 
-- Target feature: define the isolated twice-daily heartbeat runner, local-time
+- Target feature: define the isolated twice-daily memorize runner, local-time
   scheduling semantics, and durable checkpoint contract
 - Key dependencies: [PLAN.md](../../../PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
@@ -13,8 +13,8 @@ Last updated: 2026-04-19
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md),
   [docs/implementation/thread-runtime-isolation/README.md](../thread-runtime-isolation/README.md)
 - Constraints and boundaries:
-  - heartbeat runs in its own isolated thread
-  - heartbeat runs twice a day in the student's local timezone
+  - memorize runs in its own isolated thread
+  - memorize runs twice a day in the student's local timezone
   - scheduling must support catch-up on app resume or restart
   - checkpointing must be idempotent and safe to reread after partial failure
   - do not implement summarization or graph promotion in this phase
@@ -23,13 +23,13 @@ Last updated: 2026-04-19
   - checkpoint fields and update timing are defined clearly
   - catch-up behavior is fixed for missed runs and partial runs
   - the phase names the ownership boundary between Electron scheduling and
-    server-side heartbeat execution
+    server-side memorize execution
 
 ## Beginning
 
 ### Objective
 
-Define how the heartbeat gets scheduled, launched, resumed, and checkpointed so
+Define how the memorize gets scheduled, launched, resumed, and checkpointed so
 the later summarization and graph phases can assume reliable execution
 semantics.
 
@@ -39,7 +39,7 @@ semantics.
   start/stop and catch-up-on-resume behavior.
 - Thread runtime work already establishes the repo pattern for isolated runtime
   ownership.
-- The approved memory design requires heartbeat to process only incremental
+- The approved memory design requires memorize to process only incremental
   changes since the last successful run.
 
 ### Out Of Scope
@@ -47,7 +47,7 @@ semantics.
 - prompt design for distillation
 - retention pruning
 - graph file mutation
-- UI display of heartbeat status
+- UI display of memorize status
 
 ### Acceptance Criteria
 
@@ -71,14 +71,14 @@ semantics.
 
 1. Define the ownership split:
    - Electron owns schedule computation and wake-up timing
-   - the local server or orchestration layer owns the isolated heartbeat turn
+   - the local server or orchestration layer owns the isolated memorize turn
      body
 2. Define the cadence rules for morning and evening runs, including how the app
    computes the next run in local time.
 3. Define catch-up behavior for:
    - app launch after a missed run
    - long sleep or suspend
-   - one failed heartbeat followed by the next scheduled slot
+   - one failed memorize followed by the next scheduled slot
 4. Define checkpoint update semantics:
    - write only after a successful run commits its outputs
    - preserve the last successful checkpoint on failure
@@ -91,7 +91,7 @@ semantics.
 - `packages/electron/src/`
 - `packages/server/src/orchestration/`
 - `packages/server/src/db/` if durable run metadata later needs a local DB home
-- `docs/implementation/memory-heartbeat-rollout/`
+- `docs/implementation/memorize/`
 
 ### Verification Gates
 
@@ -101,7 +101,7 @@ semantics.
   - checkpoint tests can prove failed runs do not overwrite the last successful
     boundary
 - Integration:
-  - one isolated heartbeat run can be started from the scheduler with a stable
+  - one isolated memorize run can be started from the scheduler with a stable
     checkpoint boundary
 - Manual smoke:
   - a developer can suspend or restart the app and observe one catch-up pass
@@ -120,7 +120,7 @@ semantics.
 
 ### Done When
 
-- the isolated heartbeat scheduler and checkpoint contract are decision-complete
+- the isolated memorize scheduler and checkpoint contract are decision-complete
 - later phases no longer need to debate cadence, checkpoint ownership, or
   catch-up semantics
 

@@ -1,4 +1,4 @@
-# Memory Heartbeat Rollout Glossary, Tracker, And Handoff
+# Memorize Glossary, Tracker, And Handoff
 
 Last updated: 2026-04-19
 
@@ -31,16 +31,16 @@ unless its verification state is `Verified`.
 
 | Phase | Status | Owner | Verification State | Next Action |
 | --- | --- | --- | --- | --- |
-| 00 - Memory Filesystem Scaffold And Contracts | not_started | Unassigned | Not run | Lock the on-disk memory contract, fixed root scaffold, and markdown update rules |
-| 01 - Heartbeat Scheduler And Run Checkpointing | not_started | Unassigned | Not run | Define the isolated twice-daily heartbeat runner and checkpoint semantics |
+| 00 - Memory Filesystem Scaffold And Contracts | complete | rereynrd | Verified | Proceed to Phase 01; see phase-00-spec.md for the frozen contract |
+| 01 - Memorize Scheduler And Run Checkpointing | not_started | Unassigned | Not run | Define the isolated twice-daily memorize runner and checkpoint semantics |
 | 02 - Daily And Weekly Distillation Pipeline | not_started | Unassigned | Not run | Define incremental chat ingestion, summary generation, and rolling retention |
 | 03 - Graph Promotion And Node Evolution | not_started | Unassigned | Not run | Define durable-fact promotion and graph update behavior |
-| 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect heartbeat inputs and memory consumers across server, Canvas, and app surfaces |
+| 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect memorize inputs and memory consumers across server, Canvas, and app surfaces |
 | 05 - Hardening, Verification, And Recovery | not_started | Unassigned | Not run | Lock recovery, duplicate-prevention, and end-to-end verification behavior |
 
 ## Current Recommended Next Step
 
-Start [Phase 00 - Memory Filesystem Scaffold And Contracts](phase-00-memory-filesystem-scaffold-and-contracts.md) and treat the markdown filesystem layout as the first contract to stabilize before scheduler or summarization implementation begins.
+Start [Phase 01 - Memorize Scheduler And Run Checkpointing](phase-01-memorize-scheduler-and-run-checkpointing.md). The filesystem and state-file contracts are locked in [phase-00-spec.md](phase-00-spec.md); Phase 01 builds the isolated Memorize runner against that stable target and against the `MemoryPaths` helper + `MemorizeState` schema introduced in Phase 00.
 
 ## Handoff Update Protocol
 
@@ -86,7 +86,7 @@ below with:
 
 ## Shared Vocabulary
 
-### Heartbeat
+### Memorize
 
 The isolated background turn that runs twice a day in the student's local time,
 reads unprocessed workspace-wide conversation activity, and updates memory
@@ -144,7 +144,7 @@ course-specific.
 
 ### Checkpoint
 
-The persisted run state in `heartbeat-state.json` that tells heartbeat what it
+The persisted run state in `memorize-state.json` that tells memorize what it
 processed successfully last time, which files it updated, and where a catch-up
 run should resume after app restart or failure.
 
@@ -158,9 +158,35 @@ updates for a long period.
 
 ### Phase 00 - Memory Filesystem Scaffold And Contracts
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - froze filesystem contract at `~/.student-claw/memory/` with `STUDENT_CLAW_HOME` env override
+  - wrote authoritative spec at [phase-00-spec.md](phase-00-spec.md)
+  - locked mandatory H2 heading order for base graph nodes and course nodes
+  - locked course identity model: kebab-case slug directory + `canvasId` frontmatter
+  - locked `memorize-state.json` v1 shape (renamed from `heartbeat-state.json`)
+  - added Effect schemas in `packages/contracts/src/schemas/memorize.ts`
+  - added `MemoryPaths` helper in `packages/server/src/memory/paths.ts` with env override
+  - added 12 unit tests for path resolution and validation
+- Remaining:
+  - delete stale `docs/implementation/memory-heartbeat-rollout/` directory in a separate housekeeping commit
+  - runtime seeding of the root tree (owned by Phase 01's runner)
+- Risks or blockers:
+  - `memory-heartbeat-rollout/` folder still exists alongside `memorize/`; if both get referenced, readers may land on stale heartbeat-named docs
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' typecheck` -> pass
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test packages/server/src/__tests__/memory-paths.test.ts` -> 12 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-00-spec.md`
+  - passing test run
+- First recommended next step:
+  - start Phase 01: define the isolated Memorize runner loop, twice-daily schedule, and checkpoint read/write flow against the `MemoryPaths` helper and `MemorizeState` schema
 
-### Phase 01 - Heartbeat Scheduler And Run Checkpointing
+### Phase 01 - Memorize Scheduler And Run Checkpointing
 
 No handoff entries yet.
 
