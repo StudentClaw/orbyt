@@ -33,14 +33,14 @@ unless its verification state is `Verified`.
 | --- | --- | --- | --- | --- |
 | 00 - Memory Filesystem Scaffold And Contracts | complete | rereynrd | Verified | Proceed to Phase 01; see phase-00-spec.md for the frozen contract |
 | 01 - Memorize Scheduler And Run Checkpointing | complete | rereynrd | Verified | Proceed to Phase 02; see phase-01-spec.md for the frozen contract |
-| 02 - Daily And Weekly Distillation Pipeline | not_started | Unassigned | Not run | Define incremental chat ingestion, summary generation, and rolling retention |
+| 02 - Daily And Weekly Distillation Pipeline | complete | rereynrd | Verified | Proceed to Phase 03; see phase-02-spec.md for the frozen contract |
 | 03 - Graph Promotion And Node Evolution | not_started | Unassigned | Not run | Define durable-fact promotion and graph update behavior |
 | 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect memorize inputs and memory consumers across server, Canvas, and app surfaces |
 | 05 - Hardening, Verification, And Recovery | not_started | Unassigned | Not run | Lock recovery, duplicate-prevention, and end-to-end verification behavior |
 
 ## Current Recommended Next Step
 
-Start [Phase 02 - Daily And Weekly Distillation Pipeline](phase-02-daily-and-weekly-distillation-pipeline.md). The scheduler, state store, and turn-runner seam are locked in [phase-01-spec.md](phase-01-spec.md); Phase 02 implements the real turn body: chat ingestion, daily file writes, and weekly distillation.
+Start [Phase 03 - Graph Promotion And Node Evolution](phase-03-graph-promotion-and-node-evolution.md). The daily/weekly pipeline is locked in [phase-02-spec.md](phase-02-spec.md); Phase 03 parses promotion candidates from those files and promotes them into the durable graph.
 
 ## Handoff Update Protocol
 
@@ -219,7 +219,33 @@ updates for a long period.
 
 ### Phase 02 - Daily And Weekly Distillation Pipeline
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - locked read window: completed turns since `_global` cursor
+  - locked daily file format: run-stamped blocks, no duplication on same-day re-run
+  - locked weekly accumulation: expiring daily folds into its own ISO week's file
+  - locked retention: 7 daily / 4 weekly, prune-after-commit only
+  - prompt templates: daily-distillation.md + weekly-distillation.md (markdown sources + TS exports)
+  - `LiveMemorizeTurnRunner` replacing `NoOpMemorizeTurnRunner`
+  - `CodexMemorizeDistiller` wrapping `CodexCliService.streamTurn()`
+  - utility modules: turn-reader, daily-writer, weekly-writer, pruner, week, distiller
+  - 25 tests passing (week utils 8, daily writer 5, pruner 8, live runner 4)
+  - wrote authoritative spec at [phase-02-spec.md](phase-02-spec.md)
+- Remaining:
+  - Phase 04 must inject real `CodexCliService` into `CodexMemorizeDistiller` and wire the IPC activation
+- Risks or blockers:
+  - `_global` cursor is a v1 simplification; per-thread cursors are more correct if threads diverge significantly in activity
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test packages/server/src/__tests__/memorize-*.test.ts` -> 25 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-02-spec.md`
+  - passing test runs above
+- First recommended next step:
+  - start Phase 03: parse promotion candidates from daily/weekly files and promote durable facts into graph nodes
 
 ### Phase 03 - Graph Promotion And Node Evolution
 
