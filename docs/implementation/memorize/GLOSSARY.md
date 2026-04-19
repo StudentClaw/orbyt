@@ -32,7 +32,7 @@ unless its verification state is `Verified`.
 | Phase | Status | Owner | Verification State | Next Action |
 | --- | --- | --- | --- | --- |
 | 00 - Memory Filesystem Scaffold And Contracts | complete | rereynrd | Verified | Proceed to Phase 01; see phase-00-spec.md for the frozen contract |
-| 01 - Memorize Scheduler And Run Checkpointing | not_started | Unassigned | Not run | Define the isolated twice-daily memorize runner and checkpoint semantics |
+| 01 - Memorize Scheduler And Run Checkpointing | complete | rereynrd | Verified | Proceed to Phase 02; see phase-01-spec.md for the frozen contract |
 | 02 - Daily And Weekly Distillation Pipeline | not_started | Unassigned | Not run | Define incremental chat ingestion, summary generation, and rolling retention |
 | 03 - Graph Promotion And Node Evolution | not_started | Unassigned | Not run | Define durable-fact promotion and graph update behavior |
 | 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect memorize inputs and memory consumers across server, Canvas, and app surfaces |
@@ -40,7 +40,7 @@ unless its verification state is `Verified`.
 
 ## Current Recommended Next Step
 
-Start [Phase 01 - Memorize Scheduler And Run Checkpointing](phase-01-memorize-scheduler-and-run-checkpointing.md). The filesystem and state-file contracts are locked in [phase-00-spec.md](phase-00-spec.md); Phase 01 builds the isolated Memorize runner against that stable target and against the `MemoryPaths` helper + `MemorizeState` schema introduced in Phase 00.
+Start [Phase 02 - Daily And Weekly Distillation Pipeline](phase-02-daily-and-weekly-distillation-pipeline.md). The scheduler, state store, and turn-runner seam are locked in [phase-01-spec.md](phase-01-spec.md); Phase 02 implements the real turn body: chat ingestion, daily file writes, and weekly distillation.
 
 ## Handoff Update Protocol
 
@@ -188,7 +188,34 @@ updates for a long period.
 
 ### Phase 01 - Memorize Scheduler And Run Checkpointing
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - froze cadence (07:00 / 20:00 local time) and timezone source (system)
+  - froze ownership split: Electron owns timer, server owns turn body
+  - froze catch-up: one consolidated run, not per-slot backfill
+  - froze checkpoint write semantics: write on success only, atomic temp+rename
+  - wrote authoritative spec at [phase-01-spec.md](phase-01-spec.md)
+  - `MemorizeScheduler` in `packages/electron/src/memorize/`
+  - `MemorizeStateStore` (atomic read/write/commitSuccess/recordFailure) in `packages/server/src/memory/`
+  - `MemorizeTurnRunner` interface + `NoOpMemorizeTurnRunner` stub in `packages/server/src/memory/runner.ts`
+  - `MemorizeRunResult`, `MemorizeRunError` schemas in contracts
+  - 15 scheduler tests + 7 state store tests = 22 passing
+- Remaining:
+  - Electron activation (IPC wiring) deferred to Phase 04; heartbeats system will call `start()` and `runCatchUpIfNeeded()`
+- Risks or blockers:
+  - `NoOpMemorizeTurnRunner` must be swapped in Phase 02 before Memorize produces any real output
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test packages/electron/src/__tests__/memorize-scheduler.test.ts` -> 15 pass / 0 fail
+  - `bun test packages/server/src/__tests__/memorize-state-store.test.ts` -> 7 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-01-spec.md`
+  - passing test runs above
+- First recommended next step:
+  - start Phase 02: real `MemorizeTurnRunner` that reads conversation activity, writes daily files, and triggers weekly distillation
 
 ### Phase 02 - Daily And Weekly Distillation Pipeline
 

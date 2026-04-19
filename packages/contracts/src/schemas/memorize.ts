@@ -45,6 +45,8 @@ export const DAILY_RETENTION = 7
 export const WEEKLY_RETENTION = 4
 
 export const MEMORIZE_STATE_VERSION = 1
+export const MORNING_RUN_HOUR = 7
+export const EVENING_RUN_HOUR = 20
 
 export const RunOutcome = Schema.Literal("success", "failed", "partial")
 export type RunOutcome = Schema.Schema.Type<typeof RunOutcome>
@@ -83,6 +85,26 @@ export const initialMemorizeState = (): MemorizeState => ({
   lastWeeklyFile: null,
   pendingPromotionCandidates: [],
 })
+
+export const MemorizeRunResult = Schema.Struct({
+  dailyFileWritten: Schema.NullOr(Schema.String),
+  weeklyFileWritten: Schema.NullOr(Schema.String),
+  graphNodesUpdated: Schema.Array(Schema.String),
+})
+export type MemorizeRunResult = Schema.Schema.Type<typeof MemorizeRunResult>
+
+export const MemorizeRunErrorType = Schema.Literal(
+  "runner_failed",
+  "state_read_error",
+  "state_write_error",
+)
+export type MemorizeRunErrorType = Schema.Schema.Type<typeof MemorizeRunErrorType>
+
+export const MemorizeRunError = Schema.Struct({
+  type: MemorizeRunErrorType,
+  message: Schema.String,
+})
+export type MemorizeRunError = Schema.Schema.Type<typeof MemorizeRunError>
 
 export const CourseNodeFrontmatter = Schema.Struct({
   slug: Schema.String,
