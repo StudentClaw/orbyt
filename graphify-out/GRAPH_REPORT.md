@@ -3522,11 +3522,11 @@ Nodes (1): White Wave Logomark
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `toIsoString()` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 6`, `Community 8`, `Community 9`, `Community 10`, `Community 12`, `Community 16`, `Community 49`, `Community 18`, `Community 25`, `Community 28`?**
-  _High betweenness centrality (0.150) - this node is a cross-community bridge._
+  _High betweenness centrality (0.100) - this node is a cross-community bridge._
 - **Why does `now()` connect `Community 18` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 9`, `Community 10`, `Community 22`, `Community 23`, `Community 25`, `Community 28`?**
-  _High betweenness centrality (0.067) - this node is a cross-community bridge._
-- **Why does `randomUUID()` connect `Community 3` to `Community 40`, `Community 24`, `Community 2`, `Community 1`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+  _High betweenness centrality (0.050) - this node is a cross-community bridge._
+- **Why does `bootstrapBrowserSession()` connect `Community 6` to `Community 0`?**
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
 - **Are the 97 inferred relationships involving `toIsoString()` (e.g. with `buildLanguageAssociations()` and `markThreadVisited()`) actually correct?**
   _`toIsoString()` has 97 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 45 inferred relationships involving `now()` (e.g. with `formatRelativeTime()` and `formatRelativeTimeUntil()`) actually correct?**
