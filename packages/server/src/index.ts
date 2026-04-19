@@ -6,7 +6,7 @@ import { Database, DatabaseLive } from "./db/Database.js"
 import { PluginGatewayLive } from "./mcp/PluginGateway.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
-import { ThreadRuntimeManagerLive } from "./orchestration/ThreadRuntimeManager.js"
+import { ThreadRuntimeManager, ThreadRuntimeManagerLive } from "./orchestration/ThreadRuntimeManager.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
 import { SkillResolverLive } from "./skills/index.js"
 import { PushBusLive } from "./ws/PushBus.js"
@@ -79,6 +79,7 @@ const program = Effect.gen(function* () {
   const readiness = yield* ServerReadiness
   const orchestration = yield* OrchestrationService
   const codex = yield* CodexCli
+  const threadRuntimeManager = yield* ThreadRuntimeManager
   const ws = yield* WebSocketServerService
   const canvasSync = yield* CanvasSyncService
 
@@ -86,6 +87,13 @@ const program = Effect.gen(function* () {
 
   writeStdout(`Student Claw server started on :${config.port}`)
   writeStdout(`Database: ${config.dbPath}`)
+
+  // Pre-warm one Codex runtime so the first user send does not pay the subprocess
+  // spawn+handshake cost inline. Failures log but do not abort startup; the next
+  // submission will spawn a fresh runtime on demand.
+  void threadRuntimeManager.warmBootstrap().catch((error) => {
+    writeStderr(`Bootstrap runtime warmup failed: ${String(error)}`)
+  })
 
   // Initial sync at startup so the UI sees fresh data immediately rather than waiting an hour.
   void canvasSync.sync().catch((error) => {

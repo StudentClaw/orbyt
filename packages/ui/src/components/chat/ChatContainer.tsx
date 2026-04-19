@@ -6,7 +6,7 @@ import { useChatUiActions, useSkills } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
-import { MessageBubble } from "./MessageBubble"
+import { MessageBubble, SendingPlaceholder } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
 import type { ChatSelectionInput } from "@/hooks/useChat"
 
@@ -34,6 +34,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     connectionState,
     inputDisabled,
     inputDisabledReason,
+    isSending,
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
 
@@ -132,15 +133,20 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
             <div className="flex min-h-[300px] flex-1 items-center justify-center">
               <ChatProviderDisconnected />
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !isSending ? (
             <div className="flex min-h-[300px] flex-1 items-center justify-center">
               <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
             </div>
+          ) : messages.length === 0 ? (
+            <SendingPlaceholder />
           ) : (
             <>
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
+              {isSending && messages[messages.length - 1]?.role === "user" ? (
+                <SendingPlaceholder />
+              ) : null}
             </>
           )}
         </div>

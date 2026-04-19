@@ -43,6 +43,7 @@ export interface ChatMessage {
   readonly timestamp: number
   readonly attachments?: readonly OrchestrationTurnAttachment[]
   readonly isStreaming?: boolean
+  readonly isQueued?: boolean
   readonly toolCalls?: readonly ToolCallInfo[]
   readonly reasoning?: string
   readonly artifacts?: readonly ChatArtifact[]
@@ -200,6 +201,7 @@ export function buildChatMessages(
         reasoning: turn.reasoning || undefined,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
         isStreaming: turn.status === "streaming",
+        isQueued: turn.status === "queued",
         toolCalls: toolCallsByTurnId[turn.id] ?? [],
         artifacts: parsed.artifacts,
         pendingArtifact: parsed.pendingArtifact,

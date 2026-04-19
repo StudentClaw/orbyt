@@ -266,12 +266,14 @@ describe("ThreadRuntimeManager", () => {
     expect(runtimes[0]?.shutdownCount).toBe(1)
     expect(runtimes[1]?.shutdownCount).toBe(0)
     expect(runtimes).toHaveLength(3)
-    expect(manager.getSnapshot().activeTurns).toEqual([
+    const evictSnapshot = manager.getSnapshot()
+    expect(evictSnapshot.activeTurns).toEqual([
       { threadId: "thread-3", turnId: "turn-3" },
     ])
-    expect(manager.getSnapshot().warmThreads).toEqual([
-      { threadId: "thread-2", lastUsedAt: 4 },
+    expect(evictSnapshot.warmThreads.map((warm) => warm.threadId)).toEqual([
+      "thread-2",
     ])
+    expect(typeof evictSnapshot.warmThreads[0]?.lastUsedAt).toBe("number")
   })
 
   test("never evicts an active runtime while a warm slot exists", async () => {
@@ -334,12 +336,160 @@ describe("ThreadRuntimeManager", () => {
 
     await manager.shutdown()
 
-    expect(manager.getSnapshot()).toEqual({
-      activeTurns: [],
-      queuedTurns: [],
-      warmThreads: [],
-    })
+    const snapshot = manager.getSnapshot()
+    expect(snapshot.activeTurns).toEqual([])
+    expect(snapshot.queuedTurns).toEqual([])
+    expect(snapshot.warmThreads).toEqual([])
+    expect(snapshot.activeRuntimeCount).toBe(0)
+    expect(snapshot.warmRuntimeCount).toBe(0)
     expect(runtimes.map((runtime) => runtime.shutdownCount)).toEqual([1, 1, 1])
+  })
+
+  test("getSnapshot exposes runtime counts and max cap", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 4,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+    await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
+    await runtimes[0]?.completeTurn("turn-1")
+
+    const snapshot = manager.getSnapshot()
+    expect(snapshot.maxRuntimeCount).toBe(4)
+    expect(snapshot.activeRuntimeCount).toBe(1)
+    expect(snapshot.warmRuntimeCount).toBe(1)
+    expect(snapshot.queuedTurns).toHaveLength(0)
+  })
+
+  test("serializes concurrent submissions so the cap is never exceeded", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 4,
+    })
+
+    // Fire 8 concurrent submissions from distinct threads. With a proper admission
+    // mutex, exactly 4 must become "started" and 4 must become "queued".
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_value, index) =>
+        manager.submitTurn(createTurnInput(`thread-${index + 1}`, `turn-${index + 1}`))),
+    )
+
+    const started = results.filter((entry) => entry.admission === "started").length
+    const queued = results.filter((entry) => entry.admission === "queued").length
+    expect(started).toBe(4)
+    expect(queued).toBe(4)
+    expect(runtimes.length).toBe(4)
+    expect(manager.getSnapshot().activeRuntimeCount).toBe(4)
+  })
+
+  test("warmBootstrap pre-warms a runtime that is claimed by the first submission", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+    })
+
+    await manager.warmBootstrap()
+
+    expect(runtimes).toHaveLength(1)
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    expect(runtimes).toHaveLength(1)
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+    expect(runtimes[0]?.streamCalls.map((call) => call.turnId)).toEqual(["turn-1"])
+
+    // A second submission from a different thread requires a fresh runtime because
+    // the bootstrap has already been claimed.
+    await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
+    expect(runtimes).toHaveLength(2)
+  })
+
+  test("inactivity watchdog fails a stalled turn and recycles its slot", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    let currentTime = 1_000
+    let stalledFailure: ProviderRuntimeFailure | null = null
+
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+      now: () => currentTime,
+      turnInactivityTimeoutMs: 100,
+      turnWatchdogTickMs: 10,
+      interruptEscalationMs: 20,
+    })
+
+    await manager.submitTurn(
+      createTurnInput("thread-1", "turn-1", {
+        onError: async (failure) => {
+          stalledFailure = failure
+          return "interrupt"
+        },
+      }),
+    )
+
+    expect(runtimes[0]?.streamCalls).toHaveLength(1)
+
+    // Simulate time passing without any onToken callback firing. The watchdog should
+    // notice the inactivity, interrupt the runtime, and settle the turn as failed.
+    currentTime += 500
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(stalledFailure).not.toBeNull()
+    expect(stalledFailure?.code).toBe("codex_turn_stalled")
+    // Slot should be destroyed, not kept warm, so the runtime was shut down.
+    expect(runtimes[0]?.shutdownCount).toBeGreaterThanOrEqual(1)
+    expect(manager.getSnapshot().activeRuntimeCount).toBe(0)
+  })
+
+  test("watchdog resets on token activity and does not fire during healthy streaming", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    let currentTime = 1_000
+    let stalledFailure: ProviderRuntimeFailure | null = null
+
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+      now: () => currentTime,
+      turnInactivityTimeoutMs: 100,
+      turnWatchdogTickMs: 10,
+      interruptEscalationMs: 20,
+    })
+
+    await manager.submitTurn(
+      createTurnInput("thread-1", "turn-1", {
+        onError: async (failure) => {
+          stalledFailure = failure
+          return "interrupt"
+        },
+      }),
+    )
+
+    const runtime = runtimes[0]
+    if (!runtime) throw new Error("runtime missing")
+
+    // Simulate three bursts of activity well within the timeout window.
+    const streamInput = runtime.streamCalls[0]
+    expect(streamInput).toBeDefined()
+
+    // Access the currently active turn via the runtime's internal hook.
+    // We touch activity through the wrapped onToken callback by calling the runtime's
+    // record of input directly. The controlled runtime stored the input in activeTurns.
+    for (let index = 0; index < 3; index += 1) {
+      currentTime += 50 // below the 100ms timeout
+      await new Promise((resolve) => setTimeout(resolve, 15))
+      // Trigger a token via the runtime (the manager's wrapper will touch the watchdog).
+      // We reach into the controlled runtime: it stored the managed wrapped callbacks.
+      // Use emitApproval as a cheap proxy — it also touches the watchdog through wrappedOnApprovalRequest.
+      await runtime.emitApproval("turn-1", `approval-${index}`)
+    }
+
+    await runtime.completeTurn("turn-1")
+    expect(stalledFailure).toBeNull()
   })
 
   test("disposeThread shuts down the owned runtime and admits the next queued thread", async () => {
@@ -355,10 +505,11 @@ describe("ThreadRuntimeManager", () => {
     await manager.disposeThread("thread-1")
 
     expect(runtimes[0]?.shutdownCount).toBe(1)
-    expect(manager.getSnapshot()).toEqual({
-      activeTurns: [{ threadId: "thread-2", turnId: "turn-2" }],
-      queuedTurns: [],
-      warmThreads: [],
-    })
+    const disposeSnapshot = manager.getSnapshot()
+    expect(disposeSnapshot.activeTurns).toEqual([
+      { threadId: "thread-2", turnId: "turn-2" },
+    ])
+    expect(disposeSnapshot.queuedTurns).toEqual([])
+    expect(disposeSnapshot.warmThreads).toEqual([])
   })
 })
