@@ -530,7 +530,9 @@ export function getThreadStartPolicy(accessMode: ThreadAccessMode): {
   }
 
   return {
-    approvalPolicy: "untrusted",
+    // Keep the safer workspace-write sandbox for default threads, but do not
+    // force provider-side permission prompts for MCP tool calls.
+    approvalPolicy: "never",
     sandbox: "workspace-write",
   }
 }
