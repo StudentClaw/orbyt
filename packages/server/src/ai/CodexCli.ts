@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect"
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
 import readline from "node:readline"
+import { ARTIFACT_CONTRACT } from "./prompts/artifactContract.js"
 import {
   shouldAutoApproveShellCommand,
   type ProviderApprovalDecision,
@@ -141,6 +142,7 @@ export function createCodexRuntimeInstance(
   const providerThreadIds = new Map<string, string>()
   const activeProviderTurns = new Map<string, ActiveTurn>()
   const pendingApprovalRequests = new Map<string, PendingApprovalEntry>()
+  const artifactPreambleSentThreads = new Set<string>()
   let child: ChildProcessWithoutNullStreams | null = null
   let output: readline.Interface | null = null
   let pending = new Map<string, PendingRequest>()
@@ -800,12 +802,18 @@ export function createCodexRuntimeInstance(
         cwd: normalizeSessionCwd(input.cwd),
       })
 
+      let turnText = input.content
+      if (!artifactPreambleSentThreads.has(input.localThreadId)) {
+        turnText = `<system>\n${ARTIFACT_CONTRACT}\n</system>\n\n${input.content}`
+        artifactPreambleSentThreads.add(input.localThreadId)
+      }
+
       const response = await sendRequest<TurnStartResponse>("turn/start", {
         threadId: providerThreadId,
         input: [
           {
             type: "text",
-            text: input.content,
+            text: turnText,
             text_elements: [],
           },
         ],
@@ -830,6 +838,7 @@ export function createCodexRuntimeInstance(
         mcpToolCalls: new Map(),
         tokenIndex: 0,
         reasoningIndex: 0,
+        lastReasoningItemId: null,
       }
 
       if (!providerTurnId) {

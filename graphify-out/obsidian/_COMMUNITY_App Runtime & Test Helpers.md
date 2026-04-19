@@ -1,0 +1,263 @@
+---
+type: community
+cohesion: 0.02
+members: 207
+---
+
+# App Runtime & Test Helpers
+
+**Cohesion:** 0.02 - loosely connected
+**Members:** 207 nodes
+
+## Members
+- [[.assertSupportedCodexCliVersion()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.attachProcessListeners()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.clear()_1]] - code - packages/electron/src/plugins/plugin-vault.ts
+- [[.constructor()_14]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.delete()_1]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[.emitErrorEvent()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.emitEvent()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.emitLifecycleEvent()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.emitNotificationEvent()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.handleResponse()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.handleServerNotification()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.handleServerRequest()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.handleStdoutLine()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.hasSession()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.interruptTurn()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.isResponse()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.isServerNotification()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.isServerRequest()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.listSessions()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.onStatusChange()]] - code - packages/ui/src/rpc/wsTransport.ts
+- [[.parseThreadSnapshot()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readArray()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readBoolean()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readChildParentTurnId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readObject()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readProviderConversationId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readRouteFields()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readString()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.readThread()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.rememberCollabReceiverTurns()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.requestKindForMethod()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.requireSession()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.respondToRequest()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.respondToUserInput()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.rollbackThread()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.sendRequest()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.sendTurn()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.shouldSuppressChildConversationNotification()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.startSession()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.stopAll()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.stopSession()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.updateSession()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[.writeMessage()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[ActivityFeedItem.test.tsx]] - code - packages/ui/src/__tests__/ActivityFeedItem.test.tsx
+- [[AnnouncementsFeed.test.tsx]] - code - packages/ui/src/__tests__/AnnouncementsFeed.test.tsx
+- [[CanvasContextBuilder.ts]] - code - packages/server/src/skills/CanvasContextBuilder.ts
+- [[ChatView.logic.ts]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[ChatView.tsx]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[CodexAppServerManager]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[DeadlineTimeline.test.tsx]] - code - packages/ui/src/__tests__/DeadlineTimeline.test.tsx
+- [[DraftChatThreadRouteView()]] - code - references/t3code/apps/web/src/routes/_chat.draft.$draftId.tsx
+- [[GradeOverview.test.tsx]] - code - packages/ui/src/__tests__/GradeOverview.test.tsx
+- [[PreferencesStep.tsx]] - code - packages/ui/src/components/onboarding/PreferencesStep.tsx
+- [[ProviderModelPicker.browser.tsx]] - code - references/t3code/apps/web/src/components/chat/ProviderModelPicker.browser.tsx
+- [[RoutinesStep.tsx]] - code - packages/ui/src/components/onboarding/RoutinesStep.tsx
+- [[SchedulePreferencesSection.tsx]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[_chat.draft.$draftId.tsx]] - code - references/t3code/apps/web/src/routes/_chat.draft.$draftId.tsx
+- [[activeProject()]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[activityId()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[activityState.test.ts]] - code - packages/ui/src/rpc/activityState.test.ts
+- [[adjustCodexModelsForAccount()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[appRuntime.ts]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[asObject()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[asString()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[assertSupportedCodexCliVersion()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[brandIfNonEmpty()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[buildCanvasContext()]] - code - packages/server/src/skills/CanvasContextBuilder.ts
+- [[buildCodexCollaborationMode()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[buildCodexInitializeParams()]] - code - references/t3code/apps/server/src/provider/codexAppServer.ts
+- [[buildCodexProvider()]] - code - references/t3code/apps/web/src/components/chat/ProviderModelPicker.browser.tsx
+- [[buildExpiredTerminalContextToastCopy()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[buildLocalDraftThread()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[buildTemporaryWorktreeBranchName()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[canvasState.test.ts]] - code - packages/ui/src/rpc/canvasState.test.ts
+- [[classifyCodexStderrLine()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[cliAuthFormat.test.ts]] - code - references/t3code/apps/server/src/cliAuthFormat.test.ts
+- [[cliAuthFormat.ts]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[cloneComposerImageForRetry()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[codexAccount.ts]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[codexAppServer.ts]] - code - references/t3code/apps/server/src/provider/codexAppServer.ts
+- [[codexAppServerManager.ts]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[codexAuthSubLabel()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[codexAuthSubType()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[codexCliVersion.ts]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[collectUserMessageBlobPreviewUrls()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[compareCodexCliVersions()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[comparePrereleaseIdentifier()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[courseId()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[createLocalDispatchSnapshot()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[dashboard-fixtures.ts]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[dashboard-model.test.ts]] - code - packages/ui/src/components/dashboard/dashboard-model.test.ts
+- [[daysAgo()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[daysAgo()_1]] - code - packages/ui/src/components/dashboard/dashboard-model.test.ts
+- [[daysAgo()_2]] - code - packages/ui/src/__tests__/GradeOverview.test.tsx
+- [[daysFromNow()_3]] - code - packages/ui/src/rpc/canvasState.test.ts
+- [[daysFromNow()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[daysFromNow()_1]] - code - packages/ui/src/components/dashboard/dashboard-model.test.ts
+- [[daysFromNow()_2]] - code - packages/ui/src/__tests__/DeadlineTimeline.test.tsx
+- [[deriveLockedProvider()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[effort()]] - code - references/t3code/apps/web/src/components/chat/ProviderModelPicker.browser.tsx
+- [[formatClientMetadata()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[formatCodexCliUpgradeMessage()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[formatDate()]] - code - packages/server/src/skills/CanvasContextBuilder.ts
+- [[formatDuration()_2]] - code - packages/ui/src/components/onboarding/PreferencesStep.tsx
+- [[formatDuration()_1]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[formatHour()_1]] - code - packages/ui/src/components/onboarding/RoutinesStep.tsx
+- [[formatHour()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[formatIssuedPairingCredential()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[formatIssuedSession()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[formatItem()]] - code - packages/server/src/skills/CanvasContextBuilder.ts
+- [[formatPairingCredentialList()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[formatSessionList()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[getPairingTokenFromUrl()]] - code - references/t3code/apps/web/src/pairingUrl.ts
+- [[getPrimaryTransport()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[getPrimaryWsRpcClient()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[getRendererBootstrap()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[getStandaloneDevBootstrap()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[handleCalendarIntegration()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[handleMaxDuration()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[handleNotificationsEnabled()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[handleQuietEnd()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[handleQuietStart()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[hasServerAcknowledgedLocalDispatch()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[hoursAgo()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[isCodexCliVersionSupported()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[isLinuxPlatform()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[isRecoverableThreadResumeError()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[itemId()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[killChildTree()_1]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[killCodexChildProcess()]] - code - references/t3code/apps/server/src/provider/codexAppServer.ts
+- [[makeActivity()]] - code - references/t3code/apps/web/src/session-logic.test.ts
+- [[makeAnnouncement()]] - code - packages/ui/src/__tests__/AnnouncementsFeed.test.tsx
+- [[makeCourse()_1]] - code - packages/ui/src/rpc/canvasState.test.ts
+- [[makeCourse()]] - code - packages/ui/src/__tests__/GradeOverview.test.tsx
+- [[makeEntry()_1]] - code - packages/ui/src/__tests__/ActivityFeedItem.test.tsx
+- [[makeEntry()_2]] - code - packages/ui/src/rpc/activityState.test.ts
+- [[makeGrade()_2]] - code - packages/ui/src/rpc/canvasState.test.ts
+- [[makeGrade()]] - code - packages/ui/src/components/dashboard/dashboard-model.test.ts
+- [[makeGrade()_1]] - code - packages/ui/src/__tests__/GradeOverview.test.tsx
+- [[makeItem()_4]] - code - packages/ui/src/rpc/canvasState.test.ts
+- [[makeItem()_1]] - code - packages/ui/src/components/dashboard/dashboard-model.test.ts
+- [[makeItem()_3]] - code - packages/ui/src/__tests__/DeadlineTimeline.test.tsx
+- [[mapCodexRuntimeMode()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[newCommandId()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[newDraftId()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[newMessageId()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[newProjectId()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[newThreadId()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[normalizeCodexModelSlug()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[normalizeCodexVersion()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[normalizeProviderThreadId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[normalizeRemoteBaseUrl()]] - code - references/t3code/apps/web/src/environments/remote/target.ts
+- [[onComposerCommandKey()]] - code - references/t3code/apps/web/src/components/chat/ChatComposer.tsx
+- [[onInterrupt()]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[onSend()]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[pairingUrl.ts]] - code - references/t3code/apps/web/src/pairingUrl.ts
+- [[parseCodexCliVersion()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[parseSemver()]] - code - references/t3code/apps/server/src/provider/codexCliVersion.ts
+- [[parseStandaloneComposerSlashCommand()]] - code - references/t3code/apps/web/src/composer-logic.ts
+- [[probeCodexAccount()]] - code - references/t3code/apps/server/src/provider/codexAppServer.ts
+- [[randomUUID()]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[readCodexAccountSnapshot()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[readErrorMessage()_1]] - code - references/t3code/apps/server/src/provider/codexAppServer.ts
+- [[readFileAsDataUrl()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[readHashParams()]] - code - references/t3code/apps/web/src/pairingUrl.ts
+- [[readResumeCursorThreadId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[readResumeThreadId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[reconcileMountedTerminalThreadIds()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[recordActivityEntry()]] - code - packages/server/src/activity/feed.ts
+- [[resolveCodexModelForAccount()]] - code - references/t3code/apps/server/src/provider/codexAccount.ts
+- [[resolveRemotePairingTarget()]] - code - references/t3code/apps/web/src/environments/remote/target.ts
+- [[revokeBlobPreviewUrl()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[revokeUserMessagePreviewUrls()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[serializeOptionalFields()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[session-logic.test.ts]] - code - references/t3code/apps/web/src/session-logic.test.ts
+- [[sessionId()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[setPairingTokenOnUrl()]] - code - references/t3code/apps/web/src/pairingUrl.ts
+- [[shouldWriteThreadErrorToCurrentServerThread()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[startAppRuntime()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[startWsConnectionStateSync()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[stripPairingTokenFromUrl()]] - code - references/t3code/apps/web/src/pairingUrl.ts
+- [[syncPreferences()_1]] - code - packages/ui/src/components/onboarding/PreferencesStep.tsx
+- [[syncPreferences()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[syncRoutines()_1]] - code - packages/ui/src/components/onboarding/RoutinesStep.tsx
+- [[syncRoutines()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[target.ts_1]] - code - references/t3code/apps/web/src/environments/remote/target.ts
+- [[taskId()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[threadHasStarted()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+- [[toCodexUserInputAnswer()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[toCodexUserInputAnswers()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[toHttpBaseUrl()]] - code - references/t3code/apps/web/src/environments/remote/target.ts
+- [[toIsoString()]] - code - references/t3code/apps/server/src/cliAuthFormat.ts
+- [[toProviderItemId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[toTurnId()]] - code - references/t3code/apps/server/src/codexAppServerManager.ts
+- [[toWsBaseUrl()]] - code - references/t3code/apps/web/src/environments/remote/target.ts
+- [[todayAt()]] - code - packages/ui/src/__mocks__/dashboard-fixtures.ts
+- [[toggleCell()_1]] - code - packages/ui/src/components/onboarding/RoutinesStep.tsx
+- [[toggleCell()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[toggleOffDay()_1]] - code - packages/ui/src/components/onboarding/PreferencesStep.tsx
+- [[toggleOffDay()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[toggleStudyTime()_1]] - code - packages/ui/src/components/onboarding/PreferencesStep.tsx
+- [[toggleStudyTime()]] - code - packages/ui/src/components/settings/SchedulePreferencesSection.tsx
+- [[useLocalDispatchState()]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[useThreadPlanCatalog()]] - code - references/t3code/apps/web/src/components/ChatView.tsx
+- [[utils.ts]] - code - references/t3code/apps/web/src/lib/utils.ts
+- [[waitForPrimaryWsRpcClient()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[waitForStartedServerThread()]] - code - references/t3code/apps/web/src/components/ChatView.logic.ts
+
+## Live Query (requires Dataview plugin)
+
+```dataview
+TABLE source_file, type FROM #community/App_Runtime_&_Test_Helpers
+SORT file.name ASC
+```
+
+## Connections to other communities
+- 40 edges to [[_COMMUNITY_Activity Feed & State]]
+- 34 edges to [[_COMMUNITY_Database Migrations & Onboarding Schema]]
+- 12 edges to [[_COMMUNITY_Auth & Analytics Services]]
+- 9 edges to [[_COMMUNITY_Plugin Bridge & Attachments]]
+- 6 edges to [[_COMMUNITY_Metrics & Tracing Attributes]]
+- 5 edges to [[_COMMUNITY_Composer Draft & Orchestration]]
+- 5 edges to [[_COMMUNITY_Client Tracing & Observability]]
+- 4 edges to [[_COMMUNITY_Auth Bootstrap & Server Pairing]]
+- 4 edges to [[_COMMUNITY_Academic Data Normalization]]
+- 3 edges to [[_COMMUNITY_Claude Provider & Formatting]]
+- 3 edges to [[_COMMUNITY_Branch Toolbar Logic]]
+- 3 edges to [[_COMMUNITY_Keybindings & Chat Handler]]
+- 3 edges to [[_COMMUNITY_Composer Send State & Terminal]]
+- 3 edges to [[_COMMUNITY_Backend Readiness & Desktop Settings]]
+- 2 edges to [[_COMMUNITY_Chat UI & Composer]]
+- 2 edges to [[_COMMUNITY_Composer Editor & Mentions]]
+- 2 edges to [[_COMMUNITY_Provider Runtime & Session Logic]]
+- 2 edges to [[_COMMUNITY_Chat View Browser Tests]]
+- 2 edges to [[_COMMUNITY_Chat Composer Attachments]]
+- 2 edges to [[_COMMUNITY_Attachment Paths & Store]]
+- 2 edges to [[_COMMUNITY_Claude Adapter & Commands]]
+- 1 edge to [[_COMMUNITY_Environment Catalog]]
+- 1 edge to [[_COMMUNITY_UI Component Library]]
+- 1 edge to [[_COMMUNITY_Auth Control Plane]]
+- 1 edge to [[_COMMUNITY_Module 49]]
+- 1 edge to [[_COMMUNITY_Push Notifications]]
+- 1 edge to [[_COMMUNITY_Codex Adapter Utilities]]
+- 1 edge to [[_COMMUNITY_Desktop Artifact Builder]]
+
+## Top bridge nodes
+- [[toIsoString()]] - degree 100, connects to 14 communities
+- [[.delete()_1]] - degree 31, connects to 8 communities
+- [[.clear()_1]] - degree 14, connects to 5 communities
+- [[randomUUID()]] - degree 24, connects to 4 communities
+- [[.startSession()]] - degree 24, connects to 3 communities

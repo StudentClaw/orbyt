@@ -10,3 +10,4 @@ package-lock.json
 
 # Local reference repos
 references/
+graphify-out/GRAPH_REPORT.md

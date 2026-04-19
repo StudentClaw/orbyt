@@ -53,6 +53,7 @@ export function useChat(selection?: ChatSelectionInput) {
   const uiActions = useChatUiActions()
   const [accessModeMutationPending, setAccessModeMutationPending] = useState(false)
   const [approvalDecisionPendingId, setApprovalDecisionPendingId] = useState<string | null>(null)
+  const [isSending, setIsSending] = useState(false)
 
   const selectedWorkspaceId = selection?.workspaceId ?? selectedWorkspaceIdFromUi
   const selectedThreadId = selection?.threadId ?? selectedThreadIdFromUi
@@ -105,22 +106,27 @@ export function useChat(selection?: ChatSelectionInput) {
     }
 
     const promptContent = buildPromptContent(trimmed, attachments)
-    let threadId = currentThread?.id ?? selectedThreadId
-    if (!threadId) {
-      threadId = await actions.createThread(currentWorkspace.id, buildThreadTitle(trimmed, attachments))
-      if (selection?.onThreadCreated) {
-        await selection.onThreadCreated(currentWorkspace.id, threadId)
-      } else {
-        uiActions.selectChatTarget(currentWorkspace.id, threadId)
+    setIsSending(true)
+    try {
+      let threadId = currentThread?.id ?? selectedThreadId
+      if (!threadId) {
+        threadId = await actions.createThread(currentWorkspace.id, buildThreadTitle(trimmed, attachments))
+        if (selection?.onThreadCreated) {
+          await selection.onThreadCreated(currentWorkspace.id, threadId)
+        } else {
+          uiActions.selectChatTarget(currentWorkspace.id, threadId)
+        }
       }
-    }
 
-    if (skillId === undefined) {
-      await actions.sendTurn(threadId, promptContent, attachments, selection?.model)
-      return
-    }
+      if (skillId === undefined) {
+        await actions.sendTurn(threadId, promptContent, attachments, selection?.model)
+        return
+      }
 
-    await actions.sendTurn(threadId, promptContent, attachments, selection?.model, skillId)
+      await actions.sendTurn(threadId, promptContent, attachments, selection?.model, skillId)
+    } finally {
+      setIsSending(false)
+    }
   }, [
     actions,
     connectionStatus.phase,
@@ -195,5 +201,6 @@ export function useChat(selection?: ChatSelectionInput) {
     connectionState: connectionStatus.phase,
     inputDisabled: Boolean(inputDisabledReason),
     inputDisabledReason,
+    isSending,
   }
 }

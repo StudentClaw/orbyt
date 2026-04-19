@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 import {
   IpcChannel,
   type DesktopBootstrap,
@@ -48,4 +48,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, handler)
     return () => ipcRenderer.removeListener(channel, handler)
   },
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 })

@@ -1,12 +1,19 @@
 import { useState } from "react"
 import type { InsightData } from "./InsightCard"
 
+export interface InsightAction {
+  readonly label: string
+  readonly prompt: string
+  readonly skillId?: string
+}
+
 export interface InsightStripItem extends InsightData {
-  readonly actionLabel?: string
+  readonly action?: InsightAction
 }
 
 interface InsightStripProps {
   readonly insights: ReadonlyArray<InsightStripItem>
+  readonly onAction?: (action: InsightAction) => void
 }
 
 const DOT_COLORS = [
@@ -17,7 +24,7 @@ const DOT_COLORS = [
   "bg-pink-400",
 ]
 
-export function InsightStrip({ insights }: InsightStripProps) {
+export function InsightStrip({ insights, onAction }: InsightStripProps) {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set())
 
   const visible = insights.filter((i) => !dismissed.has(i.id))
@@ -41,6 +48,7 @@ export function InsightStrip({ insights }: InsightStripProps) {
           insight={insight}
           dotColor={DOT_COLORS[i % DOT_COLORS.length]}
           onDismiss={() => dismiss(insight.id)}
+          onAction={onAction}
         />
       ))}
     </div>
@@ -51,9 +59,10 @@ interface InsightPillProps {
   readonly insight: InsightStripItem
   readonly dotColor: string
   readonly onDismiss: () => void
+  readonly onAction?: (action: InsightAction) => void
 }
 
-function InsightPill({ insight, dotColor, onDismiss }: InsightPillProps) {
+function InsightPill({ insight, dotColor, onDismiss, onAction }: InsightPillProps) {
   return (
     <div
       className="flex items-center gap-3 rounded-2xl backdrop-blur-xl bg-card/60 border border-white/10 px-4 py-3 animate-[slide-in-down_0.2s_ease-out] shadow-sm"
@@ -77,12 +86,13 @@ function InsightPill({ insight, dotColor, onDismiss }: InsightPillProps) {
           </p>
         )}
       </div>
-      {insight.actionLabel && (
+      {insight.action && (
         <button
           type="button"
           className="shrink-0 text-xs font-medium text-primary hover:underline"
+          onClick={() => onAction?.(insight.action!)}
         >
-          {insight.actionLabel}
+          {insight.action.label}
         </button>
       )}
       <button

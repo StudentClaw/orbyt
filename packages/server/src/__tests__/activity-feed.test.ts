@@ -33,6 +33,18 @@ describe("activity feed", () => {
   test("records workflow completion entries and publishes the full payload", async () => {
     const db = createDatabase()
     const published: unknown[] = []
+    const now = new Date().toISOString()
+
+    db.run(
+      `INSERT INTO chat_workspaces (id, kind, name, root_path, availability, created_at, updated_at)
+       VALUES ('workspace_1', 'legacy', 'Test Workspace', NULL, NULL, ?, ?)`,
+      [now, now],
+    )
+    db.run(
+      `INSERT INTO orchestration_threads (id, workspace_id, title, access_mode, status, current_turn_id, created_at, updated_at)
+       VALUES ('thread_1', 'workspace_1', 'Test Thread', 'default', 'idle', NULL, ?, ?)`,
+      [now, now],
+    )
 
     const entry = await recordWorkflowCompletionActivity({
       database: createDatabaseService(db),
@@ -70,7 +82,7 @@ describe("activity feed", () => {
       category: "workflow",
       type: "workflow_completed",
       priority: 3,
-      deepLink: "/chat",
+      deepLink: "/chat/workspace_1/thread_1",
     })
     expect(rows).toEqual([
       {
@@ -80,7 +92,7 @@ describe("activity feed", () => {
         title: entry.title,
         body: entry.body ?? null,
         priority: 3,
-        deep_link: "/chat",
+        deep_link: "/chat/workspace_1/thread_1",
       },
     ])
     expect(published).toEqual([entry])

@@ -1,19 +1,32 @@
 import { beforeEach, describe, test, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { IpcChannel, type ChatModel } from "@student-claw/contracts"
+import { IpcChannel, type ChatModel, type TurnAttachmentInput } from "@student-claw/contracts"
 import { PromptInput } from "../components/chat/PromptInput"
 
 type ElectronAPI = NonNullable<Window["electronAPI"]>
 
-function setElectronApi(invoke: ElectronAPI["invoke"]) {
+function setElectronApi(
+  invoke: ElectronAPI["invoke"],
+  getPathForFile?: ElectronAPI["getPathForFile"],
+) {
   window.electronAPI = {
     getBootstrap: vi.fn().mockResolvedValue(null),
     codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
     invoke,
     send: vi.fn(),
     on: vi.fn().mockReturnValue(() => {}),
+    getPathForFile,
   }
+}
+
+function createFileDragEvent(type: string, files: File[] = []) {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, "dataTransfer", {
+    value: { files, types: files.length > 0 ? ["Files"] : [] },
+    configurable: true,
+  })
+  return event
 }
 
 describe("PromptInput", () => {
@@ -371,5 +384,126 @@ describe("PromptInput", () => {
     await user.keyboard("{Enter}")
 
     expect(onRespondToApproval).toHaveBeenCalledWith("approve")
+  })
+
+  describe("drag and drop attachments", () => {
+    function setupDropMocks(metadataByPath: Record<string, TurnAttachmentInput>) {
+      const getPathForFile = vi.fn((file: File) =>
+        Object.keys(metadataByPath).find((p) => p.endsWith(file.name)) ?? ""
+      )
+      const invoke = vi.fn(async (channel, ...args) => {
+        const payload = args[0] as { paths: readonly string[] } | undefined
+        if (channel === IpcChannel.FILE_GET_ATTACHMENT_METADATA) {
+          return (payload?.paths ?? [])
+            .map((p) => metadataByPath[p])
+            .filter(Boolean) as TurnAttachmentInput[]
+        }
+        return null
+      }) as ElectronAPI["invoke"]
+      setElectronApi(invoke, getPathForFile)
+      return { getPathForFile, invoke }
+    }
+
+    test("shows drag overlay when files are dragged over the composer", () => {
+      setupDropMocks({})
+      render(<PromptInput {...defaultProps} />)
+      const composerArea = screen.getByTestId("composer-area")
+      const file = new File(["content"], "photo.png", { type: "image/png" })
+
+      fireEvent(composerArea, createFileDragEvent("dragenter", [file]))
+
+      expect(screen.getByTestId("drag-drop-overlay")).toBeDefined()
+    })
+
+    test("hides drag overlay when drag leaves the composer", () => {
+      setupDropMocks({})
+      render(<PromptInput {...defaultProps} />)
+      const composerArea = screen.getByTestId("composer-area")
+      const file = new File(["content"], "photo.png", { type: "image/png" })
+
+      fireEvent(composerArea, createFileDragEvent("dragenter", [file]))
+      expect(screen.getByTestId("drag-drop-overlay")).toBeDefined()
+
+      fireEvent(composerArea, createFileDragEvent("dragleave"))
+      expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+    })
+
+    test("does not show overlay for non-file drag events", () => {
+      setupDropMocks({})
+      render(<PromptInput {...defaultProps} />)
+      const composerArea = screen.getByTestId("composer-area")
+
+      const event = new Event("dragenter", { bubbles: true, cancelable: true })
+      Object.defineProperty(event, "dataTransfer", {
+        value: { files: [], types: ["text/plain"] },
+        configurable: true,
+      })
+      fireEvent(composerArea, event)
+
+      expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+    })
+
+    test("adds dropped files as attachments", async () => {
+      const metadata: TurnAttachmentInput = {
+        path: "/Users/test/photo.png",
+        name: "photo.png",
+        mimeType: "image/png",
+        sizeBytes: 7,
+        kind: "image" as const,
+      }
+      setupDropMocks({ "/Users/test/photo.png": metadata })
+      render(<PromptInput {...defaultProps} />)
+      const composerArea = screen.getByTestId("composer-area")
+      const file = new File(["content"], "photo.png", { type: "image/png" })
+
+      fireEvent(composerArea, createFileDragEvent("drop", [file]))
+
+      expect(await screen.findByText("photo.png")).toBeDefined()
+    })
+
+    test("hides drag overlay after drop", async () => {
+      const metadata: TurnAttachmentInput = {
+        path: "/Users/test/photo.png",
+        name: "photo.png",
+        mimeType: "image/png",
+        sizeBytes: 7,
+        kind: "image" as const,
+      }
+      setupDropMocks({ "/Users/test/photo.png": metadata })
+      render(<PromptInput {...defaultProps} />)
+      const composerArea = screen.getByTestId("composer-area")
+      const file = new File(["content"], "photo.png", { type: "image/png" })
+
+      fireEvent(composerArea, createFileDragEvent("dragenter", [file]))
+      expect(screen.getByTestId("drag-drop-overlay")).toBeDefined()
+
+      fireEvent(composerArea, createFileDragEvent("drop", [file]))
+      expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+    })
+
+    test("sends dropped attachments with the message", async () => {
+      const onSend = vi.fn()
+      const metadata: TurnAttachmentInput = {
+        path: "/Users/test/notes.md",
+        name: "notes.md",
+        mimeType: "text/markdown",
+        sizeBytes: 12,
+        kind: "file" as const,
+      }
+      setupDropMocks({ "/Users/test/notes.md": metadata })
+      const user = userEvent.setup()
+      render(<PromptInput {...defaultProps} onSend={onSend} />)
+      const composerArea = screen.getByTestId("composer-area")
+      const file = new File(["hello world"], "notes.md", { type: "text/markdown" })
+
+      fireEvent(composerArea, createFileDragEvent("drop", [file]))
+      expect(await screen.findByText("notes.md")).toBeDefined()
+
+      await user.click(screen.getByLabelText("Send message"))
+
+      expect(onSend).toHaveBeenCalledWith(
+        expect.objectContaining({ attachments: [metadata] }),
+      )
+    })
   })
 })

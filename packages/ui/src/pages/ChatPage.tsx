@@ -3,6 +3,8 @@ import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { ChatContainer } from "@/components/chat/ChatContainer"
 import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
 import { useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
+import { ArtifactProvider } from "@/context/ArtifactContext"
+import { ArtifactDrawer } from "@/components/artifacts/ArtifactDrawer"
 
 export function ChatPage() {
   const navigate = useNavigate()
@@ -71,15 +73,18 @@ export function ChatPage() {
   }, [navigate])
 
   return (
-    <div className="h-full">
-      <ChatContainer
-        variant="page"
-        selection={{
-          workspaceId: selection.workspaceId,
-          threadId: selection.threadId,
-          onThreadCreated: handleThreadCreated,
-        }}
-      />
-    </div>
+    <ArtifactProvider>
+      <div className="h-full">
+        <ChatContainer
+          variant="page"
+          selection={{
+            workspaceId: selection.workspaceId,
+            threadId: selection.threadId,
+            onThreadCreated: handleThreadCreated,
+          }}
+        />
+        <ArtifactDrawer />
+      </div>
+    </ArtifactProvider>
   )
 }

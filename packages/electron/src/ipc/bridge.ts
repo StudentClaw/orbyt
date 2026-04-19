@@ -4,6 +4,7 @@ import {
   ipcMain,
   app,
   Notification,
+  shell,
   type OpenDialogOptions,
   type SaveDialogOptions,
 } from "electron"
@@ -227,6 +228,19 @@ export function registerIpcHandlers(
         ? await dialog.showSaveDialog(window, dialogOptions)
         : await dialog.showSaveDialog(dialogOptions)
       return result.canceled ? null : (result.filePath ?? null)
+    },
+  )
+
+  registerHandler(
+    IPC_CHANNELS.FILE_REVEAL_IN_FOLDER,
+    (_event, params?: { path?: string }): boolean => {
+      const filePath = params?.path?.trim()
+      if (!filePath || !existsSync(filePath)) {
+        return false
+      }
+
+      shell.showItemInFolder(filePath)
+      return true
     },
   )
 

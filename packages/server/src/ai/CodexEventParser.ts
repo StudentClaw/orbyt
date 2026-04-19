@@ -57,6 +57,7 @@ export type ActiveTurn = {
   readonly mcpToolCalls: Map<string, Omit<CodexMcpToolCallSnapshot, "status" | "error">>
   tokenIndex: number
   reasoningIndex: number
+  lastReasoningItemId: string | null
 }
 
 export type ActiveTurnLocator = Pick<ActiveTurn, "localThreadId" | "localTurnId">
@@ -195,6 +196,25 @@ function recordEmittedTextLength(
   activeTurn.emittedTextLengths.set(itemId, currentLength + emittedLength)
 }
 
+async function emitReasoningParagraphSeparator(
+  activeTurn: ActiveTurn,
+  itemId: string | null,
+): Promise<void> {
+  if (
+    itemId !== null
+    && activeTurn.lastReasoningItemId !== null
+    && activeTurn.lastReasoningItemId !== itemId
+  ) {
+    const sepIndex = activeTurn.reasoningIndex
+    activeTurn.reasoningIndex += 1
+    await activeTurn.onReasoning("\n\n", sepIndex)
+  }
+
+  if (itemId !== null) {
+    activeTurn.lastReasoningItemId = itemId
+  }
+}
+
 export async function emitTextByPhase(
   activeTurn: ActiveTurn,
   itemId: string | null,
@@ -206,6 +226,7 @@ export async function emitTextByPhase(
   }
 
   if (shouldTreatAgentMessageAsReasoning(phase)) {
+    await emitReasoningParagraphSeparator(activeTurn, itemId)
     const nextIndex = activeTurn.reasoningIndex
     activeTurn.reasoningIndex += 1
     await activeTurn.onReasoning(text, nextIndex)
@@ -228,6 +249,8 @@ export async function emitReasoningText(
   if (!text) {
     return
   }
+
+  await emitReasoningParagraphSeparator(activeTurn, itemId)
 
   const nextIndex = activeTurn.reasoningIndex
   activeTurn.reasoningIndex += 1

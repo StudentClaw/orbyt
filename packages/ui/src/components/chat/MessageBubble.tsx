@@ -13,12 +13,42 @@ import { MarkdownContent } from "./MarkdownContent"
 import { StreamingResponse } from "./StreamingResponse"
 import { ToolCallIndicator } from "./ToolCallIndicator"
 import { ChatAttachments } from "./ChatAttachments"
+import { PendingArtifactChip } from "./ArtifactChip"
+import { useArtifactContextOptional } from "@/context/ArtifactContext"
 
 interface MessageBubbleProps {
   readonly message: ChatMessage
 }
 
 const CHAIN_OF_THOUGHT_PREVIEW_MS = 1000
+
+function QueuedPlaceholder() {
+  return (
+    <div
+      data-testid="assistant-queued-placeholder"
+      className="flex items-center gap-2 text-sm text-muted-foreground"
+    >
+      <span className="inline-flex size-1.5 animate-pulse rounded-full bg-sky-500" aria-hidden="true" />
+      <span>Queued…</span>
+    </div>
+  )
+}
+
+function SendingPlaceholder() {
+  return (
+    <div
+      data-testid="assistant-sending-placeholder"
+      className="flex min-w-0 max-w-[min(42rem,100%)] flex-col gap-3"
+    >
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="inline-flex size-1.5 animate-pulse rounded-full bg-sky-500" aria-hidden="true" />
+        <span>Sending…</span>
+      </div>
+    </div>
+  )
+}
+
+export { SendingPlaceholder }
 
 function UserMessage({ message }: MessageBubbleProps) {
   const hasVisibleContent = message.content.trim().length > 0
@@ -44,12 +74,24 @@ function UserMessage({ message }: MessageBubbleProps) {
 
 function AssistantMessage({ message }: MessageBubbleProps) {
   const hasVisibleContent = message.content.trim().length > 0
+  const hasArtifacts = (message.artifacts?.length ?? 0) > 0
+  const hasPending = Boolean(message.pendingArtifact)
   const shouldRenderMainResponse =
-    hasVisibleContent || (message.isStreaming && !message.reasoning)
+    hasVisibleContent
+    || hasArtifacts
+    || hasPending
+    || (message.isStreaming && !message.reasoning)
+    || (message.isQueued && !message.reasoning)
   const [isThoughtOpen, setIsThoughtOpen] = useState(() => Boolean(message.isStreaming && message.reasoning))
   const [isCopied, setIsCopied] = useState(false)
   const hasPreviewedStreamingThought = useRef(false)
   const copyResetTimeoutRef = useRef<number | null>(null)
+  const artifactCtx = useArtifactContextOptional()
+
+  useEffect(() => {
+    if (!artifactCtx || !message.artifacts || message.artifacts.length === 0) return
+    artifactCtx.registerArtifacts(message.artifacts)
+  }, [artifactCtx, message.artifacts])
 
   useEffect(() => {
     if (!message.isStreaming || !message.reasoning || hasPreviewedStreamingThought.current) {
@@ -121,9 +163,14 @@ function AssistantMessage({ message }: MessageBubbleProps) {
       {shouldRenderMainResponse
         ? (
             <div data-testid="assistant-response" className="text-sm text-foreground">
-              {message.isStreaming
-                ? <StreamingResponse content={message.content} isStreaming />
-                : <MarkdownContent content={message.content} />}
+              {message.isQueued && !hasVisibleContent && !hasArtifacts && !hasPending
+                ? <QueuedPlaceholder />
+                : message.isStreaming
+                  ? <StreamingResponse content={message.content} isStreaming />
+                  : <MarkdownContent content={message.content} />}
+              {hasPending && message.pendingArtifact
+                ? <PendingArtifactChip pending={message.pendingArtifact} />
+                : null}
             </div>
           )
         : null}

@@ -1,0 +1,506 @@
+---
+type: community
+cohesion: 0.01
+members: 453
+---
+
+# Activity Feed & State
+
+**Cohesion:** 0.01 - loosely connected
+**Members:** 453 nodes
+
+## Members
+- [[.autoStartEnabled()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.callTool()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.callTool()_2]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.clear()]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.clearIdleTimer()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.constructor()_2]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[.constructor()_6]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.constructor()_25]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.delay()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.dispose()_1]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.disposeRuntime()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.emitClose()]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.evictIfNeeded()]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.get()]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.get()_3]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[.get()_2]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[.getSandboxPid()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.getStatus()_1]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.handleUnexpectedClose()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.idFromName()]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[.list()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.listTools()_1]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.onDidClose()_1]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.overlayEntry()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.promote()]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.put()_1]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[.resetIdleTimer()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.retry()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.sendMessage()_1]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.set()]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[.start()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.startOnce()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.stop()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.stop()_4]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[.updateRuntime()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[.validateLifecycleTarget()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[AiAuthStep.tsx]] - code - packages/ui/src/components/onboarding/AiAuthStep.tsx
+- [[AppAtomRegistryProvider()]] - code - references/t3code/apps/web/src/rpc/atomRegistry.tsx
+- [[AuthenticatedTracingBootstrap()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[ChatHistory()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[ChatHistory.tsx]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[ChatPage()]] - code - packages/ui/src/pages/ChatPage.tsx
+- [[ChatPage.tsx]] - code - packages/ui/src/pages/ChatPage.tsx
+- [[ChatProviderDisconnected.tsx]] - code - packages/ui/src/components/chat/ChatProviderDisconnected.tsx
+- [[ConnectionStatus()]] - code - packages/ui/src/components/shell/ConnectionStatus.tsx
+- [[ConnectionStatus.tsx]] - code - packages/ui/src/components/shell/ConnectionStatus.tsx
+- [[ConnectionsSection()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[ConnectionsSection.tsx]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[DashboardPage()]] - code - packages/ui/src/pages/DashboardPage.tsx
+- [[DashboardPage.tsx]] - code - packages/ui/src/pages/DashboardPage.tsx
+- [[EnvironmentConnectionManagerBootstrap()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[EventRouter()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[FakeNamespace]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[FakeSandbox]] - code - packages/electron/src/__tests__/plugin-manager.test.ts
+- [[FakeStorage]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[GradeChart.tsx]] - code - packages/ui/src/components/dashboard/GradeChart.tsx
+- [[LRUCache]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[NOOP()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[OnboardingWizard.tsx]] - code - packages/ui/src/components/onboarding/OnboardingWizard.tsx
+- [[PluginManager]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[RemoteEnvironmentAuthHttpError]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[RootRouteView()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[ServerStateBootstrap()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[SlowRpcAckToastCoordinator()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[StaleBanner()]] - code - packages/ui/src/components/dashboard/StaleBanner.tsx
+- [[StaleBanner.tsx]] - code - packages/ui/src/components/dashboard/StaleBanner.tsx
+- [[WebSocketConnectionCoordinator()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[WebSocketConnectionSurface()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[WebSocketConnectionSurface.tsx]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[WeeklyProgress()]] - code - packages/ui/src/components/dashboard/WeeklyProgress.tsx
+- [[WeeklyProgress.tsx]] - code - packages/ui/src/components/dashboard/WeeklyProgress.tsx
+- [[__resetLocalApiForTests()]] - code - references/t3code/apps/web/src/localApi.ts
+- [[__root.tsx]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[acknowledgeRpcRequest()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[activityState.ts]] - code - packages/ui/src/rpc/activityState.ts
+- [[addSavedEnvironment()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[advanceOnboardingStep()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[api.ts]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[appendSlowRpcAckRequest()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[applyActivityFeedUpsertEvent()]] - code - packages/ui/src/rpc/activityState.ts
+- [[applyCanvasSyncProgressEvent()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[applyDashboardUpdateEvent()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[applyDisconnectState()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[applyDomainEvent()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[applyOrchestrationDomainEvent()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[applyPlannerStreamEvent()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[applyProviderRuntimeEvent()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[applyProvidersUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[applyServerConfigEvent()]] - code - packages/ui/src/rpc/serverState.ts
+- [[applyServerLifecycleEvent()]] - code - packages/ui/src/rpc/serverState.ts
+- [[applySessionCheckInEvent()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[applySettingsUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[applyTurnEvent()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[atomRegistry.ts]] - code - packages/ui/src/rpc/atomRegistry.ts
+- [[atomRegistry.tsx]] - code - references/t3code/apps/web/src/rpc/atomRegistry.tsx
+- [[authHttpHandlers.ts]] - code - references/t3code/apps/web/test/authHttpHandlers.ts
+- [[bootstrapRemoteBearerSession()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[buildChartData()]] - code - packages/ui/src/components/dashboard/GradeChart.tsx
+- [[buildEmptyAuthValues()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[buildEmptySnapshot()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[buildReconnectTitle()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[buildThreadTitle()]] - code - packages/ui/src/hooks/useChat.ts
+- [[cacheBootstrap()]] - code - packages/ui/src/rpc/appRuntime.ts
+- [[canvasState.ts]] - code - packages/ui/src/rpc/canvasState.ts
+- [[chatRoutes.ts]] - code - packages/ui/src/lib/chatRoutes.ts
+- [[clearAllTrackedRpcRequests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[clearChatSelection()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[clearTrackedRpcRequest()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[closeChatPanel()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[codexAuth.ts]] - code - packages/ui/src/lib/codexAuth.ts
+- [[completeOnboarding()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[computeCompletionRatio()]] - code - packages/ui/src/components/dashboard/progress-model.ts
+- [[computeCourseGradePercentage()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[computeGradeTrend()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[computeStaleness()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[computeStreak()]] - code - packages/ui/src/components/dashboard/progress-model.ts
+- [[computeUrgencyZone()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[computeWeekOverWeek()]] - code - packages/ui/src/components/dashboard/progress-model.ts
+- [[connectCodexAccount()]] - code - packages/ui/src/lib/codexAuth.ts
+- [[createAtom()]] - code - packages/ui/src/rpc/atomRegistry.ts
+- [[createAuthenticatedSessionHandlers()]] - code - references/t3code/apps/web/test/authHttpHandlers.ts
+- [[createEnvironmentConnectionHandlers()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[createInitialState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[createInitialSteps()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[createLocalApi()]] - code - references/t3code/apps/web/src/localApi.ts
+- [[createOrchestrationThread()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[createOrchestrationWorkspace()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[createPrimaryEnvironmentClient()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[createPrimaryEnvironmentConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[createRegisteredGitStatusClient()]] - code - references/t3code/apps/web/src/lib/gitStatusState.test.ts
+- [[dashboard-model.ts]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[dashboardState.ts]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[deleteOrchestrationThread()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[deleteOrchestrationWorkspace()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[describeExhaustedToast()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[describeOfflineToast()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[describeRecoveredToast()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[describeSlowRpcAckToast()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[devMockSeed.ts]] - code - packages/ui/src/rpc/devMockSeed.ts
+- [[disconnectSavedEnvironment()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[emitEnvironmentConnectionRegistryChange()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[emitGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.test.ts
+- [[emitProvidersUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[emitServerConfigUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[emitWelcome()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[ensureEnvironmentConnectionBootstrapped()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[ensureLocalApi()]] - code - references/t3code/apps/web/src/localApi.ts
+- [[ensureSavedEnvironmentConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[errorDetails()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[errorMessage()]] - code - references/t3code/apps/web/src/routes/__root.tsx
+- [[evictOldestPendingRpcRequestIfNeeded()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[exhaustWsReconnectIfStillWaiting()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[fetchRemoteEnvironmentDescriptor()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[fetchRemoteJson()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[fetchRemoteSessionState()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[filterActivityEntries()]] - code - packages/ui/src/rpc/activityState.ts
+- [[formatConnectionMoment()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[formatCountdown()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[formatInstallSource()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[formatReconnectAttemptLabel()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[formatRetryCountdown()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[getActivityEntries()]] - code - packages/ui/src/rpc/activityState.ts
+- [[getActivityFilter()]] - code - packages/ui/src/rpc/activityState.ts
+- [[getActivityUnreadCount()]] - code - packages/ui/src/rpc/activityState.ts
+- [[getAuthStatusLabel()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getAuthStatusVariant()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getCalendarViewWeek()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[getChatUiState()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[getCodexStatusBadgeVariant()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getCodexStatusDescription()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getCodexStatusLabel()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getCourseGrades()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getCourses()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getCoursework()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getCourseworkForCourse()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getDashboardSections()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[getEntryName()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getEntryPluginId()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getEntryVersion()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getErrorMessage()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[getGitStatusSnapshot()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[getGitStatusTargetKey()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[getGrades()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getInputType()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getKnownEnvironmentWsBaseUrl()]] - code - references/t3code/packages/client-runtime/src/knownEnvironment.ts
+- [[getLastSync()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[getOrchestrationSnapshot()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[getPendingCheckIns()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[getPlannedSessions()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[getPlannerStreaming()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[getPrimaryEnvironmentConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[getRuntimeErrorFields()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[getServerConfig()]] - code - packages/ui/src/rpc/serverState.ts
+- [[getServerConfigUpdatedNotification()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[getServerWelcome()]] - code - packages/ui/src/rpc/serverState.ts
+- [[getSlowRpcAckRequests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[getSlowRpcAckRequestsValue()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[getSnapshot()_1]] - code - packages/server/src/orchestration/OrchestrationService.ts
+- [[getStatusBadgeVariant()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[getSyncProgress()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getThreadIndicator()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[getUpcomingDeadlines()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[getWsConnectionStatus()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[getWsConnectionUiState()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[getWsReconnectDelayMsForRetry()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[gitStatusState.test.ts]] - code - references/t3code/apps/web/src/lib/gitStatusState.test.ts
+- [[gitStatusState.ts]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[goToOnboardingStep()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[groupDeadlinesByDay()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[handleBack()]] - code - packages/ui/src/components/onboarding/OnboardingWizard.tsx
+- [[handleConnect()_1]] - code - packages/ui/src/components/onboarding/AiAuthStep.tsx
+- [[handleConnect()]] - code - packages/ui/src/components/chat/ChatProviderDisconnected.tsx
+- [[handleNext()]] - code - packages/ui/src/components/onboarding/OnboardingWizard.tsx
+- [[handleSkip()_1]] - code - packages/ui/src/components/onboarding/AiAuthStep.tsx
+- [[handleSkip()]] - code - packages/ui/src/components/onboarding/OnboardingWizard.tsx
+- [[hasManualTokenAuth()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[hasSavedEnvironmentRegistryHydrated()]] - code - references/t3code/apps/web/src/environments/runtime/catalog.ts
+- [[hydrateOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[hydrateOnboardingStateFromServer()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[interruptOrchestrationTurn()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[isChatPath()]] - code - packages/ui/src/lib/chatRoutes.ts
+- [[isOnboardingComplete()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[isRunningStatus()]] - code - packages/electron/src/plugins/plugin-manager.ts
+- [[isValidCanvasBaseUrl()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[isoNow()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[isoNow()_1]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[issueRemoteWebSocketToken()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[listEnvironmentConnections()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[loadCanvasData()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[localApi.ts]] - code - references/t3code/apps/web/src/localApi.ts
+- [[lruCache.ts]] - code - references/t3code/apps/web/src/lib/lruCache.ts
+- [[markAllActivityRead()]] - code - packages/ui/src/rpc/activityState.ts
+- [[markGitStatusPending()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[onProvidersUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[onServerConfig()]] - code - packages/ui/src/rpc/serverState.ts
+- [[onServerConfigUpdated()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[onServerWelcome()]] - code - packages/ui/src/rpc/serverState.ts
+- [[onWelcome()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[onboardingState.ts]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[openChatPanel()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[orchestrationState.ts]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[persistCollapsedWorkspaceIds()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[persistOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[persistSeenThreadTurns()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[plannerState.ts]] - code - packages/ui/src/rpc/plannerState.ts
+- [[progress-model.ts]] - code - packages/ui/src/components/dashboard/progress-model.ts
+- [[pruneProviderToolCalls()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[readCollapsedWorkspaceIds()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[readEnvironmentConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[readLocalApi()]] - code - references/t3code/apps/web/src/localApi.ts
+- [[readPersistedOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[readRemoteAuthErrorMessage()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[readResolvedGitStatusClient()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[readSeenThreadTurns()]] - code - packages/ui/src/components/shell/ChatHistory.tsx
+- [[readStoredModel()]] - code - packages/ui/src/hooks/useChatModel.ts
+- [[readTurnAttachmentsByTurnIds()_1]] - code - packages/server/src/orchestration/OrchestrationService.ts
+- [[reconnectSavedEnvironment()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[recordEmittedTextLength()]] - code - packages/server/src/ai/CodexEventParser.ts
+- [[recordWsConnectionAttempt()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[recordWsConnectionClosed()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[recordWsConnectionErrored()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[recordWsConnectionOpened()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[refreshGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[refreshSavedEnvironmentMetadata()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[registerConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[registerListener()_1]] - code - references/t3code/apps/web/src/lib/gitStatusState.test.ts
+- [[relinkOrchestrationWorkspace()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[remoteEndpointUrl()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[removeConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[removeSavedEnvironment()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[renameOrchestrationThread()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[requestLatencyState.ts]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[requireEnvironmentConnection()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[resetActivityStateForTests()]] - code - packages/ui/src/rpc/activityState.ts
+- [[resetAllOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[resetCanvasStateForTests()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[resetDashboardStateForTests()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[resetEnvironmentServiceForTests()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[resetGitStatusStateForTests()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[resetOnboardingStateForTests()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[resetOnboardingWizardState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[resetOrchestrationStateForTests()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[resetPlannerStateForTests()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[resetRequestLatencyStateForTests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[resetServerStateForTests()]] - code - packages/ui/src/rpc/serverState.ts
+- [[resetWsConnectionStateForTests()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[resetWsReconnectBackoff()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[resolveChatRouteSelection()]] - code - packages/ui/src/lib/chatRoutes.ts
+- [[resolveRemoteWebSocketConnectionUrl()]] - code - references/t3code/apps/web/src/environments/remote/api.ts
+- [[resolveServerConfig()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[respondToProviderApproval()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[retryOrchestrationProviderInitialize()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[seedDevMockData()]] - code - packages/ui/src/rpc/devMockSeed.ts
+- [[selectAvailableEditors()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[selectChatTarget()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[selectChatWorkspace()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[selectKeybindings()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[selectKeybindingsConfigPath()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[selectObservability()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[selectProviders()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[selectSettings()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[sendOrchestrationTurn()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[serverState.ts_1]] - code - packages/ui/src/rpc/serverState.ts
+- [[serverState.ts]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[service.ts]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[setActivityEntries()]] - code - packages/ui/src/rpc/activityState.ts
+- [[setActivityFilter()]] - code - packages/ui/src/rpc/activityState.ts
+- [[setAiAuthStatus()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[setBrowserOnlineStatus()]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+- [[setCalendarViewWeek()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[setCanvasTokenValidated()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[setChatPanelWidth()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[setCourses()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[setCoursework()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[setDesktopBootstrap()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[setGrades()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[setLastSync()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[setOnboardingRpcClient()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[setOrchestrationSnapshot()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[setOrchestrationThreadAccessMode()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[setPlannedSessions()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[setPlannerStreaming()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[setRuntimeConnected()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[setRuntimeConnecting()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[setRuntimeDisconnected()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[setRuntimeError()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[setSelectedChatThread()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[setServerConfigSnapshot()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[setSlowRpcAckRequests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[setSlowRpcAckThresholdMsForTests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[setWsConnectionStatus()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[shouldApplyTerminalEvent()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[shouldAutoReconnect()]] - code - references/t3code/apps/web/src/components/WebSocketConnectionSurface.tsx
+- [[shouldTrackRpcAck()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[skipOnboardingStep()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[sortProjectsForSidebar()]] - code - references/t3code/apps/web/src/components/Sidebar.logic.ts
+- [[startActivityStateSync()]] - code - packages/ui/src/rpc/activityState.ts
+- [[startCanvasStateSync()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[startDashboardStateSync()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[startEnvironmentConnectionService()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[startOrchestrationProviderAuth()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[startOrchestrationStateSync()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[startPlannerStateSync()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[stopActiveService()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[subscribeEnvironmentConnections()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[subscribeLatest()]] - code - packages/ui/src/rpc/serverState.ts
+- [[subscribeToGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[subscribeToGitStatusTarget()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[syncChatUiState()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[syncOverallStatusToServer()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[syncSavedEnvironmentConnections()]] - code - references/t3code/apps/web/src/environments/runtime/service.ts
+- [[syncStepToServer()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[toServerConfigUpdatedPayload()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[trackRpcRequestSent()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[trendColor()_1]] - code - packages/ui/src/components/dashboard/WeeklyProgress.tsx
+- [[trendIndicator()]] - code - packages/ui/src/components/dashboard/WeeklyProgress.tsx
+- [[unwatchGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[updateDashboardSection()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[updateWsConnectionStatus()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[urgencyZoneBgColor()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[urgencyZoneColor()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[useActivityEntries()]] - code - packages/ui/src/rpc/activityState.ts
+- [[useActivityFilter()]] - code - packages/ui/src/rpc/activityState.ts
+- [[useActivityUnreadCount()]] - code - packages/ui/src/rpc/activityState.ts
+- [[useAppRuntime.ts]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useAtomSubscribe()]] - code - packages/ui/src/rpc/atomRegistry.ts
+- [[useAtomValue()]] - code - packages/ui/src/rpc/atomRegistry.ts
+- [[useCalendarViewWeek()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[useCanvasCourses()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[useCanvasCoursework()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[useCanvasGrades()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[useCanvasLastSync()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[useCanvasSyncProgress()]] - code - packages/ui/src/rpc/canvasState.ts
+- [[useChat()]] - code - packages/ui/src/hooks/useChat.ts
+- [[useChat.ts]] - code - packages/ui/src/hooks/useChat.ts
+- [[useChatModel()]] - code - packages/ui/src/hooks/useChatModel.ts
+- [[useChatModel.ts]] - code - packages/ui/src/hooks/useChatModel.ts
+- [[useChatPanelOpen()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useChatPanelWidth()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useChatUiActions()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useChatUiState()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useDashboard()]] - code - packages/ui/src/hooks/useDashboard.ts
+- [[useDashboard.ts]] - code - packages/ui/src/hooks/useDashboard.ts
+- [[useDashboardSection()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[useDashboardSections()]] - code - packages/ui/src/rpc/dashboardState.ts
+- [[useDesktopBootstrap()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[useFilteredActivityEntries()]] - code - packages/ui/src/rpc/activityState.ts
+- [[useGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[useIsHydrationComplete()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[useIsOnboardingComplete()_1]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[useIsOnboardingComplete()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useIsServerHydrationComplete()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useLatestAtomSubscription()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useNativeNotification()]] - code - packages/ui/src/hooks/useNativeNotification.ts
+- [[useNativeNotification.ts]] - code - packages/ui/src/hooks/useNativeNotification.ts
+- [[useOnboardingState()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[useOnboardingStep()]] - code - packages/ui/src/rpc/onboardingState.ts
+- [[useOrchestrationActions()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useOrchestrationSnapshot()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[usePendingCheckIns()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[usePlannedSessions()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[usePlannerStreaming()]] - code - packages/ui/src/rpc/plannerState.ts
+- [[useProviderRuntimeEvents()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useProviderToolCallsByTurnId()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useRuntimeActivityEntries()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeActivityFilter()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeActivityUnreadCount()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeBootstrap()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeCanvasLastSync()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeCanvasSyncProgress()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeChatPanelOpen()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeChatPanelWidth()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeChatUiState()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeConnectionStatus()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeCourses()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeCoursework()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeDashboardSections()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeGrades()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeOrchestrationSnapshot()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimePendingCheckIns()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimePlannedSessions()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeProviderEvents()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeProviderToolCallsByTurnId()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeSelectedThreadId()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeSelectedWorkspaceId()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeServerConfig()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useRuntimeWelcome()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useSelectedChatThreadId()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useSelectedChatWorkspaceId()]] - code - packages/ui/src/rpc/orchestrationState.ts
+- [[useServerAvailableEditors()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerConfig()]] - code - packages/ui/src/rpc/serverState.ts
+- [[useServerConfigUpdatedSubscription()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerKeybindings()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerKeybindingsConfigPath()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerObservability()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerProviders()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerSettings()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useServerWelcome()]] - code - packages/ui/src/rpc/serverState.ts
+- [[useServerWelcomeSubscription()]] - code - references/t3code/apps/web/src/rpc/serverState.ts
+- [[useSkills()]] - code - packages/ui/src/hooks/useAppRuntime.ts
+- [[useSlowRpcAckRequests()]] - code - references/t3code/apps/web/src/rpc/requestLatencyState.ts
+- [[useWsConnectionStatus()]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[validateAuthField()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[validateAuthValues()]] - code - packages/ui/src/components/settings/ConnectionsSection.tsx
+- [[waitFor()_3]] - code - references/t3code/apps/server/src/terminal/Layers/Manager.test.ts
+- [[waitFor()_2]] - code - references/t3code/apps/server/integration/OrchestrationEngineHarness.integration.ts
+- [[waitForSavedEnvironmentRegistryHydration()]] - code - references/t3code/apps/web/src/environments/runtime/catalog.ts
+- [[watchGitStatus()]] - code - references/t3code/apps/web/src/lib/gitStatusState.ts
+- [[weightedAverage()]] - code - packages/ui/src/components/dashboard/dashboard-model.ts
+- [[worker.test.ts]] - code - packages/push-relay/src/__tests__/worker.test.ts
+- [[wsConnectionState.ts_1]] - code - packages/ui/src/rpc/wsConnectionState.ts
+- [[wsConnectionState.ts]] - code - references/t3code/apps/web/src/rpc/wsConnectionState.ts
+
+## Live Query (requires Dataview plugin)
+
+```dataview
+TABLE source_file, type FROM #community/Activity_Feed_&_State
+SORT file.name ASC
+```
+
+## Connections to other communities
+- 47 edges to [[_COMMUNITY_Database Migrations & Onboarding Schema]]
+- 40 edges to [[_COMMUNITY_App Runtime & Test Helpers]]
+- 11 edges to [[_COMMUNITY_Plugin Bridge & Attachments]]
+- 9 edges to [[_COMMUNITY_Client Tracing & Observability]]
+- 9 edges to [[_COMMUNITY_Environment Catalog]]
+- 8 edges to [[_COMMUNITY_Chat View Browser Tests]]
+- 7 edges to [[_COMMUNITY_Metrics & Tracing Attributes]]
+- 7 edges to [[_COMMUNITY_Chat UI & Composer]]
+- 6 edges to [[_COMMUNITY_Composer Draft & Orchestration]]
+- 6 edges to [[_COMMUNITY_Auth & Analytics Services]]
+- 5 edges to [[_COMMUNITY_Keybindings & Chat Handler]]
+- 5 edges to [[_COMMUNITY_App Root & Markdown Renderer]]
+- 4 edges to [[_COMMUNITY_Auth Bootstrap & Server Pairing]]
+- 4 edges to [[_COMMUNITY_Codex Event Parser]]
+- 3 edges to [[_COMMUNITY_Academic Data Normalization]]
+- 2 edges to [[_COMMUNITY_Module 47]]
+- 2 edges to [[_COMMUNITY_Composer Editor & Mentions]]
+- 2 edges to [[_COMMUNITY_Provider Runtime & Session Logic]]
+- 2 edges to [[_COMMUNITY_Desktop Artifact Builder]]
+- 2 edges to [[_COMMUNITY_Module 42]]
+- 2 edges to [[_COMMUNITY_Backend Readiness & Desktop Settings]]
+- 1 edge to [[_COMMUNITY_Branch Toolbar Logic]]
+- 1 edge to [[_COMMUNITY_UI Component Library]]
+- 1 edge to [[_COMMUNITY_Command Approval & Classification]]
+- 1 edge to [[_COMMUNITY_Claude Adapter & Commands]]
+
+## Top bridge nodes
+- [[.set()]] - degree 110, connects to 18 communities
+- [[.get()_3]] - degree 124, connects to 17 communities
+- [[ensureSavedEnvironmentConnection()]] - degree 12, connects to 3 communities
+- [[serverState.ts]] - degree 34, connects to 2 communities
+- [[service.ts]] - degree 33, connects to 2 communities
