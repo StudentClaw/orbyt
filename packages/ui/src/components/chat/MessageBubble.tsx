@@ -62,7 +62,7 @@ function UserMessage({ message }: MessageBubbleProps) {
         {hasVisibleContent && (
           <div
             data-testid="user-message-bubble"
-            className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-left text-primary-foreground"
+            className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-left text-white"
           >
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           </div>
