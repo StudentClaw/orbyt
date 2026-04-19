@@ -323,6 +323,8 @@ export function PromptInput({
   const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
   const [showSkillPicker, setShowSkillPicker] = useState(false)
   const [skillFilter, setSkillFilter] = useState("")
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounterRef = useRef(0)
   const composerRef = useRef<RichComposerHandle>(null)
 
   const isConnected = connectionState === "connected"
@@ -330,6 +332,7 @@ export function PromptInput({
   const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
+  const canDropFiles = !attachmentControlsDisabled && Boolean(typeof window !== "undefined" && window.electronAPI?.getPathForFile)
   const accessControlDisabled =
     !isConnected
     || !accessMode
@@ -507,6 +510,58 @@ export function PromptInput({
     setAttachmentError(null)
   }, [])
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files") || !canDropFiles) return
+    dragCounterRef.current++
+    setIsDragOver(true)
+  }, [canDropFiles])
+
+  const handleDragLeave = useCallback(() => {
+    dragCounterRef.current--
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsDragOver(false)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes("Files") && canDropFiles) {
+      e.preventDefault()
+    }
+  }, [canDropFiles])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    dragCounterRef.current = 0
+    setIsDragOver(false)
+
+    if (!e.dataTransfer.types.includes("Files")) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const getPathForFile = window.electronAPI?.getPathForFile
+    if (!getPathForFile || !isConnected || disabled || isStreaming) return
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+
+    const paths = files.map(file => getPathForFile(file)).filter(Boolean)
+    if (paths.length === 0) return
+
+    const metadata = await resolveAttachmentMetadata(paths)
+    if (metadata.length === 0) {
+      setAttachmentError("Dropped files could not be attached.")
+      return
+    }
+
+    if (metadata.length !== paths.length) {
+      setAttachmentError("Some dropped files could not be attached.")
+    } else {
+      setAttachmentError(null)
+    }
+
+    setAttachments(current => mergeComposerAttachments(current, metadata.map(toComposerAttachment)))
+  }, [disabled, isConnected, isStreaming, resolveAttachmentMetadata])
+
   const handleDefaultAccessSelect = useCallback(() => {
     if (accessMode !== "default") {
       void onAccessModeChange("default")
@@ -530,7 +585,23 @@ export function PromptInput({
           onToggleTechnicalDetails={() => setApprovalTechnicalDetailsOpen((current) => !current)}
         />
       ) : (
-        <div className="relative">
+        <div
+          className="relative"
+          data-testid="composer-area"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={(e) => { void handleDrop(e) }}
+        >
+          {isDragOver && (
+            <div
+              data-testid="drag-drop-overlay"
+              className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-[2rem] border-2 border-dashed border-primary/60 bg-primary/8"
+              aria-hidden="true"
+            >
+              <span className="text-sm font-medium text-primary">Drop files here</span>
+            </div>
+          )}
           {showSkillPicker ? (
             <SkillPicker
               skills={skills}

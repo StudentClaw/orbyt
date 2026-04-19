@@ -14,6 +14,7 @@ interface ElectronAPI {
   invoke: <T extends InvokableChannel>(channel: T, ...args: IpcInvokeArgsMap[T]) => Promise<IpcInvokeResultMap[T]>
   send: (channel: IpcChannel, ...args: unknown[]) => void
   on: <T extends keyof IpcEventPayloadMap>(channel: T, callback: (payload: IpcEventPayloadMap[T]) => void) => () => void
+  getPathForFile?: (file: File) => string
 }
 
 declare global {

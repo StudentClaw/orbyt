@@ -7,6 +7,7 @@ import type {
 } from "@student-claw/contracts"
 import type { PrioritizedItem } from "@/components/dashboard/priority-model"
 import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
+import type { InsightAction, InsightStripItem } from "@/components/dashboard/InsightStrip"
 
 // --- Helper factories ---
 
@@ -475,33 +476,40 @@ export const MOCK_ANNOUNCEMENTS: ReadonlyArray<AnnouncementData> = [
 
 // --- Mock Insights ---
 
-export interface InsightData {
-  readonly id: string
-  readonly title: string
-  readonly body: string
-  readonly actionLabel?: string
-  readonly actionContext?: string
-}
+export type { InsightAction }
+
+export type InsightData = InsightStripItem
 
 export const MOCK_INSIGHTS: ReadonlyArray<InsightData> = [
   {
     id: "insight-1",
     title: "3 deadlines next week",
     body: "You have deadlines clustering around Thursday. Want to get ahead?",
-    actionLabel: "Plan my week",
-    actionContext: "plan my week",
+    action: {
+      label: "Plan my week",
+      prompt:
+        "I have 3 deadlines landing within 48 hours: Lab Report: Synthesis of Aspirin (CHEM 202, due tomorrow), Pre-lab Quiz: Distillation (CHEM 202, due tomorrow), and Problem Set 5: Recursion (CS 101, due in 2 days). Build me a day-by-day study plan for the next 3 days. Prioritize by urgency and effort, include specific time blocks, and account for the fact that I already have study sessions scheduled today.",
+    },
   },
   {
     id: "insight-2",
     title: "CS 101 grades trending up",
     body: "You've improved 13% this month in CS 101. Keep it up!",
+    action: {
+      label: "Set a goal",
+      prompt:
+        "My CS 101 grades have been trending up over the last month — 82%, 88%, 91%, 95%. Help me set a specific, measurable goal for the rest of the semester and identify which study habits are driving this improvement so I can apply the same approach to CHEM 202 and PSYCH 100 where I'm struggling.",
+    },
   },
   {
     id: "insight-3",
     title: "CHEM 202 needs attention",
     body: "Your chemistry grades have been declining. Consider scheduling extra study time.",
-    actionLabel: "Help me study",
-    actionContext: "help me study for CHEM 202",
+    action: {
+      label: "Help me study",
+      prompt:
+        "My CHEM 202 (Organic Chemistry II) grades have been declining over the last month: 90%, 84%, 76%, 70%. I have a Lab Report on Synthesis of Aspirin and a Pre-lab Quiz on Distillation both due tomorrow. Give me a targeted recovery plan for today — what to focus on, in what order, and what study strategies will help me stabilize my grade in this course going forward.",
+    },
   },
 ]
 

@@ -1,5 +1,9 @@
+import { useCallback } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { useDashboard } from "@/hooks/useDashboard"
+import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 import { setCalendarViewWeek } from "@/rpc/plannerState"
+import type { InsightAction } from "@/components/dashboard/InsightStrip"
 import {
   DashboardLayout,
   DASHBOARD_SECTION_ORDER,
@@ -17,6 +21,24 @@ import { PlannerStreamOverlay } from "@/components/dashboard/PlannerStreamOverla
 import { MOCK_PRIORITY_ITEMS, MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
 export function DashboardPage() {
+  const navigate = useNavigate()
+  const snapshot = useRuntimeOrchestrationSnapshot()
+  const actions = useOrchestrationActions()
+
+  const handleInsightAction = useCallback(
+    async (action: InsightAction) => {
+      const workspace = snapshot?.workspaces[0]
+      if (!workspace) return
+      const threadId = await actions.createThread(workspace.id, action.label)
+      await actions.sendTurn(threadId, action.prompt, [], null, action.skillId ?? null)
+      await navigate({
+        to: "/chat/$workspaceId/$threadId",
+        params: { workspaceId: workspace.id, threadId },
+      })
+    },
+    [actions, navigate, snapshot],
+  )
+
   const {
     courses,
     grades,
@@ -46,7 +68,7 @@ export function DashboardPage() {
           return {
             id,
             label: "Insights",
-            content: <InsightStrip insights={MOCK_INSIGHTS} />,
+            content: <InsightStrip insights={MOCK_INSIGHTS} onAction={handleInsightAction} />,
           }
         case "calendar":
           return {

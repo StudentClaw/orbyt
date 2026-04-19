@@ -7,6 +7,8 @@ import type {
   ProviderRuntimeEvent,
 } from "@student-claw/contracts"
 import { extractDisplayContent } from "@/lib/chatAttachments"
+import { parseArtifacts } from "@/lib/artifacts/parseArtifacts"
+import type { ChatArtifact, PendingArtifact } from "@/lib/artifacts/types"
 
 export type ProviderGuidance = {
   title: string
@@ -43,6 +45,8 @@ export interface ChatMessage {
   readonly isStreaming?: boolean
   readonly toolCalls?: readonly ToolCallInfo[]
   readonly reasoning?: string
+  readonly artifacts?: readonly ChatArtifact[]
+  readonly pendingArtifact?: PendingArtifact | null
 }
 
 export function getChatStatusPresentation(status: ChatStatus): {
@@ -179,6 +183,8 @@ export function buildChatMessages(
 ): ReadonlyArray<ChatMessage> {
   return getThreadTurns(snapshot, threadId).flatMap((turn) => {
     const timestamp = Date.parse(turn.startedAt)
+    const assistantId = `${turn.id}:assistant`
+    const parsed = parseArtifacts(turn.output, assistantId)
     return [
       {
         id: `${turn.id}:user`,
@@ -188,13 +194,15 @@ export function buildChatMessages(
         attachments: turn.attachments,
       },
       {
-        id: `${turn.id}:assistant`,
+        id: assistantId,
         role: "assistant",
-        content: turn.output,
+        content: parsed.cleanedContent,
         reasoning: turn.reasoning || undefined,
         timestamp: Date.parse(turn.completedAt ?? turn.startedAt),
         isStreaming: turn.status === "streaming",
         toolCalls: toolCallsByTurnId[turn.id] ?? [],
+        artifacts: parsed.artifacts,
+        pendingArtifact: parsed.pendingArtifact,
       },
     ] satisfies ReadonlyArray<ChatMessage>
   })

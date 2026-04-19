@@ -10,6 +10,7 @@ import {
 } from "@student-claw/contracts"
 import type { AppConfig } from "../config/defaults.js"
 import type { DatabaseService } from "../db/Database.js"
+import { readThread } from "../orchestration/OrchestrationDB.js"
 import type { PushBusService } from "../ws/PushBus.js"
 
 type ActivityEntryInput = Omit<ActivityFeedEntry, "id">
@@ -258,6 +259,10 @@ export async function recordWorkflowCompletionActivity({
 }: ActivityWriterDeps & {
   readonly turn: WorkflowCompletionTurn
 }): Promise<ActivityFeedEntry> {
+  const thread = readThread(database, turn.threadId)
+  const deepLink = thread
+    ? `/chat/${thread.workspaceId}/${turn.threadId}`
+    : "/chat"
   return recordActivityEntry({
     database,
     pushBus,
@@ -267,7 +272,7 @@ export async function recordWorkflowCompletionActivity({
       title: "Workflow complete",
       body: previewBody(turn.output),
       priority: 3,
-      deepLink: "/chat",
+      deepLink,
     },
   })
 }

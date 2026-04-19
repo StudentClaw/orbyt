@@ -13,6 +13,8 @@ import { MarkdownContent } from "./MarkdownContent"
 import { StreamingResponse } from "./StreamingResponse"
 import { ToolCallIndicator } from "./ToolCallIndicator"
 import { ChatAttachments } from "./ChatAttachments"
+import { PendingArtifactChip } from "./ArtifactChip"
+import { useArtifactContextOptional } from "@/context/ArtifactContext"
 
 interface MessageBubbleProps {
   readonly message: ChatMessage
@@ -44,12 +46,23 @@ function UserMessage({ message }: MessageBubbleProps) {
 
 function AssistantMessage({ message }: MessageBubbleProps) {
   const hasVisibleContent = message.content.trim().length > 0
+  const hasArtifacts = (message.artifacts?.length ?? 0) > 0
+  const hasPending = Boolean(message.pendingArtifact)
   const shouldRenderMainResponse =
-    hasVisibleContent || (message.isStreaming && !message.reasoning)
+    hasVisibleContent
+    || hasArtifacts
+    || hasPending
+    || (message.isStreaming && !message.reasoning)
   const [isThoughtOpen, setIsThoughtOpen] = useState(() => Boolean(message.isStreaming && message.reasoning))
   const [isCopied, setIsCopied] = useState(false)
   const hasPreviewedStreamingThought = useRef(false)
   const copyResetTimeoutRef = useRef<number | null>(null)
+  const artifactCtx = useArtifactContextOptional()
+
+  useEffect(() => {
+    if (!artifactCtx || !message.artifacts || message.artifacts.length === 0) return
+    artifactCtx.registerArtifacts(message.artifacts)
+  }, [artifactCtx, message.artifacts])
 
   useEffect(() => {
     if (!message.isStreaming || !message.reasoning || hasPreviewedStreamingThought.current) {
@@ -124,6 +137,9 @@ function AssistantMessage({ message }: MessageBubbleProps) {
               {message.isStreaming
                 ? <StreamingResponse content={message.content} isStreaming />
                 : <MarkdownContent content={message.content} />}
+              {hasPending && message.pendingArtifact
+                ? <PendingArtifactChip pending={message.pendingArtifact} />
+                : null}
             </div>
           )
         : null}
