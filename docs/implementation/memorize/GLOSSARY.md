@@ -34,13 +34,13 @@ unless its verification state is `Verified`.
 | 00 - Memory Filesystem Scaffold And Contracts | complete | rereynrd | Verified | Proceed to Phase 01; see phase-00-spec.md for the frozen contract |
 | 01 - Memorize Scheduler And Run Checkpointing | complete | rereynrd | Verified | Proceed to Phase 02; see phase-01-spec.md for the frozen contract |
 | 02 - Daily And Weekly Distillation Pipeline | complete | rereynrd | Verified | Proceed to Phase 03; see phase-02-spec.md for the frozen contract |
-| 03 - Graph Promotion And Node Evolution | not_started | Unassigned | Not run | Define durable-fact promotion and graph update behavior |
+| 03 - Graph Promotion And Node Evolution | complete | rereynrd | Verified | Proceed to Phase 04; see phase-03-spec.md for the frozen contract |
 | 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect memorize inputs and memory consumers across server, Canvas, and app surfaces |
 | 05 - Hardening, Verification, And Recovery | not_started | Unassigned | Not run | Lock recovery, duplicate-prevention, and end-to-end verification behavior |
 
 ## Current Recommended Next Step
 
-Start [Phase 03 - Graph Promotion And Node Evolution](phase-03-graph-promotion-and-node-evolution.md). The daily/weekly pipeline is locked in [phase-02-spec.md](phase-02-spec.md); Phase 03 parses promotion candidates from those files and promotes them into the durable graph.
+Start Phase 04 - Integration With Threads, Canvas Context, And Memory Reads. The full promotion pipeline is locked in [phase-03-spec.md](phase-03-spec.md); Phase 04 injects real `CodexCliService` into `CodexMemorizeDistiller`, wires Electron IPC activation, and connects Canvas context to the distillation prompts.
 
 ## Handoff Update Protocol
 
@@ -249,7 +249,39 @@ updates for a long period.
 
 ### Phase 03 - Graph Promotion And Node Evolution
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - locked promotion thresholds: `confidence >= 0.9` (immediate) or `evidenceCount >= 2` (accumulated)
+  - locked cross-layer counting: daily + weekly candidates with same fingerprint share one evidence counter
+  - locked fingerprint dedup: `promotedCandidateFingerprints` in state prevents re-promotion across runs
+  - locked graph node seeding: base template for scaffold branches, YAML-frontmatter template for course nodes
+  - locked section routing: 4 keyword regexes direct facts to the correct H2 in course nodes
+  - locked append semantics: deterministic bullet append, placeholder removal, section creation if absent
+  - `candidate-parser.ts`: parses `candidate:` and `lesson:` lines with branch field
+  - `graph-writer.ts`: seeds and appends to graph node files at branch-resolved paths
+  - `promoter.ts`: full promotion pipeline; called from `LiveMemorizeTurnRunner.run()`
+  - `LiveMemorizeTurnRunner` updated: captures daily content, reads weekly content of folded files, calls `runPromotion`, stores results in checkpoint
+  - `state-store.ts` updated: `commitSuccess` now accepts `promotedCandidateFingerprints`
+  - prompt templates updated: both daily and weekly now emit `branch:` in candidate/lesson format
+  - added `branch` field to `PromotionCandidate` schema; added `promotedCandidateFingerprints` to `MemorizeState`
+  - 39 tests passing (14 candidate-parser + 13 graph-writer + 12 promoter)
+  - wrote authoritative spec at [phase-03-spec.md](phase-03-spec.md)
+- Remaining:
+  - Phase 04 must inject real `CodexCliService` and wire Electron IPC activation
+  - node retirement / stale-marking deferred to Phase 05
+- Risks or blockers:
+  - section routing is keyword-based; overlapping keywords (e.g. "rubric" hits Professor Patterns before Pitfalls) mean prompt wording affects which section a fact lands in
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test src/__tests__/memorize-*.test.ts` -> 71 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-03-spec.md`
+  - passing test run above
+- First recommended next step:
+  - start Phase 04: inject `CodexCliService`, wire `MemorizeScheduler.start()` from Electron IPC, connect Canvas course context to distillation prompts
 
 ### Phase 04 - Integration With Threads, Canvas Context, And Memory Reads
 

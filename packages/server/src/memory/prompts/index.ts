@@ -35,9 +35,18 @@ approach. Keep signals short and concrete. Skip if none observed.
 List any facts stable enough to consider adding to the long-term memory graph.
 Only include facts that are durable (preferences, stable course rules, professor
 patterns), not one-time events. Format each line exactly as:
-- candidate: "<the fact>" (source: conversation, confidence: <0.0-1.0>)
+- candidate: "<the fact>" (source: conversation, confidence: <0.0-1.0>, branch: <branch>)
 
-If nothing qualifies, write \`_none_\` under this section.
+Where \`<branch>\` is one of:
+- \`school/courses/<course-slug>\` — course-specific facts (e.g. \`school/courses/cs-301\`)
+- \`school/playbooks/<playbook-slug>\` — reusable cross-course strategies
+- \`school\` — general academic strategies
+- \`personality\` — student preferences or identity facts
+- \`routine\` — schedule or habit facts
+- \`work\` — work-related facts
+- \`relationships\` — relationship facts
+
+Use kebab-case for slugs. If nothing qualifies, write \`_none_\` under this section.
 `
 
 export const WEEKLY_DISTILLATION_PROMPT = `# Weekly Distillation Prompt
@@ -84,7 +93,16 @@ Include Canvas-specific strategies if observed. Skip if none evident.
 List insights that should probably move into the permanent memory graph.
 Only include stable, reusable lessons — not week-specific events.
 Format each line exactly as:
-- lesson: "<the lesson>" (confidence: <0.0-1.0>)
+- lesson: "<the lesson>" (confidence: <0.0-1.0>, branch: <branch>)
+
+Where \`<branch>\` is one of:
+- \`school/courses/<course-slug>\` — course-specific lessons
+- \`school/playbooks/<playbook-slug>\` — reusable cross-course strategies
+- \`school\` — general academic lessons
+- \`personality\` — student character or preference lessons
+- \`routine\` — schedule or habit lessons
+- \`work\` — work-related lessons
+- \`relationships\` — relationship lessons
 
 If nothing qualifies, write \`_none_\` under this section.
 `

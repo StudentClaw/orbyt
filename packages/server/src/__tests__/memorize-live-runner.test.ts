@@ -122,6 +122,7 @@ describe("LiveMemorizeTurnRunner", () => {
       lastDailyFile: "2026-04-18",
       lastWeeklyFile: "2026-W16",
       pendingPromotionCandidates: [],
+      promotedCandidateFingerprints: [],
     })
 
     const runner = new LiveMemorizeTurnRunner({

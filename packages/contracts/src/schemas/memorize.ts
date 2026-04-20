@@ -44,6 +44,9 @@ export const MEMORY_ROOT_MANAGED_SECTIONS = [
 export const DAILY_RETENTION = 7
 export const WEEKLY_RETENTION = 4
 
+export const EVIDENCE_COUNT_THRESHOLD = 2
+export const IMMEDIATE_PROMOTION_CONFIDENCE = 0.9
+
 export const MEMORIZE_STATE_VERSION = 1
 export const MORNING_RUN_HOUR = 7
 export const EVENING_RUN_HOUR = 20
@@ -54,6 +57,7 @@ export type RunOutcome = Schema.Schema.Type<typeof RunOutcome>
 export const PromotionCandidate = Schema.Struct({
   id: Schema.String,
   source: Schema.String,
+  branch: Schema.String,
   text: Schema.String,
   confidence: Schema.Number,
   firstSeenAt: Schema.String,
@@ -73,6 +77,7 @@ export const MemorizeState = Schema.Struct({
   lastDailyFile: Schema.NullOr(Schema.String),
   lastWeeklyFile: Schema.NullOr(Schema.String),
   pendingPromotionCandidates: Schema.Array(PromotionCandidate),
+  promotedCandidateFingerprints: Schema.optional(Schema.Array(Schema.String)),
 })
 export type MemorizeState = Schema.Schema.Type<typeof MemorizeState>
 
@@ -84,6 +89,7 @@ export const initialMemorizeState = (): MemorizeState => ({
   lastDailyFile: null,
   lastWeeklyFile: null,
   pendingPromotionCandidates: [],
+  promotedCandidateFingerprints: [],
 })
 
 export const MemorizeRunResult = Schema.Struct({

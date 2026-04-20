@@ -42,6 +42,7 @@ export class MemorizeStateStore {
       | "lastDailyFile"
       | "lastWeeklyFile"
       | "pendingPromotionCandidates"
+      | "promotedCandidateFingerprints"
     >,
   ): void {
     const current = this.read()

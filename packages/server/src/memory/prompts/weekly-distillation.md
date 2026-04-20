@@ -42,6 +42,15 @@ Include Canvas-specific strategies if observed. Skip if none evident.
 List insights that should probably move into the permanent memory graph.
 Only include stable, reusable lessons — not week-specific events.
 Format each line exactly as:
-- lesson: "<the lesson>" (confidence: <0.0-1.0>)
+- lesson: "<the lesson>" (confidence: <0.0-1.0>, branch: <branch>)
+
+Where `<branch>` is one of:
+- `school/courses/<course-slug>` — course-specific lessons
+- `school/playbooks/<playbook-slug>` — reusable cross-course strategies
+- `school` — general academic lessons
+- `personality` — student character or preference lessons
+- `routine` — schedule or habit lessons
+- `work` — work-related lessons
+- `relationships` — relationship lessons
 
 If nothing qualifies, write `_none_` under this section.
