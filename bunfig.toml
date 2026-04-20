@@ -1,0 +1,5 @@
+[test]
+# Scope `bun test` discovery to packages/. Keeps vendored code under
+# references/ (which ships its own uninstalled dependency tree) out of
+# the suite.
+root = "packages"

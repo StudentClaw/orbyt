@@ -225,6 +225,107 @@ describe("ThreadRuntimeManager", () => {
     expect(manager.getSnapshot().queuedTurns).toHaveLength(0)
   })
 
+  test("interrupts an active turn and forwards the call to the runtime", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+
+    expect(result).toEqual({ interrupted: true, disposition: "active" })
+    expect(runtimes[0]?.interruptedTurns).toEqual(["turn-1"])
+  })
+
+  test("double-interrupt of the same active turn is idempotent", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const first = await manager.interruptTurn("thread-1", "turn-1")
+    expect(first.disposition).toBe("active")
+
+    // Settle the turn so the slot releases.
+    await runtimes[0]?.interruptTurnCallback("turn-1")
+
+    const second = await manager.interruptTurn("thread-1", "turn-1")
+    expect(second).toEqual({ interrupted: false, disposition: "missing" })
+  })
+
+  test("interrupting a non-existent turn returns disposition missing", async () => {
+    const { factory } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    const result = await manager.interruptTurn("thread-x", "turn-x")
+
+    expect(result).toEqual({ interrupted: false, disposition: "missing" })
+  })
+
+  test("interrupt during a pending approval settles the turn as interrupted", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    let interruptedCallback = false
+    await manager.submitTurn(
+      createTurnInput("thread-1", "turn-1", {
+        onInterrupted: async () => {
+          interruptedCallback = true
+        },
+      }),
+    )
+    await runtimes[0]?.emitApproval("turn-1", "approval-1")
+
+    expect(manager.listPendingApprovals().map((entry) => entry.id)).toEqual([
+      "approval-1",
+    ])
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+    expect(result).toEqual({ interrupted: true, disposition: "active" })
+
+    // Simulate Codex acking the interrupt. The wrapper must fire onInterrupted.
+    await runtimes[0]?.interruptTurnCallback("turn-1")
+
+    expect(interruptedCallback).toBe(true)
+  })
+
+  test("surfaces runtime interrupt failure without crashing the manager", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const runtime = runtimes[0]
+    if (!runtime) throw new Error("runtime missing")
+    // Runtime reports the turn was not found (already finished between client click and ack).
+    const originalInterrupt = runtime.interruptTurn
+    runtime.interruptTurn = async (threadId, turnId) => {
+      runtime.interruptedTurns.push(turnId)
+      return false
+    }
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+
+    expect(result).toEqual({ interrupted: false, disposition: "active" })
+    expect(runtime.interruptedTurns).toEqual(["turn-1"])
+    runtime.interruptTurn = originalInterrupt
+  })
+
   test("reuses a warm runtime for later turns in the same thread", async () => {
     const { factory, runtimes } = createControlledRuntimeFactory()
     const manager = createThreadRuntimeManager({

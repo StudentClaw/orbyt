@@ -2455,36 +2455,69 @@ export const OrchestrationServiceLive = Layer.scoped(
           return { interrupted: false }
         }
 
+        const activeTurnId = thread.currentTurnId
+
+        const optimisticNow = new Date().toISOString()
+        database.transaction(() => {
+          database.execute(
+            `UPDATE orchestration_turns
+             SET status = 'interrupting', updated_at = ?
+             WHERE id = ? AND status IN ('streaming', 'queued')`,
+            [optimisticNow, activeTurnId],
+          )
+          database.execute(
+            `UPDATE orchestration_threads
+             SET status = 'interrupting', updated_at = ?
+             WHERE id = ? AND status IN ('streaming', 'queued')`,
+            [optimisticNow, threadId],
+          )
+        })
+
+        const optimisticTurn = readTurn(activeTurnId)
+        if (optimisticTurn?.status === "interrupting") {
+          appendEvent(
+            "provider.interruptionRequested",
+            { threadId, turnId: activeTurnId },
+            { threadId, turnId: activeTurnId, commandId },
+          )
+          await publishRuntimeEvent({
+            type: "provider.interruptionRequested",
+            threadId: threadId as ProviderThreadId,
+            turnId: activeTurnId as ProviderTurnId,
+          })
+          await publishDomainEvent({ type: "turn.updated", turn: optimisticTurn })
+        }
+
         const interruptResult = await threadRuntimeManager.interruptTurn(
           threadId,
-          thread.currentTurnId,
+          activeTurnId,
         )
         if (interruptResult.disposition === "queued" || interruptResult.disposition === "missing") {
-          await runtimeStore.dequeueTurn(thread.currentTurnId)
-          const persistedTurn = readTurn(thread.currentTurnId)
+          await runtimeStore.dequeueTurn(activeTurnId)
+          const persistedTurn = readTurn(activeTurnId)
           await completeTurn(
             commandId,
             threadId,
-            thread.currentTurnId,
+            activeTurnId,
             persistedTurn?.output ?? "",
             true,
           )
           return { interrupted: true }
         }
         if (!interruptResult.interrupted) {
-          const persistedTurn = readTurn(thread.currentTurnId)
+          const persistedTurn = readTurn(activeTurnId)
           await completeTurn(
             commandId,
             threadId,
-            thread.currentTurnId,
+            activeTurnId,
             persistedTurn?.output ?? "",
             true,
           )
           return { interrupted: true }
         }
 
-        recordReceipt(commandId, "completed", { interrupted: true, turnId: thread.currentTurnId })
-        await receiptBus.resolve(commandId, { interrupted: true, turnId: thread.currentTurnId })
+        recordReceipt(commandId, "completed", { interrupted: true, turnId: activeTurnId })
+        await receiptBus.resolve(commandId, { interrupted: true, turnId: activeTurnId })
         return { interrupted: true }
       },
       startProviderAuth: async (commandId) => {

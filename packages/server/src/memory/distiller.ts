@@ -5,8 +5,10 @@ export interface MemorizeDistiller {
   distill(prompt: string): Promise<string>
 }
 
+export const MEMORIZE_THREAD_ID = "thread_memorize_system"
+
 export class CodexMemorizeDistiller implements MemorizeDistiller {
-  private readonly memorizeThreadId = createId("memorize")
+  private readonly memorizeThreadId = MEMORIZE_THREAD_ID
 
   constructor(private readonly codex: CodexCliService) {}
 

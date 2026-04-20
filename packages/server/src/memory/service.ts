@@ -5,7 +5,7 @@ import { Database } from "../db/Database.js"
 import { CodexCli } from "../ai/CodexCli.js"
 import { createMemoryPaths } from "./paths.js"
 import { MemorizeStateStore } from "./state-store.js"
-import { CodexMemorizeDistiller } from "./distiller.js"
+import { CodexMemorizeDistiller, MEMORIZE_THREAD_ID } from "./distiller.js"
 import { LiveMemorizeTurnRunner } from "./live-runner.js"
 import { memorizeRunNeeded } from "./timer.js"
 import { markStaleCourseNodes } from "./node-curator.js"
@@ -33,6 +33,18 @@ export const MemorizeServiceLive = Layer.effect(
     const store = new MemorizeStateStore(paths)
     const distiller = new CodexMemorizeDistiller(codex)
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller })
+
+    // Seed a synthetic orchestration thread for the Memorize pipeline so that
+    // CodexCli.streamTurn can upsert provider_runtime_sessions without hitting
+    // the FK to orchestration_threads(id). This thread is internal-only and is
+    // never surfaced to the UI (filtered out in snapshots).
+    const nowIso = new Date().toISOString()
+    db.execute(
+      `INSERT OR IGNORE INTO orchestration_threads
+         (id, workspace_id, title, access_mode, status, current_turn_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+      [MEMORIZE_THREAD_ID, "workspace_legacy", "Memorize (system)", "default", "idle", nowIso, nowIso],
+    )
 
     let isRunning = false
 

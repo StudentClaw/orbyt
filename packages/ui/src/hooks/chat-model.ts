@@ -22,6 +22,7 @@ export type ChatStatus =
   | "idle"
   | "queued"
   | "streaming"
+  | "interrupting"
   | "interrupted"
   | "offline"
   | "rate-limited"
@@ -277,6 +278,8 @@ export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
       return `Token ${event.index + 1}: ${event.token}`
     case "provider.turnCompleted":
       return `Turn completed: ${event.turnId}`
+    case "provider.interruptionRequested":
+      return `Interruption requested: ${event.turnId}`
     case "provider.turnInterrupted":
       return `Turn interrupted: ${event.turnId}`
     case "provider.mcpToolCall":
@@ -294,6 +297,7 @@ export function resolveChatState(
   snapshot: OrchestrationSnapshot | null,
   thread: OrchestrationThread | null,
   connectionStatus: WsConnectionStatus,
+  interruptRequested: boolean = false,
 ): { status: ChatStatus; error: string | null } {
   if (connectionStatus.phase !== "connected") {
     return {
@@ -338,6 +342,26 @@ export function resolveChatState(
   if (thread?.status === "interrupted" || currentTurn?.status === "interrupted") {
     return {
       status: "interrupted",
+      error: null,
+    }
+  }
+
+  if (thread?.status === "interrupting" || currentTurn?.status === "interrupting") {
+    return {
+      status: "interrupting",
+      error: null,
+    }
+  }
+
+  const turnInFlight =
+    thread?.status === "streaming"
+    || currentTurn?.status === "streaming"
+    || thread?.status === "queued"
+    || currentTurn?.status === "queued"
+
+  if (interruptRequested && turnInFlight) {
+    return {
+      status: "interrupting",
       error: null,
     }
   }

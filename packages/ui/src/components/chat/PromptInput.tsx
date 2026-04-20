@@ -61,6 +61,8 @@ interface PromptInputProps {
   readonly pendingApproval?: ProviderPendingApproval | null
   readonly onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
   readonly approvalDecisionPending?: boolean
+  readonly interruptPending?: boolean
+  readonly interruptError?: string | null
 }
 
 type ComposerAttachment = TurnAttachmentInput & {
@@ -314,6 +316,8 @@ export function PromptInput({
   pendingApproval = null,
   onRespondToApproval,
   approvalDecisionPending = false,
+  interruptPending = false,
+  interruptError = null,
   skills = [],
 }: PromptInputProps) {
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
@@ -329,17 +333,23 @@ export function PromptInput({
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
-  const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
+  const isInterrupting = status === "interrupting"
+  const isQueued = status === "queued"
+  const isTurnActive = isStreaming || isQueued || isInterrupting
+  const showStopButton = isTurnActive
+  const canSend = (!isComposerEmpty || attachments.length > 0) && !isTurnActive && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
-  const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
+  const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isTurnActive
   const canDropFiles = !attachmentControlsDisabled && Boolean(typeof window !== "undefined" && window.electronAPI?.getPathForFile)
   const accessControlDisabled =
     !isConnected
     || !accessMode
-    || isStreaming
+    || isTurnActive
     || accessModeUpdatePending
     || pendingApproval !== null
     || approvalDecisionPending
+  const stopDisabled = interruptPending || isInterrupting
+  const stopAriaLabel = stopDisabled ? "Stopping…" : "Stop generating"
   const approvalCopy = pendingApproval ? approvalPromptCopy(pendingApproval) : null
   const technicalDetails = pendingApproval
     ? [
@@ -636,6 +646,10 @@ export function PromptInput({
                     ? "Reconnecting..."
                   : disabled && disabledReason
                     ? disabledReason
+                  : isInterrupting || interruptPending
+                    ? "Stopping..."
+                  : isQueued
+                    ? "Waiting for previous turn..."
                   : isStreaming
                     ? "Wait for response..."
                     : "What would you like to know?"
@@ -646,6 +660,15 @@ export function PromptInput({
               onSubmit={handleComposerSubmit}
               onKeyDown={handleComposerKeyDown}
             />
+            {stopDisabled ? (
+              <p
+                className="px-4 pb-1 text-xs text-muted-foreground"
+                data-testid="interrupt-pending-hint"
+                aria-live="polite"
+              >
+                Stopping…
+              </p>
+            ) : null}
 
             <PromptInputFooter className="flex-col items-stretch gap-2.5 pt-0">
               <div className="flex items-center justify-between gap-3">
@@ -712,11 +735,17 @@ export function PromptInput({
                   </DropdownMenu>
                 </PromptInputTools>
 
-                {isStreaming ? (
+                {showStopButton ? (
                   <PromptInputButton
-                    aria-label="Stop generating"
+                    aria-label={stopAriaLabel}
+                    data-testid="interrupt-button"
+                    data-pending={stopDisabled ? "true" : undefined}
+                    disabled={stopDisabled}
                     onClick={onInterrupt}
-                    className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    className={cn(
+                      "size-10 rounded-2xl border border-destructive bg-background text-destructive hover:bg-destructive hover:text-destructive-foreground",
+                      stopDisabled && "opacity-60 cursor-not-allowed hover:bg-background hover:text-destructive",
+                    )}
                   >
                     <SquareIcon className="size-4 fill-current" />
                   </PromptInputButton>
@@ -735,6 +764,16 @@ export function PromptInput({
 
       {attachmentError ? (
         <p className="mt-2 px-1 text-xs text-destructive">{attachmentError}</p>
+      ) : null}
+
+      {interruptError ? (
+        <p
+          className="mt-2 px-1 text-xs text-destructive"
+          role="alert"
+          data-testid="interrupt-error"
+        >
+          {interruptError}
+        </p>
       ) : null}
 
       <AlertDialog open={fullAccessDialogOpen} onOpenChange={setFullAccessDialogOpen}>

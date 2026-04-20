@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
   ProviderApprovalDecision,
   ThreadAccessMode,
@@ -54,6 +54,9 @@ export function useChat(selection?: ChatSelectionInput) {
   const [accessModeMutationPending, setAccessModeMutationPending] = useState(false)
   const [approvalDecisionPendingId, setApprovalDecisionPendingId] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [interruptPendingThreadId, setInterruptPendingThreadId] = useState<string | null>(null)
+  const [interruptError, setInterruptError] = useState<string | null>(null)
+  const interruptRpcInFlightRef = useRef(false)
 
   const selectedWorkspaceId = selection?.workspaceId ?? selectedWorkspaceIdFromUi
   const selectedThreadId = selection?.threadId ?? selectedThreadIdFromUi
@@ -70,9 +73,33 @@ export function useChat(selection?: ChatSelectionInput) {
     return buildChatMessages(snapshot, currentThread?.id ?? null, providerToolCallsByTurnId)
   }, [currentThread?.id, providerToolCallsByTurnId, snapshot])
 
+  const interruptRequested =
+    interruptPendingThreadId !== null
+    && currentThread?.id === interruptPendingThreadId
+
   const chatState = useMemo(() => {
-    return resolveChatState(snapshot, currentThread, connectionStatus)
-  }, [connectionStatus, currentThread, snapshot])
+    return resolveChatState(snapshot, currentThread, connectionStatus, interruptRequested)
+  }, [connectionStatus, currentThread, interruptRequested, snapshot])
+
+  useEffect(() => {
+    if (!interruptPendingThreadId) {
+      return
+    }
+
+    const pendingThread = snapshot?.threads.find((thread) => thread.id === interruptPendingThreadId) ?? null
+    if (!pendingThread) {
+      setInterruptPendingThreadId(null)
+      return
+    }
+
+    if (
+      pendingThread.status === "interrupted"
+      || pendingThread.status === "completed"
+      || pendingThread.status === "idle"
+    ) {
+      setInterruptPendingThreadId(null)
+    }
+  }, [interruptPendingThreadId, snapshot])
 
   const currentPendingApproval = useMemo(() => {
     if (!snapshot || !currentThread) {
@@ -144,8 +171,35 @@ export function useChat(selection?: ChatSelectionInput) {
       return
     }
 
-    await actions.interruptTurn(activeThreadId)
-  }, [actions, currentThread?.id, selectedThreadId])
+    if (interruptRpcInFlightRef.current || interruptPendingThreadId === activeThreadId) {
+      return
+    }
+
+    const threadStatus = currentThread?.status ?? null
+    if (
+      threadStatus !== "streaming"
+      && threadStatus !== "queued"
+      && threadStatus !== "interrupting"
+    ) {
+      return
+    }
+
+    interruptRpcInFlightRef.current = true
+    setInterruptPendingThreadId(activeThreadId)
+    setInterruptError(null)
+
+    try {
+      const interrupted = await actions.interruptTurn(activeThreadId)
+      if (!interrupted) {
+        setInterruptPendingThreadId(null)
+      }
+    } catch (error: unknown) {
+      setInterruptPendingThreadId(null)
+      setInterruptError(error instanceof Error ? error.message : "Failed to stop the turn.")
+    } finally {
+      interruptRpcInFlightRef.current = false
+    }
+  }, [actions, currentThread?.id, currentThread?.status, interruptPendingThreadId, selectedThreadId])
 
   const retry = useCallback(async () => {
     await actions.retryProviderInitialize()
@@ -202,5 +256,7 @@ export function useChat(selection?: ChatSelectionInput) {
     inputDisabled: Boolean(inputDisabledReason),
     inputDisabledReason,
     isSending,
+    interruptPending: interruptRequested,
+    interruptError,
   }
 }

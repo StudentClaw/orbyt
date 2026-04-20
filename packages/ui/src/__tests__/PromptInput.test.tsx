@@ -166,6 +166,83 @@ describe("PromptInput", () => {
     expect(onInterrupt).toHaveBeenCalledOnce()
   })
 
+  test("shows Stop button while status is queued", () => {
+    render(<PromptInput {...defaultProps} status="queued" />)
+    expect(screen.getByLabelText("Stop generating")).toBeDefined()
+    expect(screen.queryByLabelText("Send message")).toBeNull()
+  })
+
+  test("shows disabled Stop with Stopping… label while status is interrupting", () => {
+    render(<PromptInput {...defaultProps} status="interrupting" />)
+    const stopBtn = screen.getByLabelText("Stopping…")
+    expect(stopBtn).toBeDefined()
+    expect(stopBtn.hasAttribute("disabled")).toBe(true)
+    expect(screen.getByTestId("interrupt-pending-hint")).toBeDefined()
+  })
+
+  test("shows disabled Stop when interruptPending is true during streaming", () => {
+    render(<PromptInput {...defaultProps} status="streaming" interruptPending={true} />)
+    const stopBtn = screen.getByLabelText("Stopping…")
+    expect(stopBtn.hasAttribute("disabled")).toBe(true)
+    expect(stopBtn.getAttribute("data-pending")).toBe("true")
+  })
+
+  test("rapid double-click fires onInterrupt exactly once when interruptPending is true", async () => {
+    const onInterrupt = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        interruptPending={true}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    const stopBtn = screen.getByLabelText("Stopping…")
+    await user.click(stopBtn)
+    await user.click(stopBtn)
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  test("does not fire Send when transitioning from streaming to interrupting", async () => {
+    const onSend = vi.fn()
+    const onInterrupt = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        onSend={onSend}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    rerender(
+      <PromptInput
+        {...defaultProps}
+        status="interrupting"
+        onSend={onSend}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    const stopBtn = screen.getByLabelText("Stopping…")
+    await user.click(stopBtn)
+    expect(onSend).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText("Send message")).toBeNull()
+  })
+
+  test("renders interruptError with role alert", () => {
+    render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        interruptError="Failed to stop the turn."
+      />,
+    )
+    const alert = screen.getByTestId("interrupt-error")
+    expect(alert.getAttribute("role")).toBe("alert")
+    expect(alert.textContent).toBe("Failed to stop the turn.")
+  })
+
   test("shows the selected model label", () => {
     render(<PromptInput {...defaultProps} />)
     expect(screen.getByText("GPT-5.4 Mini")).toBeDefined()

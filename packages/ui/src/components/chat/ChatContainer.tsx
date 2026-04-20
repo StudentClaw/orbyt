@@ -35,6 +35,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     inputDisabled,
     inputDisabledReason,
     isSending,
+    interruptPending,
+    interruptError,
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
 
@@ -117,7 +119,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         </div>
       ) : null}
 
-      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" ? (
+      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupting" && status !== "queued" && status !== "interrupted" ? (
         <div className="px-4 pt-3">
           <ErrorBanner status={status} error={error} />
         </div>
@@ -183,6 +185,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         pendingApproval={currentPendingApproval}
         onRespondToApproval={(decision) => void respondToApproval(decision)}
         approvalDecisionPending={approvalDecisionPending}
+        interruptPending={interruptPending}
+        interruptError={interruptError}
         skills={skills}
       />
     </div>

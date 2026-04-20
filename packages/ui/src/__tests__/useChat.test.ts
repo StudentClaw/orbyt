@@ -160,11 +160,104 @@ describe("useChat", () => {
   })
 
   test("interrupt calls the runtime interrupt action", async () => {
+    hookMocks.interruptTurn.mockResolvedValueOnce(true)
     const { result } = renderHook(() => useChat())
     await act(async () => {
       await result.current.interrupt()
     })
     expect(hookMocks.interruptTurn).toHaveBeenCalledWith("thread-1")
+  })
+
+  test("interrupt is a no-op when no active thread is selected", async () => {
+    hookMocks.snapshot = { ...baseSnapshot, threads: [], turns: [] }
+    hookMocks.selectedThreadId = null
+
+    const { result } = renderHook(() => useChat())
+    await act(async () => {
+      await result.current.interrupt()
+    })
+    expect(hookMocks.interruptTurn).not.toHaveBeenCalled()
+  })
+
+  test("interrupt is a no-op when the thread status is not interruptible", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed" }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed" }],
+    }
+
+    const { result } = renderHook(() => useChat())
+    await act(async () => {
+      await result.current.interrupt()
+    })
+    expect(hookMocks.interruptTurn).not.toHaveBeenCalled()
+  })
+
+  test("interrupt sets interruptPending and status transitions to interrupting", async () => {
+    let resolveInterrupt: ((value: boolean) => void) | null = null
+    hookMocks.interruptTurn.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { resolveInterrupt = resolve }),
+    )
+
+    const { result } = renderHook(() => useChat())
+
+    act(() => {
+      void result.current.interrupt()
+    })
+
+    expect(result.current.interruptPending).toBe(true)
+    expect(result.current.status).toBe("interrupting")
+
+    await act(async () => {
+      resolveInterrupt?.(true)
+    })
+
+    expect(hookMocks.interruptTurn).toHaveBeenCalledWith("thread-1")
+  })
+
+  test("interrupt clears interruptPending when server returns false", async () => {
+    hookMocks.interruptTurn.mockResolvedValueOnce(false)
+    const { result } = renderHook(() => useChat())
+
+    await act(async () => {
+      await result.current.interrupt()
+    })
+
+    expect(result.current.interruptPending).toBe(false)
+    expect(result.current.interruptError).toBeNull()
+  })
+
+  test("interrupt surfaces an error and clears pending on RPC failure", async () => {
+    hookMocks.interruptTurn.mockRejectedValueOnce(new Error("ws offline"))
+    const { result } = renderHook(() => useChat())
+
+    await act(async () => {
+      await result.current.interrupt()
+    })
+
+    expect(result.current.interruptPending).toBe(false)
+    expect(result.current.interruptError).toBe("ws offline")
+  })
+
+  test("concurrent interrupt calls fire exactly one underlying RPC", async () => {
+    let resolveInterrupt: ((value: boolean) => void) | null = null
+    hookMocks.interruptTurn.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { resolveInterrupt = resolve }),
+    )
+
+    const { result } = renderHook(() => useChat())
+
+    await act(async () => {
+      void result.current.interrupt()
+      void result.current.interrupt()
+      void result.current.interrupt()
+    })
+
+    expect(hookMocks.interruptTurn).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveInterrupt?.(true)
+    })
   })
 
   test("returns offline state when disconnected", () => {
