@@ -36,11 +36,11 @@ unless its verification state is `Verified`.
 | 02 - Daily And Weekly Distillation Pipeline | complete | rereynrd | Verified | Proceed to Phase 03; see phase-02-spec.md for the frozen contract |
 | 03 - Graph Promotion And Node Evolution | complete | rereynrd | Verified | Proceed to Phase 04; see phase-03-spec.md for the frozen contract |
 | 04 - Integration With Threads, Canvas Context, And Scheduling | complete | rereynrd | Verified | Proceed to Phase 05; see phase-04-spec.md for the frozen contract |
-| 05 - Hardening, Verification, And Recovery | not_started | Unassigned | Not run | Lock recovery, duplicate-prevention, and end-to-end verification behavior |
+| 05 - Hardening, Verification, And Recovery | complete | rereynrd | Verified | Proceed to Phase 06 if planned; see phase-05-spec.md for frozen contract |
 
 ## Current Recommended Next Step
 
-Start Phase 05 - Hardening, Verification, And Recovery. The end-to-end pipeline is running; Phase 05 locks recovery behavior (idempotent re-runs, partial failure handling), adds Codex process isolation for Memorize, and adds end-to-end verification.
+All five phases complete. The Memorize system is fully wired, hardened, and verified. Next work is operational: monitor `memorize-error.log` in production, review daily/weekly output quality, and adjust distillation prompts as needed.
 
 ## Handoff Update Protocol
 
@@ -315,4 +315,32 @@ updates for a long period.
 
 ### Phase 05 - Hardening, Verification, And Recovery
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - concurrency lock: `isRunning` flag + `streaming` turn DB check in `MemorizeService.runIfNeeded`
+  - recovery path: if today's daily file exists on entry, skip distillation and commit success using existing content
+  - stale course node marking: `markStaleCourseNodes` normalizes DB course codes to slugs, writes `_stale: true` + `_staleAt` to YAML frontmatter of inactive course graph nodes
+  - structured error logging: `appendMemorizeError` appends JSON lines to `memorize-error.log`
+  - `paths.errorLog` field added to `MemoryPaths`
+  - `error-log.ts` — best-effort JSON-lines appender
+  - `node-curator.ts` — `markStaleCourseNodes` with `setFrontmatterField` helper
+  - `live-runner.ts` — recovery path check + catch-block error logging
+  - `service.ts` — full rewrite with concurrency lock, streaming check, curator call, error logging
+  - 10 new node-curator tests + 4 recovery tests + 6 integration tests (real SQLite via `runMigrations`) = 20 new tests
+  - 104 total memorize tests green
+  - wrote authoritative spec at [phase-05-spec.md](phase-05-spec.md)
+- Remaining:
+  - manual smoke-test checklist (see spec §9) to be run on a real device
+- Risks or blockers:
+  - slug normalization uses simple string transforms; course graph nodes created with different slug conventions may not match and avoid stale-marking
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test src/__tests__/memorize-*.test.ts` -> 104 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-05-spec.md`
+  - passing test run above
+- First recommended next step:
+  - run manual smoke-test checklist (phase-05-spec.md §9) on a real device after deployment

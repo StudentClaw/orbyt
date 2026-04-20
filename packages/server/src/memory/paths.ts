@@ -25,6 +25,7 @@ export interface MemoryPaths {
   readonly root: string
   readonly memoryFile: string
   readonly stateFile: string
+  readonly errorLog: string
   readonly dailyDir: string
   readonly weeklyDir: string
   readonly graphDir: string
@@ -86,6 +87,7 @@ export function createMemoryPaths(
     root,
     memoryFile: join(root, MEMORY_ROOT_FILENAME),
     stateFile: join(root, MEMORIZE_STATE_FILENAME),
+    errorLog: join(root, "memorize-error.log"),
     dailyDir: join(root, DAILY_DIR),
     weeklyDir: join(root, WEEKLY_DIR),
     graphDir,

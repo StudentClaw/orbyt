@@ -6,13 +6,14 @@ import type { MemoryPaths } from "./paths.js"
 import type { MemorizeStateStore } from "./state-store.js"
 import type { MemorizeDistiller } from "./distiller.js"
 import { readTurnsSince, buildCursor, formatTurnsForPrompt } from "./turn-reader.js"
-import { writeDailyFile } from "./daily-writer.js"
+import { writeDailyFile, readDailyFile } from "./daily-writer.js"
 import { enforceRetention } from "./pruner.js"
 import { weekKeyForDailyDate } from "./weekly-writer.js"
 import { isoWeekKey, isoDateKey } from "./week.js"
 import { fillTemplate, DAILY_DISTILLATION_PROMPT } from "./prompts/index.js"
 import { runPromotion } from "./promoter.js"
 import { readCourseContext } from "./course-reader.js"
+import { appendMemorizeError } from "./error-log.js"
 
 export interface LiveMemorizeTurnRunnerDeps {
   readonly db: DatabaseService
@@ -43,7 +44,15 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
       let dailyFileWritten: string | null = null
       let dailyContent: string | null = null
 
-      if (turns.length > 0) {
+      const todayFileExists = existsSync(paths.dailyFile(dateKey))
+
+      if (todayFileExists) {
+        // Recovery path: a previous run wrote the daily file but failed before commitSuccess.
+        // Re-use existing content so we don't call the AI again.
+        dailyContent = readDailyFile(paths, dateKey)
+        dailyFileWritten = dateKey
+      } else if (turns.length > 0) {
+        // Normal path: distill new turns and write the daily file.
         const courses = readCourseContext(db)
         const prompt = fillTemplate(DAILY_DISTILLATION_PROMPT, {
           courses,
@@ -87,6 +96,7 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
         },
       }
     } catch (err) {
+      appendMemorizeError(paths, "live-runner.run", err)
       store.recordFailure()
       return {
         ok: false,
