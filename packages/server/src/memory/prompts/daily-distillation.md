@@ -3,6 +3,10 @@
 You are summarizing a student's recent AI-assisted study sessions for their
 personal memory system.
 
+## Active Courses
+
+{{courses}}
+
 ## Conversation Turns ({{date}})
 
 The following exchanges happened since the last Memorize run:

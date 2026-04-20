@@ -12,6 +12,7 @@ import { SkillResolverLive } from "./skills/index.js"
 import { PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
+import { MemorizeService, MemorizeServiceLive } from "./memory/service.js"
 
 const CoreLive = Layer.mergeAll(
   ConfigServiceLive,
@@ -50,9 +51,15 @@ const CanvasSyncLive = CanvasSyncServiceLive.pipe(
   Layer.provideMerge(CoreLive),
 )
 
+const MemorizeLive = MemorizeServiceLive.pipe(
+  Layer.provideMerge(ProviderLive),
+  Layer.provideMerge(CoreLive),
+)
+
 const WebSocketLive = WebSocketServerLive.pipe(
   Layer.provideMerge(OrchestrationLive),
   Layer.provideMerge(CanvasSyncLive),
+  Layer.provideMerge(MemorizeLive),
   Layer.provideMerge(CoreLive),
 )
 
@@ -60,6 +67,7 @@ const MainLive = Layer.mergeAll(
   CoreLive,
   OrchestrationLive,
   CanvasSyncLive,
+  MemorizeLive,
   WebSocketLive,
 )
 
@@ -82,6 +90,7 @@ const program = Effect.gen(function* () {
   const threadRuntimeManager = yield* ThreadRuntimeManager
   const ws = yield* WebSocketServerService
   const canvasSync = yield* CanvasSyncService
+  const memorize = yield* MemorizeService
 
   readiness.markReady()
 
@@ -98,6 +107,11 @@ const program = Effect.gen(function* () {
   // Initial sync at startup so the UI sees fresh data immediately rather than waiting an hour.
   void canvasSync.sync().catch((error) => {
     writeStderr(`Initial canvas sync failed: ${String(error)}`)
+  })
+
+  // Catch-up run on startup: if a scheduled slot was missed while the server was down, run now.
+  void memorize.runIfNeeded(new Date()).catch((error) => {
+    writeStderr(`Memorize startup catch-up failed: ${String(error)}`)
   })
 
   const hourlyTimer = setInterval(() => {

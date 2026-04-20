@@ -35,12 +35,12 @@ unless its verification state is `Verified`.
 | 01 - Memorize Scheduler And Run Checkpointing | complete | rereynrd | Verified | Proceed to Phase 02; see phase-01-spec.md for the frozen contract |
 | 02 - Daily And Weekly Distillation Pipeline | complete | rereynrd | Verified | Proceed to Phase 03; see phase-02-spec.md for the frozen contract |
 | 03 - Graph Promotion And Node Evolution | complete | rereynrd | Verified | Proceed to Phase 04; see phase-03-spec.md for the frozen contract |
-| 04 - Integration With Threads, Canvas Context, And Memory Reads | not_started | Unassigned | Not run | Connect memorize inputs and memory consumers across server, Canvas, and app surfaces |
+| 04 - Integration With Threads, Canvas Context, And Scheduling | complete | rereynrd | Verified | Proceed to Phase 05; see phase-04-spec.md for the frozen contract |
 | 05 - Hardening, Verification, And Recovery | not_started | Unassigned | Not run | Lock recovery, duplicate-prevention, and end-to-end verification behavior |
 
 ## Current Recommended Next Step
 
-Start Phase 04 - Integration With Threads, Canvas Context, And Memory Reads. The full promotion pipeline is locked in [phase-03-spec.md](phase-03-spec.md); Phase 04 injects real `CodexCliService` into `CodexMemorizeDistiller`, wires Electron IPC activation, and connects Canvas context to the distillation prompts.
+Start Phase 05 - Hardening, Verification, And Recovery. The end-to-end pipeline is running; Phase 05 locks recovery behavior (idempotent re-runs, partial failure handling), adds Codex process isolation for Memorize, and adds end-to-end verification.
 
 ## Handoff Update Protocol
 
@@ -283,9 +283,35 @@ updates for a long period.
 - First recommended next step:
   - start Phase 04: inject `CodexCliService`, wire `MemorizeScheduler.start()` from Electron IPC, connect Canvas course context to distillation prompts
 
-### Phase 04 - Integration With Threads, Canvas Context, And Memory Reads
+### Phase 04 - Integration With Threads, Canvas Context, And Scheduling
 
-No handoff entries yet.
+- Date: 2026-04-19
+- Branch: memorize-system
+- Owner: rereynrd
+- Status change: not_started -> complete
+- Completed:
+  - added `MEMORIZE_RUN` RPC method to contracts; server router handles it via `MemorizeService.runIfNeeded`
+  - `readCourseContext(db)` reads enrolled courses and injects them into the daily distillation prompt as `## Active Courses`
+  - `MemorizeService` Effect layer wired into `WebSocketServer`, `Router`, and `index.ts`
+  - server calls `runIfNeeded` at startup for automatic catch-up after restart
+  - `timer.ts` — server-side `memorizeRunNeeded` guard prevents double-runs
+  - `MemorizeManager` in Electron wraps `MemorizeScheduler`; `onRun` opens a WS to the server and sends `memorize.run` RPC
+  - `main.ts` starts and stops `MemorizeManager` on app lifecycle events
+  - 13 new tests (3 course-reader + 10 timer); 84 total memorize tests green
+  - wrote authoritative spec at [phase-04-spec.md](phase-04-spec.md)
+- Remaining:
+  - Codex process isolation (Memorize shares the chat Codex pool; true isolation deferred to Phase 05)
+- Risks or blockers:
+  - Memorize and active chat turns share the same `CodexCli` instance; under heavy use this may add latency. Phase 05 should isolate
+  - `getLastRunAt` always returns null from Electron — the server's `memorizeRunNeeded` is the authoritative guard
+- Commands run:
+  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun test src/__tests__/memorize-*.test.ts` -> 84 pass / 0 fail
+- Evidence captured:
+  - spec doc at `docs/implementation/memorize/phase-04-spec.md`
+  - passing test run above
+- First recommended next step:
+  - start Phase 05: Codex process isolation, idempotent re-run hardening, and end-to-end verification
 
 ### Phase 05 - Hardening, Verification, And Recovery
 

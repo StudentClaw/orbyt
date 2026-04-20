@@ -10,6 +10,7 @@ import { PushBus, type PushBusService } from "./PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
 import { CanvasSyncService, type CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import { SkillResolver, type SkillResolverService } from "../skills/SkillResolver.js"
+import { MemorizeService, type MemorizeServiceShape } from "../memory/service.js"
 import { selectWebSocketProtocol, validateWebSocketHandshake } from "./handshake.js"
 import { routeMessage, type RouteMessageResult } from "./Router.js"
 
@@ -42,8 +43,9 @@ export const WebSocketServerLive = Layer.effect(
     const database = yield* Database
     const canvasSync = yield* CanvasSyncService
     const skillResolver = yield* SkillResolver
+    const memorize = yield* MemorizeService
 
-    return createWebSocketService(config, readiness, pushBus, orchestration, database, canvasSync, skillResolver)
+    return createWebSocketService(config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, memorize)
   }),
 )
 
@@ -62,6 +64,7 @@ function createWebSocketService(
   database: DatabaseService,
   canvasSync: CanvasSyncServiceShape,
   skillResolver: SkillResolverService,
+  memorize: MemorizeServiceShape,
 ): WebSocketService {
   const wss = new WsServer({
     port: config.port,
@@ -75,7 +78,7 @@ function createWebSocketService(
   })
 
   wss.on("connection", (ws) => {
-    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database, canvasSync, skillResolver)
+    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, memorize)
   })
 
   return {
@@ -96,6 +99,7 @@ function registerSocketHandlers(
   database: DatabaseService,
   canvasSync: CanvasSyncServiceShape,
   skillResolver: SkillResolverService,
+  memorize: MemorizeServiceShape,
 ): void {
   pushBus.registerClient(ws)
 
@@ -113,6 +117,7 @@ function registerSocketHandlers(
       database,
       canvasSync,
       skillResolver,
+      memorize,
     })
     sendRouteResponse(ws, result)
   })

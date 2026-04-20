@@ -115,6 +115,7 @@ export const RPC_METHODS = {
   SKILLS_LIST: "skills.list",
   DEV_RESET_SOFT: "dev.resetSoft",
   DEV_RESET_HARD: "dev.resetHard",
+  MEMORIZE_RUN: "memorize.run",
 } as const
 
 /**

@@ -12,6 +12,7 @@ import { weekKeyForDailyDate } from "./weekly-writer.js"
 import { isoWeekKey, isoDateKey } from "./week.js"
 import { fillTemplate, DAILY_DISTILLATION_PROMPT } from "./prompts/index.js"
 import { runPromotion } from "./promoter.js"
+import { readCourseContext } from "./course-reader.js"
 
 export interface LiveMemorizeTurnRunnerDeps {
   readonly db: DatabaseService
@@ -43,7 +44,9 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
       let dailyContent: string | null = null
 
       if (turns.length > 0) {
+        const courses = readCourseContext(db)
         const prompt = fillTemplate(DAILY_DISTILLATION_PROMPT, {
+          courses,
           date: dateKey,
           thread_turns: formatTurnsForPrompt(turns),
         })
