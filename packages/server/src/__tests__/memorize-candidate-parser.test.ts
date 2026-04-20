@@ -6,9 +6,9 @@ import {
 } from "../memory/candidate-parser.js"
 
 describe("candidateFingerprint", () => {
-  test("returns 16-char hex string", () => {
+  test("returns 32-char hex string", () => {
     const fp = candidateFingerprint("some fact")
-    expect(fp).toHaveLength(16)
+    expect(fp).toHaveLength(32)
     expect(fp).toMatch(/^[0-9a-f]+$/)
   })
 

@@ -38,30 +38,27 @@ export const MemorizeServiceLive = Layer.effect(
 
     return {
       runIfNeeded: async (now: Date) => {
-        const state = store.read()
-
-        if (!memorizeRunNeeded(state.lastRunAt, now)) {
-          return { ran: false, result: null }
-        }
-
         if (isRunning) {
           return { ran: false, result: null }
         }
 
-        const activeTurns = db.query<ActiveTurnRow>(
-          `SELECT COUNT(*) as cnt FROM orchestration_turns WHERE status = 'streaming'`,
-        )
-        if ((activeTurns[0]?.cnt ?? 0) > 0) {
-          appendMemorizeError(
-            paths,
-            "service.runIfNeeded",
-            new Error("Deferred: active chat session in progress"),
-          )
-          return { ran: false, result: null }
-        }
-
+        // Read state inside the lock so we never act on a stale lastRunAt
+        // from before a completed prior run.
         isRunning = true
         try {
+          const state = store.read()
+
+          if (!memorizeRunNeeded(state.lastRunAt, now)) {
+            return { ran: false, result: null }
+          }
+
+          const activeTurns = db.query<ActiveTurnRow>(
+            `SELECT COUNT(*) as cnt FROM orchestration_turns WHERE status = 'streaming'`,
+          )
+          if ((activeTurns[0]?.cnt ?? 0) > 0) {
+            return { ran: false, result: null }
+          }
+
           const sinceCursor = state.lastProcessedThreadCursor
           const outcome = await runner.run({ sinceCursor, now })
 

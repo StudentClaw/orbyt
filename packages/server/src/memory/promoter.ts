@@ -27,17 +27,19 @@ function mergeIntoQueue(
   now: Date,
 ): readonly PromotionCandidate[] {
   const nowIso = now.toISOString()
-  const queue = existing.map((c) => ({ ...c }))
+  const queue: PromotionCandidate[] = existing.map((c) => ({ ...c }))
 
   for (const parsed of incoming) {
     if (promotedFingerprints.includes(parsed.fingerprint)) continue
 
-    const existing = queue.find((c) => candidateFingerprint(c.text) === parsed.fingerprint)
-    if (existing) {
-      existing.evidenceCount += 1
-      existing.lastSeenAt = nowIso
-      if (parsed.confidence > existing.confidence) {
-        existing.confidence = parsed.confidence
+    const idx = queue.findIndex((c) => candidateFingerprint(c.text) === parsed.fingerprint)
+    if (idx >= 0) {
+      const c = queue[idx]!
+      queue[idx] = {
+        ...c,
+        evidenceCount: c.evidenceCount + 1,
+        lastSeenAt: nowIso,
+        confidence: parsed.confidence > c.confidence ? parsed.confidence : c.confidence,
       }
     } else {
       queue.push({

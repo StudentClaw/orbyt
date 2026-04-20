@@ -9,14 +9,25 @@ function courseCodeToSlug(code: string): string {
   return code.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
 }
 
-function setFrontmatterField(content: string, key: string, value: string): string {
-  if (!content.startsWith("---")) return content
+function assertSafeFrontmatterValue(value: string): void {
+  if (/[\r\n]/.test(value)) {
+    throw new Error(`Frontmatter value must not contain newlines: ${JSON.stringify(value)}`)
+  }
+}
 
-  const endIdx = content.indexOf("\n---", 3)
+function setFrontmatterField(content: string, key: string, value: string): string {
+  assertSafeFrontmatterValue(value)
+
+  // Normalize line endings so \r\n files parse correctly.
+  const normalized = content.replace(/\r\n/g, "\n")
+
+  if (!normalized.startsWith("---")) return content
+
+  const endIdx = normalized.indexOf("\n---", 3)
   if (endIdx < 0) return content
 
-  const frontmatter = content.slice(3, endIdx)
-  const rest = content.slice(endIdx + 4)
+  const frontmatter = normalized.slice(3, endIdx)
+  const rest = normalized.slice(endIdx + 4)
 
   const keyPattern = new RegExp(`^${key}:.*$`, "m")
   const newLine = `${key}: ${value}`
@@ -41,7 +52,9 @@ export function markStaleCourseNodes(
 
   const staleFiles: string[] = []
 
-  for (const dir of readdirSync(paths.coursesDir)) {
+  for (const entry of readdirSync(paths.coursesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = entry.name
     if (activeSlugs.has(dir)) continue
 
     const indexPath = join(paths.coursesDir, dir, "index.md")

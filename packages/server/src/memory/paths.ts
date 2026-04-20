@@ -1,5 +1,5 @@
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import {
   DAILY_DIR,
   GRAPH_DIR,
@@ -67,9 +67,9 @@ export function resolveMemoryRoot(
 ): string {
   const env = input.env ?? process.env
   const home = input.home ?? homedir
-  const override = env[STUDENT_CLAW_HOME_ENV]?.trim()
-  const base = override && override.length > 0
-    ? override
+  const raw = env[STUDENT_CLAW_HOME_ENV]?.trim()
+  const base = raw && raw.length > 0
+    ? resolve(raw)
     : join(home(), DEFAULT_HOME_DIR)
   return join(base, MEMORY_DIR)
 }

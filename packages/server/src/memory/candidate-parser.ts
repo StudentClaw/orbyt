@@ -20,7 +20,7 @@ export function candidateFingerprint(text: string): string {
   return createHash("sha256")
     .update(text.trim().toLowerCase())
     .digest("hex")
-    .slice(0, 16)
+    .slice(0, 32)
 }
 
 function normalizeSlug(raw: string): string {

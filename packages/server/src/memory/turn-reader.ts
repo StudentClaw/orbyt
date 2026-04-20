@@ -71,7 +71,7 @@ export function formatTurnsForPrompt(turns: readonly CompletedTurn[]): string {
   return turns
     .map(
       (t, i) =>
-        `**Turn ${i + 1}** (${t.completedAt})\n\nUser: ${t.input}\n\nAssistant: ${t.output}`,
+        `<turn index="${i + 1}" completed_at="${t.completedAt}">\n<user>${t.input}</user>\n<assistant>${t.output}</assistant>\n</turn>`,
     )
-    .join("\n\n---\n\n")
+    .join("\n\n")
 }

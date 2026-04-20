@@ -5,8 +5,25 @@ import {
   mkdirSync,
 } from "node:fs"
 import { dirname } from "node:path"
+import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@student-claw/contracts"
 import type { MemoryPaths } from "./paths.js"
 import type { ParsedCandidate } from "./candidate-parser.js"
+
+const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
+const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+function validateBranchSegments(branch: string): void {
+  const segments = branch.split("/").filter(Boolean)
+  for (const seg of segments) {
+    if (!SLUG_SEGMENT_PATTERN.test(seg)) {
+      throw new Error(`Invalid branch segment "${seg}" in branch: ${branch}`)
+    }
+  }
+  const root = segments[0] ?? ""
+  if (!VALID_SCAFFOLD_BRANCHES.has(root)) {
+    throw new Error(`Unknown branch root "${root}" in branch: ${branch}`)
+  }
+}
 
 const NONE_PLACEHOLDER = "_none yet_"
 
@@ -65,15 +82,16 @@ function appendBulletToSection(
 }
 
 function resolvePath(paths: MemoryPaths, branch: string): string {
-  const parts = branch.split("/")
+  validateBranchSegments(branch)
+  const parts = branch.split("/").filter(Boolean)
   if (parts[0] === "school" && parts[1] === "courses" && parts[2]) {
     return paths.courseIndex(parts[2])
   }
   if (parts[0] === "school" && parts[1] === "playbooks" && parts[2]) {
     return paths.playbookFile(parts[2])
   }
-  const scaffold = (parts[0] ?? "school") as Parameters<typeof paths.branchIndex>[0]
-  return paths.branchIndex(scaffold as never)
+  const root = (parts[0] ?? "school") as ScaffoldBranch
+  return paths.branchIndex(root)
 }
 
 function seedBaseNode(heading: string): string {

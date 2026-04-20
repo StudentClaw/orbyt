@@ -124,7 +124,7 @@ describe("runPromotion — fingerprint deduplication", () => {
     const { paths } = setup()
     const result = await runPromotion(paths, initialMemorizeState(), HIGH_CONF_DAILY, null, NOW)
     expect(result.updatedFingerprints).toHaveLength(1)
-    expect(result.updatedFingerprints[0]).toMatch(/^[0-9a-f]{16}$/)
+    expect(result.updatedFingerprints[0]).toMatch(/^[0-9a-f]{32}$/)
   })
 
   test("updatedFingerprints accumulates across runs", async () => {

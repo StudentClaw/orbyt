@@ -45,10 +45,14 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
       let dailyContent: string | null = null
 
       const todayFileExists = existsSync(paths.dailyFile(dateKey))
+      // On recovery, we don't re-parse the daily file for promotion candidates —
+      // they were already (partially) processed in the prior run. Passing null
+      // prevents evidenceCount from inflating on every crash-recovery cycle.
+      const isRecovery = todayFileExists
 
-      if (todayFileExists) {
+      if (isRecovery) {
         // Recovery path: a previous run wrote the daily file but failed before commitSuccess.
-        // Re-use existing content so we don't call the AI again.
+        // Re-use existing content without re-feeding it to the promoter.
         dailyContent = readDailyFile(paths, dateKey)
         dailyFileWritten = dateKey
       } else if (turns.length > 0) {
@@ -74,15 +78,17 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
           .map((p) => readFileSync(p, "utf-8"))
           .join("\n\n") || null
 
-      const promotion = await runPromotion(paths, state, dailyContent, weeklyContent, now)
+      // On recovery, don't re-parse the existing daily file — candidates were already queued.
+      const promotionDailyContent = isRecovery ? null : dailyContent
+      const promotion = await runPromotion(paths, state, promotionDailyContent, weeklyContent, now)
 
-      const weeklyFileWritten = isoWeekKey(now)
+      const weeklyFileWritten = prunedDaily.length > 0 ? isoWeekKey(now) : null
 
       store.commitSuccess({
         lastRunAt: now.toISOString(),
         lastProcessedThreadCursor: newCursor,
         lastDailyFile: dailyFileWritten ?? state.lastDailyFile,
-        lastWeeklyFile: weeklyFileWritten,
+        lastWeeklyFile: weeklyFileWritten ?? state.lastWeeklyFile,
         pendingPromotionCandidates: promotion.updatedPending,
         promotedCandidateFingerprints: promotion.updatedFingerprints,
       })
@@ -91,7 +97,7 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
         ok: true,
         result: {
           dailyFileWritten,
-          weeklyFileWritten: prunedDaily.length > 0 ? weeklyFileWritten : null,
+          weeklyFileWritten,
           graphNodesUpdated: promotion.promoted,
         },
       }
@@ -102,7 +108,7 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
         ok: false,
         error: {
           type: "runner_failed",
-          message: err instanceof Error ? err.message : String(err),
+          message: "Memory distillation failed. See memorize-error.log for details.",
         },
       }
     }
