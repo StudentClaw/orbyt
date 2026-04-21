@@ -408,15 +408,51 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
   }
 }
 
-export function startOrchestrationStateSync(client: WsRpcClient): () => void {
+export function startOrchestrationStateSync(client: WsRpcClient): {
+  stop: () => void
+  initialSnapshotReady: Promise<void>
+} {
   let disposed = false
+  let initialSnapshotSettled = false
+  let resolveInitialSnapshot: (() => void) | null = null
+  let rejectInitialSnapshot: ((error: Error) => void) | null = null
+
+  const initialSnapshotReady = new Promise<void>((resolve, reject) => {
+    resolveInitialSnapshot = resolve
+    rejectInitialSnapshot = reject
+  })
+
+  const settleInitialSnapshot = (error?: Error) => {
+    if (initialSnapshotSettled) {
+      return
+    }
+
+    initialSnapshotSettled = true
+    if (error) {
+      rejectInitialSnapshot?.(error)
+      return
+    }
+
+    resolveInitialSnapshot?.()
+  }
 
   const syncSnapshot = () => {
     void client.orchestration.getSnapshot().then((snapshot) => {
       if (!disposed) {
         setOrchestrationSnapshot(snapshot)
+        settleInitialSnapshot()
       }
-    }).catch(() => undefined)
+    }).catch((error: unknown) => {
+      if (disposed) {
+        return
+      }
+
+      settleInitialSnapshot(
+        error instanceof Error
+          ? error
+          : new Error("Failed to load the initial orchestration snapshot."),
+      )
+    })
   }
 
   const cleanups = [
@@ -436,13 +472,18 @@ export function startOrchestrationStateSync(client: WsRpcClient): () => void {
 
   if (getOrchestrationSnapshot() === null) {
     syncSnapshot()
+  } else {
+    settleInitialSnapshot()
   }
 
-  return () => {
-    disposed = true
-    for (const cleanup of cleanups) {
-      cleanup()
-    }
+  return {
+    stop: () => {
+      disposed = true
+      for (const cleanup of cleanups) {
+        cleanup()
+      }
+    },
+    initialSnapshotReady,
   }
 }
 

@@ -115,6 +115,7 @@ export const RPC_METHODS = {
   SKILLS_LIST: "skills.list",
   DEV_RESET_SOFT: "dev.resetSoft",
   DEV_RESET_HARD: "dev.resetHard",
+  MEMORIZE_RUN: "memorize.run",
 } as const
 
 /**
@@ -224,7 +225,7 @@ export const OrchestrationThread = Schema.Struct({
   workspaceId: WorkspaceId,
   title: Schema.String,
   accessMode: Schema.Literal("default", "full"),
-  status: Schema.Literal("idle", "queued", "streaming", "interrupted", "completed"),
+  status: Schema.Literal("idle", "queued", "streaming", "interrupting", "interrupted", "completed"),
   createdAt: Schema.String,
   currentTurnId: Schema.NullOr(TurnId),
 })
@@ -257,7 +258,7 @@ export const OrchestrationTurn = Schema.Struct({
   input: Schema.String,
   output: Schema.String,
   reasoning: Schema.String,
-  status: Schema.Literal("queued", "streaming", "interrupted", "completed"),
+  status: Schema.Literal("queued", "streaming", "interrupting", "interrupted", "completed"),
   startedAt: Schema.String,
   completedAt: Schema.NullOr(Schema.String),
   skill: Schema.NullOr(Schema.Struct({ id: SkillId, name: Schema.String })),
@@ -522,6 +523,11 @@ export const ProviderRuntimeEvent = Schema.Union(
     threadId: ThreadId,
     turnId: TurnId,
     output: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.interruptionRequested"),
+    threadId: ThreadId,
+    turnId: TurnId,
   }),
   Schema.Struct({
     type: Schema.Literal("provider.turnInterrupted"),

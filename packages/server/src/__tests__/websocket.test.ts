@@ -4,6 +4,7 @@ import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"
 import { runMigrations } from "../db/migrations/runner.js"
+import { getWeekKey } from "../activity/feed.js"
 
 const mockWs = { readyState: 1, send: () => undefined } as never
 
@@ -234,6 +235,6 @@ describe("Router", () => {
 
     expect(response.ok).toBe(true)
     expect(response.result.title).toContain("Weekly insight")
-    expect(response.result.weekKey).toBe("2026-04-13")
+    expect(response.result.weekKey).toBe(getWeekKey(new Date()))
   })
 })

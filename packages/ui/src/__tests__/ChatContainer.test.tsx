@@ -15,6 +15,8 @@ const chatMocks = vi.hoisted(() => ({
     }>,
     status: "idle" as ChatStatus,
     error: null as string | null,
+    preparingLabel: null as string | null,
+    preparingDetail: null as string | null,
     currentThread: null as {
       id: string
       title: string
@@ -62,6 +64,8 @@ describe("ChatContainer", () => {
       messages: [],
       status: "idle",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
       currentThread: null,
       currentWorkspace: null,
       sendMessage: vi.fn(),
@@ -127,6 +131,36 @@ describe("ChatContainer", () => {
     render(<ChatContainer />)
     expect(screen.getByText("Something went wrong")).toBeDefined()
     expect(screen.getByText("Connection failed")).toBeDefined()
+  })
+
+  test("shows a blocking loading state while chat is preparing", () => {
+    chatMocks.state.status = "preparing"
+    chatMocks.state.preparingLabel = "Preparing Codex"
+    chatMocks.state.preparingDetail = "Warming the local Codex runtime for chat."
+    chatMocks.state.inputDisabled = true
+    chatMocks.state.inputDisabledReason = "Warming the local Codex runtime for chat."
+    render(<ChatContainer />)
+    expect(screen.getByTestId("composer-loading-overlay")).toBeDefined()
+    expect(screen.getByText("Start a conversation")).toBeDefined()
+    expect(screen.queryByText("Something went wrong")).toBeNull()
+  })
+
+  test("keeps transcript messages visible while chat is preparing", () => {
+    chatMocks.state.status = "preparing"
+    chatMocks.state.preparingLabel = "Preparing Codex"
+    chatMocks.state.preparingDetail = "Warming the local Codex runtime for chat."
+    chatMocks.state.inputDisabled = true
+    chatMocks.state.inputDisabledReason = "Warming the local Codex runtime for chat."
+    chatMocks.state.messages = [
+      { id: "1", role: "user", content: "Hello", timestamp: Date.now() },
+      { id: "2", role: "assistant", content: "Still loading", timestamp: Date.now() },
+    ]
+
+    render(<ChatContainer />)
+
+    expect(screen.getByText("Hello")).toBeDefined()
+    expect(screen.getByText("Still loading")).toBeDefined()
+    expect(screen.getByTestId("composer-loading-overlay")).toBeDefined()
   })
 
   test("shows offline banner", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import type { OnboardingStepProps } from "./OnboardingWizard"
-import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { getPrimaryWsRpcClient, waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -29,21 +29,18 @@ export function PreferencesStep(_props: OnboardingStepProps) {
   useEffect(() => {
     let cancelled = false
 
-    try {
-      void getPrimaryWsRpcClient().onboarding.getPreferences()
-        .then((prefs) => {
-          if (cancelled) return
-          setStudyTimes(new Set(prefs.studyTimes.map((time) => capitalize(time))))
-          setMaxDuration(prefs.maxSessionMins)
-          setOffDays(new Set(prefs.offLimitDays))
-          setNotificationsEnabled(prefs.notificationEnabled)
-          setQuietStart(prefs.quietHoursStart)
-          setQuietEnd(prefs.quietHoursEnd)
-        })
-        .catch(() => undefined)
-    } catch {
-      // Runtime not yet initialised — keep local defaults until the server is available.
-    }
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.onboarding.getPreferences())
+      .then((prefs) => {
+        if (cancelled) return
+        setStudyTimes(new Set(prefs.studyTimes.map((time) => capitalize(time))))
+        setMaxDuration(prefs.maxSessionMins)
+        setOffDays(new Set(prefs.offLimitDays))
+        setNotificationsEnabled(prefs.notificationEnabled)
+        setQuietStart(prefs.quietHoursStart)
+        setQuietEnd(prefs.quietHoursEnd)
+      })
+      .catch(() => undefined)
 
     return () => {
       cancelled = true

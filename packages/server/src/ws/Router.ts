@@ -43,6 +43,7 @@ import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
 import type { DatabaseService } from "../db/Database.js"
 import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import type { SkillResolverService } from "../skills/SkillResolver.js"
+import type { MemorizeServiceShape } from "../memory/service.js"
 
 type RouteDependencies = {
   readonly config: AppConfig
@@ -52,6 +53,7 @@ type RouteDependencies = {
   readonly database: DatabaseService
   readonly canvasSync: CanvasSyncServiceShape
   readonly skillResolver: SkillResolverService
+  readonly memorize: MemorizeServiceShape
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -831,6 +833,19 @@ async function handleSkillsMethod(
   }
 }
 
+async function handleMemorizeMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+  switch (method) {
+    case RPC_METHODS.MEMORIZE_RUN:
+      return encodeSuccess(id, await dependencies.memorize.runIfNeeded(new Date()))
+    default:
+      return null
+  }
+}
+
 export async function routeMessage(
   raw: string,
   ws: WebSocket,
@@ -851,6 +866,7 @@ export async function routeMessage(
       ?? await handleProviderMethod(decoded, dependencies)
       ?? await handleOnboardingMethod(decoded, dependencies)
       ?? await handleSkillsMethod(decoded, dependencies)
+      ?? await handleMemorizeMethod(decoded, dependencies)
 
     if (response) {
       return { response }

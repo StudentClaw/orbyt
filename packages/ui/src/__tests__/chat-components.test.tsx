@@ -11,7 +11,7 @@ import {
 import { MarkdownContent } from "../components/chat/MarkdownContent"
 import { StreamingResponse } from "../components/chat/StreamingResponse"
 import { ToolCallIndicator } from "../components/chat/ToolCallIndicator"
-import { MessageBubble } from "../components/chat/MessageBubble"
+import { MessageBubble, formatMessageTimestamp } from "../components/chat/MessageBubble"
 import { ChatEmptyState } from "../components/chat/ChatEmptyState"
 import { ErrorBanner } from "../components/chat/ErrorBanner"
 import { ChatStatusBadge } from "../components/chat/ChatStatusBadge"
@@ -179,11 +179,17 @@ describe("MessageBubble", () => {
 
     const row = screen.getByTestId("user-message-row")
     const bubble = screen.getByTestId("user-message-bubble")
+    const footer = screen.getByTestId("user-message-footer")
 
     expect(screen.getByText("Hello")).toBeDefined()
     expect(row.className.includes("justify-end")).toBe(true)
     expect(bubble.className.includes("bg-primary")).toBe(true)
     expect(bubble.className.includes("text-left")).toBe(true)
+    expect(footer.textContent).toContain(formatMessageTimestamp(now))
+    expect(footer.querySelector('[aria-hidden="true"]')).not.toBeNull()
+    expect(screen.queryByRole("button", { name: "Copy message" })).toBeNull()
+    fireEvent.mouseEnter(row)
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeDefined()
     expect(screen.queryByText("You")).toBeNull()
     expect(screen.queryByText(/ago/)).toBeNull()
   })
@@ -225,9 +231,16 @@ describe("MessageBubble", () => {
     const message: ChatMessage = { id: "2", role: "assistant", content: "**Bold response**", timestamp: now }
     render(<MessageBubble message={message} />)
 
+    const row = screen.getByTestId("assistant-message-row")
     const response = screen.getByTestId("assistant-response")
+    const footer = screen.getByTestId("assistant-message-footer")
 
     expect(screen.getByText("Bold response")).toBeDefined()
+    expect(footer.textContent).toContain(formatMessageTimestamp(now))
+    expect(footer.querySelector('[aria-hidden="true"]')).not.toBeNull()
+    expect(screen.queryByRole("button", { name: "Copy response" })).toBeNull()
+    fireEvent.mouseEnter(row)
+    expect(screen.getByRole("button", { name: "Copy response" })).toBeDefined()
     expect(screen.queryByText("SC")).toBeNull()
     expect(screen.queryByText(/ago/)).toBeNull()
     expect(response.className.includes("border")).toBe(false)
@@ -253,6 +266,7 @@ describe("MessageBubble", () => {
 
     render(<MessageBubble message={message} />)
 
+    fireEvent.mouseEnter(screen.getByTestId("assistant-message-row"))
     const copyButton = screen.getByRole("button", { name: "Copy response" })
     await act(async () => {
       fireEvent.click(copyButton)
@@ -270,11 +284,47 @@ describe("MessageBubble", () => {
     expect(screen.getByRole("button", { name: "Copy response" })).toBeDefined()
   })
 
+  test("user messages copy plain text and briefly swap to copied state", async () => {
+    vi.useFakeTimers()
+
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    })
+
+    const message: ChatMessage = {
+      id: "2b",
+      role: "user",
+      content: "Copy this user message",
+      timestamp: now,
+    }
+
+    render(<MessageBubble message={message} />)
+
+    fireEvent.mouseEnter(screen.getByTestId("user-message-row"))
+    const copyButton = screen.getByRole("button", { name: "Copy message" })
+    await act(async () => {
+      fireEvent.click(copyButton)
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledWith("Copy this user message")
+    expect(screen.getByRole("button", { name: "Copied" })).toBeDefined()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeDefined()
+  })
+
   test("renders streaming assistant message", () => {
     const message: ChatMessage = { id: "3", role: "assistant", content: "Partial", timestamp: now, isStreaming: true }
     const { container } = render(<MessageBubble message={message} />)
     expect(screen.getByText("Partial")).toBeDefined()
     expect(container.querySelector(".animate-pulse")).not.toBeNull()
+    expect(screen.queryByTestId("assistant-message-footer")).toBeNull()
   })
 
   test("renders tool calls in assistant message", () => {

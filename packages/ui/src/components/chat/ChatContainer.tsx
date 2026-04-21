@@ -22,6 +22,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     messages,
     status,
     error,
+    preparingLabel,
+    preparingDetail,
     currentThread,
     currentWorkspace,
     sendMessage,
@@ -35,6 +37,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     inputDisabled,
     inputDisabledReason,
     isSending,
+    interruptPending,
+    interruptError,
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
 
@@ -89,6 +93,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   }, [userScrolledUp])
 
   const isAuthRequired = status === "auth-expired"
+  const isPreparing = status === "preparing"
 
   return (
     <div className={`flex h-full flex-col ${variant === "page" ? "mx-auto max-w-3xl" : ""}`}>
@@ -117,7 +122,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         </div>
       ) : null}
 
-      {!isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupted" ? (
+      {!isPreparing && !isAuthRequired && status !== "idle" && status !== "streaming" && status !== "interrupting" && status !== "queued" && status !== "interrupted" ? (
         <div className="px-4 pt-3">
           <ErrorBanner status={status} error={error} />
         </div>
@@ -135,7 +140,10 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
             </div>
           ) : messages.length === 0 && !isSending ? (
             <div className="flex min-h-[300px] flex-1 items-center justify-center">
-              <ChatEmptyState onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })} />
+              <ChatEmptyState
+                disabled={isPreparing}
+                onSuggestionClick={(content) => void sendMessage({ content, attachments: [] })}
+              />
             </div>
           ) : messages.length === 0 ? (
             <SendingPlaceholder />
@@ -174,6 +182,9 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         connectionState={connectionState}
         disabled={inputDisabled}
         disabledReason={inputDisabledReason}
+        loading={isPreparing}
+        loadingLabel={preparingLabel}
+        loadingDetail={preparingDetail}
         availableModels={availableModels}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
@@ -183,6 +194,8 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         pendingApproval={currentPendingApproval}
         onRespondToApproval={(decision) => void respondToApproval(decision)}
         approvalDecisionPending={approvalDecisionPending}
+        interruptPending={interruptPending}
+        interruptError={interruptError}
         skills={skills}
       />
     </div>

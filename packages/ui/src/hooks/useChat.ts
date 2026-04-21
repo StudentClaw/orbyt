@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
   ProviderApprovalDecision,
   ThreadAccessMode,
@@ -43,6 +43,38 @@ export interface ChatSendInput {
   readonly skillId?: string | null
 }
 
+function resolveInputDisabledReason(args: {
+  readonly currentWorkspace: ReturnType<typeof resolveCurrentWorkspace>
+  readonly chatState: ReturnType<typeof resolveChatState>
+}): string | null {
+  const { currentWorkspace, chatState } = args
+
+  if (!currentWorkspace) {
+    return "Select a folder to start chatting."
+  }
+
+  if (currentWorkspace.kind === "filesystem" && currentWorkspace.availability === "missing") {
+    return "Relink or remove this missing folder before sending messages."
+  }
+
+  switch (chatState.status) {
+    case "preparing":
+      return chatState.preparingDetail ?? "Preparing Codex before opening the composer."
+    case "auth-expired":
+      return chatState.error ?? "Finish the Codex sign-in flow before sending messages."
+    case "error":
+      return chatState.error ?? "Chat is still starting up."
+    case "rate-limited":
+      return chatState.error ?? "Codex is rate limited right now."
+    default:
+      return null
+  }
+}
+
+function canSendWithStatus(status: ReturnType<typeof resolveChatState>["status"]): boolean {
+  return status === "idle" || status === "interrupted"
+}
+
 export function useChat(selection?: ChatSelectionInput) {
   const snapshot = useRuntimeOrchestrationSnapshot()
   const connectionStatus = useRuntimeConnectionStatus()
@@ -54,6 +86,9 @@ export function useChat(selection?: ChatSelectionInput) {
   const [accessModeMutationPending, setAccessModeMutationPending] = useState(false)
   const [approvalDecisionPendingId, setApprovalDecisionPendingId] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [interruptPendingThreadId, setInterruptPendingThreadId] = useState<string | null>(null)
+  const [interruptError, setInterruptError] = useState<string | null>(null)
+  const interruptRpcInFlightRef = useRef(false)
 
   const selectedWorkspaceId = selection?.workspaceId ?? selectedWorkspaceIdFromUi
   const selectedThreadId = selection?.threadId ?? selectedThreadIdFromUi
@@ -70,9 +105,33 @@ export function useChat(selection?: ChatSelectionInput) {
     return buildChatMessages(snapshot, currentThread?.id ?? null, providerToolCallsByTurnId)
   }, [currentThread?.id, providerToolCallsByTurnId, snapshot])
 
+  const interruptRequested =
+    interruptPendingThreadId !== null
+    && currentThread?.id === interruptPendingThreadId
+
   const chatState = useMemo(() => {
-    return resolveChatState(snapshot, currentThread, connectionStatus)
-  }, [connectionStatus, currentThread, snapshot])
+    return resolveChatState(snapshot, currentThread, connectionStatus, interruptRequested)
+  }, [connectionStatus, currentThread, interruptRequested, snapshot])
+
+  useEffect(() => {
+    if (!interruptPendingThreadId) {
+      return
+    }
+
+    const pendingThread = snapshot?.threads.find((thread) => thread.id === interruptPendingThreadId) ?? null
+    if (!pendingThread) {
+      setInterruptPendingThreadId(null)
+      return
+    }
+
+    if (
+      pendingThread.status === "interrupted"
+      || pendingThread.status === "completed"
+      || pendingThread.status === "idle"
+    ) {
+      setInterruptPendingThreadId(null)
+    }
+  }, [interruptPendingThreadId, snapshot])
 
   const currentPendingApproval = useMemo(() => {
     if (!snapshot || !currentThread) {
@@ -83,22 +142,18 @@ export function useChat(selection?: ChatSelectionInput) {
   }, [currentThread, snapshot])
 
   const inputDisabledReason = useMemo(() => {
-    if (!currentWorkspace) {
-      return "Select a folder to start chatting."
-    }
-
-    if (currentWorkspace.kind === "filesystem" && currentWorkspace.availability === "missing") {
-      return "Relink or remove this missing folder before sending messages."
-    }
-
-    return null
-  }, [currentWorkspace])
+    return resolveInputDisabledReason({
+      currentWorkspace,
+      chatState,
+    })
+  }, [chatState, currentWorkspace])
 
   const sendMessage = useCallback(async ({ content, attachments, skillId }: ChatSendInput) => {
     const trimmed = content.trim()
     if (
       (trimmed.length === 0 && attachments.length === 0)
       || connectionStatus.phase !== "connected"
+      || !canSendWithStatus(chatState.status)
       || !currentWorkspace
       || inputDisabledReason
     ) {
@@ -129,6 +184,7 @@ export function useChat(selection?: ChatSelectionInput) {
     }
   }, [
     actions,
+    chatState.status,
     connectionStatus.phase,
     currentThread?.id,
     currentWorkspace,
@@ -144,8 +200,35 @@ export function useChat(selection?: ChatSelectionInput) {
       return
     }
 
-    await actions.interruptTurn(activeThreadId)
-  }, [actions, currentThread?.id, selectedThreadId])
+    if (interruptRpcInFlightRef.current || interruptPendingThreadId === activeThreadId) {
+      return
+    }
+
+    const threadStatus = currentThread?.status ?? null
+    if (
+      threadStatus !== "streaming"
+      && threadStatus !== "queued"
+      && threadStatus !== "interrupting"
+    ) {
+      return
+    }
+
+    interruptRpcInFlightRef.current = true
+    setInterruptPendingThreadId(activeThreadId)
+    setInterruptError(null)
+
+    try {
+      const interrupted = await actions.interruptTurn(activeThreadId)
+      if (!interrupted) {
+        setInterruptPendingThreadId(null)
+      }
+    } catch (error: unknown) {
+      setInterruptPendingThreadId(null)
+      setInterruptError(error instanceof Error ? error.message : "Failed to stop the turn.")
+    } finally {
+      interruptRpcInFlightRef.current = false
+    }
+  }, [actions, currentThread?.id, currentThread?.status, interruptPendingThreadId, selectedThreadId])
 
   const retry = useCallback(async () => {
     await actions.retryProviderInitialize()
@@ -185,6 +268,8 @@ export function useChat(selection?: ChatSelectionInput) {
     messages,
     status: chatState.status,
     error: chatState.error,
+    preparingLabel: chatState.preparingLabel,
+    preparingDetail: chatState.preparingDetail,
     currentThread,
     currentWorkspace,
     sendMessage,
@@ -202,5 +287,7 @@ export function useChat(selection?: ChatSelectionInput) {
     inputDisabled: Boolean(inputDisabledReason),
     inputDisabledReason,
     isSending,
+    interruptPending: interruptRequested,
+    interruptError,
   }
 }

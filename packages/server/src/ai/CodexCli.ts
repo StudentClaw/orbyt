@@ -379,6 +379,9 @@ export function createCodexRuntimeInstance(
     const providerTurnId = readString(turn, "id") ?? readString(params, "turnId")
 
     if (method === "turn/started" && providerTurnId) {
+      // Fill in providerTurnId on the pending activeTurn if the notification
+      // beats the `turn/start` response. Safe to run even after registration —
+      // it is idempotent.
       const activeTurn = Array.from(activeProviderTurns.values()).find(
         (entry) =>
           entry.providerThreadId === providerThreadId && entry.providerTurnId === null,
@@ -506,11 +509,7 @@ export function createCodexRuntimeInstance(
     }
 
     if (method === "turn/completed") {
-      const resolvedProviderTurnId = activeTurn.providerTurnId ?? providerTurnId
-      if (!resolvedProviderTurnId) {
-        return
-      }
-      activeProviderTurns.delete(resolvedProviderTurnId)
+      activeProviderTurns.delete(activeTurn.localTurnId)
       clearPendingApprovalsForTurn(activeTurn.localTurnId)
       await runtimeStore.updateState({
         status: "idle",
@@ -803,29 +802,23 @@ export function createCodexRuntimeInstance(
       })
 
       let turnText = input.content
+      let preambleAddedForFirstSend = false
       if (!artifactPreambleSentThreads.has(input.localThreadId)) {
         turnText = `<system>\n${ARTIFACT_CONTRACT}\n</system>\n\n${input.content}`
         artifactPreambleSentThreads.add(input.localThreadId)
+        preambleAddedForFirstSend = true
       }
 
-      const response = await sendRequest<TurnStartResponse>("turn/start", {
-        threadId: providerThreadId,
-        input: [
-          {
-            type: "text",
-            text: turnText,
-            text_elements: [],
-          },
-        ],
-        model: input.model ?? config.codexModel,
-      })
-
-      const providerTurnId = response.turn?.id
+      // Pre-register the active turn BEFORE sending `turn/start`. Notifications
+      // (turn/started, item/*/delta, even turn/completed) can be flushed by the
+      // codex app-server before the `turn/start` JSON-RPC response returns. If
+      // we registered after the response, those notifications would be dropped
+      // and the turn would appear stuck at "thinking" indefinitely.
       const activeTurn: ActiveTurn = {
         localThreadId: input.localThreadId,
         localTurnId: input.localTurnId,
         providerThreadId,
-        providerTurnId: providerTurnId ?? null,
+        providerTurnId: null,
         onToken: input.onToken,
         onReasoning: input.onReasoning,
         onCompleted: input.onCompleted,
@@ -840,8 +833,38 @@ export function createCodexRuntimeInstance(
         reasoningIndex: 0,
         lastReasoningItemId: null,
       }
+      activeProviderTurns.set(input.localTurnId, activeTurn)
 
+      let response: TurnStartResponse
+      try {
+        response = await sendRequest<TurnStartResponse>("turn/start", {
+          threadId: providerThreadId,
+          input: [
+            {
+              type: "text",
+              text: turnText,
+              text_elements: [],
+            },
+          ],
+          model: input.model ?? config.codexModel,
+        })
+      } catch (error) {
+        // Registration rollback: drop the pre-registered turn so a retry can
+        // start cleanly, and undo the first-send preamble flag so the next
+        // attempt still carries the system contract.
+        activeProviderTurns.delete(input.localTurnId)
+        if (preambleAddedForFirstSend) {
+          artifactPreambleSentThreads.delete(input.localThreadId)
+        }
+        throw error
+      }
+
+      const providerTurnId = response.turn?.id
       if (!providerTurnId) {
+        activeProviderTurns.delete(input.localTurnId)
+        if (preambleAddedForFirstSend) {
+          artifactPreambleSentThreads.delete(input.localThreadId)
+        }
         throw new ProviderRuntimeFailure(
           "codex_turn_start_failed",
           "Codex did not return a provider turn id.",
@@ -849,7 +872,10 @@ export function createCodexRuntimeInstance(
         )
       }
 
-      activeProviderTurns.set(providerTurnId, activeTurn)
+      // Adopt the providerTurnId. A `turn/started` notification may have
+      // beaten us here and already set this field — that's fine, it is the
+      // same id.
+      activeTurn.providerTurnId = providerTurnId
     },
     listPendingApprovals: () => {
       return Array.from(pendingApprovalRequests.values()).map((entry) => entry.approval)

@@ -1,5 +1,5 @@
 import { beforeEach, describe, test, expect, vi } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { IpcChannel, type ChatModel, type TurnAttachmentInput } from "@student-claw/contracts"
 import { PromptInput } from "../components/chat/PromptInput"
@@ -82,28 +82,47 @@ describe("PromptInput", () => {
 
   test("renders textarea with placeholder", () => {
     render(<PromptInput {...defaultProps} />)
-    expect(screen.getByPlaceholderText("What would you like to know?")).toBeDefined()
+    expect(screen.getByText("What would you like to know?")).toBeDefined()
   })
 
   test("shows connecting placeholder when connecting", () => {
     render(<PromptInput {...defaultProps} connectionState="connecting" />)
-    expect(screen.getByPlaceholderText("Connecting to Student Claw...")).toBeDefined()
+    expect(screen.getByText("Connecting to Student Claw...")).toBeDefined()
   })
 
   test("shows reconnecting placeholder when disconnected", () => {
     render(<PromptInput {...defaultProps} connectionState="disconnected" />)
-    expect(screen.getByPlaceholderText("Reconnecting...")).toBeDefined()
+    expect(screen.getByText("Reconnecting...")).toBeDefined()
   })
 
   test("shows wait placeholder when streaming", () => {
     render(<PromptInput {...defaultProps} status="streaming" />)
-    expect(screen.getByPlaceholderText("Wait for response...")).toBeDefined()
+    expect(screen.getByText("Wait for response...")).toBeDefined()
+  })
+
+  test("renders a loading overlay and locks the composer while preparing", () => {
+    render(
+      <PromptInput
+        {...defaultProps}
+        disabled={true}
+        disabledReason="Warming the local Codex runtime for chat."
+        loading={true}
+        loadingLabel="Preparing Codex"
+        loadingDetail="Warming the local Codex runtime for chat."
+      />,
+    )
+
+    const overlay = screen.getByTestId("composer-loading-overlay")
+    expect(overlay).toBeDefined()
+    expect(within(overlay).getByRole("progressbar", { name: "Runtime readiness progress" })).toBeDefined()
+    expect(screen.getByLabelText("Chat message input").getAttribute("aria-disabled")).toBe("true")
+    expect(screen.getByLabelText("Send message").hasAttribute("disabled")).toBe(true)
   })
 
   test("disables textarea when disconnected", () => {
     render(<PromptInput {...defaultProps} connectionState="disconnected" />)
     const textarea = screen.getByLabelText("Chat message input")
-    expect(textarea.hasAttribute("disabled")).toBe(true)
+    expect(textarea.getAttribute("aria-disabled")).toBe("true")
   })
 
   test("send button is disabled when empty", () => {
@@ -164,6 +183,83 @@ describe("PromptInput", () => {
     render(<PromptInput {...defaultProps} status="streaming" onInterrupt={onInterrupt} />)
     await user.click(screen.getByLabelText("Stop generating"))
     expect(onInterrupt).toHaveBeenCalledOnce()
+  })
+
+  test("shows Stop button while status is queued", () => {
+    render(<PromptInput {...defaultProps} status="queued" />)
+    expect(screen.getByLabelText("Stop generating")).toBeDefined()
+    expect(screen.queryByLabelText("Send message")).toBeNull()
+  })
+
+  test("shows disabled Stop with Stopping… label while status is interrupting", () => {
+    render(<PromptInput {...defaultProps} status="interrupting" />)
+    const stopBtn = screen.getByLabelText("Stopping…")
+    expect(stopBtn).toBeDefined()
+    expect(stopBtn.hasAttribute("disabled")).toBe(true)
+    expect(screen.getByTestId("interrupt-pending-hint")).toBeDefined()
+  })
+
+  test("shows disabled Stop when interruptPending is true during streaming", () => {
+    render(<PromptInput {...defaultProps} status="streaming" interruptPending={true} />)
+    const stopBtn = screen.getByLabelText("Stopping…")
+    expect(stopBtn.hasAttribute("disabled")).toBe(true)
+    expect(stopBtn.getAttribute("data-pending")).toBe("true")
+  })
+
+  test("rapid double-click fires onInterrupt exactly once when interruptPending is true", async () => {
+    const onInterrupt = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        interruptPending={true}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    const stopBtn = screen.getByLabelText("Stopping…")
+    await user.click(stopBtn)
+    await user.click(stopBtn)
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  test("does not fire Send when transitioning from streaming to interrupting", async () => {
+    const onSend = vi.fn()
+    const onInterrupt = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        onSend={onSend}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    rerender(
+      <PromptInput
+        {...defaultProps}
+        status="interrupting"
+        onSend={onSend}
+        onInterrupt={onInterrupt}
+      />,
+    )
+    const stopBtn = screen.getByLabelText("Stopping…")
+    await user.click(stopBtn)
+    expect(onSend).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText("Send message")).toBeNull()
+  })
+
+  test("renders interruptError with role alert", () => {
+    render(
+      <PromptInput
+        {...defaultProps}
+        status="streaming"
+        interruptError="Failed to stop the turn."
+      />,
+    )
+    const alert = screen.getByTestId("interrupt-error")
+    expect(alert.getAttribute("role")).toBe("alert")
+    expect(alert.textContent).toBe("Failed to stop the turn.")
   })
 
   test("shows the selected model label", () => {
@@ -478,7 +574,9 @@ describe("PromptInput", () => {
       expect(screen.getByTestId("drag-drop-overlay")).toBeDefined()
 
       fireEvent(composerArea, createFileDragEvent("drop", [file]))
-      expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+      await waitFor(() => {
+        expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+      })
     })
 
     test("sends dropped attachments with the message", async () => {

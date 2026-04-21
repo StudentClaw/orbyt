@@ -68,7 +68,7 @@ beforeAll(() => {
   if (!existsSync(path.join(extensionDir, "dist/index.js"))) {
     throw new Error("template-mcp build did not produce dist/index.js")
   }
-})
+}, 60_000)
 
 afterEach(async () => {
   while (tempDirs.length > 0) {
@@ -192,5 +192,5 @@ describe("server PluginGateway", () => {
       await gateway?.dispose()
       await manager.dispose()
     }
-  })
+  }, 60_000)
 })

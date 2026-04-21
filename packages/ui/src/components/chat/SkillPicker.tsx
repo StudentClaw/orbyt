@@ -20,7 +20,7 @@ interface SkillPickerProps {
   readonly onDismiss: () => void
 }
 
-export function SkillPicker({ skills, filter, onSelect, onDismiss }: SkillPickerProps) {
+export function SkillPicker({ skills, filter, onSelect, onDismiss: _onDismiss }: SkillPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const visible = skills.filter((s) => {

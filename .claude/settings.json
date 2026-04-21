@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/rereynrd/School/student-claw/.claude/hooks/graphify_arch.py"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Glob|Grep",
