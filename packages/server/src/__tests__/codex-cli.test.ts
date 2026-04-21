@@ -111,12 +111,13 @@ async function loadCodexCli(options: {
   readonly codexBinaryPath: string
   readonly logPath: string
   readonly pluginGatewayHarness: ReturnType<typeof createPluginGatewayHarness>
+  readonly codexRequestTimeoutMs?: number
 }) {
   const configLayer = Layer.succeed(ConfigService, {
     ...defaultConfig,
     wsAuthToken: "a".repeat(64),
     codexBinaryPath: options.codexBinaryPath,
-    codexRequestTimeoutMs: 5_000,
+    codexRequestTimeoutMs: options.codexRequestTimeoutMs ?? 5_000,
     pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
     pluginGatewayMcpBearerToken: "gateway-secret",
     pluginGatewayMcpServerName: "student-claw",
@@ -148,6 +149,7 @@ function createFakeCodexBinary(
   logPath: string,
   options?: {
     readonly approvalCommand?: string
+    readonly emitNotificationsBeforeTurnStartResponse?: boolean
   },
 ): string {
   const dir = createTempDir()
@@ -171,6 +173,9 @@ if (args[0] === "app-server") {
     gatewayToken: process.env.STUDENT_CLAW_GATEWAY_BEARER_TOKEN ?? null,
   })
   const approvalCommand = ${JSON.stringify(options?.approvalCommand ?? null)}
+  const emitNotificationsBeforeTurnStartResponse = ${JSON.stringify(
+    options?.emitNotificationsBeforeTurnStartResponse ?? false,
+  )}
   const providerThreadId = "provider_thread_1"
   const providerTurnId = "provider_turn_1"
 
@@ -200,6 +205,36 @@ if (args[0] === "app-server") {
           : message.method === "turn/start"
             ? { turn: { id: providerTurnId } }
             : {}
+
+    if (message.method === "turn/start" && emitNotificationsBeforeTurnStartResponse) {
+      // Reproduce the race: flush the full notification stream for the turn
+      // before sending the turn/start JSON-RPC response. Pre-registration
+      // in streamTurn is required for these to be routed correctly.
+      process.stdout.write(JSON.stringify({
+        method: "turn/started",
+        params: { threadId: providerThreadId, turnId: providerTurnId },
+      }) + "\\n")
+      process.stdout.write(JSON.stringify({
+        method: "item/agentMessage/delta",
+        params: {
+          threadId: providerThreadId,
+          turnId: providerTurnId,
+          delta: "hello",
+          itemId: "item_1",
+        },
+      }) + "\\n")
+      process.stdout.write(JSON.stringify({
+        method: "turn/completed",
+        params: {
+          threadId: providerThreadId,
+          turn: { id: providerTurnId, status: "completed" },
+        },
+      }) + "\\n")
+      setTimeout(() => {
+        process.stdout.write(JSON.stringify({ id: message.id, result }) + "\\n")
+      }, 20)
+      return
+    }
 
     process.stdout.write(JSON.stringify({ id: message.id, result }) + "\\n")
 
@@ -562,6 +597,53 @@ describe("CodexCli gateway wiring", () => {
     } finally {
       await runtimeA.shutdown()
       await runtimeB.shutdown()
+      // fall through to the outer finally below
+    }
+  })
+
+  test("routes notifications that arrive before the turn/start response", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      emitNotificationsBeforeTurnStartResponse: true,
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const { codex } = await loadCodexCli({
+      codexBinaryPath: fakeCodexBinary,
+      logPath,
+      pluginGatewayHarness,
+    })
+
+    const tokens: string[] = []
+    let completed = false
+
+    try {
+      await codex.streamTurn({
+        localThreadId: "thread_race",
+        localTurnId: "turn_race",
+        content: "Say hi",
+        cwd: "/repo",
+        onToken: async (token) => {
+          tokens.push(token)
+        },
+        onReasoning: async () => undefined,
+        onCompleted: async () => {
+          completed = true
+        },
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      // The notification stream was flushed before the turn/start response
+      // returned. Pre-registration must ensure the delta and completion land
+      // on the correct active turn, otherwise the turn appears stuck.
+      await sleep(80)
+
+      expect(tokens.join("")).toBe("hello")
+      expect(completed).toBe(true)
+    } finally {
+      await codex.shutdown()
     }
   })
 })

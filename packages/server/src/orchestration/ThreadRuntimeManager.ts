@@ -83,6 +83,9 @@ type ThreadRuntimeManagerOptions = {
   readonly turnInactivityTimeoutMs?: number
   readonly turnWatchdogTickMs?: number
   readonly interruptEscalationMs?: number
+  readonly prewarmBackoffBaseMs?: number
+  readonly prewarmBackoffMaxMs?: number
+  readonly onPrewarmFailure?: (error: unknown) => void
 }
 
 export interface ThreadRuntimeManagerService {
@@ -116,6 +119,8 @@ export class ThreadRuntimeManager extends Context.Tag("ThreadRuntimeManager")<
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 90_000
 const DEFAULT_WATCHDOG_TICK_MS = 5_000
 const DEFAULT_INTERRUPT_ESCALATION_MS = 5_000
+const DEFAULT_PREWARM_BACKOFF_BASE_MS = 1_000
+const DEFAULT_PREWARM_BACKOFF_MAX_MS = 60_000
 
 function normalizeFailure(error: unknown): ProviderRuntimeFailure {
   if (error instanceof ProviderRuntimeFailure) {
@@ -144,6 +149,10 @@ export function createThreadRuntimeManager(
   const turnWatchdogTickMs = options.turnWatchdogTickMs ?? DEFAULT_WATCHDOG_TICK_MS
   const interruptEscalationMs =
     options.interruptEscalationMs ?? DEFAULT_INTERRUPT_ESCALATION_MS
+  const prewarmBackoffBaseMs =
+    options.prewarmBackoffBaseMs ?? DEFAULT_PREWARM_BACKOFF_BASE_MS
+  const prewarmBackoffMaxMs =
+    options.prewarmBackoffMaxMs ?? DEFAULT_PREWARM_BACKOFF_MAX_MS
   const slots = new Map<string, ThreadRuntimeSlot>()
   const queuedTurns: ManagedTurnInput[] = []
   const inFlightTurnTasks = new Set<Promise<void>>()
@@ -152,6 +161,8 @@ export function createThreadRuntimeManager(
   let bootstrapWarmPromise: Promise<void> | null = null
   let admissionChain: Promise<unknown> = Promise.resolve()
   let shuttingDown = false
+  let prewarmFailureCount = 0
+  let prewarmBackoffTimer: ReturnType<typeof setTimeout> | null = null
 
   // Single admission mutex: every state transition that reads/writes slot capacity
   // or the queued-turns list serializes through this chain. This is the only
@@ -220,7 +231,13 @@ export function createThreadRuntimeManager(
   }
 
   const claimNewRuntime = (): CodexCliService => {
-    if (bootstrapRuntime) {
+    // Only hand out the bootstrap runtime once its warm-up has resolved. If a
+    // submission arrives while bootstrap init is still pending, a failure in
+    // that init would otherwise be inherited by an unrelated user turn —
+    // surfacing as a spurious "stuck at thinking" followed by a retry loop.
+    // Spawning a fresh runtime in that window costs one extra subprocess but
+    // decouples failure domains.
+    if (bootstrapRuntime && !bootstrapWarmPromise) {
       const runtime = bootstrapRuntime
       bootstrapRuntime = null
       return runtime
@@ -238,6 +255,9 @@ export function createThreadRuntimeManager(
     if (shuttingDown || outcome === "retry" || outcome === "failed") {
       slots.delete(slot.threadId)
       await slot.runtime.shutdown()
+      // A slot was freed (and the shutdown guard will short-circuit on the
+      // shuttingDown branch). Refill the spare if the pool now has headroom.
+      schedulePrewarm()
       return
     }
 
@@ -445,6 +465,9 @@ export function createThreadRuntimeManager(
     }
     slots.set(input.threadId, slot)
     trackInFlightTurn(startTurnOnSlot(slot, input))
+    // Bootstrap may have been consumed by claimNewRuntime(); refill so the NEXT
+    // thread's first send is also warm. No-op when the pool is full.
+    schedulePrewarm()
     return true
   }
 
@@ -459,6 +482,74 @@ export function createThreadRuntimeManager(
         queuedTurns.shift()
       }
     })
+
+  const warmBootstrapInternal = async (): Promise<void> => {
+    if (shuttingDown || bootstrapRuntime || bootstrapWarmPromise) {
+      if (bootstrapWarmPromise) {
+        await bootstrapWarmPromise
+      }
+      return
+    }
+    const runtime = options.runtimeFactory()
+    bootstrapRuntime = runtime
+    bootstrapWarmPromise = (async () => {
+      try {
+        await runtime.initialize()
+      } catch (error) {
+        // If pre-warming fails, clear the bootstrap reference so the next submission
+        // creates a fresh runtime on demand rather than reusing a broken process.
+        if (bootstrapRuntime === runtime) {
+          bootstrapRuntime = null
+        }
+        try {
+          await runtime.shutdown()
+        } catch {
+          // best-effort
+        }
+        throw error
+      } finally {
+        bootstrapWarmPromise = null
+      }
+    })()
+    await bootstrapWarmPromise
+  }
+
+  // Always-warm spare: keep exactly one pre-initialized runtime ready on top of the
+  // `slots` pool so the next submission in any thread can claim it instantly.
+  // Gated on `slots.size < maxActiveRuntimes` so the spare never exceeds the process
+  // budget — when the pool is full, the next send will queue anyway and a spare
+  // cannot help.
+  const schedulePrewarm = (): void => {
+    if (shuttingDown) return
+    if (bootstrapRuntime || bootstrapWarmPromise) return
+    if (slots.size >= maxActiveRuntimes) return
+    if (prewarmBackoffTimer) return
+
+    void warmBootstrapInternal()
+      .then(() => {
+        prewarmFailureCount = 0
+      })
+      .catch((error) => {
+        prewarmFailureCount += 1
+        try {
+          options.onPrewarmFailure?.(error)
+        } catch {
+          // ignore listener errors
+        }
+        if (shuttingDown) return
+        const delay = Math.min(
+          prewarmBackoffBaseMs * 2 ** (prewarmFailureCount - 1),
+          prewarmBackoffMaxMs,
+        )
+        prewarmBackoffTimer = setTimeout(() => {
+          prewarmBackoffTimer = null
+          schedulePrewarm()
+        }, delay)
+        if (typeof (prewarmBackoffTimer as { unref?: () => void }).unref === "function") {
+          (prewarmBackoffTimer as { unref?: () => void }).unref?.()
+        }
+      })
+  }
 
   return {
     submitTurn: async (input) =>
@@ -530,6 +621,9 @@ export function createThreadRuntimeManager(
           if (!admitted) break
           queuedTurns.shift()
         }
+
+        // Thread closed; refill the spare if the pool now has headroom.
+        schedulePrewarm()
       })
     },
     listPendingApprovals: () =>
@@ -588,36 +682,13 @@ export function createThreadRuntimeManager(
         bootstrapReady: bootstrapRuntime !== null,
       }
     },
-    warmBootstrap: async () => {
-      if (shuttingDown || bootstrapRuntime || bootstrapWarmPromise) {
-        await bootstrapWarmPromise
-        return
-      }
-      const runtime = options.runtimeFactory()
-      bootstrapRuntime = runtime
-      bootstrapWarmPromise = (async () => {
-        try {
-          await runtime.initialize()
-        } catch (error) {
-          // If pre-warming fails, clear the bootstrap reference so the next submission
-          // creates a fresh runtime on demand rather than reusing a broken process.
-          if (bootstrapRuntime === runtime) {
-            bootstrapRuntime = null
-          }
-          try {
-            await runtime.shutdown()
-          } catch {
-            // best-effort
-          }
-          throw error
-        } finally {
-          bootstrapWarmPromise = null
-        }
-      })()
-      await bootstrapWarmPromise
-    },
+    warmBootstrap: warmBootstrapInternal,
     shutdown: async () => {
       shuttingDown = true
+      if (prewarmBackoffTimer) {
+        clearTimeout(prewarmBackoffTimer)
+        prewarmBackoffTimer = null
+      }
       queuedTurns.splice(0, queuedTurns.length)
       for (const watchdog of Array.from(activeWatchdogs)) {
         watchdog.stop()

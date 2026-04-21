@@ -341,11 +341,17 @@ describe("ThreadRuntimeManager", () => {
     await runtimes[0]?.completeTurn("turn-1")
     await manager.submitTurn(createTurnInput("thread-1", "turn-2"))
 
-    expect(runtimes).toHaveLength(1)
+    // thread-1's own slot is reused for turn-2 — both turns stream on runtimes[0].
+    // A second runtime may also exist as the always-warm spare refilled after the
+    // first admission consumed the bootstrap; that one must NOT have received any
+    // stream calls because thread-1's warm slot took precedence.
     expect(runtimes[0]?.streamCalls.map((call) => call.turnId)).toEqual([
       "turn-1",
       "turn-2",
     ])
+    expect(runtimes.slice(1).every((runtime) => runtime.streamCalls.length === 0)).toBe(
+      true,
+    )
   })
 
   test("evicts the least recently used warm runtime under pressure", async () => {
@@ -498,16 +504,21 @@ describe("ThreadRuntimeManager", () => {
     expect(runtimes).toHaveLength(1)
     expect(manager.getSnapshot().bootstrapReady).toBe(true)
 
+    // First admission claims the bootstrap (runtimes[0]) for thread-1. The
+    // always-warm spare then refills in the background via schedulePrewarm().
     await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
-
-    expect(runtimes).toHaveLength(1)
-    expect(manager.getSnapshot().bootstrapReady).toBe(false)
     expect(runtimes[0]?.streamCalls.map((call) => call.turnId)).toEqual(["turn-1"])
 
-    // A second submission from a different thread requires a fresh runtime because
-    // the bootstrap has already been claimed.
+    // Yield microtasks so the refill's initialize() resolves.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+
+    // Second thread claims the refilled spare. Total factory calls: initial
+    // bootstrap + one refill = 2 runtimes, at which point slots fill the cap and
+    // no further refill happens.
     await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
     expect(runtimes).toHaveLength(2)
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
   })
 
   test("inactivity watchdog fails a stalled turn and recycles its slot", async () => {
@@ -591,6 +602,151 @@ describe("ThreadRuntimeManager", () => {
 
     await runtime.completeTurn("turn-1")
     expect(stalledFailure).toBeNull()
+  })
+
+  test("refills bootstrap after first submission consumes it", async () => {
+    const { factory } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+    })
+
+    await manager.warmBootstrap()
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    // The refill was scheduled synchronously inside tryAdmitTurnUnlocked but its
+    // initialize() is async; a microtask flush lets it resolve.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+  })
+
+  test("does not refill bootstrap when the pool has no headroom", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+    await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    // Pool is full (2 active slots out of 2). No spare should be spawned.
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+    const runtimesBeforeRelease = runtimes.length
+
+    // Free a slot by completing a turn and disposing the thread. After disposal
+    // the pool drops to 1 active slot — refill should kick in.
+    await runtimes[0]?.completeTurn("turn-1")
+    await manager.disposeThread("thread-1")
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+    expect(runtimes.length).toBe(runtimesBeforeRelease + 1)
+  })
+
+  test("refills bootstrap after LRU eviction frees a slot", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    let tick = 0
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+      now: () => ++tick,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+    await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
+    await runtimes[0]?.completeTurn("turn-1")
+    await runtimes[1]?.completeTurn("turn-2")
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    // Pool is full of warm-idle slots. No spare has been refilled.
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+
+    // Admitting a third thread evicts the LRU warm slot, then claims a fresh
+    // runtime. After admission, slots.size is still 2 — but the newly-admitted
+    // thread replaces the evicted one, so the refill gate still sees no headroom.
+    // We explicitly dispose the third thread to free a slot and verify refill.
+    await manager.submitTurn(createTurnInput("thread-3", "turn-3"))
+    await runtimes[runtimes.length - 1]?.completeTurn("turn-3")
+    await manager.disposeThread("thread-3")
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+  })
+
+  test("does not refill bootstrap during shutdown", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 2,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    const runtimesBeforeShutdown = runtimes.length
+
+    await manager.shutdown()
+
+    // After shutdown, disposing or releasing would normally trigger a refill.
+    // The shuttingDown guard in schedulePrewarm must prevent that.
+    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+    expect(runtimes.length).toBe(runtimesBeforeShutdown)
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+  })
+
+  test("backs off on repeated prewarm failure and retries with exponential delay", async () => {
+    const makeFailingRuntime = (): CodexCliService => ({
+      initialize: async () => {
+        throw new Error("codex boot failed")
+      },
+      retryInitialize: async () => true,
+      startAuth: async () => true,
+      reloadGatewayTools: async () => true,
+      streamTurn: async () => undefined,
+      listPendingApprovals: () => [],
+      respondToApproval: async (approvalRequestId, decision) => ({
+        approvalRequestId,
+        threadId: "",
+        turnId: "",
+        decision,
+        resolved: false,
+      }),
+      interruptTurn: async () => false,
+      shutdown: async () => undefined,
+    })
+
+    const failures: unknown[] = []
+    const failureTimestamps: number[] = []
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: makeFailingRuntime,
+      maxActiveRuntimes: 2,
+      prewarmBackoffBaseMs: 30,
+      prewarmBackoffMaxMs: 500,
+      onPrewarmFailure: (error) => {
+        failures.push(error)
+        failureTimestamps.push(Date.now())
+      },
+    })
+
+    // Admission itself succeeds (claimNewRuntime returns the runtime synchronously
+    // — initialize() is only called by the bootstrap path). The schedulePrewarm
+    // call at the end of tryAdmitTurnUnlocked then attempts to warm a spare, which
+    // fails, recording the failure and scheduling a backoff retry.
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    // Wait long enough for at least two retries (30ms + 60ms + jitter).
+    await new Promise<void>((resolve) => setTimeout(resolve, 200))
+
+    expect(failures.length).toBeGreaterThanOrEqual(2)
+    // Delay between the 1st and 2nd recorded failures should be >= base backoff.
+    if (failureTimestamps.length >= 2) {
+      expect(failureTimestamps[1]! - failureTimestamps[0]!).toBeGreaterThanOrEqual(25)
+    }
+
+    await manager.shutdown()
   })
 
   test("disposeThread shuts down the owned runtime and admits the next queued thread", async () => {

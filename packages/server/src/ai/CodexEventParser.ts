@@ -270,17 +270,34 @@ export function findActiveTurnByProviderIds(
   providerThreadId: string | null,
   providerTurnId: string | null,
 ): ActiveTurn | null {
+  // Active turns are keyed by localTurnId, so we always scan. There are rarely
+  // more than a handful of active turns; the O(n) cost is negligible and lets
+  // us correlate notifications that arrive before the `turn/start` response
+  // has populated `providerTurnId`.
   if (providerTurnId) {
-    return activeProviderTurns.get(providerTurnId) ?? null
+    for (const entry of activeProviderTurns.values()) {
+      if (entry.providerTurnId === providerTurnId) {
+        return entry
+      }
+    }
   }
 
   if (!providerThreadId) {
     return null
   }
 
-  return Array.from(activeProviderTurns.values()).find((entry) => {
-    return entry.providerThreadId === providerThreadId
-  }) ?? null
+  // Fall back to matching by thread. Prefer a turn that has no providerTurnId
+  // yet (the one still awaiting its `turn/start` response) so early
+  // notifications adopt the correct registration.
+  let threadMatch: ActiveTurn | null = null
+  for (const entry of activeProviderTurns.values()) {
+    if (entry.providerThreadId !== providerThreadId) continue
+    if (!entry.providerTurnId) {
+      return entry
+    }
+    threadMatch = threadMatch ?? entry
+  }
+  return threadMatch
 }
 
 // ============================================================================
