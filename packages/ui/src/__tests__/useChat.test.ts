@@ -126,6 +126,17 @@ describe("useChat", () => {
   })
 
   test("sendMessage reuses the selected thread", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed", currentTurnId: null }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed", completedAt: "2026-04-09T00:02:00.000Z" }],
+      providerStatus: "idle",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "idle",
+      },
+    }
+
     const { result } = renderHook(() => useChat())
     await act(async () => {
       await result.current.sendMessage({ content: "Hello", attachments: [] })
@@ -150,6 +161,17 @@ describe("useChat", () => {
   })
 
   test("sendMessage passes the selected model through to the runtime", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed", currentTurnId: null }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed", completedAt: "2026-04-09T00:02:00.000Z" }],
+      providerStatus: "idle",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "idle",
+      },
+    }
+
     const { result } = renderHook(() => useChat({ model: "o3" }))
 
     await act(async () => {
@@ -157,6 +179,35 @@ describe("useChat", () => {
     })
 
     expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], "o3")
+  })
+
+  test("sendMessage is a no-op while chat is still preparing", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed", currentTurnId: null }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed", completedAt: "2026-04-09T00:02:00.000Z" }],
+      providerStatus: "idle",
+      providerRuntime: {
+        adapter: "stub",
+        status: "idle",
+        authState: "unknown",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-09T00:01:00.000Z",
+      },
+    }
+
+    const { result } = renderHook(() => useChat())
+
+    expect(result.current.status).toBe("preparing")
+    expect(result.current.inputDisabled).toBe(true)
+
+    await act(async () => {
+      await result.current.sendMessage({ content: "Hello", attachments: [] })
+    })
+
+    expect(hookMocks.sendTurn).not.toHaveBeenCalled()
+    expect(hookMocks.createThread).not.toHaveBeenCalled()
   })
 
   test("interrupt calls the runtime interrupt action", async () => {

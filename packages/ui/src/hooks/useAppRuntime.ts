@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { getPrimaryWsRpcClient, waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import {
   clearChatSelection,
   closeChatPanel,
@@ -46,6 +46,7 @@ import {
   useIsOnboardingComplete as useOnboardingComplete,
   useIsHydrationComplete,
 } from "@/rpc/onboardingState"
+import { useRuntimeStartupState as useStartupState } from "@/rpc/runtimeStartupState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
 import type { TurnAttachmentInput } from "@student-claw/contracts"
@@ -56,6 +57,10 @@ export function useRuntimeConnectionStatus() {
 
 export function useRuntimeBootstrap() {
   return useDesktopBootstrap()
+}
+
+export function useRuntimeStartupState() {
+  return useStartupState()
 }
 
 export function useRuntimeServerConfig() {
@@ -222,11 +227,24 @@ export function useSkills(): readonly SkillEntry[] {
   const [skills, setSkills] = useState<readonly SkillEntry[]>([])
 
   useEffect(() => {
-    void getPrimaryWsRpcClient().skills.list().then((result) => {
-      setSkills(result.skills)
-    }).catch(() => {
-      // skills unavailable — leave empty
-    })
+    let cancelled = false
+
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.skills.list())
+      .then((result) => {
+        if (!cancelled) {
+          setSkills(result.skills)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkills([])
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return skills

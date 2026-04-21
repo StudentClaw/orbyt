@@ -1,5 +1,5 @@
 import { beforeEach, describe, test, expect, vi } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { IpcChannel, type ChatModel, type TurnAttachmentInput } from "@student-claw/contracts"
 import { PromptInput } from "../components/chat/PromptInput"
@@ -82,28 +82,47 @@ describe("PromptInput", () => {
 
   test("renders textarea with placeholder", () => {
     render(<PromptInput {...defaultProps} />)
-    expect(screen.getByPlaceholderText("What would you like to know?")).toBeDefined()
+    expect(screen.getByText("What would you like to know?")).toBeDefined()
   })
 
   test("shows connecting placeholder when connecting", () => {
     render(<PromptInput {...defaultProps} connectionState="connecting" />)
-    expect(screen.getByPlaceholderText("Connecting to Student Claw...")).toBeDefined()
+    expect(screen.getByText("Connecting to Student Claw...")).toBeDefined()
   })
 
   test("shows reconnecting placeholder when disconnected", () => {
     render(<PromptInput {...defaultProps} connectionState="disconnected" />)
-    expect(screen.getByPlaceholderText("Reconnecting...")).toBeDefined()
+    expect(screen.getByText("Reconnecting...")).toBeDefined()
   })
 
   test("shows wait placeholder when streaming", () => {
     render(<PromptInput {...defaultProps} status="streaming" />)
-    expect(screen.getByPlaceholderText("Wait for response...")).toBeDefined()
+    expect(screen.getByText("Wait for response...")).toBeDefined()
+  })
+
+  test("renders a loading overlay and locks the composer while preparing", () => {
+    render(
+      <PromptInput
+        {...defaultProps}
+        disabled={true}
+        disabledReason="Warming the local Codex runtime for chat."
+        loading={true}
+        loadingLabel="Preparing Codex"
+        loadingDetail="Warming the local Codex runtime for chat."
+      />,
+    )
+
+    const overlay = screen.getByTestId("composer-loading-overlay")
+    expect(overlay).toBeDefined()
+    expect(within(overlay).getByRole("progressbar", { name: "Runtime readiness progress" })).toBeDefined()
+    expect(screen.getByLabelText("Chat message input").getAttribute("aria-disabled")).toBe("true")
+    expect(screen.getByLabelText("Send message").hasAttribute("disabled")).toBe(true)
   })
 
   test("disables textarea when disconnected", () => {
     render(<PromptInput {...defaultProps} connectionState="disconnected" />)
     const textarea = screen.getByLabelText("Chat message input")
-    expect(textarea.hasAttribute("disabled")).toBe(true)
+    expect(textarea.getAttribute("aria-disabled")).toBe("true")
   })
 
   test("send button is disabled when empty", () => {
@@ -555,7 +574,9 @@ describe("PromptInput", () => {
       expect(screen.getByTestId("drag-drop-overlay")).toBeDefined()
 
       fireEvent(composerArea, createFileDragEvent("drop", [file]))
-      expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+      await waitFor(() => {
+        expect(screen.queryByTestId("drag-drop-overlay")).toBeNull()
+      })
     })
 
     test("sends dropped attachments with the message", async () => {

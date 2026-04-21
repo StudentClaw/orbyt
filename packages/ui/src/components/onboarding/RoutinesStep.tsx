@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import type { OnboardingStepProps } from "./OnboardingWizard"
-import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { getPrimaryWsRpcClient, waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
@@ -17,16 +17,13 @@ export function RoutinesStep(_props: OnboardingStepProps) {
   useEffect(() => {
     let cancelled = false
 
-    try {
-      void getPrimaryWsRpcClient().onboarding.getRoutines()
-        .then((routines) => {
-          if (cancelled) return
-          setActiveCells(new Set(routines.cells.map((cell) => `${cell.dayOfWeek}-${cell.hourOfDay}`)))
-        })
-        .catch(() => undefined)
-    } catch {
-      // Runtime not yet initialised — keep local defaults until the server is available.
-    }
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.onboarding.getRoutines())
+      .then((routines) => {
+        if (cancelled) return
+        setActiveCells(new Set(routines.cells.map((cell) => `${cell.dayOfWeek}-${cell.hourOfDay}`)))
+      })
+      .catch(() => undefined)
 
     return () => {
       cancelled = true

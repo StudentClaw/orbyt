@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 
 interface ChatEmptyStateProps {
   readonly onSuggestionClick: (content: string) => void
+  readonly disabled?: boolean
 }
 
 const SUGGESTIONS = [
@@ -12,7 +13,7 @@ const SUGGESTIONS = [
   "Help me get started",
 ] as const
 
-export function ChatEmptyState({ onSuggestionClick }: ChatEmptyStateProps) {
+export function ChatEmptyState({ onSuggestionClick, disabled = false }: ChatEmptyStateProps) {
   return (
     <Empty className="border-0">
       <EmptyHeader>
@@ -28,6 +29,7 @@ export function ChatEmptyState({ onSuggestionClick }: ChatEmptyStateProps) {
               key={suggestion}
               variant="outline"
               size="sm"
+              disabled={disabled}
               onClick={() => onSuggestionClick(suggestion)}
             >
               {suggestion}

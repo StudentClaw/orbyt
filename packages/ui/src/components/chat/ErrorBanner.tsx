@@ -10,7 +10,7 @@ interface ErrorBannerProps {
 }
 
 export function ErrorBanner({ status, error, onRetry, onReauth }: ErrorBannerProps) {
-  if (status === "idle" || status === "streaming" || status === "interrupted") {
+  if (status === "preparing" || status === "idle" || status === "streaming" || status === "interrupted") {
     return null
   }
 

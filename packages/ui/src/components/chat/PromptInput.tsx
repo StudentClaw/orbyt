@@ -38,6 +38,7 @@ import {
 import type { ChatStatus } from "@/hooks/chat-model"
 import type { WsConnectionPhase } from "@/rpc/wsConnectionState"
 import { cn } from "@/lib/utils"
+import { ReadinessProgressBar } from "@/components/runtime/ReadinessProgressBar"
 import { ModelSelector } from "./ModelSelector"
 
 interface PromptInputProps {
@@ -52,6 +53,9 @@ interface PromptInputProps {
   readonly connectionState: WsConnectionPhase
   readonly disabled?: boolean
   readonly disabledReason?: string | null
+  readonly loading?: boolean
+  readonly loadingLabel?: string | null
+  readonly loadingDetail?: string | null
   readonly availableModels: readonly ChatModel[]
   readonly selectedModel: string
   readonly onModelChange: (model: string) => void
@@ -307,6 +311,9 @@ export function PromptInput({
   connectionState,
   disabled = false,
   disabledReason = null,
+  loading = false,
+  loadingLabel = null,
+  loadingDetail = null,
   availableModels,
   selectedModel,
   onModelChange,
@@ -336,14 +343,16 @@ export function PromptInput({
   const isInterrupting = status === "interrupting"
   const isQueued = status === "queued"
   const isTurnActive = isStreaming || isQueued || isInterrupting
+  const inputLocked = disabled || loading
   const showStopButton = isTurnActive
-  const canSend = (!isComposerEmpty || attachments.length > 0) && !isTurnActive && isConnected && !disabled
+  const canSend = (!isComposerEmpty || attachments.length > 0) && !isTurnActive && isConnected && !inputLocked
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
-  const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isTurnActive
+  const attachmentControlsDisabled = !canPickAttachments || !isConnected || inputLocked || isTurnActive
   const canDropFiles = !attachmentControlsDisabled && Boolean(typeof window !== "undefined" && window.electronAPI?.getPathForFile)
   const accessControlDisabled =
     !isConnected
     || !accessMode
+    || inputLocked
     || isTurnActive
     || accessModeUpdatePending
     || pendingApproval !== null
@@ -453,7 +462,7 @@ export function PromptInput({
   const handleActualSubmit = useCallback(async () => {
     const text = composerRef.current?.getText() ?? ""
     const skillId = composerRef.current?.getSkillId() ?? null
-    if ((!text && attachments.length === 0 && !skillId) || isStreaming || !isConnected || disabled) {
+    if ((!text && attachments.length === 0 && !skillId) || isStreaming || !isConnected || inputLocked) {
       return
     }
 
@@ -471,7 +480,7 @@ export function PromptInput({
     composerRef.current?.clear()
     setAttachments([])
     setAttachmentError(null)
-  }, [attachments.length, disabled, isConnected, isStreaming, onSend, validateAttachments])
+  }, [attachments.length, inputLocked, isConnected, isStreaming, onSend, validateAttachments])
 
   const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
     await handleActualSubmit()
@@ -549,7 +558,7 @@ export function PromptInput({
     e.stopPropagation()
 
     const getPathForFile = window.electronAPI?.getPathForFile
-    if (!getPathForFile || !isConnected || disabled || isStreaming) return
+    if (!getPathForFile || !isConnected || inputLocked || isStreaming) return
 
     const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) return
@@ -570,7 +579,7 @@ export function PromptInput({
     }
 
     setAttachments(current => mergeComposerAttachments(current, metadata.map(toComposerAttachment)))
-  }, [disabled, isConnected, isStreaming, resolveAttachmentMetadata])
+  }, [inputLocked, isConnected, isStreaming, resolveAttachmentMetadata])
 
   const handleDefaultAccessSelect = useCallback(() => {
     if (accessMode !== "default") {
@@ -620,12 +629,30 @@ export function PromptInput({
               onDismiss={handleSkillDismiss}
             />
           ) : null}
+          {loading ? (
+            <div
+              className="absolute inset-0 z-40 flex items-center rounded-[2rem] border border-border/70 bg-background/94 px-4 py-3 shadow-sm backdrop-blur-sm"
+              data-testid="composer-loading-overlay"
+            >
+              <div className="w-full space-y-2">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {loadingLabel ?? "Preparing Codex"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {loadingDetail ?? "Warming the local Codex runtime for chat."}
+                  </p>
+                </div>
+                <ReadinessProgressBar activeStage={2} />
+              </div>
+            </div>
+          ) : null}
 
           <RegistryPromptInput
             onSubmit={handleSubmit}
             inputGroupClassName={cn(
               "h-auto rounded-[2rem] border-border/60 bg-card/85 shadow-sm backdrop-blur-sm dark:bg-card/80",
-              disabled && "opacity-70",
+              inputLocked && "opacity-70",
             )}
           >
             {attachments.length > 0 ? (
@@ -638,13 +665,13 @@ export function PromptInput({
 
             <RichComposer
               ref={composerRef}
-              disabled={!isConnected || disabled}
+              disabled={!isConnected || inputLocked}
               placeholder={
                 connectionState === "connecting"
                   ? "Connecting to Student Claw..."
                   : !isConnected
                     ? "Reconnecting..."
-                  : disabled && disabledReason
+                  : inputLocked && disabledReason
                     ? disabledReason
                   : isInterrupting || interruptPending
                     ? "Stopping..."
@@ -686,7 +713,7 @@ export function PromptInput({
                     models={availableModels}
                     selectedModel={selectedModel}
                     onModelChange={onModelChange}
-                    disabled={!isConnected || isStreaming}
+                    disabled={!isConnected || isTurnActive || inputLocked}
                   />
 
                   <DropdownMenu>

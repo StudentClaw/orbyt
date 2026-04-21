@@ -85,6 +85,70 @@ describe("resolveChatState", () => {
     expect(result.error).toBeNull()
   })
 
+  test("returns preparing while provider startup is still initializing", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "initializing",
+      providerRuntime: {
+        adapter: "codex",
+        status: "initializing",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("preparing")
+    expect(result.preparingLabel).toBe("Preparing Codex")
+  })
+
+  test("returns preparing while provider auth is still unknown on cold start", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "offline",
+      providerRuntime: {
+        adapter: "codex",
+        status: "offline",
+        authState: "unknown",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("preparing")
+  })
+
+  test("returns preparing while the snapshot is still using the fallback stub runtime", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "idle",
+      providerRuntime: {
+        adapter: "stub",
+        status: "idle",
+        authState: "unknown",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("preparing")
+  })
+
   test("returns interrupting when local interruptRequested is set and turn is queued", () => {
     const thread = makeThread({ status: "queued" })
     const turn = makeTurn({ status: "queued" })
@@ -126,6 +190,27 @@ describe("resolveChatState", () => {
     expect(result.status).toBe("interrupted")
   })
 
+  test("auth-required stops preparing and hands off to sign-in UI", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "auth_required",
+      providerRuntime: {
+        adapter: "codex",
+        status: "auth_required",
+        authState: "auth_required",
+        lastError: { code: "codex_auth_required", message: "Sign in again." },
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("auth-expired")
+  })
+
   test("ignores stale local interruptRequested when the turn is already idle/completed", () => {
     const thread = makeThread({ status: "completed", currentTurnId: null })
     const turn = makeTurn({ status: "completed" })
@@ -154,6 +239,27 @@ describe("resolveChatState", () => {
     const result = resolveChatState(snapshot, thread, connected, false)
 
     expect(result.status).toBe("queued")
+  })
+
+  test("returns error for degraded runtime after startup", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "degraded",
+      providerRuntime: {
+        adapter: "codex",
+        status: "degraded",
+        authState: "authenticated",
+        lastError: { code: "codex_degraded", message: "Runtime failed." },
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("error")
   })
 
   test("offline takes priority over local interrupt flag", () => {

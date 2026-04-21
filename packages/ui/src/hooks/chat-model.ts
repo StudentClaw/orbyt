@@ -16,9 +16,11 @@ export type ProviderGuidance = {
   showRetry: boolean
   showAuth: boolean
 }
+
 import type { WsConnectionStatus } from "@/rpc/wsConnectionState"
 
 export type ChatStatus =
+  | "preparing"
   | "idle"
   | "queued"
   | "streaming"
@@ -28,6 +30,13 @@ export type ChatStatus =
   | "rate-limited"
   | "auth-expired"
   | "error"
+
+export interface ChatState {
+  readonly status: ChatStatus
+  readonly error: string | null
+  readonly preparingLabel: string | null
+  readonly preparingDetail: string | null
+}
 
 export interface ToolCallInfo {
   readonly toolName: string
@@ -57,6 +66,12 @@ export function getChatStatusPresentation(status: ChatStatus): {
   pulse: boolean
 } | undefined {
   switch (status) {
+    case "preparing":
+      return {
+        label: "Preparing",
+        dotClassName: "bg-sky-500",
+        pulse: true,
+      }
     case "idle":
       return {
         label: "Ready",
@@ -298,11 +313,13 @@ export function resolveChatState(
   thread: OrchestrationThread | null,
   connectionStatus: WsConnectionStatus,
   interruptRequested: boolean = false,
-): { status: ChatStatus; error: string | null } {
+): ChatState {
   if (connectionStatus.phase !== "connected") {
     return {
       status: "offline",
       error: connectionStatus.lastError,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -310,6 +327,8 @@ export function resolveChatState(
     return {
       status: "idle",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -323,6 +342,32 @@ export function resolveChatState(
     return {
       status: "auth-expired",
       error: guidance?.detail ?? "Finish the Codex login flow, then retry the runtime.",
+      preparingLabel: null,
+      preparingDetail: null,
+    }
+  }
+
+  const providerIsPreparing =
+    snapshot.providerRuntime.status === "initializing"
+    || (
+      snapshot.providerRuntime.authState === "unknown"
+      && (
+        snapshot.providerRuntime.adapter === "stub"
+        || snapshot.providerRuntime.status === "idle"
+        || !snapshot.ready
+        || snapshot.providerStatus === "offline"
+        || snapshot.providerRuntime.status === "offline"
+      )
+    )
+
+  if (providerIsPreparing) {
+    return {
+      status: "preparing",
+      error: null,
+      preparingLabel: "Preparing Codex",
+      preparingDetail: snapshot.providerRuntime.status === "initializing"
+        ? "Warming the local Codex runtime for chat."
+        : "Finalizing the local chat runtime before opening the conversation.",
     }
   }
 
@@ -335,6 +380,8 @@ export function resolveChatState(
     return {
       status: "error",
       error: guidance?.detail ?? connectionStatus.lastError ?? "AI unavailable right now. The local runtime is not ready.",
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -343,6 +390,8 @@ export function resolveChatState(
     return {
       status: "interrupted",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -350,6 +399,8 @@ export function resolveChatState(
     return {
       status: "interrupting",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -363,6 +414,8 @@ export function resolveChatState(
     return {
       status: "interrupting",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -370,6 +423,8 @@ export function resolveChatState(
     return {
       status: "queued",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -380,6 +435,8 @@ export function resolveChatState(
     return {
       status: "streaming",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
@@ -387,11 +444,15 @@ export function resolveChatState(
     return {
       status: "rate-limited",
       error: guidance?.detail ?? null,
+      preparingLabel: null,
+      preparingDetail: null,
     }
   }
 
   return {
     status: "idle",
     error: null,
+    preparingLabel: null,
+    preparingDetail: null,
   }
 }

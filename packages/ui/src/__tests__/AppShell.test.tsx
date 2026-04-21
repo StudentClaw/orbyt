@@ -176,4 +176,29 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId("chat-status-badge").textContent).toContain("Offline")
   })
+
+  test("shows a preparing chat badge while the provider is still warming", () => {
+    shellMocks.pathname = "/chat"
+    shellMocks.snapshot = {
+      workspaces: [],
+      threads: [],
+      turns: [],
+      pendingApprovals: [],
+      providerStatus: "offline",
+      providerRuntime: {
+        adapter: "codex",
+        status: "offline",
+        authState: "unknown",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-09T00:00:00.000Z",
+      },
+      ready: true,
+      lastSequence: 1,
+    }
+
+    render(<AppShell />)
+
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Preparing")
+  })
 })

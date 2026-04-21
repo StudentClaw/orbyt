@@ -5,6 +5,7 @@ import { startCanvasStateSync, loadCanvasData } from "./canvasState"
 import { startDashboardStateSync } from "./dashboardState"
 import { startPlannerStateSync } from "./plannerState"
 import { startOrchestrationStateSync } from "./orchestrationState"
+import { setRuntimeStartupState } from "./runtimeStartupState"
 import { startServerStateSync } from "./serverState"
 import { setDesktopBootstrap, setWsConnectionStatus } from "./wsConnectionState"
 import { hydrateOnboardingStateFromServer, setOnboardingRpcClient } from "./onboardingState"
@@ -81,8 +82,8 @@ function cacheBootstrap(bootstrap: DesktopBootstrap): void {
   setDesktopBootstrap(bootstrap)
 }
 
-function startWsConnectionStateSync(transport: WsTransport): void {
-  transport.onStatusChange((status) => {
+function startWsConnectionStateSync(transport: WsTransport): () => void {
+  return transport.onStatusChange((status) => {
     setWsConnectionStatus({
       phase: status.phase,
       wsUrl: status.wsUrl,
@@ -100,29 +101,87 @@ export function startAppRuntime(): Promise<void> {
     return runtimeStartPromise
   }
 
+  setRuntimeStartupState({
+    phase: "bootstrapping",
+    label: "Starting Student Claw",
+    detail: "Connecting to Student Claw",
+    error: null,
+  })
+
   runtimeStartPromise = (async () => {
-    const rendererBootstrap = await getRendererBootstrap()
-    if (!rendererBootstrap) {
-      throw new Error("Electron bootstrap or standalone dev bootstrap is required to start the app runtime")
+    const cleanups: Array<() => void> = []
+
+    try {
+      const rendererBootstrap = await getRendererBootstrap()
+      if (!rendererBootstrap) {
+        throw new Error("Electron bootstrap or standalone dev bootstrap is required to start the app runtime")
+      }
+
+      cacheBootstrap(rendererBootstrap)
+      setRuntimeStartupState({
+        phase: "connecting",
+        label: "Starting Student Claw",
+        detail: "Connecting to Student Claw",
+        error: null,
+      })
+
+      const client = getPrimaryWsRpcClient(rendererBootstrap)
+      cleanups.push(startWsConnectionStateSync(client.transport))
+      client.transport.registerBootstrapRefresher(getRendererBootstrap)
+
+      await client.transport.connect()
+
+      setRuntimeStartupState({
+        phase: "hydrating",
+        label: "Loading your workspace",
+        detail: "Loading Student Claw settings",
+        error: null,
+      })
+
+      setOnboardingRpcClient(client)
+      await hydrateOnboardingStateFromServer(client)
+
+      const orchestrationSync = startOrchestrationStateSync(client)
+      cleanups.push(orchestrationSync.stop)
+      cleanups.push(startServerStateSync(client))
+      cleanups.push(startCanvasStateSync(client))
+      cleanups.push(startDashboardStateSync(client))
+      cleanups.push(startPlannerStateSync(client))
+      cleanups.push(startActivityStateSync(client))
+
+      setRuntimeStartupState({
+        phase: "hydrating",
+        label: "Loading your workspace",
+        detail: "Loading chat state",
+        error: null,
+      })
+
+      await orchestrationSync.initialSnapshotReady
+
+      void loadCanvasData(client)
+
+      setRuntimeStartupState({
+        phase: "ready",
+        label: "Student Claw ready",
+        detail: "",
+        error: null,
+      })
+    } catch (error: unknown) {
+      for (const cleanup of cleanups.reverse()) {
+        cleanup()
+      }
+
+      const message = error instanceof Error ? error.message : "Failed to start Student Claw."
+
+      setRuntimeStartupState({
+        phase: "error",
+        label: "Student Claw couldn't start",
+        detail: "Retry the local runtime startup.",
+        error: message,
+      })
+
+      throw error
     }
-
-    cacheBootstrap(rendererBootstrap)
-    const client = getPrimaryWsRpcClient(rendererBootstrap)
-    startWsConnectionStateSync(client.transport)
-    client.transport.registerBootstrapRefresher(getRendererBootstrap)
-
-    await client.transport.connect()
-
-    setOnboardingRpcClient(client)
-    await hydrateOnboardingStateFromServer(client)
-
-    startServerStateSync(client)
-    startOrchestrationStateSync(client)
-    startCanvasStateSync(client)
-    startDashboardStateSync(client)
-    startPlannerStateSync(client)
-    startActivityStateSync(client)
-    void loadCanvasData(client)
   })()
 
   runtimeStartPromise.catch(() => {
