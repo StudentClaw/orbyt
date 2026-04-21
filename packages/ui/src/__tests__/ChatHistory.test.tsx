@@ -204,7 +204,7 @@ describe("ChatHistory", () => {
     }
     historyMocks.createWorkspace.mockResolvedValue("workspace-2")
     window.electronAPI = {
-      ...window.electronAPI,
+      ...(window.electronAPI as NonNullable<typeof window.electronAPI>),
       invoke: vi.fn().mockResolvedValue("/class-notes"),
     }
 

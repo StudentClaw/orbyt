@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@student-claw/contracts": path.resolve(__dirname, "../contracts/src/index.ts"),
+      "@student-claw/shared-runtime": path.resolve(__dirname, "../shared-runtime/src/index.ts"),
     },
   },
 });

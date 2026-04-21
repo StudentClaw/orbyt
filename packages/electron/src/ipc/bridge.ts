@@ -10,6 +10,7 @@ import {
 } from "electron"
 import { spawn } from "node:child_process"
 import { existsSync, statSync } from "node:fs"
+import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import {
@@ -20,12 +21,17 @@ import {
   type DesktopBootstrap,
   type ExtensionRegistryEntry,
   type PluginGetStatusParams,
+  type PluginGetRuntimeLogsParams,
   type PluginGetAuthStatusParams,
   type PluginInstallBundledParams,
   type PluginAuthStatus,
   type PluginLifecycleActionResult,
   type PluginManagementActionResult,
+  type PluginReadinessEvent,
   type PluginRetryParams,
+  type PluginRetryClass,
+  type PluginRevealPermissionSettingsParams,
+  type PluginRevealPermissionSettingsResult,
   type PluginSaveAuthParams,
   type PluginSaveAuthResult,
   type PluginStartParams,
@@ -38,6 +44,7 @@ import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
 import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
+import { PluginRuntimeLogBuffer } from "../plugins/plugin-runtime-log-buffer.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "../push/push-manager.js"
 
@@ -137,7 +144,7 @@ function resolvePushManager(
  */
 export function registerIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pluginRuntimeLogs?: PluginRuntimeLogBuffer; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   registerHandler(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
@@ -336,27 +343,72 @@ function emitPluginLifecycle(payload: { pluginId: string; status: ExtensionRegis
   }
 }
 
+function emitPluginReadiness(payload: PluginReadinessEvent): void {
+  const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+  for (const window of windows) {
+    window.webContents.send(IpcChannel.PLUGIN_READINESS, payload)
+  }
+}
+
+function isPluginRetryClass(value: unknown): value is PluginRetryClass {
+  return value === "retry_bridge_start" || value === "retry_permission" || value === "retry_plugin_start"
+}
+
+async function revealPluginPermissionSettings(
+  bootstrap: DesktopBootstrap,
+  params: PluginRevealPermissionSettingsParams,
+): Promise<PluginRevealPermissionSettingsResult> {
+  if (params.pluginId !== "apple-calendar-mcp") {
+    return { ok: false, pluginId: params.pluginId, reason: "unsupported_plugin" }
+  }
+
+  if (bootstrap.platform !== "darwin") {
+    return { ok: false, pluginId: params.pluginId, reason: "platform_unsupported" }
+  }
+
+  const candidates = [
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
+    "x-apple.systempreferences:com.apple.SystemSettings",
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      await shell.openExternal(candidate)
+      return { ok: true, pluginId: params.pluginId }
+    } catch {
+      continue
+    }
+  }
+
+  return { ok: false, pluginId: params.pluginId, reason: "open_failed" }
+}
+
 function registerPluginIpcHandlers(
   bootstrap: DesktopBootstrap,
-  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pushManager?: PushManager },
+  runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pluginRuntimeLogs?: PluginRuntimeLogBuffer; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
   const runtimeServices = runtime ?? (() => {
     const createdRuntime = createPluginRuntime({
       currentDir,
       isPackaged: app.isPackaged,
       userDataPath: app.getPath("userData"),
+      platform: process.platform,
+      systemVersion: os.release(),
       emitLifecycleEvent: emitPluginLifecycle,
+      emitReadinessEvent: emitPluginReadiness,
     })
 
     return {
       pluginManager: createdRuntime.manager,
       pluginAuthService: createdRuntime.authService,
       pluginEnabledStore: createdRuntime.enabledStore,
+      pluginRuntimeLogs: createdRuntime.runtimeLogs,
     }
   })()
   const pluginManager = runtimeServices.pluginManager
   const pluginAuthService = runtimeServices.pluginAuthService
   const pluginEnabledStore = runtimeServices.pluginEnabledStore
+  const pluginRuntimeLogs = runtimeServices.pluginRuntimeLogs
 
   registerHandler(IpcChannel.PLUGIN_LIST, (): ExtensionRegistryEntry[] => {
     return pluginManager.list()
@@ -386,12 +438,45 @@ function registerPluginIpcHandlers(
 
   registerHandler(
     IpcChannel.PLUGIN_RETRY,
-    (_event, params: PluginRetryParams): Promise<PluginLifecycleActionResult> | PluginLifecycleActionResult => {
+    async (_event, params: PluginRetryParams): Promise<PluginLifecycleActionResult> => {
       if (!bootstrap.featureFlags.pluginSystem) {
         return buildPluginLifecycleActionResult(bootstrap, params.pluginId)
       }
 
-      return pluginManager.retry(params.pluginId)
+      if (!isPluginRetryClass(params.retryClass)) {
+        return {
+          ok: false,
+          pluginId: params.pluginId,
+          reason: "invalid_retry_class",
+        }
+      }
+
+      if (params.retryClass === "retry_permission") {
+        const permissionResult = await revealPluginPermissionSettings(bootstrap, { pluginId: params.pluginId })
+        if (!permissionResult.ok) {
+          return {
+            ok: false,
+            pluginId: params.pluginId,
+            reason: "start_failed",
+          }
+        }
+
+        const refreshed = await pluginManager.refreshReadiness(params.pluginId)
+        return {
+          ok: true,
+          pluginId: params.pluginId,
+          status: refreshed?.status ?? pluginManager.getStatus(params.pluginId)?.status ?? "discovered",
+        }
+      }
+
+      return await pluginManager.retry(params.pluginId, params.retryClass)
+    },
+  )
+
+  registerHandler(
+    IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS,
+    async (_event, params: PluginRevealPermissionSettingsParams): Promise<PluginRevealPermissionSettingsResult> => {
+      return await revealPluginPermissionSettings(bootstrap, params)
     },
   )
 
@@ -436,6 +521,15 @@ function registerPluginIpcHandlers(
     IpcChannel.PLUGIN_GET_STATUS,
     (_event, params: PluginGetStatusParams): ExtensionRegistryEntry | null => {
       return pluginManager.getStatus(params.pluginId)
+    },
+  )
+
+  registerHandler(
+    IpcChannel.PLUGIN_GET_RUNTIME_LOGS,
+    (_event, params?: PluginGetRuntimeLogsParams) => {
+      return {
+        entries: pluginRuntimeLogs?.getEntries(params) ?? [],
+      }
     },
   )
 

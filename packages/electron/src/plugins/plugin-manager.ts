@@ -1,29 +1,36 @@
+import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import path from "node:path"
 import {
   type ExtensionLifecycleStatus,
   type ExtensionRegistryEntry,
+  type PluginRuntimeLogEntry,
+  type PluginReadinessEvent,
+  type PluginRetryClass,
+  type ExtensionRuntimeReadiness,
   type PluginLifecycleActionResult,
   type PluginLifecycleEvent,
 } from "@student-claw/contracts"
 import {
   type AvailablePluginRegistryRecord,
 } from "./plugin-registry.js"
+import type { PluginRuntimePreparation } from "./plugin-runtime-preparation.js"
 import { PluginSandbox, type PluginSandboxOptions } from "./plugin-sandbox.js"
 import type { PluginEnabledStore } from "./plugin-enabled-store.js"
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>
 
-type PluginSandboxLike = Pick<PluginSandbox, "start" | "listTools" | "callTool" | "sendMessage" | "stop" | "onDidClose" | "pid">
+type PluginSandboxLike = Pick<PluginSandbox, "start" | "listTools" | "callTool" | "sendMessage" | "stop" | "onDidClose" | "onRuntimeLog" | "pid">
 
 type PluginRuntimeState = {
   status: ExtensionLifecycleStatus
+  readiness?: ExtensionRuntimeReadiness
   lastError?: string
   sandbox: PluginSandboxLike | null
   idleTimer: TimerHandle | null
 }
 
-type PluginSandboxFactory = (record: AvailablePluginRegistryRecord) => PluginSandboxLike
+type PluginSandboxFactory = (record: AvailablePluginRegistryRecord, runtimeEnv?: Record<string, string>) => PluginSandboxLike
 
 type PluginRegistrySource = Pick<
   import("./plugin-registry.js").PluginRegistry,
@@ -33,10 +40,14 @@ type PluginRegistrySource = Pick<
 export type PluginManagerOptions = {
   registry: PluginRegistrySource
   emitLifecycleEvent?: (event: PluginLifecycleEvent) => void
+  emitReadinessEvent?: (event: PluginReadinessEvent) => void
+  emitRuntimeLog?: (entry: PluginRuntimeLogEntry) => void
   createSandbox?: PluginSandboxFactory
   idleTimeoutMs?: number | null
   retryDelaysMs?: number[]
   getCredentialMessage?: (pluginId: string) => unknown | null
+  prepareRuntime?: (record: AvailablePluginRegistryRecord) => Promise<PluginRuntimePreparation | null> | PluginRuntimePreparation | null
+  cleanupRuntime?: (record: AvailablePluginRegistryRecord) => Promise<void> | void
   now?: () => Date
   scheduleTimeout?: typeof globalThis.setTimeout
   clearScheduledTimeout?: typeof globalThis.clearTimeout
@@ -64,7 +75,10 @@ export function applyPluginSandboxEnv(baseEnv: Record<string, string>, isElectro
   }
 }
 
-export function buildSandboxOptions(record: AvailablePluginRegistryRecord): PluginSandboxOptions {
+export function buildSandboxOptions(
+  record: AvailablePluginRegistryRecord,
+  runtimeEnv: Record<string, string> = {},
+): PluginSandboxOptions {
   const extensionDir = path.dirname(record.manifestPath)
   const entryPath = path.resolve(extensionDir, record.entry.manifest.transport.entry)
 
@@ -72,9 +86,12 @@ export function buildSandboxOptions(record: AvailablePluginRegistryRecord): Plug
     throw new Error(`Runtime entry not found for ${record.entry.manifest.id}: ${entryPath}`)
   }
 
-  const env = applyPluginSandboxEnv(Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-  ))
+  const env = applyPluginSandboxEnv({
+    ...Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    ),
+    ...runtimeEnv,
+  })
 
   return {
     pluginId: record.entry.manifest.id,
@@ -87,21 +104,30 @@ export function buildSandboxOptions(record: AvailablePluginRegistryRecord): Plug
 
 export class PluginManager {
   private readonly runtimes = new Map<string, PluginRuntimeState>()
+  private readonly activeOperationContexts = new Map<string, { retryClass?: PluginRetryClass; correlationId?: string }>()
   private readonly emitLifecycleEvent: (event: PluginLifecycleEvent) => void
+  private readonly emitReadinessEvent: (event: PluginReadinessEvent) => void
+  private readonly emitRuntimeLog: (entry: PluginRuntimeLogEntry) => void
   private readonly createSandbox: PluginSandboxFactory
   private readonly idleTimeoutMs: number | null
   private readonly retryDelaysMs: number[]
   private readonly getCredentialMessage: (pluginId: string) => unknown | null
+  private readonly prepareRuntime: (record: AvailablePluginRegistryRecord) => Promise<PluginRuntimePreparation | null>
+  private readonly cleanupRuntime: (record: AvailablePluginRegistryRecord) => Promise<void>
   private readonly now: () => Date
   private readonly scheduleTimeout: typeof globalThis.setTimeout
   private readonly clearScheduledTimeout: typeof globalThis.clearTimeout
 
   constructor(private readonly options: PluginManagerOptions) {
     this.emitLifecycleEvent = options.emitLifecycleEvent ?? (() => undefined)
-    this.createSandbox = options.createSandbox ?? ((record) => new PluginSandbox(buildSandboxOptions(record)))
+    this.emitReadinessEvent = options.emitReadinessEvent ?? (() => undefined)
+    this.emitRuntimeLog = options.emitRuntimeLog ?? (() => undefined)
+    this.createSandbox = options.createSandbox ?? ((record, runtimeEnv) => new PluginSandbox(buildSandboxOptions(record, runtimeEnv)))
     this.idleTimeoutMs = options.idleTimeoutMs ?? null
     this.retryDelaysMs = options.retryDelaysMs ?? [250, 500, 1000]
     this.getCredentialMessage = options.getCredentialMessage ?? (() => null)
+    this.prepareRuntime = async (record) => await (options.prepareRuntime?.(record) ?? null)
+    this.cleanupRuntime = async (record) => await (options.cleanupRuntime?.(record) ?? undefined)
     this.now = options.now ?? (() => new Date())
     this.scheduleTimeout = options.scheduleTimeout ?? globalThis.setTimeout
     this.clearScheduledTimeout = options.clearScheduledTimeout ?? globalThis.clearTimeout
@@ -143,13 +169,22 @@ export class PluginManager {
     if (!validation.ok) {
       return validation.result
     }
+    this.activeOperationContexts.delete(pluginId)
 
     const runtime = this.runtimes.get(pluginId)
     if (!runtime?.sandbox || !isRunningStatus(runtime.status)) {
+      this.clearIdleTimer(pluginId)
+      this.updateRuntime(pluginId, {
+        status: "stopped",
+        readiness: undefined,
+        sandbox: null,
+        idleTimer: null,
+      })
+      await this.cleanupRuntime(validation.record)
       return {
-        ok: false,
+        ok: true,
         pluginId,
-        reason: "not_running",
+        status: "stopped",
       }
     }
 
@@ -168,12 +203,13 @@ export class PluginManager {
     this.clearIdleTimer(pluginId)
 
     await runtime.sandbox.stop()
-
     this.updateRuntime(pluginId, {
       status: "stopped",
+      readiness: undefined,
       sandbox: null,
       idleTimer: null,
     })
+    await this.cleanupRuntime(validation.record)
 
     return {
       ok: true,
@@ -182,27 +218,67 @@ export class PluginManager {
     }
   }
 
-  async retry(pluginId: string): Promise<PluginLifecycleActionResult> {
+  async retry(pluginId: string, retryClass: PluginRetryClass = "retry_plugin_start"): Promise<PluginLifecycleActionResult> {
     const validation = this.validateLifecycleTarget(pluginId)
     if (!validation.ok) {
       return validation.result
     }
 
-    let lastFailure: PluginLifecycleActionResult = {
-      ok: false,
-      pluginId,
-      reason: "start_failed",
+    const operationContext = {
+      retryClass,
+      correlationId: randomUUID(),
+    }
+    this.activeOperationContexts.set(pluginId, operationContext)
+
+    if (retryClass === "retry_bridge_start") {
+      await this.cleanupRuntime(validation.record).catch(() => undefined)
     }
 
-    for (const delayMs of this.retryDelaysMs) {
-      await this.delay(delayMs)
-      lastFailure = await this.startOnce(validation.record)
-      if (lastFailure.ok) {
-        return lastFailure
+    try {
+      let lastFailure: PluginLifecycleActionResult = {
+        ok: false,
+        pluginId,
+        reason: "start_failed",
       }
+
+      for (const delayMs of this.retryDelaysMs) {
+        await this.delay(delayMs)
+        lastFailure = await this.startOnce(validation.record, operationContext)
+        if (lastFailure.ok) {
+          return lastFailure
+        }
+      }
+
+      return lastFailure
+    } finally {
+      this.activeOperationContexts.delete(pluginId)
+    }
+  }
+
+  async refreshReadiness(pluginId: string): Promise<ExtensionRegistryEntry | null> {
+    const validation = this.validateLifecycleTarget(pluginId)
+    if (!validation.ok) {
+      return this.getStatus(pluginId)
     }
 
-    return lastFailure
+    const current = this.runtimes.get(pluginId)
+    const runtimePreparation = await this.prepareRuntime(validation.record)
+    if (!runtimePreparation) {
+      return this.getStatus(pluginId)
+    }
+
+    const fallbackStatus = current?.status
+      ?? (this.options.enabledStore?.isEnabled(pluginId) ? "discovered" : validation.record.entry.status)
+
+    this.updateRuntime(pluginId, {
+      status: fallbackStatus,
+      readiness: runtimePreparation.readiness,
+      lastError: runtimePreparation.readiness === "ready" ? undefined : runtimePreparation.lastError,
+      sandbox: current?.sandbox ?? null,
+      idleTimer: current?.idleTimer ?? null,
+    })
+
+    return this.getStatus(pluginId)
   }
 
   async callTool(pluginId: string, toolName: string, args: Record<string, unknown> = {}) {
@@ -211,13 +287,22 @@ export class PluginManager {
       throw new Error(`Plugin ${pluginId} is not running`)
     }
 
-    const result = await runtime.sandbox.callTool(toolName, args)
-    this.updateRuntime(pluginId, {
-      ...runtime,
-      status: "active",
-    })
-    this.resetIdleTimer(pluginId, runtime.sandbox)
-    return result
+    const operationContext = {
+      correlationId: randomUUID(),
+    }
+    this.activeOperationContexts.set(pluginId, operationContext)
+
+    try {
+      const result = await runtime.sandbox.callTool(toolName, args)
+      this.updateRuntime(pluginId, {
+        ...runtime,
+        status: "active",
+      })
+      this.resetIdleTimer(pluginId, runtime.sandbox)
+      return result
+    } finally {
+      this.activeOperationContexts.delete(pluginId)
+    }
   }
 
   async autoStartEnabled(): Promise<void> {
@@ -230,20 +315,53 @@ export class PluginManager {
     await Promise.all(pluginIds.map((pluginId) => this.disposeRuntime(pluginId)))
   }
 
-  private async startOnce(record: AvailablePluginRegistryRecord): Promise<PluginLifecycleActionResult> {
+  private async startOnce(
+    record: AvailablePluginRegistryRecord,
+    eventContext: { retryClass?: PluginRetryClass; correlationId?: string } = {},
+  ): Promise<PluginLifecycleActionResult> {
     const pluginId = record.entry.manifest.id
     this.clearIdleTimer(pluginId)
 
-    const sandbox = this.createSandbox(record)
+    const runtimePreparation = await this.prepareRuntime(record)
+    if (runtimePreparation && runtimePreparation.readiness !== "ready") {
+      this.updateRuntime(pluginId, {
+        status: "error",
+        readiness: runtimePreparation.readiness,
+        lastError: runtimePreparation.lastError,
+        sandbox: null,
+        idleTimer: null,
+      })
+
+      return {
+        ok: false,
+        pluginId,
+        reason: "start_failed",
+      }
+    }
+
+    const sandbox = this.createSandbox(record, runtimePreparation?.env)
+    sandbox.onRuntimeLog((message) => {
+      this.emitRuntimeLog({
+        pluginId,
+        source: "mcp",
+        message,
+        emittedAt: this.now().toISOString(),
+        readiness: this.runtimes.get(pluginId)?.readiness,
+        lifecycleStatus: this.runtimes.get(pluginId)?.status,
+        retryClass: this.activeOperationContexts.get(pluginId)?.retryClass,
+        correlationId: this.activeOperationContexts.get(pluginId)?.correlationId,
+      })
+    })
     sandbox.onDidClose(() => {
       this.handleUnexpectedClose(pluginId, sandbox)
     })
 
     this.updateRuntime(pluginId, {
       status: "starting",
+      readiness: runtimePreparation ? "bridge_starting" : undefined,
       sandbox,
       idleTimer: null,
-    })
+    }, eventContext)
 
     try {
       await sandbox.start()
@@ -258,9 +376,10 @@ export class PluginManager {
 
       this.updateRuntime(pluginId, {
         status: "ready",
+        readiness: runtimePreparation?.readiness ?? "ready",
         sandbox,
         idleTimer: null,
-      })
+      }, eventContext)
 
       const credentialMessage = this.getCredentialMessage(pluginId)
       if (credentialMessage) {
@@ -276,9 +395,10 @@ export class PluginManager {
 
       this.updateRuntime(pluginId, {
         status: "active",
+        readiness: runtimePreparation?.readiness ?? "ready",
         sandbox,
         idleTimer: null,
-      })
+      }, eventContext)
       this.resetIdleTimer(pluginId, sandbox)
 
       return {
@@ -291,10 +411,11 @@ export class PluginManager {
 
       this.updateRuntime(pluginId, {
         status: "error",
+        readiness: runtimePreparation?.readiness ?? "error",
         lastError: message,
         sandbox: null,
         idleTimer: null,
-      })
+      }, eventContext)
       await sandbox.stop().catch(() => undefined)
 
       return {
@@ -377,17 +498,45 @@ export class PluginManager {
       ...entry,
       enabled,
       status: runtime.status,
+      readiness: runtime.readiness,
       lastError: runtime.lastError,
     }
   }
 
-  private updateRuntime(pluginId: string, runtime: PluginRuntimeState): void {
+  private updateRuntime(
+    pluginId: string,
+    runtime: PluginRuntimeState,
+    eventContext: { retryClass?: PluginRetryClass } = {},
+  ): void {
+    const previous = this.runtimes.get(pluginId)
     this.runtimes.set(pluginId, runtime)
-    this.emitLifecycleEvent({
-      pluginId,
-      status: runtime.status,
-      emittedAt: this.now().toISOString(),
-    })
+    const emittedAt = this.now().toISOString()
+
+    if (!previous || previous.status !== runtime.status) {
+      this.emitLifecycleEvent({
+        pluginId,
+        status: runtime.status,
+        emittedAt,
+      })
+    }
+
+    if (
+      runtime.readiness
+      && (
+        !previous
+        || previous.readiness !== runtime.readiness
+        || previous.lastError !== runtime.lastError
+      )
+    ) {
+      this.emitReadinessEvent({
+        pluginId,
+        readiness: runtime.readiness,
+        previousReadiness: previous?.readiness,
+        lastError: runtime.lastError,
+        retryClass: eventContext.retryClass,
+        emittedAt,
+      })
+    }
   }
 
   private clearIdleTimer(pluginId: string): void {
@@ -436,6 +585,7 @@ export class PluginManager {
     this.clearIdleTimer(pluginId)
     this.updateRuntime(pluginId, {
       status: "error",
+      readiness: runtime.readiness ? "error" : undefined,
       lastError: formatUnexpectedExitMessage(pluginId, sandbox.pid),
       sandbox: null,
       idleTimer: null,
@@ -444,13 +594,20 @@ export class PluginManager {
 
   private async disposeRuntime(pluginId: string): Promise<void> {
     this.clearIdleTimer(pluginId)
+    const record = this.options.registry.getAvailableRecord(pluginId)
     const runtime = this.runtimes.get(pluginId)
     if (!runtime?.sandbox) {
+      if (record) {
+        await this.cleanupRuntime(record).catch(() => undefined)
+      }
       this.runtimes.delete(pluginId)
       return
     }
 
     await runtime.sandbox.stop().catch(() => undefined)
+    if (record) {
+      await this.cleanupRuntime(record).catch(() => undefined)
+    }
     this.runtimes.delete(pluginId)
   }
 

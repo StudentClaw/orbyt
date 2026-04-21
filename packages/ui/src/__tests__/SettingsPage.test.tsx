@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { IpcChannel } from "@student-claw/contracts"
 
@@ -13,6 +13,7 @@ const runtimeHooks = vi.hoisted(() => ({
   useRuntimeOrchestrationSnapshot: vi.fn(),
   useOrchestrationActions: vi.fn(),
   useRuntimeServerConfig: vi.fn(),
+  useSkills: vi.fn(),
 }))
 
 vi.mock("@/hooks/useAppRuntime", () => ({
@@ -21,6 +22,7 @@ vi.mock("@/hooks/useAppRuntime", () => ({
   useRuntimeCanvasSyncProgress: runtimeHooks.useRuntimeCanvasSyncProgress,
   useRuntimeOrchestrationSnapshot: runtimeHooks.useRuntimeOrchestrationSnapshot,
   useRuntimeServerConfig: runtimeHooks.useRuntimeServerConfig,
+  useSkills: runtimeHooks.useSkills,
 }))
 
 vi.mock("@/components/dev/DevOnboardingControls", () => ({
@@ -36,12 +38,24 @@ const notificationMocks = vi.hoisted(() => ({
   requestPermission: vi.fn<() => Promise<NotificationPermission>>(),
 }))
 
+const appRuntimeMocks = vi.hoisted(() => ({
+  canvasSync: vi.fn(),
+}))
+
 vi.mock("@/lib/codexAuth", () => ({
   connectCodexAccount: codexAuthMocks.connectCodexAccount,
 }))
 
 vi.mock("qrcode", () => ({
   toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qr"),
+}))
+
+vi.mock("@/rpc/appRuntime", () => ({
+  getPrimaryWsRpcClient: () => ({
+    canvas: {
+      sync: appRuntimeMocks.canvasSync,
+    },
+  }),
 }))
 
 import { SettingsPage } from "../pages/SettingsPage"
@@ -102,6 +116,29 @@ describe("SettingsPage", () => {
       enabled: true,
     },
     {
+      kind: "available",
+      manifest: {
+        id: "apple-calendar-mcp",
+        name: "Apple Calendar",
+        description: "Local Apple Calendar integration",
+        version: "1.0.0",
+        transport: {
+          type: "local_stdio",
+          entry: "dist/index.js",
+        },
+        permissions: ["local_os.calendar.read", "local_os.calendar.write"],
+        auth: {
+          type: "none",
+        },
+        tools: [{ name: "getCalendars", description: "List calendars" }],
+        author: "student-claw",
+        homepage: "https://github.com/StudentClaw/student-claw",
+      },
+      installSource: "bundled",
+      status: "discovered",
+      enabled: false,
+    },
+    {
       kind: "invalid",
       pluginId: "broken-mcp",
       displayName: "Broken MCP",
@@ -117,6 +154,7 @@ describe("SettingsPage", () => {
     vi.clearAllMocks()
     codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
     notificationMocks.requestPermission.mockResolvedValue("granted")
+    appRuntimeMocks.canvasSync.mockResolvedValue(undefined)
 
     class MockNotification {
       static permission: NotificationPermission = "default"
@@ -137,6 +175,10 @@ describe("SettingsPage", () => {
       appVersion: "0.1.0",
     })
     runtimeHooks.useRuntimeCanvasSyncProgress.mockReturnValue(null)
+    runtimeHooks.useSkills.mockReturnValue([
+      { id: "brainstorming", name: "brainstorming", description: "Explore ideas before implementation." },
+      { id: "tdd", name: "tdd", description: "Test-driven development workflow." },
+    ])
     runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
       providerRuntime: {
         adapter: "codex",
@@ -223,8 +265,9 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
-    expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
+    expect(screen.getAllByText("Plugins").length).toBeGreaterThan(0)
     expect(screen.getByTestId("settings-plugin-disabled")).toBeDefined()
+    expect(screen.queryByTestId("settings-codex-card")).toBeNull()
 
     await navigateTo("notifications")
     await waitFor(() => {
@@ -233,54 +276,7 @@ describe("SettingsPage", () => {
     expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_GET_SETTINGS)
   })
 
-  test("shows Codex connection status from the runtime snapshot", async () => {
-    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
-      platform: "darwin",
-      featureFlags: {
-        pluginSystem: false,
-      },
-    })
-
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
-    expect(screen.getByTestId("settings-codex-card")).toBeDefined()
-    expect(screen.getByTestId("settings-codex-status").textContent).toBe("Connected")
-    expect(screen.getByTestId("settings-codex-auth-state").textContent).toContain("authenticated")
-    expect(screen.getByTestId("settings-codex-runtime-state").textContent).toContain("idle")
-  })
-
-  test("connects Codex from settings when sign-in is required", async () => {
-    const user = userEvent.setup()
-    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
-      platform: "darwin",
-      featureFlags: {
-        pluginSystem: false,
-      },
-    })
-    runtimeHooks.useRuntimeOrchestrationSnapshot.mockReturnValue({
-      providerRuntime: {
-        adapter: "codex",
-        status: "auth_required",
-        authState: "auth_required",
-        lastError: {
-          code: "codex_auth_required",
-          message: "Codex CLI is not authenticated.",
-        },
-        queuedTurnCount: 0,
-        lastUpdatedAt: new Date(0).toISOString(),
-      },
-    })
-
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
-    await user.click(screen.getByTestId("settings-codex-connect"))
-
-    expect(codexAuthMocks.connectCodexAccount).toHaveBeenCalledOnce()
-  })
-
-  test("renders discovered registry rows and manual auth fields when the plugin flag is on", async () => {
+  test("renders plugin manager filters, rows, and skill counts when the plugin flag is on", async () => {
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -297,14 +293,69 @@ describe("SettingsPage", () => {
 
     expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_LIST)
     expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId: "canvas-mcp" })
-    expect(screen.getAllByText("Canvas Assistant")).toHaveLength(2)
+    expect(screen.getByTestId("settings-plugin-filter-plugins").textContent).toContain("3")
+    expect(screen.getByTestId("settings-plugin-filter-mcps").textContent).toContain("3")
+    expect(screen.getByTestId("settings-plugin-filter-skills").textContent).toContain("2")
+    expect(screen.getAllByText("Canvas Assistant").length).toBeGreaterThan(0)
+    expect(screen.getByText("Apple Calendar")).toBeDefined()
     expect(screen.getByText("Broken MCP")).toBeDefined()
-    expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
+    expect(screen.queryByTestId("settings-plugin-auth-card-canvas-mcp")).toBeNull()
+  })
+
+  test("supports searching plugins and switching to the skills tab", async () => {
+    const user = userEvent.setup()
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-plugin-row-canvas-mcp")).toBeDefined()
+    })
+
+    await user.type(screen.getByTestId("settings-plugin-search"), "calendar")
+    expect(screen.queryByTestId("settings-plugin-row-canvas-mcp")).toBeNull()
+    expect(screen.getByTestId("settings-plugin-row-apple-calendar-mcp")).toBeDefined()
+
+    await user.click(screen.getByTestId("settings-plugin-filter-skills"))
+    await user.clear(screen.getByTestId("settings-plugin-search"))
+    expect(screen.getByTestId("settings-skill-row-brainstorming")).toBeDefined()
+    expect(screen.getByTestId("settings-skill-row-tdd")).toBeDefined()
+  })
+
+  test("navigates into a plugin detail view with breadcrumb and tools", async () => {
+    const user = userEvent.setup()
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
+
+    expect(screen.getAllByText("Canvas Assistant").length).toBeGreaterThan(0)
+    expect(screen.getByText("Exposed tools")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-tools-canvas-mcp")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-tool-canvas-mcp-list_courses")).toBeDefined()
+    expect(await screen.findByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-baseUrl")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-token")).toBeDefined()
   })
 
   test("disables Canvas sync while a sync is already in progress", async () => {
+    const user = userEvent.setup()
+
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
       featureFlags: {
@@ -324,7 +375,8 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
     })
 
-    const syncButton = screen.getByRole("button", { name: "Syncing..." })
+    await user.click(screen.getByTestId("settings-plugin-manage-canvas-mcp"))
+    const syncButton = await screen.findByRole("button", { name: "Syncing..." })
     expect(syncButton.hasAttribute("disabled")).toBe(true)
   })
 
@@ -584,8 +636,10 @@ describe("SettingsPage", () => {
 
       return null
     }) as any
-    window.electronAPI!.on = vi.fn((_channel, callback) => {
-      lifecycleListener = callback as (payload: { pluginId: string }) => void
+    window.electronAPI!.on = vi.fn((channel, callback) => {
+      if (channel === IpcChannel.PLUGIN_LIFECYCLE) {
+        lifecycleListener = callback as (payload: { pluginId: string }) => void
+      }
       return () => {
         lifecycleListener = null
       }
@@ -594,14 +648,17 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
+    const row = await screen.findByTestId("settings-plugin-row-canvas-mcp")
     await waitFor(() => {
-      expect(screen.getByText("discovered")).toBeDefined()
+      expect(within(row).getByText("discovered")).toBeDefined()
     })
 
-    ;(lifecycleListener as ((payload: { pluginId: string }) => void) | null)?.({ pluginId: "canvas-mcp" })
+    await act(async () => {
+      ;(lifecycleListener as ((payload: { pluginId: string }) => void) | null)?.({ pluginId: "canvas-mcp" })
+    })
 
     await waitFor(() => {
-      expect(screen.getByText("active")).toBeDefined()
+      expect(within(row).getByText("active")).toBeDefined()
     })
   })
 
@@ -637,9 +694,127 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
+    const row = await screen.findByTestId("settings-plugin-row-canvas-mcp")
     await waitFor(() => {
-      expect(screen.getByText("error")).toBeDefined()
+      expect(within(row).getByText("error")).toBeDefined()
     })
+  })
+
+  test("renders Apple Calendar readiness details when provided by the desktop runtime", async () => {
+    const user = userEvent.setup()
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+      if (channel === IpcChannel.PLUGIN_LIST) {
+        return registryEntries.map((entry) => (
+          entry.kind === "available" && entry.manifest.id === "apple-calendar-mcp"
+            ? {
+                ...entry,
+                enabled: true,
+                status: "error",
+                readiness: "permission_required" as const,
+                lastError: "Grant Calendar access in macOS Settings to finish enabling Apple Calendar.",
+              }
+            : entry
+        ))
+      }
+
+      if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "canvas-mcp") {
+        return {
+          pluginId: "canvas-mcp",
+          status: "not_configured" as const,
+        }
+      }
+
+      return null
+    }) as any
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-apple-calendar-mcp"))
+    const readinessCard = await screen.findByTestId("settings-plugin-readiness-card-apple-calendar-mcp")
+    expect(screen.getByTestId("settings-plugin-readiness-body-apple-calendar-mcp").textContent)
+      .toContain("Grant Calendar access in macOS Settings to finish enabling Apple Calendar.")
+    expect(within(readinessCard).getByRole("button", { name: "Grant Calendar access" })).toBeDefined()
+    expect(screen.queryByTestId("settings-plugin-auth-card-apple-calendar-mcp")).toBeNull()
+  })
+
+  test("updates Apple Calendar readiness from the dedicated readiness event without refetching the row", async () => {
+    const user = userEvent.setup()
+    let readinessListener: ((payload: { pluginId: string; readiness: "ready"; lastError?: string }) => void) | null = null
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+      if (channel === IpcChannel.PLUGIN_LIST) {
+        return registryEntries.map((entry) => (
+          entry.kind === "available" && entry.manifest.id === "apple-calendar-mcp"
+            ? {
+                ...entry,
+                enabled: true,
+                status: "error",
+                readiness: "bridge_unavailable" as const,
+                lastError: "The local bridge for Apple Calendar did not start. You can retry it.",
+              }
+            : entry
+        ))
+      }
+
+      if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "canvas-mcp") {
+        return {
+          pluginId: "canvas-mcp",
+          status: "not_configured" as const,
+        }
+      }
+
+      return null
+    }) as any
+    window.electronAPI!.on = vi.fn((channel, callback) => {
+      if (channel === IpcChannel.PLUGIN_READINESS) {
+        readinessListener = callback as (payload: { pluginId: string; readiness: "ready"; lastError?: string }) => void
+      }
+      return () => {
+        readinessListener = null
+      }
+    })
+
+    render(<SettingsPage />)
+
+    await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-apple-calendar-mcp"))
+    await screen.findByTestId("settings-plugin-readiness-card-apple-calendar-mcp")
+    expect(screen.getByTestId("settings-plugin-readiness-body-apple-calendar-mcp").textContent)
+      .toContain("The local bridge for Apple Calendar did not start. You can retry it.")
+
+    await act(async () => {
+      ;(readinessListener as ((payload: { pluginId: string; readiness: "ready"; lastError?: string }) => void) | null)?.({
+        pluginId: "apple-calendar-mcp",
+        readiness: "ready",
+        lastError: undefined,
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-plugin-readiness-body-apple-calendar-mcp").textContent)
+        .toContain("Apple Calendar tools are available.")
+    })
+    expect(
+      (window.electronAPI?.invoke as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([channel, params]) => channel === IpcChannel.PLUGIN_GET_STATUS && params?.pluginId === "apple-calendar-mcp",
+      ),
+    ).toBe(false)
   })
 
   test("saves credentials through the desktop bridge", async () => {
@@ -686,6 +861,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })
@@ -706,7 +882,7 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       const authCard = screen.getByTestId("settings-plugin-auth-card-canvas-mcp")
-      expect(within(authCard).getByText("Configured")).toBeDefined()
+      expect(within(authCard).getByText(/Status:\s*Configured/)).toBeDefined()
     })
   })
 
@@ -723,6 +899,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })
@@ -776,6 +953,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />)
 
     await navigateTo("connections")
+    await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     })

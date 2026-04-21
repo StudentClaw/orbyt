@@ -1,5 +1,6 @@
 import { app, BrowserWindow, nativeImage } from "electron"
 import { existsSync } from "node:fs"
+import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { IpcChannel } from "@student-claw/contracts"
@@ -49,6 +50,8 @@ async function ensureServerProcess(): Promise<ServerProcess> {
         currentDir,
         isPackaged: app.isPackaged,
         userDataPath: app.getPath("userData"),
+        platform: process.platform,
+        systemVersion: os.release(),
         emitLifecycleEvent: (event) => {
           const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
           for (const window of windows) {
@@ -56,6 +59,12 @@ async function ensureServerProcess(): Promise<ServerProcess> {
           }
 
           void pluginGateway?.notifyToolInventoryChanged()
+        },
+        emitReadinessEvent: (event) => {
+          const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+          for (const window of windows) {
+            window.webContents.send(IpcChannel.PLUGIN_READINESS, event)
+          }
         },
       })
       pluginManager = runtime.manager
@@ -71,6 +80,9 @@ async function ensureServerProcess(): Promise<ServerProcess> {
 
       const nextServerProcess = await spawnServer(gateway.config, {
         userDataPath: app.getPath("userData"),
+      }, {
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
       })
       serverProcess = nextServerProcess
 
@@ -85,6 +97,7 @@ async function ensureServerProcess(): Promise<ServerProcess> {
           pluginManager: runtime.manager,
           pluginAuthService: runtime.authService,
           pluginEnabledStore: runtime.enabledStore,
+          pluginRuntimeLogs: runtime.runtimeLogs,
           pushManager,
         },
       ).pluginManager

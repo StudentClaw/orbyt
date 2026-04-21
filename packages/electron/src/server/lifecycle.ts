@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { spawn, type ChildProcess } from "node:child_process"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { WebSocket } from "ws"
 import { RPC_METHODS, WS_PROTOCOL, type DesktopBootstrap } from "@student-claw/contracts"
@@ -18,6 +19,18 @@ export interface ServerProcess {
 
 export type CodexIsolationConfig = {
   readonly userDataPath: string
+}
+
+export type ServerLaunchContext = {
+  readonly isPackaged?: boolean
+  readonly resourcesPath?: string
+}
+
+export type ServerLaunchSpec = {
+  readonly command: string
+  readonly args: string[]
+  readonly serverPath: string
+  readonly packaged: boolean
 }
 
 const HEALTH_CHECK_REQUEST_ID = "health-check"
@@ -146,6 +159,7 @@ export function healthCheck(
 export async function spawnServer(
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
+  launchContext: ServerLaunchContext = {},
 ): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
   const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.student-claw/data.db`
@@ -162,34 +176,73 @@ export async function spawnServer(
     }
   }
 
-  const serverPath = new URL("../../../server/src/index.ts", import.meta.url).pathname
-
-  const child = spawnServerChild(serverPath, port, dbPath, auth, gateway, codexIsolation)
+  const launchSpec = resolveServerLaunchSpec(launchContext)
+  const child = spawnServerChild(launchSpec, port, dbPath, auth, gateway, codexIsolation)
   pipeChildOutput(child)
+  const childError = createChildErrorTracker(child)
 
   // Health check with retry/backoff
   const maxAttempts = 10
   let delay = 500
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, delay))
-    const bootstrap = await healthCheck(port, auth)
-    if (bootstrap) {
-      return {
-        port,
-        bootstrap,
-        process: child,
-        owned: true,
-        kill: () => {
-          child.kill("SIGTERM")
-        },
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await waitForAttemptDelay(delay, childError)
+      const bootstrap = await raceWithChildError(healthCheck(port, auth), childError)
+      if (bootstrap) {
+        return {
+          port,
+          bootstrap,
+          process: child,
+          owned: true,
+          kill: () => {
+            child.kill("SIGTERM")
+          },
+        }
       }
+      delay = Math.min(delay * 2, 5000)
     }
-    delay = Math.min(delay * 2, 5000)
+  } catch (error) {
+    child.kill("SIGTERM")
+    throw normalizeServerLaunchError(error, launchSpec)
   }
 
   child.kill("SIGTERM")
   throw new Error(`Server failed to start after ${maxAttempts} attempts`)
+}
+
+export function resolveServerLaunchSpec(options: ServerLaunchContext = {}): ServerLaunchSpec {
+  if (options.isPackaged) {
+    const resourcesRoot = options.resourcesPath ?? process.resourcesPath ?? ""
+    const serverPath = path.join(
+      resourcesRoot,
+      "app.asar",
+      "node_modules",
+      "@student-claw",
+      "server",
+      "dist",
+      "index.js",
+    )
+
+    if (!existsSync(serverPath)) {
+      throw new Error(`Packaged Student Claw server runtime not found at ${serverPath}`)
+    }
+
+    return {
+      command: process.execPath,
+      args: [serverPath],
+      serverPath,
+      packaged: true,
+    }
+  }
+
+  const serverPath = new URL("../../../server/src/index.ts", import.meta.url).pathname
+  return {
+    command: "bun",
+    args: ["run", serverPath],
+    serverPath,
+    packaged: false,
+  }
 }
 
 function handleHealthCheckMessage(
@@ -213,19 +266,22 @@ function handleHealthCheckMessage(
 }
 
 function spawnServerChild(
-  serverPath: string,
+  launchSpec: ServerLaunchSpec,
   port: number,
   dbPath: string,
   auth: WsHandshakeAuth,
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
 ): ChildProcess {
-  const child = spawn("bun", ["run", serverPath], {
+  const child = spawn(launchSpec.command, launchSpec.args, {
     env: {
       ...(codexIsolation ? buildIsolatedCodexEnv(codexIsolation.userDataPath, gateway) : process.env),
       PORT: String(port),
       DB_PATH: dbPath,
       WS_AUTH_TOKEN: auth.authToken,
+      ...(launchSpec.packaged ? {
+        ELECTRON_RUN_AS_NODE: "1",
+      } : {}),
       ...(codexIsolation ? {
         CODEX_HOME_PATH: path.join(codexIsolation.userDataPath, "codex-home"),
         CODEX_PROCESS_HOME_PATH: path.join(codexIsolation.userDataPath, "codex-user-home"),
@@ -268,4 +324,35 @@ function pipeChildOutput(child: ChildProcess): void {
 function formatChildLog(data: Buffer): string {
   const text = data.toString().trim()
   return text ? `[server] ${text}\n` : ""
+}
+
+function createChildErrorTracker(child: ChildProcess): Promise<never> {
+  return new Promise((_, reject) => {
+    child.once("error", (error) => {
+      reject(error)
+    })
+  })
+}
+
+function waitForAttemptDelay(delayMs: number, childError: Promise<never>): Promise<void> {
+  return Promise.race([
+    new Promise<void>((resolve) => setTimeout(resolve, delayMs)),
+    childError,
+  ])
+}
+
+function raceWithChildError<T>(work: Promise<T>, childError: Promise<never>): Promise<T> {
+  return Promise.race([work, childError])
+}
+
+function normalizeServerLaunchError(error: unknown, launchSpec: ServerLaunchSpec): Error {
+  if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    if (launchSpec.packaged) {
+      return new Error(`Packaged Student Claw server runtime could not be launched: ${launchSpec.serverPath}`)
+    }
+
+    return new Error(`Student Claw server runtime command was not found: ${launchSpec.command}`)
+  }
+
+  return error instanceof Error ? error : new Error(String(error))
 }

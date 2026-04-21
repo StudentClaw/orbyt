@@ -7,10 +7,12 @@ import {
   type ExtensionInstallSource,
   type ExtensionRegistryEntry,
 } from "@student-claw/contracts"
+import { isCuratedExtensionVisibleOnHost, type PluginAvailabilityContext } from "./curated-extension-availability.js"
 
 export type PluginRegistryPaths = {
   bundledCatalogDir: string
   userExtensionStoreDir: string
+  availability?: PluginAvailabilityContext
 }
 
 const INSTALL_SOURCE_ORDER: Record<ExtensionInstallSource, number> = {
@@ -146,6 +148,12 @@ function getInstallSourceOrder(installSource: ExtensionInstallSource): number {
 export class PluginRegistry {
   constructor(private readonly paths: PluginRegistryPaths) {}
 
+  private getAvailabilityContext(): PluginAvailabilityContext {
+    return this.paths.availability ?? {
+      platform: process.platform,
+    }
+  }
+
   private listRecords(): PluginRegistryRecord[] {
     const bundledEntries = discoverManifestPaths(this.paths.bundledCatalogDir)
       .map((manifestPath) => parseRegistryRecord(manifestPath, "bundled"))
@@ -156,7 +164,10 @@ export class PluginRegistry {
   }
 
   list(): ExtensionRegistryEntry[] {
-    return this.listRecords().map((record) => record.entry)
+    const availability = this.getAvailabilityContext()
+    return this.listRecords()
+      .filter((record) => isCuratedExtensionVisibleOnHost(getEntryPluginId(record.entry), availability))
+      .map((record) => record.entry)
   }
 
   getStatus(pluginId: string): ExtensionRegistryEntry | null {

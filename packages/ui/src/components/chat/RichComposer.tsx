@@ -228,13 +228,12 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         <div
           ref={divRef}
           contentEditable={disabled ? false : true}
-          disabled={disabled || undefined}
           suppressContentEditableWarning
           role="textbox"
           aria-multiline="true"
           aria-label="Chat message input"
           aria-disabled={disabled ? "true" : "false"}
-          placeholder={placeholder}
+          data-placeholder={placeholder}
           className={cn(
             "min-h-20 w-full cursor-text break-words whitespace-pre-wrap text-sm outline-none",
             disabled && "pointer-events-none opacity-50",

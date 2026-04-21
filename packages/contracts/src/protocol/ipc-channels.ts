@@ -3,6 +3,7 @@ import type { TurnAttachmentInput } from "./orchestration.js"
 import type {
   ExtensionLifecycleStatus,
   ExtensionRegistryEntry,
+  ExtensionRuntimeReadiness,
 } from "../schemas/extension.js"
 import type {
   PhonePushSettings,
@@ -39,9 +40,12 @@ export const IpcChannel = {
   PLUGIN_SET_ENABLED: "plugin:set-enabled",
   PLUGIN_UNINSTALL: "plugin:uninstall",
   PLUGIN_GET_STATUS: "plugin:get-status",
+  PLUGIN_GET_RUNTIME_LOGS: "plugin:get-runtime-logs",
   PLUGIN_LIFECYCLE: "plugin:lifecycle",
+  PLUGIN_READINESS: "plugin:readiness",
   PLUGIN_GET_AUTH_STATUS: "plugin:get-auth-status",
   PLUGIN_SAVE_AUTH: "plugin:save-auth",
+  PLUGIN_REVEAL_PERMISSION_SETTINGS: "plugin:reveal-permission-settings",
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -68,6 +72,11 @@ export type PluginGetStatusParams = {
   readonly pluginId: string
 }
 
+export type PluginGetRuntimeLogsParams = {
+  readonly pluginId?: string
+  readonly limit?: number
+}
+
 export type PluginStartParams = {
   readonly pluginId: string
 }
@@ -78,9 +87,19 @@ export type PluginStopParams = {
 
 export type PluginRetryParams = {
   readonly pluginId: string
+  readonly retryClass: PluginRetryClass
 }
 
+export type PluginRetryClass =
+  | "retry_bridge_start"
+  | "retry_permission"
+  | "retry_plugin_start"
+
 export type PluginGetAuthStatusParams = {
+  readonly pluginId: string
+}
+
+export type PluginRevealPermissionSettingsParams = {
   readonly pluginId: string
 }
 
@@ -128,6 +147,7 @@ export type PluginLifecycleFailureReason =
   | "already_running"
   | "not_running"
   | "start_failed"
+  | "invalid_retry_class"
 
 export type PluginLifecycleActionResult =
   | {
@@ -145,6 +165,30 @@ export type PluginLifecycleEvent = {
   readonly pluginId: string
   readonly status: ExtensionLifecycleStatus
   readonly emittedAt: string
+}
+
+export type PluginReadinessEvent = {
+  readonly pluginId: string
+  readonly readiness: ExtensionRuntimeReadiness
+  readonly previousReadiness?: ExtensionRuntimeReadiness
+  readonly lastError?: string
+  readonly retryClass?: PluginRetryClass
+  readonly emittedAt: string
+}
+
+export type PluginRuntimeLogEntry = {
+  readonly pluginId: string
+  readonly source: "bridge" | "mcp"
+  readonly message: string
+  readonly emittedAt: string
+  readonly readiness?: ExtensionRuntimeReadiness
+  readonly lifecycleStatus?: ExtensionLifecycleStatus
+  readonly retryClass?: PluginRetryClass
+  readonly correlationId?: string
+}
+
+export type PluginRuntimeLogsResult = {
+  readonly entries: readonly PluginRuntimeLogEntry[]
 }
 
 export type PluginAuthStatusState = "not_configured" | "configured" | "error"
@@ -178,6 +222,22 @@ export type PluginSaveAuthResult =
     readonly fieldErrors?: Record<string, string>
   }
 
+export type PluginRevealPermissionSettingsFailureReason =
+  | "unsupported_plugin"
+  | "platform_unsupported"
+  | "open_failed"
+
+export type PluginRevealPermissionSettingsResult =
+  | {
+    readonly ok: true
+    readonly pluginId: string
+  }
+  | {
+    readonly ok: false
+    readonly pluginId: string
+    readonly reason: PluginRevealPermissionSettingsFailureReason
+  }
+
 export type IpcInvokeArgsMap = {
   [IpcChannel.APP_GET_PATH]: [name: string]
   [IpcChannel.APP_GET_BOOTSTRAP]: []
@@ -208,8 +268,10 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.PLUGIN_SET_ENABLED]: [params: PluginSetEnabledParams]
   [IpcChannel.PLUGIN_UNINSTALL]: [params: PluginUninstallParams]
   [IpcChannel.PLUGIN_GET_STATUS]: [params: PluginGetStatusParams]
+  [IpcChannel.PLUGIN_GET_RUNTIME_LOGS]: [params?: PluginGetRuntimeLogsParams]
   [IpcChannel.PLUGIN_GET_AUTH_STATUS]: [params: PluginGetAuthStatusParams]
   [IpcChannel.PLUGIN_SAVE_AUTH]: [params: PluginSaveAuthParams]
+  [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: [params: PluginRevealPermissionSettingsParams]
 }
 
 export type IpcInvokeResultMap = {
@@ -239,10 +301,13 @@ export type IpcInvokeResultMap = {
   [IpcChannel.PLUGIN_SET_ENABLED]: PluginManagementActionResult
   [IpcChannel.PLUGIN_UNINSTALL]: PluginManagementActionResult
   [IpcChannel.PLUGIN_GET_STATUS]: ExtensionRegistryEntry | null
+  [IpcChannel.PLUGIN_GET_RUNTIME_LOGS]: PluginRuntimeLogsResult
   [IpcChannel.PLUGIN_GET_AUTH_STATUS]: PluginAuthStatus | null
   [IpcChannel.PLUGIN_SAVE_AUTH]: PluginSaveAuthResult
+  [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: PluginRevealPermissionSettingsResult
 }
 
 export type IpcEventPayloadMap = {
   [IpcChannel.PLUGIN_LIFECYCLE]: PluginLifecycleEvent
+  [IpcChannel.PLUGIN_READINESS]: PluginReadinessEvent
 }
