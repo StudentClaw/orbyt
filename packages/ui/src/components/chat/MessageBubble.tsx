@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type FocusEvent } from "react"
 import { CheckIcon, CopyIcon } from "lucide-react"
 import type { ChatMessage } from "@/hooks/chat-model"
 import { Actions, Action } from "@/components/ai/actions"
@@ -21,6 +21,14 @@ interface MessageBubbleProps {
 }
 
 const CHAIN_OF_THOUGHT_PREVIEW_MS = 1000
+const MESSAGE_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+})
+
+export function formatMessageTimestamp(timestamp: number): string {
+  return MESSAGE_TIMESTAMP_FORMATTER.format(new Date(timestamp))
+}
 
 function QueuedPlaceholder() {
   return (
@@ -50,21 +58,171 @@ function SendingPlaceholder() {
 
 export { SendingPlaceholder }
 
+function CopyActionIcon({ copied }: { readonly copied: boolean }) {
+  return (
+    <span aria-hidden="true" className="relative size-4">
+      <CopyIcon
+        className={cn(
+          "absolute inset-0 size-4 transition-all duration-200 ease-out",
+          copied ? "scale-75 -rotate-12 opacity-0" : "scale-100 rotate-0 opacity-100",
+        )}
+      />
+      <CheckIcon
+        className={cn(
+          "absolute inset-0 size-4 transition-all duration-200 ease-out",
+          copied ? "scale-100 rotate-0 opacity-100" : "scale-75 rotate-12 opacity-0",
+        )}
+      />
+    </span>
+  )
+}
+
+function useCopyAction(copyText: string) {
+  const [isCopied, setIsCopied] = useState(false)
+  const copyResetTimeoutRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(copyText)
+    setIsCopied(true)
+
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current)
+    }
+
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setIsCopied(false)
+      copyResetTimeoutRef.current = null
+    }, 1000)
+  }
+
+  return { isCopied, handleCopy }
+}
+
+function useFooterVisibility() {
+  const [isVisible, setIsVisible] = useState(false)
+
+  const showFooter = () => {
+    setIsVisible(true)
+  }
+
+  const hideFooter = () => {
+    setIsVisible(false)
+  }
+
+  const handleBlurCapture = (event: FocusEvent<HTMLElement>) => {
+    const nextFocused = event.relatedTarget
+    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+      return
+    }
+
+    setIsVisible(false)
+  }
+
+  return {
+    isVisible,
+    visibilityProps: {
+      onMouseEnter: showFooter,
+      onMouseLeave: hideFooter,
+      onFocusCapture: showFooter,
+      onBlurCapture: handleBlurCapture,
+    },
+  }
+}
+
+interface MessageFooterProps {
+  readonly align: "start" | "end"
+  readonly copied: boolean
+  readonly copyLabel: string
+  readonly onCopy: () => Promise<void>
+  readonly testId: string
+  readonly timestamp: number
+  readonly visible: boolean
+}
+
+function MessageFooter({
+  align,
+  copied,
+  copyLabel,
+  onCopy,
+  testId,
+  timestamp,
+  visible,
+}: MessageFooterProps) {
+  return (
+    <div
+      data-testid={testId}
+      className={cn(
+        "flex min-h-7 items-center",
+        align === "end" ? "justify-end self-end" : "justify-start",
+      )}
+    >
+      <div
+        aria-hidden={!visible}
+        className={cn(
+          "flex items-center gap-1 text-xs text-muted-foreground transition-opacity duration-150",
+          visible ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
+        <span>{formatMessageTimestamp(timestamp)}</span>
+        <Actions className="gap-0">
+          <Action
+            label={copied ? "Copied" : copyLabel}
+            onClick={() => void onCopy()}
+            disabled={!visible}
+            tabIndex={visible ? undefined : -1}
+            className={cn(
+              "size-7 p-1 transition-colors duration-200",
+              copied && "text-primary hover:text-primary",
+            )}
+          >
+            <CopyActionIcon copied={copied} />
+          </Action>
+        </Actions>
+      </div>
+    </div>
+  )
+}
+
 function UserMessage({ message }: MessageBubbleProps) {
   const hasVisibleContent = message.content.trim().length > 0
+  const { isCopied, handleCopy } = useCopyAction(message.content)
+  const { isVisible, visibilityProps } = useFooterVisibility()
 
   return (
-    <div data-testid="user-message-row" className="flex justify-end">
+    <div
+      data-testid="user-message-row"
+      className="flex justify-end"
+      {...visibilityProps}
+    >
       <div className="flex max-w-[min(32rem,85%)] flex-col items-end gap-2">
         {message.attachments && message.attachments.length > 0 && (
           <ChatAttachments attachments={message.attachments} className="max-w-full" />
         )}
         {hasVisibleContent && (
-          <div
-            data-testid="user-message-bubble"
-            className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-left text-white"
-          >
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          <div className="flex flex-col items-end gap-1">
+            <div
+              data-testid="user-message-bubble"
+              className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-left text-white"
+            >
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            </div>
+            <MessageFooter
+              align="end"
+              copied={isCopied}
+              copyLabel="Copy message"
+              onCopy={handleCopy}
+              testId="user-message-footer"
+              timestamp={message.timestamp}
+              visible={isVisible}
+            />
           </div>
         )}
       </div>
@@ -83,9 +241,9 @@ function AssistantMessage({ message }: MessageBubbleProps) {
     || (message.isStreaming && !message.reasoning)
     || (message.isQueued && !message.reasoning)
   const [isThoughtOpen, setIsThoughtOpen] = useState(() => Boolean(message.isStreaming && message.reasoning))
-  const [isCopied, setIsCopied] = useState(false)
+  const { isCopied, handleCopy } = useCopyAction(message.content)
+  const { isVisible, visibilityProps } = useFooterVisibility()
   const hasPreviewedStreamingThought = useRef(false)
-  const copyResetTimeoutRef = useRef<number | null>(null)
   const artifactCtx = useArtifactContextOptional()
 
   useEffect(() => {
@@ -110,30 +268,12 @@ function AssistantMessage({ message }: MessageBubbleProps) {
     }
   }, [message.isStreaming, message.reasoning])
 
-  useEffect(() => {
-    return () => {
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content)
-    setIsCopied(true)
-
-    if (copyResetTimeoutRef.current !== null) {
-      window.clearTimeout(copyResetTimeoutRef.current)
-    }
-
-    copyResetTimeoutRef.current = window.setTimeout(() => {
-      setIsCopied(false)
-      copyResetTimeoutRef.current = null
-    }, 1000)
-  }
-
   return (
-    <div className="flex min-w-0 max-w-[min(42rem,100%)] flex-col gap-3">
+    <div
+      data-testid="assistant-message-row"
+      className="flex min-w-0 max-w-[min(42rem,100%)] flex-col gap-3"
+      {...visibilityProps}
+    >
       {message.reasoning && (
         <ChainOfThought
           data-testid="assistant-thought-row"
@@ -162,45 +302,31 @@ function AssistantMessage({ message }: MessageBubbleProps) {
       ))}
       {shouldRenderMainResponse
         ? (
-            <div data-testid="assistant-response" className="text-sm text-foreground">
-              {message.isQueued && !hasVisibleContent && !hasArtifacts && !hasPending
-                ? <QueuedPlaceholder />
-                : message.isStreaming
-                  ? <StreamingResponse content={message.content} isStreaming />
-                  : <MarkdownContent content={message.content} />}
-              {hasPending && message.pendingArtifact
-                ? <PendingArtifactChip pending={message.pendingArtifact} />
-                : null}
+            <div className="flex flex-col gap-1">
+              <div data-testid="assistant-response" className="text-sm text-foreground">
+                {message.isQueued && !hasVisibleContent && !hasArtifacts && !hasPending
+                  ? <QueuedPlaceholder />
+                  : message.isStreaming
+                    ? <StreamingResponse content={message.content} isStreaming />
+                    : <MarkdownContent content={message.content} />}
+                {hasPending && message.pendingArtifact
+                  ? <PendingArtifactChip pending={message.pendingArtifact} />
+                  : null}
+              </div>
+              {!message.isStreaming && hasVisibleContent && (
+                <MessageFooter
+                  align="start"
+                  copied={isCopied}
+                  copyLabel="Copy response"
+                  onCopy={handleCopy}
+                  testId="assistant-message-footer"
+                  timestamp={message.timestamp}
+                  visible={isVisible}
+                />
+              )}
             </div>
           )
         : null}
-      {!message.isStreaming && hasVisibleContent && (
-        <Actions>
-          <Action
-            label={isCopied ? "Copied" : "Copy response"}
-            onClick={() => void handleCopy()}
-            className={cn(
-              "transition-colors duration-200",
-              isCopied && "text-primary hover:text-primary",
-            )}
-          >
-            <span aria-hidden="true" className="relative size-4">
-              <CopyIcon
-                className={cn(
-                  "absolute inset-0 size-4 transition-all duration-200 ease-out",
-                  isCopied ? "scale-75 -rotate-12 opacity-0" : "scale-100 rotate-0 opacity-100",
-                )}
-              />
-              <CheckIcon
-                className={cn(
-                  "absolute inset-0 size-4 transition-all duration-200 ease-out",
-                  isCopied ? "scale-100 rotate-0 opacity-100" : "scale-75 rotate-12 opacity-0",
-                )}
-              />
-            </span>
-          </Action>
-        </Actions>
-      )}
     </div>
   )
 }
