@@ -205,11 +205,7 @@ describe("ChatHistory", () => {
     historyMocks.createWorkspace.mockResolvedValue("workspace-2")
     window.electronAPI = {
       ...(window.electronAPI as NonNullable<typeof window.electronAPI>),
-      getBootstrap: vi.fn().mockResolvedValue(null),
-      codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
       invoke: vi.fn().mockResolvedValue("/class-notes"),
-      send: vi.fn(),
-      on: vi.fn().mockReturnValue(() => {}),
     }
 
     const user = userEvent.setup()

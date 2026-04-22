@@ -12,7 +12,6 @@ import { createPushManager, type PushManager } from "./push/push-manager.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
 import { createWindow } from "./window/window-manager.js"
-import { MemorizeManager } from "./memorize/memorize-manager.js"
 
 app.setName("Student Claw")
 
@@ -38,7 +37,6 @@ let serverProcessPromise: Promise<ServerProcess> | null = null
 let pluginManager: PluginManager | null = null
 let pluginGateway: PluginGatewayService | null = null
 let pushManager: PushManager | null = null
-let memorizeManager: MemorizeManager | null = null
 let isQuitting = false
 
 async function ensureServerProcess(): Promise<ServerProcess> {
@@ -104,17 +102,6 @@ async function ensureServerProcess(): Promise<ServerProcess> {
         },
       ).pluginManager
       void pushManager.start()
-
-      memorizeManager = new MemorizeManager({
-        port: nextServerProcess.port,
-        authToken: nextServerProcess.bootstrap.wsAuthToken,
-        getLastRunAt: () => null,
-        onError: (err) => {
-          process.stderr.write(`[memorize] trigger error: ${err.message}\n`)
-        },
-      })
-      memorizeManager.start()
-      void memorizeManager.runCatchUpIfNeeded()
 
       return nextServerProcess
     })()
@@ -221,8 +208,6 @@ app.on("before-quit", () => {
   pluginManager = null
   pushManager?.stop()
   pushManager = null
-  memorizeManager?.stop()
-  memorizeManager = null
   void pluginGateway?.close()
   pluginGateway = null
   serverProcess?.kill()
