@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { WeeklyOutlookWidget } from "../components/dashboard/WeeklyOutlookWidget"
+import { buildBuckets, WeeklyOutlookWidget } from "../components/dashboard/WeeklyOutlookWidget"
 import type { CalendarSession } from "../components/dashboard/calendar-model"
 import type { PrioritizedItem } from "../components/dashboard/priority-model"
 
@@ -52,5 +52,26 @@ describe("WeeklyOutlookWidget", () => {
     )
     expect(screen.getByTestId("weekly-outlook-day-2025-06-12")).toBeDefined()
     expect(screen.getByTestId("weekly-outlook-row-deadline-d1")).toBeDefined()
+  })
+
+  test("uses the course color as the left rail for deadline rows", () => {
+    const deadlines: PrioritizedItem[] = [
+      {
+        id: "d1",
+        title: "Homework",
+        courseId: "c1",
+        courseCode: "MATH 240",
+        effectiveDueAt: new Date(2025, 5, 12, 23, 0, 0).toISOString(),
+        estimatedMinutes: 60,
+        impactScore: 0.5,
+        coursePriority: 1,
+        courseColor: "oklch(0.72 0.15 42)",
+      },
+    ]
+
+    const buckets = buildBuckets(WEEK_START, [], deadlines, NOW)
+    const deadlineRow = buckets.flatMap((bucket) => bucket.rows).find((row) => row.id === "deadline-d1")
+
+    expect(deadlineRow?.borderLeftColor).toBe("oklch(0.72 0.15 42)")
   })
 })

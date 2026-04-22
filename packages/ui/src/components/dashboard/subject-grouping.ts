@@ -1,7 +1,7 @@
 import type { Course } from "@student-claw/contracts"
 import { sortByPriority, type PrioritizedItem } from "./priority-model"
 
-export type FilterScope = "today" | "thisWeek" | "upcoming" | "overdue"
+export type FilterScope = "today" | "thisWeek" | "upcoming" | "overdue" | "submitted"
 
 /** Local calendar date `YYYY-MM-DD`. */
 export function localDateKey(d: Date): string {
@@ -50,6 +50,12 @@ export function filterItemsByScope(
   filter: FilterScope,
   now: Date,
 ): ReadonlyArray<PrioritizedItem> {
+  if (filter === "submitted") {
+    return items.filter((item) => {
+      const status = item.submissionStatus?.trim().toLowerCase()
+      return status === "submitted" || status === "graded"
+    })
+  }
   return items.filter((item) => classifyAssignmentScope(item, now) === filter)
 }
 

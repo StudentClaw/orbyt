@@ -5,6 +5,7 @@ const TABS: ReadonlyArray<{ readonly id: FilterScope; readonly label: string }> 
   { id: "thisWeek", label: "This Week" },
   { id: "upcoming", label: "Upcoming" },
   { id: "overdue", label: "Overdue" },
+  { id: "submitted", label: "Submitted" },
 ]
 
 interface DashboardFilterTabsProps {

@@ -36,11 +36,13 @@ import {
 import { resolveChatState, resolveCurrentThread, resolveCurrentWorkspace } from "@/hooks/chat-model"
 import { resolveChatRouteSelection } from "@/lib/chatRoutes"
 import {
+  extractAssignmentId,
   extractSettingsPluginId,
   resolveRootNavbarContext,
   shouldShowRootNavbar,
   type RootNavbarContext,
 } from "@/lib/rootNavbar"
+import { useAssignmentDisplayTitle } from "@/rpc/assignmentDetailState"
 import type { PanelImperativeHandle } from "react-resizable-panels"
 import { AppSidebar, AppSidebarContent } from "./AppSidebar"
 
@@ -154,6 +156,8 @@ function RootNavbar({ sidebarLabel }: { sidebarLabel: string }) {
   const connectionStatus = useRuntimeConnectionStatus()
   const chatSelection = resolveChatRouteSelection(pathname)
   const pluginId = extractSettingsPluginId(pathname)
+  const assignmentId = extractAssignmentId(pathname)
+  const assignmentTitle = useAssignmentDisplayTitle(assignmentId)
   const currentThread = useMemo(
     () => resolveCurrentThread(snapshot, chatSelection.threadId),
     [chatSelection.threadId, snapshot],
@@ -173,8 +177,9 @@ function RootNavbar({ sidebarLabel }: { sidebarLabel: string }) {
       workspaceName: currentWorkspace?.name ?? null,
       threadTitle: currentThread?.title ?? null,
       pluginName,
+      assignmentTitle,
     }),
-    [currentThread?.title, currentWorkspace?.name, pathname, pluginName],
+    [assignmentTitle, currentThread?.title, currentWorkspace?.name, pathname, pluginName],
   )
 
   if (!navbarContext) {

@@ -23,6 +23,7 @@ type ResolveRootNavbarOptions = {
   readonly workspaceName?: string | null
   readonly threadTitle?: string | null
   readonly pluginName?: string | null
+  readonly assignmentTitle?: string | null
 }
 
 export function shouldShowRootNavbar(pathname: string): boolean {
@@ -52,11 +53,21 @@ export function formatPluginLabel(pluginId: string): string {
     .join(" ")
 }
 
+export function extractAssignmentId(pathname: string): string | null {
+  if (!pathname.startsWith("/assignments/")) {
+    return null
+  }
+
+  const segments = pathname.split("/").filter(Boolean)
+  return segments[1] ?? null
+}
+
 export function resolveRootNavbarContext({
   pathname,
   workspaceName = null,
   threadTitle = null,
   pluginName = null,
+  assignmentTitle = null,
 }: ResolveRootNavbarOptions): RootNavbarContext | null {
   if (!shouldShowRootNavbar(pathname)) {
     return null
@@ -114,6 +125,18 @@ export function resolveRootNavbarContext({
       kind: "breadcrumb",
       breadcrumbs,
       rightSlot: "chat-status",
+    }
+  }
+
+  const assignmentId = extractAssignmentId(pathname)
+  if (assignmentId) {
+    return {
+      kind: "breadcrumb",
+      breadcrumbs: [
+        { label: "Assignments" },
+        { label: assignmentTitle ?? "Assignment" },
+      ],
+      rightSlot: null,
     }
   }
 

@@ -11,12 +11,13 @@ function Harness() {
 }
 
 describe("DashboardFilterTabs", () => {
-  test("renders four tabs", () => {
+  test("renders five tabs", () => {
     render(<Harness />)
     expect(screen.getByTestId("filter-tab-today")).toBeDefined()
     expect(screen.getByTestId("filter-tab-thisWeek")).toBeDefined()
     expect(screen.getByTestId("filter-tab-upcoming")).toBeDefined()
     expect(screen.getByTestId("filter-tab-overdue")).toBeDefined()
+    expect(screen.getByTestId("filter-tab-submitted")).toBeDefined()
   })
 
   test("clicking a tab updates active styling via state", async () => {

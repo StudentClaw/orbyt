@@ -10,6 +10,7 @@ const shellMocks = vi.hoisted(() => ({
   onboardingComplete: true,
   isMobile: false,
   pluginName: "Canvas Assistant",
+  assignmentTitle: null as string | null,
   snapshot: null as OrchestrationSnapshot | null,
   connectionStatus: {
     phase: "connected",
@@ -69,6 +70,10 @@ vi.mock("../hooks/useNativeNotification", () => ({
   useNativeNotification: () => {},
 }))
 
+vi.mock("../rpc/assignmentDetailState", () => ({
+  useAssignmentDisplayTitle: () => shellMocks.assignmentTitle,
+}))
+
 import { AppShell } from "../components/shell/AppShell"
 
 describe("AppShell", () => {
@@ -78,6 +83,7 @@ describe("AppShell", () => {
     shellMocks.onboardingComplete = true
     shellMocks.isMobile = false
     shellMocks.pluginName = "Canvas Assistant"
+    shellMocks.assignmentTitle = null
     shellMocks.snapshot = null
     shellMocks.connectionStatus = {
       phase: "connected",
@@ -213,6 +219,17 @@ describe("AppShell", () => {
     expect(screen.getByText("Plugins")).toBeDefined()
     expect(screen.getByText("Canvas Assistant")).toBeDefined()
     expect(screen.queryByTestId("chat-status-badge")).toBeNull()
+  })
+
+  test("shows assignment breadcrumbs in the root navbar", () => {
+    shellMocks.pathname = "/assignments/canvas-coursework:assignment:19737:540935"
+    shellMocks.assignmentTitle = "Final Paper"
+
+    render(<AppShell />)
+
+    expect(screen.getByLabelText("breadcrumb")).toBeDefined()
+    expect(screen.getByText("Assignments")).toBeDefined()
+    expect(screen.getByText("Final Paper")).toBeDefined()
   })
 
   test("hides the root navbar on onboarding", () => {

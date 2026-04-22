@@ -1,6 +1,7 @@
 import type { CalendarSession } from "./calendar-model"
 import { computePriorityDisplay, type PrioritizedItem } from "./priority-model"
 import { localDateKey } from "./subject-grouping"
+import { resolvedBorderColor } from "./TaskCard"
 
 interface WeeklyOutlookWidgetProps {
   readonly weekStart: string
@@ -22,6 +23,7 @@ interface OutlookRow {
   readonly subtitle: string
   readonly timeLabel: string
   readonly dotClass: string
+  readonly borderLeftColor?: string
   readonly sortAt: number
 }
 
@@ -54,7 +56,7 @@ function deadlineDotClass(item: PrioritizedItem, now: Date): string {
   }
 }
 
-function buildBuckets(
+export function buildBuckets(
   weekStart: string,
   sessions: ReadonlyArray<CalendarSession>,
   deadlines: ReadonlyArray<PrioritizedItem>,
@@ -88,6 +90,7 @@ function buildBuckets(
           subtitle: d.courseCode,
           timeLabel: formatTime(at),
           dotClass: deadlineDotClass(d, now),
+          borderLeftColor: resolvedBorderColor(d, now),
           sortAt: at.getTime(),
         }
       })
@@ -128,8 +131,9 @@ export function WeeklyOutlookWidget({
                   {day.rows.map((row) => (
                     <div
                       key={row.id}
-                      className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+                      className="flex items-center gap-3 rounded-md border border-border border-l-4 bg-card px-3 py-2"
                       data-testid={`weekly-outlook-row-${row.id}`}
+                      style={row.borderLeftColor ? { borderLeftColor: row.borderLeftColor } : undefined}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{row.title}</p>
