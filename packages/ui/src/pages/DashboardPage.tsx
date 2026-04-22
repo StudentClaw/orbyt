@@ -18,19 +18,26 @@ import {
   groupAssignmentsByCourse,
   type FilterScope,
 } from "@/components/dashboard/subject-grouping"
+import { seedAssignmentPreview } from "@/rpc/assignmentDetailState"
 import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
 const TOAST_ID_PLANNER = "dashboard-planner-stream"
+const SUBMITTED_PAGE_SIZE = 12
 
 function derivePriorityItems(
-  courses: ReadonlyArray<{ id: string; code: string }>,
+  courses: ReadonlyArray<{ id: string; code: string; name: string; color?: string }>,
   upcomingAssignments: ReadonlyArray<{
     id: string
     courseId: string
     title: string
     effectiveDueAt?: string
+    sourceId: string
+    htmlUrl?: string
+    pointsPossible?: number
+    submissionStatus?: string
+    grade?: string
   }>,
   submissionStatus: {
     pending: ReadonlyArray<{
@@ -38,17 +45,29 @@ function derivePriorityItems(
       courseId: string
       title: string
       effectiveDueAt?: string
+      sourceId: string
+      htmlUrl?: string
+      pointsPossible?: number
+      submissionStatus?: string
+      grade?: string
     }>
     overdue: ReadonlyArray<{
       id: string
       courseId: string
       title: string
       effectiveDueAt?: string
+      sourceId: string
+      htmlUrl?: string
+      pointsPossible?: number
+      submissionStatus?: string
+      grade?: string
     }>
   },
 ): ReadonlyArray<PrioritizedItem> {
   const coursePriority = new Map(courses.map((course, index) => [course.id, courses.length - index]))
   const courseCode = new Map(courses.map((course) => [course.id, course.code]))
+  const courseName = new Map(courses.map((course) => [course.id, course.name]))
+  const courseColor = new Map(courses.map((course) => [course.id, course.color]))
   const buckets = [
     ...submissionStatus.overdue.map((item) => ({ item, impactScore: 1.0 })),
     ...submissionStatus.pending.map((item) => ({ item, impactScore: 0.8 })),
@@ -64,12 +83,62 @@ function derivePriorityItems(
       title: item.title,
       courseId: item.courseId,
       courseCode: courseCode.get(item.courseId) ?? "Canvas",
+      courseName: courseName.get(item.courseId),
+      courseColor: courseColor.get(item.courseId),
       effectiveDueAt: item.effectiveDueAt,
       estimatedMinutes: 60,
       impactScore,
       coursePriority: coursePriority.get(item.courseId) ?? 1,
+      pointsPossible: item.pointsPossible,
+      submissionStatus: item.submissionStatus,
+      grade: item.grade,
+      htmlUrl: item.htmlUrl,
+      sourceId: item.sourceId,
     }]
   })
+}
+
+function deriveSubmittedItems(
+  courses: ReadonlyArray<{ id: string; code: string; name: string; color?: string }>,
+  submittedAssignments: ReadonlyArray<{
+    id: string
+    courseId: string
+    title: string
+    effectiveDueAt?: string
+    sourceId: string
+    htmlUrl?: string
+    pointsPossible?: number
+    submissionStatus?: string
+    grade?: string
+  }>,
+): ReadonlyArray<PrioritizedItem> {
+  const coursePriority = new Map(courses.map((course, index) => [course.id, courses.length - index]))
+  const courseCode = new Map(courses.map((course) => [course.id, course.code]))
+  const courseName = new Map(courses.map((course) => [course.id, course.name]))
+  const courseColor = new Map(courses.map((course) => [course.id, course.color]))
+
+  return submittedAssignments
+    .flatMap((item) => {
+      if (!item.effectiveDueAt) return []
+      return [{
+        id: item.id,
+        title: item.title,
+        courseId: item.courseId,
+        courseCode: courseCode.get(item.courseId) ?? "Canvas",
+        courseName: courseName.get(item.courseId),
+        courseColor: courseColor.get(item.courseId),
+        effectiveDueAt: item.effectiveDueAt,
+        estimatedMinutes: 60,
+        impactScore: 0.2,
+        coursePriority: coursePriority.get(item.courseId) ?? 1,
+        pointsPossible: item.pointsPossible,
+        submissionStatus: item.submissionStatus,
+        grade: item.grade,
+        htmlUrl: item.htmlUrl,
+        sourceId: item.sourceId,
+      }]
+    })
+    .toSorted((a, b) => new Date(b.effectiveDueAt).getTime() - new Date(a.effectiveDueAt).getTime())
 }
 
 export function DashboardPage() {
@@ -77,6 +146,7 @@ export function DashboardPage() {
   const snapshot = useRuntimeOrchestrationSnapshot()
   const actions = useOrchestrationActions()
   const [filter, setFilter] = useState<FilterScope>("thisWeek")
+  const [submittedPage, setSubmittedPage] = useState(0)
 
   const handleInsightAction = useCallback(
     async (action: InsightAction) => {
@@ -98,6 +168,31 @@ export function DashboardPage() {
     if (planWeekAction) void handleInsightAction(planWeekAction)
   }, [handleInsightAction, planWeekAction])
 
+  const handleAssignmentSelect = useCallback(
+    async (item: PrioritizedItem) => {
+      seedAssignmentPreview({
+        assignmentId: item.id,
+        title: item.title,
+        courseId: item.courseId,
+        courseCode: item.courseCode,
+        courseName: item.courseName,
+        effectiveDueAt: item.effectiveDueAt,
+        pointsPossible: item.pointsPossible,
+        submissionStatus: item.submissionStatus,
+        grade: item.grade,
+        courseColor: item.courseColor,
+        htmlUrl: item.htmlUrl,
+        sourceId: item.sourceId,
+      })
+
+      await navigate({
+        to: "/assignments/$assignmentId",
+        params: { assignmentId: item.id },
+      })
+    },
+    [navigate],
+  )
+
   const {
     courses,
     courseGrades,
@@ -113,12 +208,35 @@ export function DashboardPage() {
   const now = new Date()
   const isSyncing = syncProgress?.status === "syncing"
   const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
+  const submittedItems = useMemo(
+    () => deriveSubmittedItems(courses, submissionStatus.submitted),
+    [courses, submissionStatus],
+  )
+  const submittedPageCount = Math.max(1, Math.ceil(submittedItems.length / SUBMITTED_PAGE_SIZE))
+  const currentSubmittedPage = Math.min(submittedPage, submittedPageCount - 1)
+  const pagedSubmittedItems = useMemo(() => {
+    const start = currentSubmittedPage * SUBMITTED_PAGE_SIZE
+    return submittedItems.slice(start, start + SUBMITTED_PAGE_SIZE)
+  }, [currentSubmittedPage, submittedItems])
   const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
   const weekStart = calendarViewWeek || todayLocal
 
+  useEffect(() => {
+    setSubmittedPage(0)
+  }, [filter])
+
+  useEffect(() => {
+    if (submittedPage > submittedPageCount - 1) {
+      setSubmittedPage(Math.max(submittedPageCount - 1, 0))
+    }
+  }, [submittedPage, submittedPageCount])
+
   const grouped = useMemo(
-    () => groupAssignmentsByCourse(courses, priorityItems, filter, now),
-    [courses, priorityItems, filter, now],
+    () =>
+      filter === "submitted"
+        ? groupAssignmentsByCourse(courses, pagedSubmittedItems, filter, now)
+        : groupAssignmentsByCourse(courses, priorityItems, filter, now),
+    [courses, pagedSubmittedItems, priorityItems, filter, now],
   )
 
   const subtitle = useMemo(() => {
@@ -202,9 +320,47 @@ export function DashboardPage() {
                 No assignments match this filter.
               </p>
             ) : (
-              grouped.map(({ course, items }) => (
-                <SubjectBlock key={course.id} course={course} items={items} now={now} />
-              ))
+              <>
+                {grouped.map(({ course, items }) => (
+                  <SubjectBlock
+                    key={course.id}
+                    course={course}
+                    items={items}
+                    now={now}
+                    onAssignmentSelect={handleAssignmentSelect}
+                  />
+                ))}
+                {filter === "submitted" && submittedItems.length > SUBMITTED_PAGE_SIZE ? (
+                  <div
+                    className="mt-8 flex items-center justify-between gap-3 border-t border-border/50 pt-4"
+                    data-testid="submitted-pagination"
+                  >
+                    <p className="text-sm text-muted-foreground">
+                      Page {currentSubmittedPage + 1} of {submittedPageCount}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        data-testid="submitted-page-prev"
+                        disabled={currentSubmittedPage === 0}
+                        onClick={() => setSubmittedPage((page) => Math.max(page - 1, 0))}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        data-testid="submitted-page-next"
+                        disabled={currentSubmittedPage >= submittedPageCount - 1}
+                        onClick={() => setSubmittedPage((page) => Math.min(page + 1, submittedPageCount - 1))}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         </div>

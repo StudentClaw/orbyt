@@ -1,6 +1,7 @@
 import { createRouter, createRootRoute, createRoute, useNavigate } from "@tanstack/react-router"
 import { AppShell } from "@/components/shell/AppShell"
 import { DashboardPage } from "@/pages/DashboardPage"
+import { AssignmentDetailPage } from "@/pages/AssignmentDetailPage"
 import { ChatPage } from "@/pages/ChatPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
 import { SettingsPage } from "@/pages/SettingsPage"
@@ -16,6 +17,18 @@ const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: DashboardPage,
+})
+
+function AssignmentDetailRouteComponent() {
+  const { assignmentId } = assignmentDetailRoute.useParams()
+
+  return <AssignmentDetailPage assignmentId={assignmentId} />
+}
+
+const assignmentDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/assignments/$assignmentId",
+  component: AssignmentDetailRouteComponent,
 })
 
 const chatIndexRoute = createRoute({
@@ -160,6 +173,7 @@ const activityRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
+  assignmentDetailRoute,
   chatIndexRoute,
   chatWorkspaceRoute,
   chatThreadRoute,

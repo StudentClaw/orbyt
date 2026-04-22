@@ -76,6 +76,18 @@ describe("subject-grouping", () => {
     expect(todayOnly.map((i) => i.id)).toEqual(["a"])
   })
 
+  test("filterItemsByScope keeps submitted and graded items for submitted filter", () => {
+    const items: PrioritizedItem[] = [
+      item({ id: "submitted", submissionStatus: "submitted" }),
+      item({ id: "graded", submissionStatus: "graded" }),
+      item({ id: "pending", submissionStatus: "not_submitted" }),
+    ]
+
+    const submittedOnly = filterItemsByScope(items, "submitted", ANCHOR)
+
+    expect(submittedOnly.map((i) => i.id)).toEqual(["submitted", "graded"])
+  })
+
   test("groupAssignmentsByCourse preserves course order and groups", () => {
     const courses = [course("c-a", "AAA"), course("c-b", "BBB")]
     const items: PrioritizedItem[] = [

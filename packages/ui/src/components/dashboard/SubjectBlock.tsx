@@ -6,9 +6,10 @@ interface SubjectBlockProps {
   readonly course: Course
   readonly items: ReadonlyArray<PrioritizedItem>
   readonly now: Date
+  readonly onAssignmentSelect?: (item: PrioritizedItem) => void
 }
 
-export function SubjectBlock({ course, items, now }: SubjectBlockProps) {
+export function SubjectBlock({ course, items, now, onAssignmentSelect }: SubjectBlockProps) {
   return (
     <section className="mb-10 last:mb-0" data-testid={`subject-block-${course.id}`}>
       <div className="mb-4 flex flex-wrap items-baseline gap-2">
@@ -20,7 +21,12 @@ export function SubjectBlock({ course, items, now }: SubjectBlockProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {items.map((item) => (
-          <TaskCard key={item.id} item={item} now={now} />
+          <TaskCard
+            key={item.id}
+            item={item}
+            now={now}
+            onClick={onAssignmentSelect ? () => onAssignmentSelect(item) : undefined}
+          />
         ))}
       </div>
     </section>

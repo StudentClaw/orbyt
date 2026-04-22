@@ -8,10 +8,17 @@ export interface PrioritizedItem {
   readonly title: string
   readonly courseId: string
   readonly courseCode: string
+  readonly courseName?: string
+  readonly courseColor?: string
   readonly effectiveDueAt: string
   readonly estimatedMinutes: number
   readonly impactScore: number
   readonly coursePriority: number
+  readonly pointsPossible?: number
+  readonly submissionStatus?: string
+  readonly grade?: string
+  readonly htmlUrl?: string
+  readonly sourceId?: string
 }
 
 export type UrgencyZone = "overdue" | "urgent" | "attention" | "calm"
