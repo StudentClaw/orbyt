@@ -69,10 +69,6 @@ async function ensureServerProcess(): Promise<ServerProcess> {
       })
       pluginManager = runtime.manager
 
-      await runtime.manager.autoStartEnabled().catch((error) => {
-        process.stderr.write(`Failed to auto-start enabled plugins: ${String(error)}\n`)
-      })
-
       const gateway = await createPluginGatewayService({
         runtime: runtime.manager,
       })
@@ -102,6 +98,9 @@ async function ensureServerProcess(): Promise<ServerProcess> {
         },
       ).pluginManager
       void pushManager.start()
+      void runtime.manager.autoStartEnabled().catch((error) => {
+        process.stderr.write(`Failed to auto-start enabled plugins: ${String(error)}\n`)
+      })
 
       return nextServerProcess
     })()

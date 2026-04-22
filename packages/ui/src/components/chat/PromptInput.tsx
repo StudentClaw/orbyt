@@ -52,6 +52,9 @@ interface PromptInputProps {
   readonly connectionState: WsConnectionPhase
   readonly disabled?: boolean
   readonly disabledReason?: string | null
+  readonly loading?: boolean
+  readonly loadingLabel?: string | null
+  readonly loadingDetail?: string | null
   readonly availableModels: readonly ChatModel[]
   readonly selectedModel: string
   readonly onModelChange: (model: string) => void
@@ -61,6 +64,8 @@ interface PromptInputProps {
   readonly pendingApproval?: ProviderPendingApproval | null
   readonly onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
   readonly approvalDecisionPending?: boolean
+  readonly interruptPending?: boolean
+  readonly interruptError?: string | null
 }
 
 type ComposerAttachment = TurnAttachmentInput & {
@@ -305,6 +310,9 @@ export function PromptInput({
   connectionState,
   disabled = false,
   disabledReason = null,
+  loading = false,
+  loadingLabel = null,
+  loadingDetail = null,
   availableModels,
   selectedModel,
   onModelChange,
@@ -314,6 +322,8 @@ export function PromptInput({
   pendingApproval = null,
   onRespondToApproval,
   approvalDecisionPending = false,
+  interruptPending = false,
+  interruptError = null,
   skills = [],
 }: PromptInputProps) {
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
@@ -329,6 +339,9 @@ export function PromptInput({
 
   const isConnected = connectionState === "connected"
   const isStreaming = status === "streaming"
+  const isQueued = status === "queued"
+  const isInterrupting = status === "interrupting" || interruptPending
+  const showStopButton = isStreaming || isQueued || isInterrupting
   const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
@@ -593,6 +606,29 @@ export function PromptInput({
           onDragOver={handleDragOver}
           onDrop={(e) => { void handleDrop(e) }}
         >
+          {loading ? (
+            <div
+              data-testid="composer-loading-overlay"
+              className="absolute inset-0 z-40 flex items-center justify-center rounded-[2rem] bg-background/88 px-6 text-center backdrop-blur-sm"
+            >
+              <div className="max-w-sm space-y-3">
+                <div
+                  role="progressbar"
+                  aria-label="Runtime readiness progress"
+                  className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-primary/20 border-t-primary"
+                />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {loadingLabel ?? "Preparing chat"}
+                  </p>
+                  {loadingDetail ? (
+                    <p className="text-sm text-muted-foreground">{loadingDetail}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {isDragOver && (
             <div
               data-testid="drag-drop-overlay"
@@ -711,10 +747,16 @@ export function PromptInput({
                   </DropdownMenu>
                 </PromptInputTools>
 
-                {isStreaming ? (
+                {showStopButton ? (
                   <PromptInputButton
-                    aria-label="Stop generating"
-                    onClick={onInterrupt}
+                    aria-label={isInterrupting ? "Stopping…" : "Stop generating"}
+                    disabled={isInterrupting}
+                    data-pending={isInterrupting ? "true" : undefined}
+                    onClick={() => {
+                      if (!isInterrupting) {
+                        onInterrupt()
+                      }
+                    }}
                     className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     <SquareIcon className="size-4 fill-current" />
@@ -734,6 +776,25 @@ export function PromptInput({
 
       {attachmentError ? (
         <p className="mt-2 px-1 text-xs text-destructive">{attachmentError}</p>
+      ) : null}
+
+      {isInterrupting ? (
+        <p
+          className="mt-2 px-1 text-xs text-muted-foreground"
+          data-testid="interrupt-pending-hint"
+        >
+          Waiting for the current turn to stop.
+        </p>
+      ) : null}
+
+      {interruptError ? (
+        <p
+          className="mt-2 px-1 text-xs text-destructive"
+          data-testid="interrupt-error"
+          role="alert"
+        >
+          {interruptError}
+        </p>
       ) : null}
 
       <AlertDialog open={fullAccessDialogOpen} onOpenChange={setFullAccessDialogOpen}>

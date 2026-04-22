@@ -63,7 +63,7 @@ export function createWindow(): BrowserWindow {
       return
     }
 
-    const [width, height] = win.getSize()
+    const [width = DEFAULT_WINDOW_WIDTH, height = DEFAULT_WINDOW_HEIGHT] = win.getSize()
     if (width < 600 || height < 400) {
       win.setSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
       win.center()
