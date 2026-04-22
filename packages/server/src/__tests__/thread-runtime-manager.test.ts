@@ -225,6 +225,110 @@ describe("ThreadRuntimeManager", () => {
     expect(manager.getSnapshot().queuedTurns).toHaveLength(0)
   })
 
+  test("interrupts an active turn and forwards the call to the runtime", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+
+    expect(result).toEqual({ interrupted: true, disposition: "active" })
+    expect(runtimes[0]?.interruptedTurns).toEqual(["turn-1"])
+  })
+
+  test("double-interrupt of the same active turn is idempotent", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const first = await manager.interruptTurn("thread-1", "turn-1")
+    expect(first.disposition).toBe("active")
+
+    // Settle the turn so the slot releases.
+    await runtimes[0]?.interruptTurnCallback("turn-1")
+
+    const second = await manager.interruptTurn("thread-1", "turn-1")
+    expect(second).toEqual({ interrupted: false, disposition: "missing" })
+  })
+
+  test("interrupting a non-existent turn returns disposition missing", async () => {
+    const { factory } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    const result = await manager.interruptTurn("thread-x", "turn-x")
+
+    expect(result).toEqual({ interrupted: false, disposition: "missing" })
+  })
+
+  test("interrupt during a pending approval settles the turn as interrupted", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    let interruptedCallback = false
+    await manager.submitTurn(
+      createTurnInput("thread-1", "turn-1", {
+        onInterrupted: async () => {
+          interruptedCallback = true
+        },
+      }),
+    )
+    await runtimes[0]?.emitApproval("turn-1", "approval-1")
+
+    expect(manager.listPendingApprovals().map((entry) => entry.id)).toEqual([
+      "approval-1",
+    ])
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+    expect(result).toEqual({ interrupted: true, disposition: "active" })
+
+    // Simulate Codex acking the interrupt. The wrapper must fire onInterrupted.
+    await runtimes[0]?.interruptTurnCallback("turn-1")
+
+    expect(interruptedCallback).toBe(true)
+  })
+
+  test("surfaces runtime interrupt failure without crashing the manager", async () => {
+    const { factory, runtimes } = createControlledRuntimeFactory()
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: factory,
+      maxActiveRuntimes: 1,
+    })
+
+    await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
+
+    const runtime = runtimes[0]
+    if (!runtime) throw new Error("runtime missing")
+    // Runtime reports the turn was not found (already finished between client click and ack).
+    const mutableRuntime = runtime as {
+      interruptTurn: (threadId: string, turnId: string) => Promise<boolean>
+      interruptedTurns: string[]
+    }
+    const originalInterrupt = mutableRuntime.interruptTurn
+    mutableRuntime.interruptTurn = async (_threadId: string, turnId: string) => {
+      runtime.interruptedTurns.push(turnId)
+      return false
+    }
+
+    const result = await manager.interruptTurn("thread-1", "turn-1")
+
+    expect(result).toEqual({ interrupted: false, disposition: "active" })
+    expect(runtime.interruptedTurns).toEqual(["turn-1"])
+    mutableRuntime.interruptTurn = originalInterrupt
+  })
   test("reuses a warm runtime for later turns in the same thread", async () => {
     const { factory, runtimes } = createControlledRuntimeFactory()
     const manager = createThreadRuntimeManager({
@@ -240,11 +344,13 @@ describe("ThreadRuntimeManager", () => {
     await runtimes[0]?.completeTurn("turn-1")
     await manager.submitTurn(createTurnInput("thread-1", "turn-2"))
 
-    expect(runtimes).toHaveLength(1)
+    expect(runtimes).toHaveLength(2)
     expect(runtimes[0]?.streamCalls.map((call) => call.turnId)).toEqual([
       "turn-1",
       "turn-2",
     ])
+    expect(runtimes[1]?.streamCalls).toEqual([])
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
   })
 
   test("evicts the least recently used warm runtime under pressure", async () => {
@@ -399,14 +505,118 @@ describe("ThreadRuntimeManager", () => {
 
     await manager.submitTurn(createTurnInput("thread-1", "turn-1"))
 
-    expect(runtimes).toHaveLength(1)
-    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+    expect(runtimes).toHaveLength(2)
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
     expect(runtimes[0]?.streamCalls.map((call) => call.turnId)).toEqual(["turn-1"])
+    expect(runtimes[1]?.streamCalls).toEqual([])
 
-    // A second submission from a different thread requires a fresh runtime because
-    // the bootstrap has already been claimed.
+    // A second submission from a different thread claims the refilled bootstrap spare.
     await manager.submitTurn(createTurnInput("thread-2", "turn-2"))
     expect(runtimes).toHaveLength(2)
+    expect(runtimes[1]?.streamCalls.map((call) => call.turnId)).toEqual(["turn-2"])
+  })
+
+  test("does not accept turns until warmBootstrap initialization actually finishes", async () => {
+    let resolveInitialize: (() => void) | null = null
+    let startedInitialize = false
+
+    const runtime: CodexCliService = {
+      initialize: async () => {
+        startedInitialize = true
+        await new Promise<void>((resolve) => {
+          resolveInitialize = resolve
+        })
+      },
+      retryInitialize: async () => true,
+      startAuth: async () => true,
+      reloadGatewayTools: async () => true,
+      streamTurn: async () => undefined,
+      listPendingApprovals: () => [],
+      respondToApproval: async (approvalRequestId, decision) => ({
+        approvalRequestId,
+        threadId: "",
+        turnId: "",
+        decision,
+        resolved: false,
+      }),
+      interruptTurn: async () => false,
+      shutdown: async () => undefined,
+    }
+
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: () => runtime,
+      maxActiveRuntimes: 1,
+    })
+
+    const warmPromise = manager.warmBootstrap()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(startedInitialize).toBe(true)
+    expect(manager.getSnapshot().bootstrapReady).toBe(false)
+    expect(manager.getSnapshot().acceptingTurns).toBe(false)
+
+    const finishInitialize = resolveInitialize
+    if (!finishInitialize) {
+      throw new Error("initialize did not start")
+    }
+    ;(finishInitialize as () => void)()
+    await warmPromise
+
+    expect(manager.getSnapshot().bootstrapReady).toBe(true)
+    expect(manager.getSnapshot().acceptingTurns).toBe(true)
+  })
+
+  test("publishes accepting-turn readiness only when the bootstrap gate actually changes", async () => {
+    let resolveInitialize: (() => void) | null = null
+    const readinessChanges: boolean[] = []
+
+    const runtime: CodexCliService = {
+      initialize: async () => {
+        await new Promise<void>((resolve) => {
+          resolveInitialize = resolve
+        })
+      },
+      retryInitialize: async () => true,
+      startAuth: async () => true,
+      reloadGatewayTools: async () => true,
+      streamTurn: async () => undefined,
+      listPendingApprovals: () => [],
+      respondToApproval: async (approvalRequestId, decision) => ({
+        approvalRequestId,
+        threadId: "",
+        turnId: "",
+        decision,
+        resolved: false,
+      }),
+      interruptTurn: async () => false,
+      shutdown: async () => undefined,
+    }
+
+    const manager = createThreadRuntimeManager({
+      runtimeFactory: () => runtime,
+      maxActiveRuntimes: 1,
+      onAcceptingTurnsChanged: (acceptingTurns) => {
+        readinessChanges.push(acceptingTurns)
+      },
+    })
+
+    const warmPromise = manager.warmBootstrap()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(readinessChanges).toEqual([])
+
+    const finishInitialize = resolveInitialize
+    if (!finishInitialize) {
+      throw new Error("initialize did not start")
+    }
+    ;(finishInitialize as () => void)()
+    await warmPromise
+
+    expect(readinessChanges).toEqual([true])
+
+    await manager.shutdown()
+
+    expect(readinessChanges).toEqual([true, false])
   })
 
   test("inactivity watchdog fails a stalled turn and recycles its slot", async () => {
@@ -439,11 +649,10 @@ describe("ThreadRuntimeManager", () => {
     currentTime += 500
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    expect(stalledFailure).not.toBeNull()
-    if (!stalledFailure) {
-      throw new Error("Expected stalledFailure to be set by the watchdog")
+    const failure = stalledFailure as ProviderRuntimeFailure | null
+    if (!failure) {
+      throw new Error("expected a ProviderRuntimeFailure")
     }
-    const failure = stalledFailure as ProviderRuntimeFailure
     expect(failure.code).toBe("codex_turn_stalled")
     // Slot should be destroyed, not kept warm, so the runtime was shut down.
     expect(runtimes[0]?.shutdownCount).toBeGreaterThanOrEqual(1)

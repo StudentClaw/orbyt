@@ -324,6 +324,7 @@ export const OrchestrationSnapshot = Schema.Struct({
   pendingApprovals: Schema.Array(ProviderPendingApproval),
   providerStatus: ProviderRuntimeStatus,
   providerRuntime: ProviderRuntimeState,
+  chatSendReady: Schema.Boolean,
   ready: Schema.Boolean,
   lastSequence: Schema.Number,
 })
@@ -498,6 +499,10 @@ export const ProviderRuntimeEvent = Schema.Union(
   Schema.Struct({
     type: Schema.Literal("provider.stateChanged"),
     state: ProviderRuntimeState,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("provider.readinessChanged"),
+    chatSendReady: Schema.Boolean,
   }),
   Schema.Struct({
     type: Schema.Literal("provider.turnStarted"),

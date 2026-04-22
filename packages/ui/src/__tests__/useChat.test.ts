@@ -93,6 +93,7 @@ const baseSnapshot: OrchestrationSnapshot = {
     queuedTurnCount: 0,
     lastUpdatedAt: "2026-04-09T00:01:00.000Z",
   },
+  chatSendReady: true,
   ready: true,
   lastSequence: 2,
 }
@@ -195,6 +196,33 @@ describe("useChat", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-09T00:01:00.000Z",
       },
+      chatSendReady: false,
+    }
+
+    const { result } = renderHook(() => useChat())
+
+    expect(result.current.status).toBe("preparing")
+    expect(result.current.inputDisabled).toBe(true)
+
+    await act(async () => {
+      await result.current.sendMessage({ content: "Hello", attachments: [] })
+    })
+
+    expect(hookMocks.sendTurn).not.toHaveBeenCalled()
+    expect(hookMocks.createThread).not.toHaveBeenCalled()
+  })
+
+  test("sendMessage is a no-op while cold-start send readiness is still false", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed", currentTurnId: null }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed", completedAt: "2026-04-09T00:02:00.000Z" }],
+      providerStatus: "idle",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "idle",
+      },
+      chatSendReady: false,
     }
 
     const { result } = renderHook(() => useChat())

@@ -1022,6 +1022,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
       queuedTurnCount: deps.state.workQueue.length,
       lastUpdatedAt: provider?.last_updated_at ?? new Date(0).toISOString(),
     },
+    chatSendReady: true,
     ready: deps.readiness.isReady(),
     lastSequence: deps.pushBus.getLastSequence(),
   }
@@ -1975,6 +1976,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         )
         const turns = turnRows.map((row) => mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []))
         const providerRuntime = await runtimeStore.getState()
+        const runtimeSnapshot = threadRuntimeManager.getSnapshot()
         return {
           workspaces,
           threads,
@@ -1982,6 +1984,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           pendingApprovals: threadRuntimeManager.listPendingApprovals(),
           providerStatus: providerRuntime.status,
           providerRuntime,
+          chatSendReady: runtimeSnapshot.acceptingTurns,
           ready: readiness.isReady(),
           lastSequence: pushBus.getLastSequence(),
         }
@@ -2246,6 +2249,11 @@ export const OrchestrationServiceLive = Layer.scoped(
         return { deleted: true }
       },
       sendTurn: async (commandId, threadId, content, attachments, model) => {
+        const runtimeState = await runtimeStore.getState()
+        if (!threadRuntimeManager.getSnapshot().acceptingTurns) {
+          throw new Error("Codex is still starting. Wait for Student Claw to finish preparing Codex and try again.")
+        }
+
         const thread = readThread(threadId)
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
@@ -2254,7 +2262,6 @@ export const OrchestrationServiceLive = Layer.scoped(
           throw new Error("Wait for the current turn to finish before sending another message.")
         }
 
-        const runtimeState = await runtimeStore.getState()
         if (runtimeState.authState === "auth_required" || runtimeState.status === "auth_required") {
           throw new Error("Codex CLI is not authenticated. Start auth and retry.")
         }

@@ -60,17 +60,18 @@ function makeSnapshot(thread: OrchestrationThread, turn: OrchestrationTurn): Orc
     turns: [turn],
     pendingApprovals: [],
     providerStatus: "streaming",
-    providerRuntime: {
-      adapter: "codex",
-      status: "streaming",
-      authState: "authenticated",
-      lastError: null,
-      queuedTurnCount: 0,
-      lastUpdatedAt: "2026-04-19T00:01:00.000Z",
-    },
-    ready: true,
-    lastSequence: 1,
-  }
+  providerRuntime: {
+    adapter: "codex",
+    status: "streaming",
+    authState: "authenticated",
+    lastError: null,
+    queuedTurnCount: 0,
+    lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+  },
+  chatSendReady: true,
+  ready: true,
+  lastSequence: 1,
+}
 }
 
 describe("resolveChatState", () => {
@@ -99,6 +100,7 @@ describe("resolveChatState", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-19T00:01:00.000Z",
       },
+      chatSendReady: false,
     }
 
     const result = resolveChatState(snapshot, thread, connected, false)
@@ -121,6 +123,7 @@ describe("resolveChatState", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-19T00:01:00.000Z",
       },
+      chatSendReady: false,
     }
 
     const result = resolveChatState(snapshot, thread, connected, false)
@@ -142,11 +145,35 @@ describe("resolveChatState", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-19T00:01:00.000Z",
       },
+      chatSendReady: false,
     }
 
     const result = resolveChatState(snapshot, thread, connected, false)
 
     expect(result.status).toBe("preparing")
+  })
+
+  test("returns preparing when chat send readiness is still false during cold start", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "idle",
+      providerRuntime: {
+        adapter: "codex",
+        status: "idle",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+      chatSendReady: false,
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("preparing")
+    expect(result.preparingDetail).toContain("chat can send messages")
   })
 
   test("returns interrupting when local interruptRequested is set and turn is queued", () => {
@@ -231,6 +258,28 @@ describe("resolveChatState", () => {
     expect(result.status).toBe("streaming")
   })
 
+  test("keeps streaming when a background spare runtime reports initializing", () => {
+    const thread = makeThread({ status: "streaming" })
+    const turn = makeTurn({ status: "streaming" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "initializing",
+      providerRuntime: {
+        adapter: "codex",
+        status: "initializing",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+      chatSendReady: true,
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("streaming")
+  })
+
   test("returns queued when thread is queued without interrupt", () => {
     const thread = makeThread({ status: "queued" })
     const turn = makeTurn({ status: "queued" })
@@ -260,6 +309,28 @@ describe("resolveChatState", () => {
     const result = resolveChatState(snapshot, thread, connected, false)
 
     expect(result.status).toBe("error")
+  })
+
+  test("stays idle when send readiness is true during background prewarm", () => {
+    const thread = makeThread({ status: "completed", currentTurnId: null })
+    const turn = makeTurn({ status: "completed" })
+    const snapshot: OrchestrationSnapshot = {
+      ...makeSnapshot(thread, turn),
+      providerStatus: "initializing",
+      providerRuntime: {
+        adapter: "codex",
+        status: "initializing",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-19T00:01:00.000Z",
+      },
+      chatSendReady: true,
+    }
+
+    const result = resolveChatState(snapshot, thread, connected, false)
+
+    expect(result.status).toBe("idle")
   })
 
   test("offline takes priority over local interrupt flag", () => {

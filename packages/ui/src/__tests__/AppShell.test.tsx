@@ -159,6 +159,7 @@ describe("AppShell", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-09T00:00:00.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 1,
     }
@@ -195,6 +196,32 @@ describe("AppShell", () => {
     expect(screen.queryByTestId("chat-status-badge")).toBeNull()
   })
 
+  test("shows a preparing chat badge while the provider is still warming", () => {
+    shellMocks.pathname = "/chat"
+    shellMocks.snapshot = {
+      workspaces: [],
+      threads: [],
+      turns: [],
+      pendingApprovals: [],
+      providerStatus: "idle",
+      providerRuntime: {
+        adapter: "codex",
+        status: "idle",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-09T00:00:00.000Z",
+      },
+      chatSendReady: false,
+      ready: true,
+      lastSequence: 1,
+    }
+
+    render(<AppShell />)
+
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Preparing")
+  })
+
   test("shows the activity title in the root navbar", () => {
     shellMocks.pathname = "/activity"
 
@@ -222,5 +249,31 @@ describe("AppShell", () => {
 
     expect(screen.queryByTestId("root-navbar")).toBeNull()
     expect(screen.queryByTestId("shell-sidebar-trigger")).toBeNull()
+  })
+
+  test("keeps the chat badge ready during background spare-runtime warmup", () => {
+    shellMocks.pathname = "/chat"
+    shellMocks.snapshot = {
+      workspaces: [],
+      threads: [],
+      turns: [],
+      pendingApprovals: [],
+      providerStatus: "initializing",
+      providerRuntime: {
+        adapter: "codex",
+        status: "initializing",
+        authState: "authenticated",
+        lastError: null,
+        queuedTurnCount: 0,
+        lastUpdatedAt: "2026-04-09T00:00:00.000Z",
+      },
+      chatSendReady: true,
+      ready: true,
+      lastSequence: 1,
+    }
+
+    render(<AppShell />)
+
+    expect(screen.getByTestId("chat-status-badge").textContent).toContain("Ready")
   })
 })

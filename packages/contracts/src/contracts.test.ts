@@ -94,6 +94,7 @@ describe("@student-claw/contracts", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-09T12:00:00.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 0,
     })
@@ -127,6 +128,16 @@ describe("@student-claw/contracts", () => {
 
     expect(event.type).toBe("provider.stateChanged")
     expect(event.state.queuedTurnCount).toBe(2)
+  })
+
+  test("decodes provider readiness-change events", () => {
+    const event = Schema.decodeUnknownSync(ProviderRuntimeEvent)({
+      type: "provider.readinessChanged",
+      chatSendReady: false,
+    })
+
+    expect(event.type).toBe("provider.readinessChanged")
+    expect(event.chatSendReady).toBe(false)
   })
 
   test("decodes activity feed entries and weekly insight payloads", () => {
@@ -274,6 +285,7 @@ describe("@student-claw/contracts", () => {
         queuedTurnCount: 1,
         lastUpdatedAt: "2026-04-16T12:00:01.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 3,
     })

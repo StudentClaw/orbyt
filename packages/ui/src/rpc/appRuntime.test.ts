@@ -81,6 +81,8 @@ const transportMocks = vi.hoisted(() => {
 const runtimeSyncMocks = vi.hoisted(() => {
   let resolveInitialSnapshot: (() => void) | null = null
   let rejectInitialSnapshot: ((error: Error) => void) | null = null
+  let resolveStartupReady: (() => void) | null = null
+  let rejectStartupReady: ((error: Error) => void) | null = null
 
   return {
     fakeClient: null as { transport: InstanceType<typeof transportMocks.MockWsTransport> } | null,
@@ -101,12 +103,22 @@ const runtimeSyncMocks = vi.hoisted(() => {
         resolveInitialSnapshot = resolve
         rejectInitialSnapshot = reject
       }),
+      startupReady: new Promise<void>((resolve, reject) => {
+        resolveStartupReady = resolve
+        rejectStartupReady = reject
+      }),
     })),
     resolveInitialSnapshot: () => {
       resolveInitialSnapshot?.()
     },
     rejectInitialSnapshot: (error: Error) => {
       rejectInitialSnapshot?.(error)
+    },
+    resolveStartupReady: () => {
+      resolveStartupReady?.()
+    },
+    rejectStartupReady: (error: Error) => {
+      rejectStartupReady?.(error)
     },
     reset() {
       runtimeSyncMocks.fakeClient = null
@@ -120,6 +132,8 @@ const runtimeSyncMocks = vi.hoisted(() => {
       runtimeSyncMocks.startOrchestrationStateSync.mockClear()
       resolveInitialSnapshot = null
       rejectInitialSnapshot = null
+      resolveStartupReady = null
+      rejectStartupReady = null
       transportMocks.MockWsTransport.instances = []
     },
   }
@@ -140,6 +154,12 @@ vi.mock("./onboardingState", () => ({
 
 vi.mock("./orchestrationState", () => ({
   startOrchestrationStateSync: runtimeSyncMocks.startOrchestrationStateSync,
+  getOrchestrationSnapshot: vi.fn(() => null),
+  isOrchestrationStartupReady: vi.fn(() => false),
+  resolveOrchestrationStartupCopy: vi.fn(() => ({
+    label: "Preparing Codex",
+    detail: "Finishing Codex startup before chat can send messages.",
+  })),
 }))
 
 vi.mock("./serverState", () => ({
@@ -212,6 +232,7 @@ describe("startAppRuntime", () => {
 
     await waitForOrchestrationStartup()
     runtimeSyncMocks.resolveInitialSnapshot()
+    runtimeSyncMocks.resolveStartupReady()
     await startPromise
   })
 
@@ -230,6 +251,7 @@ describe("startAppRuntime", () => {
 
     await waitForOrchestrationStartup()
     runtimeSyncMocks.resolveInitialSnapshot()
+    runtimeSyncMocks.resolveStartupReady()
     await startPromise
   })
 
@@ -247,12 +269,13 @@ describe("startAppRuntime", () => {
 
     await waitForOrchestrationStartup()
     runtimeSyncMocks.resolveInitialSnapshot()
+    runtimeSyncMocks.resolveStartupReady()
 
     const client = await clientPromise
     expect(client).toBe(getPrimaryWsRpcClient())
   })
 
-  test("stays in startup hydration until the first orchestration snapshot resolves", async () => {
+  test("stays in startup hydration until orchestration startup is send-ready", async () => {
     window.electronAPI = {
       getBootstrap: vi.fn().mockResolvedValue(bootstrap),
       codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
@@ -281,6 +304,16 @@ describe("startAppRuntime", () => {
     expect(settled).toBe(false)
 
     runtimeSyncMocks.resolveInitialSnapshot()
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+    expect(getRuntimeStartupState()).toMatchObject({
+      phase: "hydrating",
+      label: "Preparing Codex",
+      detail: "Finishing Codex startup before chat can send messages.",
+    })
+
+    runtimeSyncMocks.resolveStartupReady()
     await startPromise
 
     expect(getRuntimeStartupState().phase).toBe("ready")

@@ -59,6 +59,7 @@ function makeDependencies() {
           queuedTurnCount: 0,
           lastUpdatedAt: "2026-04-16T00:00:00.000Z",
         },
+        chatSendReady: true,
         ready: true,
         lastSequence: 1,
       }),

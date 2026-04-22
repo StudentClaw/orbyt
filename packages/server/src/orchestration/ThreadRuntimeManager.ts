@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import {
+  PUSH_CHANNELS,
   type ProviderApprovalDecision,
   type ProviderPendingApproval,
   type ThreadAccessMode,
@@ -12,6 +13,7 @@ import {
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import { ConfigService } from "../config/ConfigService.js"
 import { PluginGateway } from "../mcp/PluginGateway.js"
+import { PushBus } from "../ws/PushBus.js"
 
 type StreamTurnCallbacks = Parameters<CodexCliService["streamTurn"]>[0]
 
@@ -49,6 +51,7 @@ export type ThreadRuntimeSnapshot = {
   readonly activeRuntimeCount: number
   readonly warmRuntimeCount: number
   readonly maxRuntimeCount: number
+  readonly acceptingTurns: boolean
   readonly bootstrapReady: boolean
 }
 
@@ -86,6 +89,7 @@ type ThreadRuntimeManagerOptions = {
   readonly prewarmBackoffBaseMs?: number
   readonly prewarmBackoffMaxMs?: number
   readonly onPrewarmFailure?: (error: unknown) => void
+  readonly onAcceptingTurnsChanged?: (acceptingTurns: boolean) => void | Promise<void>
 }
 
 export interface ThreadRuntimeManagerService {
@@ -163,6 +167,7 @@ export function createThreadRuntimeManager(
   let shuttingDown = false
   let prewarmFailureCount = 0
   let prewarmBackoffTimer: ReturnType<typeof setTimeout> | null = null
+  let lastPublishedAcceptingTurns = false
 
   // Single admission mutex: every state transition that reads/writes slot capacity
   // or the queued-turns list serializes through this chain. This is the only
@@ -188,6 +193,31 @@ export function createThreadRuntimeManager(
     void task.finally(() => {
       inFlightTurnTasks.delete(task)
     })
+  }
+
+  const computeAcceptingTurns = (): boolean => {
+    let activeCount = 0
+    let warmCount = 0
+
+    for (const slot of slots.values()) {
+      if (slot.state === "active") {
+        activeCount += 1
+      } else {
+        warmCount += 1
+      }
+    }
+
+    return activeCount > 0 || warmCount > 0 || (bootstrapRuntime !== null && bootstrapWarmPromise === null)
+  }
+
+  const publishAcceptingTurnsIfChanged = (): void => {
+    const acceptingTurns = computeAcceptingTurns()
+    if (acceptingTurns === lastPublishedAcceptingTurns) {
+      return
+    }
+
+    lastPublishedAcceptingTurns = acceptingTurns
+    void options.onAcceptingTurnsChanged?.(acceptingTurns)
   }
 
   const getWarmestReusableSlot = (threadId: string): ThreadRuntimeSlot | null => {
@@ -258,10 +288,12 @@ export function createThreadRuntimeManager(
       // A slot was freed (and the shutdown guard will short-circuit on the
       // shuttingDown branch). Refill the spare if the pool now has headroom.
       schedulePrewarm()
+      publishAcceptingTurnsIfChanged()
       return
     }
 
     slot.state = "warm-idle"
+    publishAcceptingTurnsIfChanged()
   }
 
   const createWatchdog = (
@@ -464,6 +496,7 @@ export function createThreadRuntimeManager(
       lastUsedAt: now(),
     }
     slots.set(input.threadId, slot)
+    publishAcceptingTurnsIfChanged()
     trackInFlightTurn(startTurnOnSlot(slot, input))
     // Bootstrap may have been consumed by claimNewRuntime(); refill so the NEXT
     // thread's first send is also warm. No-op when the pool is full.
@@ -509,6 +542,7 @@ export function createThreadRuntimeManager(
         throw error
       } finally {
         bootstrapWarmPromise = null
+        publishAcceptingTurnsIfChanged()
       }
     })()
     await bootstrapWarmPromise
@@ -612,6 +646,7 @@ export function createThreadRuntimeManager(
         if (slot) {
           slots.delete(threadId)
           await slot.runtime.shutdown()
+          publishAcceptingTurnsIfChanged()
         }
 
         while (queuedTurns.length > 0) {
@@ -679,7 +714,8 @@ export function createThreadRuntimeManager(
         activeRuntimeCount: activeCount,
         warmRuntimeCount: warmCount,
         maxRuntimeCount: maxActiveRuntimes,
-        bootstrapReady: bootstrapRuntime !== null,
+        acceptingTurns: computeAcceptingTurns(),
+        bootstrapReady: bootstrapRuntime !== null && bootstrapWarmPromise === null,
       }
     },
     warmBootstrap: warmBootstrapInternal,
@@ -697,6 +733,8 @@ export function createThreadRuntimeManager(
       slots.clear()
       const pendingBootstrap = bootstrapRuntime
       bootstrapRuntime = null
+      lastPublishedAcceptingTurns = false
+      void options.onAcceptingTurnsChanged?.(false)
       const toShutdown: Promise<void>[] = runtimes.map((runtime) => runtime.shutdown())
       if (pendingBootstrap) {
         toShutdown.push(pendingBootstrap.shutdown())
@@ -713,6 +751,7 @@ export const ThreadRuntimeManagerLive = Layer.effect(
     const config = yield* ConfigService
     const pluginGateway = yield* PluginGateway
     const runtimeStore = yield* ProviderRuntimeStore
+    const pushBus = yield* PushBus
 
     return createThreadRuntimeManager({
       runtimeFactory: () =>
@@ -721,6 +760,12 @@ export const ThreadRuntimeManagerLive = Layer.effect(
           pluginGateway,
           runtimeStore,
         }),
+      onAcceptingTurnsChanged: async (acceptingTurns) => {
+        await pushBus.publish(PUSH_CHANNELS.PROVIDER_RUNTIME, {
+          type: "provider.readinessChanged",
+          chatSendReady: acceptingTurns,
+        })
+      },
     })
   }),
 )

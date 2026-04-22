@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
+import { getWeekKey } from "../activity/feed.js"
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"
 import { createBunDatabaseService, createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
@@ -76,6 +77,7 @@ function makeDependencies() {
           queuedTurnCount: 0,
           lastUpdatedAt: "2026-04-09T12:00:00.000Z",
         },
+        chatSendReady: true,
         ready: true,
         lastSequence: 1,
       }),
@@ -224,6 +226,6 @@ describe("Router", () => {
 
     expect(response.ok).toBe(true)
     expect(response.result.title).toContain("Weekly insight")
-    expect(response.result.weekKey).toBe("2026-04-13")
+    expect(response.result.weekKey).toBe(getWeekKey(new Date()))
   })
 })

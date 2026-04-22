@@ -532,6 +532,9 @@ export const OrchestrationServiceLive = Layer.scoped(
           pendingApprovals: codexCli.listPendingApprovals(),
           providerStatus: providerRuntime.status,
           providerRuntime,
+          chatSendReady:
+            providerRuntime.status !== "offline"
+            && providerRuntime.authState === "authenticated",
           ready: readiness.isReady(),
           lastSequence: pushBus.getLastSequence(),
         }

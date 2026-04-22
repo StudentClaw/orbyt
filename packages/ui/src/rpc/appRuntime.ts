@@ -4,7 +4,12 @@ import { startActivityStateSync } from "./activityState"
 import { startCanvasStateSync, loadCanvasData } from "./canvasState"
 import { startDashboardStateSync } from "./dashboardState"
 import { startPlannerStateSync } from "./plannerState"
-import { startOrchestrationStateSync } from "./orchestrationState"
+import {
+  getOrchestrationSnapshot,
+  isOrchestrationStartupReady,
+  resolveOrchestrationStartupCopy,
+  startOrchestrationStateSync,
+} from "./orchestrationState"
 import { setRuntimeStartupState } from "./runtimeStartupState"
 import { startServerStateSync } from "./serverState"
 import { setDesktopBootstrap, setWsConnectionStatus } from "./wsConnectionState"
@@ -157,6 +162,19 @@ export function startAppRuntime(): Promise<void> {
       })
 
       await orchestrationSync.initialSnapshotReady
+
+      const currentSnapshot = getOrchestrationSnapshot()
+      if (!isOrchestrationStartupReady(currentSnapshot)) {
+        const startupCopy = resolveOrchestrationStartupCopy(currentSnapshot)
+        setRuntimeStartupState({
+          phase: "hydrating",
+          label: startupCopy.label,
+          detail: startupCopy.detail,
+          error: null,
+        })
+      }
+
+      await orchestrationSync.startupReady
 
       void loadCanvasData(client)
 

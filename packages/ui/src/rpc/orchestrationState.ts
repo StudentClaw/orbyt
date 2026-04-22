@@ -70,8 +70,49 @@ function buildEmptySnapshot(sequence = 0): OrchestrationSnapshot {
     pendingApprovals: [],
     providerStatus: "idle",
     providerRuntime: FALLBACK_PROVIDER_RUNTIME,
+    chatSendReady: false,
     ready: true,
     lastSequence: sequence,
+  }
+}
+
+export function isOrchestrationStartupReady(
+  snapshot: OrchestrationSnapshot | null,
+): boolean {
+  if (!snapshot) {
+    return false
+  }
+
+  if (snapshot.chatSendReady) {
+    return true
+  }
+
+  return (
+    snapshot.providerRuntime.authState === "auth_required"
+    || snapshot.providerRuntime.authState === "expired"
+    || snapshot.providerRuntime.status === "auth_required"
+    || snapshot.providerRuntime.status === "degraded"
+    || snapshot.providerRuntime.status === "rate_limited"
+    || snapshot.providerRuntime.status === "offline"
+  )
+}
+
+export function resolveOrchestrationStartupCopy(
+  snapshot: OrchestrationSnapshot | null,
+): {
+  label: string
+  detail: string
+} {
+  if (snapshot?.providerRuntime.status === "initializing") {
+    return {
+      label: "Preparing Codex",
+      detail: "Warming the local Codex runtime for chat.",
+    }
+  }
+
+  return {
+    label: "Preparing Codex",
+    detail: "Finishing Codex startup before chat can send messages.",
   }
 }
 
@@ -293,7 +334,10 @@ export function applyOrchestrationDomainEvent(
   syncChatUiState(nextSnapshot)
 }
 
-export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
+export function applyProviderRuntimeEvent(
+  event: ProviderRuntimeEvent,
+  sequence?: number,
+): void {
   appAtomRegistry.set(
     providerRuntimeEventsAtom,
     [event, ...appAtomRegistry.get(providerRuntimeEventsAtom)].slice(0, 8),
@@ -338,6 +382,17 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
       ...current,
       providerStatus: event.state.status,
       providerRuntime: event.state,
+      lastSequence: sequence ?? current.lastSequence,
+    }
+    appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
+    return
+  }
+
+  if (event.type === "provider.readinessChanged") {
+    const nextSnapshot: OrchestrationSnapshot = {
+      ...current,
+      chatSendReady: event.chatSendReady,
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -352,6 +407,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
         ...current.providerRuntime,
         status: "interrupted",
       },
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -365,6 +421,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
         ...current.providerRuntime,
         status: "streaming",
       },
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -378,6 +435,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
             approval.id === event.approval.id ? event.approval : approval,
           )
         : [...current.pendingApprovals, event.approval],
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -389,6 +447,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
       pendingApprovals: current.pendingApprovals.filter(
         (approval) => approval.id !== event.approvalRequestId,
       ),
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
     return
@@ -403,6 +462,7 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
         ...current.providerRuntime,
         status: "idle",
       },
+      lastSequence: sequence ?? current.lastSequence,
     }
     appAtomRegistry.set(orchestrationSnapshotAtom, nextSnapshot)
   }
@@ -411,15 +471,25 @@ export function applyProviderRuntimeEvent(event: ProviderRuntimeEvent): void {
 export function startOrchestrationStateSync(client: WsRpcClient): {
   stop: () => void
   initialSnapshotReady: Promise<void>
+  startupReady: Promise<void>
 } {
   let disposed = false
   let initialSnapshotSettled = false
+  let startupReadySettled = false
   let resolveInitialSnapshot: (() => void) | null = null
   let rejectInitialSnapshot: ((error: Error) => void) | null = null
+  let resolveStartupReady: (() => void) | null = null
+  let rejectStartupReady: ((error: Error) => void) | null = null
+  let latestSnapshotRequestId = 0
 
   const initialSnapshotReady = new Promise<void>((resolve, reject) => {
     resolveInitialSnapshot = resolve
     rejectInitialSnapshot = reject
+  })
+
+  const startupReady = new Promise<void>((resolve, reject) => {
+    resolveStartupReady = resolve
+    rejectStartupReady = reject
   })
 
   const settleInitialSnapshot = (error?: Error) => {
@@ -436,22 +506,54 @@ export function startOrchestrationStateSync(client: WsRpcClient): {
     resolveInitialSnapshot?.()
   }
 
+  const settleStartupReady = (error?: Error) => {
+    if (startupReadySettled) {
+      return
+    }
+
+    if (error) {
+      startupReadySettled = true
+      rejectStartupReady?.(error)
+      return
+    }
+
+    if (!isOrchestrationStartupReady(getOrchestrationSnapshot())) {
+      return
+    }
+
+    startupReadySettled = true
+    resolveStartupReady?.()
+  }
+
   const syncSnapshot = () => {
+    const requestId = ++latestSnapshotRequestId
     void client.orchestration.getSnapshot().then((snapshot) => {
       if (!disposed) {
+        if (requestId !== latestSnapshotRequestId) {
+          return
+        }
+
+        const current = getOrchestrationSnapshot()
+        if (current && snapshot.lastSequence < current.lastSequence) {
+          return
+        }
+
         setOrchestrationSnapshot(snapshot)
         settleInitialSnapshot()
+        settleStartupReady()
       }
     }).catch((error: unknown) => {
       if (disposed) {
         return
       }
 
-      settleInitialSnapshot(
+      const snapshotError =
         error instanceof Error
           ? error
-          : new Error("Failed to load the initial orchestration snapshot."),
-      )
+          : new Error("Failed to load the initial orchestration snapshot.")
+
+      settleInitialSnapshot(snapshotError)
+      settleStartupReady(snapshotError)
     })
   }
 
@@ -463,8 +565,9 @@ export function startOrchestrationStateSync(client: WsRpcClient): {
       { onResubscribe: syncSnapshot },
     ),
     client.provider.onRuntimeEvent(
-      (event) => {
-        applyProviderRuntimeEvent(event)
+      (event, sequence) => {
+        applyProviderRuntimeEvent(event, sequence)
+        settleStartupReady()
       },
       { onResubscribe: syncSnapshot },
     ),
@@ -474,6 +577,7 @@ export function startOrchestrationStateSync(client: WsRpcClient): {
     syncSnapshot()
   } else {
     settleInitialSnapshot()
+    settleStartupReady()
   }
 
   return {
@@ -484,6 +588,7 @@ export function startOrchestrationStateSync(client: WsRpcClient): {
       }
     },
     initialSnapshotReady,
+    startupReady,
   }
 }
 

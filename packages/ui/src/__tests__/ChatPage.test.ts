@@ -62,6 +62,7 @@ const baseSnapshot: OrchestrationSnapshot = {
     queuedTurnCount: 0,
     lastUpdatedAt: "2026-04-09T00:01:00.000Z",
   },
+  chatSendReady: true,
   ready: true,
   lastSequence: 2,
 }

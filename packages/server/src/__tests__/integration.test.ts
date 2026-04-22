@@ -97,6 +97,7 @@ describe("Server integration", () => {
                 queuedTurnCount: 0,
                 lastUpdatedAt: "2026-04-09T12:00:00.000Z",
               },
+              chatSendReady: true,
               ready: true,
               lastSequence: 1,
             }),

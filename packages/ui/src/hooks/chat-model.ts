@@ -287,6 +287,10 @@ export function formatProviderEventLabel(event: ProviderRuntimeEvent): string {
       return event.state.lastError
         ? `State changed to ${formatProviderStatus(event.state.status)}: ${event.state.lastError.code}`
         : `State changed to ${formatProviderStatus(event.state.status)}`
+    case "provider.readinessChanged":
+      return event.chatSendReady
+        ? "Chat send is ready"
+        : "Chat send is waiting for Codex startup"
     case "provider.turnStarted":
       return `Turn started: ${event.turnId}`
     case "provider.token":
@@ -333,6 +337,12 @@ export function resolveChatState(
   }
 
   const guidance = resolveProviderGuidance(snapshot)
+  const currentTurn = getCurrentTurn(snapshot, thread)
+  const turnInFlight =
+    thread?.status === "streaming"
+    || currentTurn?.status === "streaming"
+    || thread?.status === "queued"
+    || currentTurn?.status === "queued"
 
   if (
     snapshot.providerRuntime.authState === "auth_required"
@@ -347,45 +357,6 @@ export function resolveChatState(
     }
   }
 
-  const providerIsPreparing =
-    snapshot.providerRuntime.status === "initializing"
-    || (
-      snapshot.providerRuntime.authState === "unknown"
-      && (
-        snapshot.providerRuntime.adapter === "stub"
-        || snapshot.providerRuntime.status === "idle"
-        || !snapshot.ready
-        || snapshot.providerStatus === "offline"
-        || snapshot.providerRuntime.status === "offline"
-      )
-    )
-
-  if (providerIsPreparing) {
-    return {
-      status: "preparing",
-      error: null,
-      preparingLabel: "Preparing Codex",
-      preparingDetail: snapshot.providerRuntime.status === "initializing"
-        ? "Warming the local Codex runtime for chat."
-        : "Finalizing the local chat runtime before opening the conversation.",
-    }
-  }
-
-  if (
-    !snapshot.ready
-    || snapshot.providerStatus === "offline"
-    || snapshot.providerRuntime.status === "degraded"
-    || snapshot.providerRuntime.status === "offline"
-  ) {
-    return {
-      status: "error",
-      error: guidance?.detail ?? connectionStatus.lastError ?? "AI unavailable right now. The local runtime is not ready.",
-      preparingLabel: null,
-      preparingDetail: null,
-    }
-  }
-
-  const currentTurn = getCurrentTurn(snapshot, thread)
   if (thread?.status === "interrupted" || currentTurn?.status === "interrupted") {
     return {
       status: "interrupted",
@@ -403,12 +374,6 @@ export function resolveChatState(
       preparingDetail: null,
     }
   }
-
-  const turnInFlight =
-    thread?.status === "streaming"
-    || currentTurn?.status === "streaming"
-    || thread?.status === "queued"
-    || currentTurn?.status === "queued"
 
   if (interruptRequested && turnInFlight) {
     return {
@@ -435,6 +400,55 @@ export function resolveChatState(
     return {
       status: "streaming",
       error: null,
+      preparingLabel: null,
+      preparingDetail: null,
+    }
+  }
+
+  const providerIsPreparing =
+    !snapshot.chatSendReady
+    && (
+      snapshot.providerRuntime.status === "initializing"
+    || (
+      snapshot.providerRuntime.authState === "unknown"
+      && (
+        snapshot.providerRuntime.adapter === "stub"
+        || snapshot.providerRuntime.status === "idle"
+        || !snapshot.ready
+        || snapshot.providerStatus === "offline"
+        || snapshot.providerRuntime.status === "offline"
+      )
+    ))
+
+  if (providerIsPreparing) {
+    return {
+      status: "preparing",
+      error: null,
+      preparingLabel: "Preparing Codex",
+      preparingDetail: snapshot.providerRuntime.status === "initializing"
+        ? "Warming the local Codex runtime for chat."
+        : "Finalizing the local chat runtime before opening the conversation.",
+    }
+  }
+
+  if (!snapshot.chatSendReady) {
+    return {
+      status: "preparing",
+      error: null,
+      preparingLabel: "Preparing Codex",
+      preparingDetail: "Finishing Codex startup before chat can send messages.",
+    }
+  }
+
+  if (
+    !snapshot.ready
+    || snapshot.providerStatus === "offline"
+    || snapshot.providerRuntime.status === "degraded"
+    || snapshot.providerRuntime.status === "offline"
+  ) {
+    return {
+      status: "error",
+      error: guidance?.detail ?? connectionStatus.lastError ?? "AI unavailable right now. The local runtime is not ready.",
       preparingLabel: null,
       preparingDetail: null,
     }

@@ -1,17 +1,60 @@
-import { beforeEach, describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 import {
   applyOrchestrationDomainEvent,
   applyProviderRuntimeEvent,
   closeChatPanel,
   getOrchestrationSnapshot,
   getChatUiState,
+  isOrchestrationStartupReady,
   openChatPanel,
   resetOrchestrationStateForTests,
   setOrchestrationSnapshot,
   setChatPanelWidth,
   selectChatTarget,
   selectChatWorkspace,
+  startOrchestrationStateSync,
 } from "../rpc/orchestrationState"
+import type { WsRpcClient } from "../rpc/wsRpcClient"
+
+function buildSnapshot(overrides: Partial<NonNullable<ReturnType<typeof getOrchestrationSnapshot>>> = {}) {
+  return {
+    workspaces: [],
+    threads: [],
+    turns: [],
+    pendingApprovals: [],
+    providerStatus: "idle" as const,
+    providerRuntime: {
+      adapter: "codex" as const,
+      status: "idle" as const,
+      authState: "authenticated" as const,
+      lastError: null,
+      queuedTurnCount: 0,
+      lastUpdatedAt: "2026-04-11T00:02:01.000Z",
+    },
+    chatSendReady: true,
+    ready: true,
+    lastSequence: 1,
+    ...overrides,
+  }
+}
+
+function createDeferredSnapshot() {
+  type Snapshot = ReturnType<typeof buildSnapshot>
+  let resolve: ((snapshot: Snapshot) => void) | null = null
+  const promise = new Promise<Snapshot>((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return {
+    promise,
+    resolve(snapshot: Snapshot) {
+      if (!resolve) {
+        throw new Error("snapshot resolver missing")
+      }
+      resolve(snapshot)
+    },
+  }
+}
 
 describe("chat UI state", () => {
   beforeEach(() => {
@@ -85,6 +128,7 @@ describe("chat UI state", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-11T00:02:01.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 1,
     })
@@ -140,6 +184,7 @@ describe("chat UI state", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-11T00:02:01.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 1,
     })
@@ -208,6 +253,7 @@ describe("chat UI state", () => {
         queuedTurnCount: 0,
         lastUpdatedAt: "2026-04-11T00:02:01.000Z",
       },
+      chatSendReady: true,
       ready: true,
       lastSequence: 1,
     })
@@ -248,5 +294,91 @@ describe("chat UI state", () => {
     }, 3)
 
     expect(getOrchestrationSnapshot()?.threads[0]?.status).toBe("streaming")
+  })
+
+  test("tracks readiness changes from provider runtime events without a snapshot refetch", () => {
+    setOrchestrationSnapshot(buildSnapshot({
+      chatSendReady: true,
+      lastSequence: 1,
+    }))
+
+    applyProviderRuntimeEvent({
+      type: "provider.readinessChanged",
+      chatSendReady: false,
+    }, 5)
+
+    expect(getOrchestrationSnapshot()?.chatSendReady).toBe(false)
+    expect(getOrchestrationSnapshot()?.lastSequence).toBe(5)
+    expect(isOrchestrationStartupReady(getOrchestrationSnapshot())).toBe(false)
+
+    applyProviderRuntimeEvent({
+      type: "provider.readinessChanged",
+      chatSendReady: true,
+    }, 6)
+
+    expect(getOrchestrationSnapshot()?.chatSendReady).toBe(true)
+    expect(getOrchestrationSnapshot()?.lastSequence).toBe(6)
+    expect(isOrchestrationStartupReady(getOrchestrationSnapshot())).toBe(true)
+  })
+
+  test("ignores stale snapshot responses after a newer resubscribe refresh wins", async () => {
+    let domainResubscribe: (() => void) | undefined
+    let runtimeResubscribe: (() => void) | undefined
+    const firstSnapshot = createDeferredSnapshot()
+    const secondSnapshot = createDeferredSnapshot()
+
+    const getSnapshot = vi.fn()
+      .mockReturnValueOnce(firstSnapshot.promise)
+      .mockReturnValueOnce(secondSnapshot.promise)
+
+    const sync = startOrchestrationStateSync({
+      orchestration: {
+        getSnapshot,
+        onDomainEvent: (
+          _listener: Parameters<WsRpcClient["orchestration"]["onDomainEvent"]>[0],
+          options?: Parameters<WsRpcClient["orchestration"]["onDomainEvent"]>[1],
+        ) => {
+          domainResubscribe = options?.onResubscribe
+          return () => undefined
+        },
+      },
+      provider: {
+        onRuntimeEvent: (
+          _listener: Parameters<WsRpcClient["provider"]["onRuntimeEvent"]>[0],
+          options?: Parameters<WsRpcClient["provider"]["onRuntimeEvent"]>[1],
+        ) => {
+          runtimeResubscribe = options?.onResubscribe
+          return () => undefined
+        },
+      },
+    } as never)
+
+    expect(getSnapshot).toHaveBeenCalledTimes(1)
+
+    runtimeResubscribe?.()
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2)
+
+    secondSnapshot.resolve(buildSnapshot({
+      chatSendReady: false,
+      lastSequence: 5,
+    }))
+    await sync.initialSnapshotReady
+
+    expect(getOrchestrationSnapshot()?.lastSequence).toBe(5)
+    expect(getOrchestrationSnapshot()?.chatSendReady).toBe(false)
+
+    firstSnapshot.resolve(buildSnapshot({
+      chatSendReady: true,
+      lastSequence: 1,
+    }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(getOrchestrationSnapshot()?.lastSequence).toBe(5)
+    expect(getOrchestrationSnapshot()?.chatSendReady).toBe(false)
+
+    sync.stop()
+    expect(domainResubscribe).toBeDefined()
   })
 })
