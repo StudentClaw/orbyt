@@ -38,6 +38,155 @@ afterEach(() => {
 })
 
 describe("PluginRegistry", () => {
+  test("hides Apple Calendar from registry listings on non-macOS while leaving other bundled plugins visible", () => {
+    const bundledDir = createTempDir()
+    const userDir = createTempDir()
+
+    writeManifest(bundledDir, "apple-calendar-mcp", {
+      id: "apple-calendar-mcp",
+      name: "Apple Calendar",
+      description: "Local Apple Calendar integration",
+      version: "1.0.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      permissions: ["local_os.calendar.read", "local_os.calendar.write"],
+      auth: {
+        type: "none",
+      },
+      tools: [
+        { name: "getCalendars", description: "List calendars" },
+      ],
+      author: "student-claw",
+      homepage: "https://github.com/StudentClaw/student-claw",
+    })
+    writeManifest(bundledDir, "canvas-mcp", {
+      id: "canvas-mcp",
+      name: "Canvas Assistant",
+      description: "Canvas integration",
+      version: "0.1.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      permissions: ["canvas.read"],
+      auth: {
+        type: "none",
+      },
+      tools: [
+        { name: "list_courses", description: "List courses" },
+      ],
+      author: "student-claw",
+      homepage: "https://github.com/StudentClaw/student-claw",
+    })
+
+    const registry = new PluginRegistry({
+      bundledCatalogDir: bundledDir,
+      userExtensionStoreDir: userDir,
+      availability: {
+        platform: "linux",
+      },
+    })
+
+    const availableIds = registry.list()
+      .filter((entry) => entry.kind === "available")
+      .map((entry) => entry.manifest.id)
+
+    expect(availableIds).toEqual(["canvas-mcp"])
+    expect(registry.getStatus("apple-calendar-mcp")).toMatchObject({
+      kind: "available",
+      manifest: {
+        id: "apple-calendar-mcp",
+      },
+    })
+  })
+
+  test("hides Apple Calendar on unsupported macOS versions while leaving other bundled plugins visible", () => {
+    const bundledDir = createTempDir()
+    const userDir = createTempDir()
+
+    writeManifest(bundledDir, "apple-calendar-mcp", {
+      id: "apple-calendar-mcp",
+      name: "Apple Calendar",
+      description: "Local Apple Calendar integration",
+      version: "1.0.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      permissions: ["local_os.calendar.read", "local_os.calendar.write"],
+      auth: {
+        type: "none",
+      },
+      tools: [
+        { name: "getCalendars", description: "List calendars" },
+      ],
+      author: "student-claw",
+      homepage: "https://github.com/StudentClaw/student-claw",
+    })
+    writeManifest(bundledDir, "canvas-mcp", {
+      id: "canvas-mcp",
+      name: "Canvas Assistant",
+      description: "Canvas integration",
+      version: "0.1.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      permissions: ["canvas.read"],
+      auth: {
+        type: "none",
+      },
+      tools: [
+        { name: "list_courses", description: "List courses" },
+      ],
+      author: "student-claw",
+      homepage: "https://github.com/StudentClaw/student-claw",
+    })
+
+    const registry = new PluginRegistry({
+      bundledCatalogDir: bundledDir,
+      userExtensionStoreDir: userDir,
+      availability: {
+        platform: "darwin",
+        systemVersion: "12.6.9",
+      },
+    })
+
+    const availableIds = registry.list()
+      .filter((entry) => entry.kind === "available")
+      .map((entry) => entry.manifest.id)
+
+    expect(availableIds).toEqual(["canvas-mcp"])
+    expect(registry.getAvailableRecord("apple-calendar-mcp")).toMatchObject({
+      entry: {
+        manifest: {
+          id: "apple-calendar-mcp",
+        },
+      },
+    })
+  })
+
+  test("discovers Apple Calendar in the real bundled catalog", () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../../..")
+    const repoBundledDir = path.join(repoRoot, "packages/extensions")
+    const registry = new PluginRegistry({
+      bundledCatalogDir: repoBundledDir,
+      userExtensionStoreDir: createTempDir(),
+    })
+
+    const entries = registry.list()
+    const appleEntry = entries.find((entry) => entry.kind === "available" && entry.manifest.id === "apple-calendar-mcp")
+
+    expect(appleEntry).toMatchObject({
+      kind: "available",
+      installSource: "bundled",
+      status: "discovered",
+      enabled: true,
+    })
+  })
+
   test("lists valid bundled and user manifests as available entries", () => {
     const bundledDir = createTempDir()
     const userDir = createTempDir()

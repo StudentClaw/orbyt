@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router"
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
@@ -8,26 +9,23 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Activity01Icon,
-  AiChat02Icon,
   DashboardSquare01Icon,
   Settings01Icon,
 } from "@hugeicons/core-free-icons"
 import { useRuntimeActivityUnreadCount } from "@/hooks/useAppRuntime"
-import { isChatPath } from "@/lib/chatRoutes"
 import { ChatHistory } from "./ChatHistory"
 import { ConnectionStatus } from "./ConnectionStatus"
 
+const sidebarBrandIcon = new URL("../../../public/favicon.svg", import.meta.url).href
+
 const navItems = [
   { label: "Dashboard", path: "/", icon: DashboardSquare01Icon },
-  { label: "Chat", path: "/chat", icon: AiChat02Icon },
   { label: "Activity", path: "/activity", icon: Activity01Icon },
-  { label: "Settings", path: "/settings", icon: Settings01Icon },
 ] as const
 
 export function AppSidebar() {
@@ -44,29 +42,31 @@ export function AppSidebarContent() {
   const activityUnreadCount = useRuntimeActivityUnreadCount()
   const { isMobile, open, openMobile } = useSidebar()
   const sidebarOpen = isMobile ? openMobile : open
-  const triggerLabel = isMobile
-    ? openMobile ? "Hide sidebar" : "Show sidebar"
-    : open ? "Hide sidebar" : "Show sidebar"
 
   return (
     <>
-      <SidebarHeader className={sidebarOpen ? "p-4 pb-2" : "items-center p-2 pt-3"}>
-        <div className={sidebarOpen ? "flex items-center justify-between gap-3" : "flex justify-center"}>
-          {sidebarOpen && <h2 className="text-lg font-semibold">Student Claw</h2>}
-          <SidebarTrigger
-            aria-label={triggerLabel}
-            data-testid={!isMobile ? "shell-sidebar-trigger" : undefined}
-            className="h-8 w-8 shrink-0"
+      <SidebarHeader className={sidebarOpen ? "px-3 pb-3 pt-4" : "px-2 pb-3 pt-4"}>
+        <div className={sidebarOpen ? "flex items-center gap-3" : "flex justify-center"}>
+          <img
+            src={sidebarBrandIcon}
+            alt=""
+            aria-hidden="true"
+            className={sidebarOpen ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"}
+            data-testid="sidebar-brand-icon"
           />
+          {sidebarOpen ? (
+            <h2
+              className="truncate text-lg font-semibold tracking-tight"
+              style={{ fontFamily: "var(--font-brand)" }}
+            >
+              Orybt
+            </h2>
+          ) : null}
         </div>
-        <SidebarMenu className={sidebarOpen ? "" : "items-center"}>
+        <SidebarMenu className={sidebarOpen ? "window-no-drag mt-4" : "window-no-drag mt-2 items-center"}>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.path}>
-              <SidebarMenuButton
-                asChild
-                tooltip={item.label}
-                isActive={item.path === "/chat" ? isChatPath(currentPath) : currentPath === item.path}
-              >
+              <SidebarMenuButton asChild tooltip={item.label} isActive={currentPath === item.path}>
                 <Link to={item.path}>
                   <HugeiconsIcon icon={item.icon} size={18} />
                   <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
@@ -81,16 +81,35 @@ export function AppSidebarContent() {
           ))}
         </SidebarMenu>
       </SidebarHeader>
-      {sidebarOpen && (
-        <>
+      <>
+        {sidebarOpen ? (
           <SidebarContent>
             <ChatHistory />
           </SidebarContent>
-          <SidebarFooter className="p-4">
-            <ConnectionStatus />
-          </SidebarFooter>
-        </>
-      )}
+        ) : null}
+        <SidebarFooter
+          className={
+            sidebarOpen
+              ? "window-no-drag mt-auto border-t border-sidebar-border/70 p-3"
+              : "window-no-drag mt-auto px-2 py-3"
+          }
+        >
+          <div className={sidebarOpen ? "flex items-center justify-between gap-3" : "flex justify-center"}>
+            {sidebarOpen ? <ConnectionStatus /> : null}
+            <Button
+              asChild
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Settings"
+              className="shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <Link to="/settings" data-testid="sidebar-settings-link">
+                <HugeiconsIcon icon={Settings01Icon} size={18} />
+              </Link>
+            </Button>
+          </div>
+        </SidebarFooter>
+      </>
     </>
   )
 }

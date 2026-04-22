@@ -554,4 +554,384 @@ describe("registerIpcHandlers plugin reads", () => {
     })
     expect(await sendTest?.({})).toEqual({ ok: true })
   })
+
+  test("rejects invalid plugin retry classes over IPC", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: false,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      shell: {
+        showItemInFolder: () => undefined,
+        openExternal: async () => undefined,
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?retry-ipc-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap, {
+      pluginManager: {
+        list: () => [],
+        start: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        stop: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        retry: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        refreshReadiness: async () => null,
+        getStatus: () => null,
+        dispose: async () => undefined,
+      } as never,
+      pluginAuthService: {
+        getStatus: () => null,
+        saveCredentials: () => ({
+          ok: false,
+          pluginId: "ignored",
+          reason: "plugin_system_disabled",
+          error: "disabled",
+        }),
+      } as never,
+    })
+
+    const retryHandler = handlers.get(IpcChannel.PLUGIN_RETRY)
+    expect(retryHandler).toBeDefined()
+
+    expect(await retryHandler?.({}, { pluginId: "apple-calendar-mcp", retryClass: "bogus" })).toEqual({
+      ok: false,
+      pluginId: "apple-calendar-mcp",
+      reason: "invalid_retry_class",
+    })
+  })
+
+  test("routes permission retry through System Settings and readiness refresh", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+    const openExternal = mock(async () => undefined)
+    const retry = mock(async () => ({ ok: false, pluginId: "apple-calendar-mcp", reason: "start_failed" as const }))
+    const refreshReadiness = mock(async () => ({
+      kind: "available" as const,
+      manifest: {
+        id: "apple-calendar-mcp",
+        name: "Apple Calendar",
+        description: "Local Apple Calendar integration",
+        version: "1.0.0",
+        transport: { type: "local_stdio" as const, entry: "dist/index.js" },
+        permissions: ["local_os.calendar.read", "local_os.calendar.write"],
+        auth: { type: "none" as const },
+        tools: [{ name: "getCalendars", description: "List calendars" }],
+        author: "student-claw",
+        homepage: "https://github.com/StudentClaw/student-claw",
+      },
+      installSource: "bundled" as const,
+      status: "error" as const,
+      enabled: true,
+      readiness: "permission_required" as const,
+      lastError: "Grant Calendar access in macOS Settings to finish enabling Apple Calendar.",
+    }))
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: false,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      shell: {
+        showItemInFolder: () => undefined,
+        openExternal,
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?permission-retry-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap, {
+      pluginManager: {
+        list: () => [],
+        start: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        stop: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        retry,
+        refreshReadiness,
+        getStatus: () => null,
+        dispose: async () => undefined,
+      } as never,
+      pluginAuthService: {
+        getStatus: () => null,
+        saveCredentials: () => ({
+          ok: false,
+          pluginId: "ignored",
+          reason: "plugin_system_disabled",
+          error: "disabled",
+        }),
+      } as never,
+    })
+
+    const retryHandler = handlers.get(IpcChannel.PLUGIN_RETRY)
+    expect(retryHandler).toBeDefined()
+
+    expect(await retryHandler?.({}, {
+      pluginId: "apple-calendar-mcp",
+      retryClass: "retry_permission",
+    })).toEqual({
+      ok: true,
+      pluginId: "apple-calendar-mcp",
+      status: "error",
+    })
+
+    expect(openExternal).toHaveBeenCalled()
+    expect(refreshReadiness).toHaveBeenCalledWith("apple-calendar-mcp")
+    expect(retry).not.toHaveBeenCalled()
+  })
+
+  test("returns platform_unsupported when revealing Apple Calendar permissions off macOS", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+    const bootstrapLinux: DesktopBootstrap = {
+      ...bootstrap,
+      platform: "linux",
+    }
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: false,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      shell: {
+        showItemInFolder: () => undefined,
+        openExternal: async () => undefined,
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?permission-reveal-test=${Date.now()}`)
+    registerIpcHandlers(bootstrapLinux, {
+      pluginManager: {
+        list: () => [],
+        start: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        stop: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        retry: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        refreshReadiness: async () => null,
+        getStatus: () => null,
+        dispose: async () => undefined,
+      } as never,
+      pluginAuthService: {
+        getStatus: () => null,
+        saveCredentials: () => ({
+          ok: false,
+          pluginId: "ignored",
+          reason: "plugin_system_disabled",
+          error: "disabled",
+        }),
+      } as never,
+    })
+
+    const revealHandler = handlers.get(IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS)
+    expect(revealHandler).toBeDefined()
+
+    expect(await revealHandler?.({}, { pluginId: "apple-calendar-mcp" })).toEqual({
+      ok: false,
+      pluginId: "apple-calendar-mcp",
+      reason: "platform_unsupported",
+    })
+  })
+
+  test("returns filtered runtime logs over IPC", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>()
+    const userDataRoot = createTempDir()
+
+    mock.module("electron", () => ({
+      BrowserWindow: {
+        getFocusedWindow: () => null,
+        getAllWindows: () => [],
+      },
+      dialog: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+        showSaveDialog: async () => ({ canceled: true, filePath: null }),
+      },
+      ipcMain: {
+        removeHandler: () => undefined,
+        handle: (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+        },
+      },
+      app: {
+        isPackaged: false,
+        getPath: (name: string) => {
+          if (name === "userData") {
+            return userDataRoot
+          }
+          return "/tmp"
+        },
+      },
+      Notification: class {
+        static isSupported(): boolean {
+          return false
+        }
+      },
+      shell: {
+        showItemInFolder: () => undefined,
+        openExternal: async () => undefined,
+      },
+      powerMonitor: {
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+        decryptString: (value: Buffer) => value.toString("utf8").replace(/^enc:/, ""),
+      },
+    }))
+
+    const { registerIpcHandlers } = await import(`../ipc/bridge.js?runtime-logs-test=${Date.now()}`)
+    registerIpcHandlers(bootstrap, {
+      pluginManager: {
+        list: () => [],
+        start: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        stop: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        retry: async () => ({ ok: false, pluginId: "ignored", reason: "plugin_system_disabled" }),
+        refreshReadiness: async () => null,
+        getStatus: () => null,
+        dispose: async () => undefined,
+      } as never,
+      pluginAuthService: {
+        getStatus: () => null,
+        saveCredentials: () => ({
+          ok: false,
+          pluginId: "ignored",
+          reason: "plugin_system_disabled",
+          error: "disabled",
+        }),
+      } as never,
+      pluginRuntimeLogs: {
+        getEntries: ({ pluginId, limit }: { pluginId?: string; limit?: number }) => {
+          const entries = [
+            {
+              pluginId: "apple-calendar-mcp",
+              source: "bridge" as const,
+              message: "Bridge failed to bind port.",
+              emittedAt: "2026-04-20T18:00:00.000Z",
+            },
+            {
+              pluginId: "canvas-mcp",
+              source: "mcp" as const,
+              message: "Canvas stderr output",
+              emittedAt: "2026-04-20T18:01:00.000Z",
+            },
+          ]
+
+          return entries
+            .filter((entry) => !pluginId || entry.pluginId === pluginId)
+            .slice(0, limit ?? entries.length)
+        },
+      } as never,
+    })
+
+    const logsHandler = handlers.get(IpcChannel.PLUGIN_GET_RUNTIME_LOGS)
+    expect(logsHandler).toBeDefined()
+
+    expect(await logsHandler?.({}, { pluginId: "apple-calendar-mcp", limit: 5 })).toEqual({
+      entries: [
+        {
+          pluginId: "apple-calendar-mcp",
+          source: "bridge",
+          message: "Bridge failed to bind port.",
+          emittedAt: "2026-04-20T18:00:00.000Z",
+        },
+      ],
+    })
+  })
 })

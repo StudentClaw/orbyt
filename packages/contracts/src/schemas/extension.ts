@@ -13,6 +13,17 @@ export const ExtensionLifecycleStatus = Schema.Literal(
 )
 export type ExtensionLifecycleStatus = Schema.Schema.Type<typeof ExtensionLifecycleStatus>
 
+export const ExtensionRuntimeReadiness = Schema.Literal(
+  "ready",
+  "bridge_starting",
+  "bridge_unavailable",
+  "permission_required",
+  "bridge_crash_loop",
+  "platform_unsupported",
+  "error",
+)
+export type ExtensionRuntimeReadiness = Schema.Schema.Type<typeof ExtensionRuntimeReadiness>
+
 export const ExtensionInstallSource = Schema.Literal("system", "bundled", "user")
 export type ExtensionInstallSource = Schema.Schema.Type<typeof ExtensionInstallSource>
 
@@ -25,6 +36,10 @@ export type ExtensionToolSummary = Schema.Schema.Type<typeof ExtensionToolSummar
 export const ExtensionTransport = Schema.Struct({
   type: Schema.Literal("local_stdio"),
   entry: Schema.String,
+  env: Schema.optional(Schema.Record({
+    key: Schema.String,
+    value: Schema.String,
+  })),
 })
 export type ExtensionTransport = Schema.Schema.Type<typeof ExtensionTransport>
 
@@ -82,6 +97,7 @@ export const ExtensionRegistryAvailableEntry = Schema.Struct({
   installSource: ExtensionInstallSource,
   status: ExtensionLifecycleStatus,
   enabled: Schema.Boolean,
+  readiness: Schema.optional(ExtensionRuntimeReadiness),
   lastError: Schema.optional(Schema.String),
 })
 export type ExtensionRegistryAvailableEntry = Schema.Schema.Type<typeof ExtensionRegistryAvailableEntry>

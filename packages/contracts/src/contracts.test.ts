@@ -6,10 +6,16 @@ import {
   GatewayToolCallResult,
   GatewayToolInventoryReadResult,
   GatewayToolsChangedEvent,
+  IpcChannel,
   MAX_THREAD_TITLE_LENGTH,
   MAX_TURN_CONTENT_LENGTH,
   OrchestrationSnapshot,
   ProviderRuntimeEvent,
+  PluginReadinessEvent,
+  PluginRuntimeLogEntry,
+  PluginRuntimeLogsResult,
+  PluginRetryParams,
+  PluginRevealPermissionSettingsParams,
   classifyShellCommandForApproval,
   shouldAutoApproveShellCommand,
   CreateThreadParams,
@@ -296,6 +302,48 @@ describe("@student-claw/contracts", () => {
         "/bin/zsh -lc \"pdftotext 'Math 26/26old_exams2_S26.pdf' - | sed -n '240,520p'\"",
       ),
     ).toBe(true)
+  })
+
+  test("locks the Phase 04 plugin IPC channels and typed retry params", () => {
+    expect(IpcChannel.PLUGIN_READINESS).toBe("plugin:readiness")
+    expect(IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS).toBe("plugin:reveal-permission-settings")
+    expect(IpcChannel.PLUGIN_GET_RUNTIME_LOGS).toBe("plugin:get-runtime-logs")
+
+    const retryParams: PluginRetryParams = {
+      pluginId: "apple-calendar-mcp",
+      retryClass: "retry_bridge_start",
+    }
+    const permissionParams: PluginRevealPermissionSettingsParams = {
+      pluginId: "apple-calendar-mcp",
+    }
+    const readinessEvent: PluginReadinessEvent = {
+      pluginId: "apple-calendar-mcp",
+      readiness: "permission_required",
+      previousReadiness: "bridge_starting",
+      lastError: "Grant Calendar access in macOS Settings to finish enabling Apple Calendar.",
+      retryClass: "retry_permission",
+      emittedAt: "2026-04-20T18:00:00.000Z",
+    }
+    const runtimeLogEntry: PluginRuntimeLogEntry = {
+      pluginId: "apple-calendar-mcp",
+      source: "bridge",
+      message: "Bridge failed to start.",
+      emittedAt: "2026-04-20T18:00:00.000Z",
+      readiness: "bridge_unavailable",
+      lifecycleStatus: "error",
+      retryClass: "retry_bridge_start",
+      correlationId: "corr_123",
+    }
+    const runtimeLogsResult: PluginRuntimeLogsResult = {
+      entries: [runtimeLogEntry],
+    }
+
+    expect(retryParams.retryClass).toBe("retry_bridge_start")
+    expect(permissionParams.pluginId).toBe("apple-calendar-mcp")
+    expect(readinessEvent.readiness).toBe("permission_required")
+    expect(readinessEvent.previousReadiness).toBe("bridge_starting")
+    expect(readinessEvent.retryClass).toBe("retry_permission")
+    expect(runtimeLogsResult.entries[0]?.source).toBe("bridge")
   })
 
   test("classifies risky commands into beginner-friendly approval prompts", () => {

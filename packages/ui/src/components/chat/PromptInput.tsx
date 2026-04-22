@@ -626,7 +626,6 @@ export function PromptInput({
               skills={skills}
               filter={skillFilter}
               onSelect={handleSkillSelect}
-              onDismiss={handleSkillDismiss}
             />
           ) : null}
           {loading ? (

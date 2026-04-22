@@ -13,3 +13,8 @@ references/
 graphify-out/GRAPH_REPORT.md
 # commit graph outputs, ignore the extraction cache
 graphify-out/cache/
+
+# Local build outputs
+build-logs/
+release/
+packages/extensions/apple-calendar-mcp/bridge/.build/

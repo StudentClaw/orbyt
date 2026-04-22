@@ -3,7 +3,7 @@ export type SettingsSection = "general" | "schedule" | "connections" | "notifica
 const NAV_ITEMS: Array<{ id: SettingsSection; label: string }> = [
   { id: "general", label: "General" },
   { id: "schedule", label: "Schedule & Preferences" },
-  { id: "connections", label: "Connections" },
+  { id: "connections", label: "Plugins" },
   { id: "notifications", label: "Notifications" },
 ]
 

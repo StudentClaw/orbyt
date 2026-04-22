@@ -15,6 +15,7 @@ export type PluginSandboxOptions = {
 }
 
 type CloseListener = (details: { code: number | null; signal: NodeJS.Signals | null }) => void
+type RuntimeLogListener = (message: string) => void
 
 function formatPluginLogLine(pluginId: string, chunk: string): string {
   const line = chunk.trim()
@@ -167,6 +168,7 @@ class IpcCapableStdioTransport implements Transport {
 
 export class PluginSandbox {
   private readonly closeListeners = new Set<CloseListener>()
+  private readonly runtimeLogListeners = new Set<RuntimeLogListener>()
   private readonly client = new Client({ name: "student-claw-plugin-manager", version: "0.1.0" })
   private transport: IpcCapableStdioTransport | null = null
   private started = false
@@ -184,7 +186,9 @@ export class PluginSandbox {
 
     const transport = new IpcCapableStdioTransport(this.options)
     transport.stderr.on("data", (chunk: Buffer | string) => {
-      process.stderr.write(formatPluginLogLine(this.options.pluginId, chunk.toString()))
+      const message = chunk.toString()
+      process.stderr.write(formatPluginLogLine(this.options.pluginId, message))
+      this.emitRuntimeLog(message)
     })
     transport.onclose = () => {
       this.started = false
@@ -199,6 +203,7 @@ export class PluginSandbox {
     transport.onerror = (error) => {
       const message = error instanceof Error ? error.message : String(error)
       process.stderr.write(formatPluginLogLine(this.options.pluginId, message))
+      this.emitRuntimeLog(message)
     }
 
     this.transport = transport
@@ -229,6 +234,13 @@ export class PluginSandbox {
     }
   }
 
+  onRuntimeLog(listener: RuntimeLogListener): () => void {
+    this.runtimeLogListeners.add(listener)
+    return () => {
+      this.runtimeLogListeners.delete(listener)
+    }
+  }
+
   async stop(): Promise<void> {
     const closeTasks: Promise<unknown>[] = []
 
@@ -240,5 +252,16 @@ export class PluginSandbox {
     await Promise.all(closeTasks)
     this.transport = null
     this.started = false
+  }
+
+  private emitRuntimeLog(message: string): void {
+    const normalized = message.trim()
+    if (normalized.length === 0) {
+      return
+    }
+
+    for (const listener of this.runtimeLogListeners) {
+      listener(normalized)
+    }
   }
 }

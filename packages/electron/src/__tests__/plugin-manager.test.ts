@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import type { ExtensionRegistryEntry } from "@student-claw/contracts"
-import { PluginManager, applyPluginSandboxEnv } from "../plugins/plugin-manager.js"
+import { PluginManager, applyPluginSandboxEnv, buildSandboxOptions } from "../plugins/plugin-manager.js"
+import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 
 const availableEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   kind: "available",
@@ -67,10 +71,43 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   enabled: true,
 }
 
+const appleEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
+  kind: "available",
+  manifest: {
+    id: "apple-calendar-mcp",
+    name: "Apple Calendar",
+    description: "Apple Calendar extension",
+    version: "1.0.0",
+    transport: {
+      type: "local_stdio",
+      entry: "dist/index.js",
+    },
+    permissions: ["local_os.calendar.read", "local_os.calendar.write"],
+    auth: {
+      type: "none",
+    },
+    tools: [{ name: "getCalendars", description: "List calendars" }],
+    author: "student-claw",
+    homepage: "https://github.com/StudentClaw/student-claw",
+  },
+  installSource: "bundled",
+  status: "discovered",
+  enabled: true,
+}
+
+const tempDirs: string[] = []
+
+function createTempDir(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-plugin-manager-"))
+  tempDirs.push(dir)
+  return dir
+}
+
 type FakeRegistryEntry = ExtensionRegistryEntry
 
 class FakeSandbox {
   readonly closeListeners = new Set<(details: { code: number | null; signal: NodeJS.Signals | null }) => void>()
+  readonly runtimeLogListeners = new Set<(message: string) => void>()
   pid = 4242
   startCalls = 0
   stopCalls = 0
@@ -120,6 +157,19 @@ class FakeSandbox {
     }
   }
 
+  onRuntimeLog(listener: (message: string) => void): () => void {
+    this.runtimeLogListeners.add(listener)
+    return () => {
+      this.runtimeLogListeners.delete(listener)
+    }
+  }
+
+  emitRuntimeLog(message: string): void {
+    for (const listener of this.runtimeLogListeners) {
+      listener(message)
+    }
+  }
+
   emitClose(): void {
     for (const listener of this.closeListeners) {
       listener({ code: null, signal: null })
@@ -145,6 +195,15 @@ function createRegistry(entry: FakeRegistryEntry = availableEntry) {
   }
 }
 
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop()
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+})
+
 describe("PluginManager", () => {
   test("marks plugin child processes to run as node under Electron", () => {
     expect(applyPluginSandboxEnv({ PATH: "/usr/bin" }, true)).toEqual({
@@ -154,6 +213,24 @@ describe("PluginManager", () => {
     expect(applyPluginSandboxEnv({ PATH: "/usr/bin" }, false)).toEqual({
       PATH: "/usr/bin",
     })
+  })
+
+  test("builds sandbox env with runtime-injected bridge values", () => {
+    const extensionDir = createTempDir()
+    mkdirSync(path.join(extensionDir, "dist"), { recursive: true })
+    const entryPath = path.join(extensionDir, "dist/index.js")
+    writeFileSync(entryPath, "console.log('apple-calendar-mcp')")
+
+    const options = buildSandboxOptions({
+      entry: appleEntry,
+      manifestPath: path.join(extensionDir, "manifest.json"),
+    }, {
+      MAC_API_BRIDGE_URL: "http://127.0.0.1:53412",
+      MAC_API_BRIDGE_TOKEN: "bridge-token",
+    })
+
+    expect(options.env.MAC_API_BRIDGE_URL).toBe("http://127.0.0.1:53412")
+    expect(options.env.MAC_API_BRIDGE_TOKEN).toBe("bridge-token")
   })
 
   test("promotes a healthy plugin to active and overlays registry state", async () => {
@@ -278,6 +355,251 @@ describe("PluginManager", () => {
       kind: "available",
       status: "error",
     })
+  })
+
+  test("withholds Apple Calendar startup until the bridge layer is ready", async () => {
+    const sandbox = new FakeSandbox()
+    let cleaned = 0
+    const manager = new PluginManager({
+      registry: createRegistry(appleEntry),
+      createSandbox: () => sandbox,
+      prepareRuntime: async () => ({
+        readiness: "bridge_unavailable",
+        lastError: "Apple Calendar bridge is unavailable.",
+      }),
+      cleanupRuntime: async () => {
+        cleaned += 1
+      },
+    })
+
+    const result = await manager.start("apple-calendar-mcp")
+
+    expect(result).toEqual({
+      ok: false,
+      pluginId: "apple-calendar-mcp",
+      reason: "start_failed",
+    })
+    expect(sandbox.startCalls).toBe(0)
+    expect(manager.getStatus("apple-calendar-mcp")).toMatchObject({
+      kind: "available",
+      status: "error",
+      lastError: "Apple Calendar bridge is unavailable.",
+    })
+
+    const stopResult = await manager.stop("apple-calendar-mcp")
+    expect(stopResult).toEqual({
+      ok: true,
+      pluginId: "apple-calendar-mcp",
+      status: "stopped",
+    })
+    expect(cleaned).toBe(1)
+    expect(manager.getStatus("apple-calendar-mcp")).toMatchObject({
+      kind: "available",
+      status: "stopped",
+      readiness: undefined,
+    })
+  })
+
+  test("emits readiness transitions separately from lifecycle events", async () => {
+    const sandbox = new FakeSandbox()
+    sandbox.listedTools = [{ name: "getCalendars", description: "List calendars" }]
+    const lifecycleEvents: string[] = []
+    const readinessEvents: string[] = []
+    const manager = new PluginManager({
+      registry: createRegistry(appleEntry),
+      createSandbox: () => sandbox,
+      emitLifecycleEvent: (event) => {
+        lifecycleEvents.push(event.status)
+      },
+      emitReadinessEvent: (event) => {
+        readinessEvents.push(event.readiness)
+      },
+      prepareRuntime: async () => ({
+        readiness: "ready",
+        env: {
+          MAC_API_BRIDGE_URL: "http://127.0.0.1:53412",
+          MAC_API_BRIDGE_TOKEN: "bridge-token",
+        },
+      }),
+    })
+
+    const result = await manager.start("apple-calendar-mcp")
+
+    expect(result).toEqual({
+      ok: true,
+      pluginId: "apple-calendar-mcp",
+      status: "active",
+    })
+    expect(lifecycleEvents).toEqual(["starting", "ready", "active"])
+    expect(readinessEvents).toEqual(["bridge_starting", "ready"])
+  })
+
+  test("includes previous readiness and retry class on retry-driven readiness transitions", async () => {
+    const sandbox = new FakeSandbox()
+    sandbox.listedTools = [{ name: "getCalendars", description: "List calendars" }]
+    const readinessEvents: Array<{
+      readiness: string
+      previousReadiness?: string
+      retryClass?: string
+    }> = []
+    let attempt = 0
+    const manager = new PluginManager({
+      registry: createRegistry(appleEntry),
+      createSandbox: () => sandbox,
+      emitReadinessEvent: (event) => {
+        readinessEvents.push({
+          readiness: event.readiness,
+          previousReadiness: event.previousReadiness,
+          retryClass: event.retryClass,
+        })
+      },
+      prepareRuntime: async () => {
+        attempt += 1
+        if (attempt === 1) {
+          return {
+            readiness: "bridge_unavailable",
+            lastError: "Bridge unavailable.",
+          }
+        }
+
+        return {
+          readiness: "ready",
+          env: {
+            MAC_API_BRIDGE_URL: "http://127.0.0.1:53412",
+            MAC_API_BRIDGE_TOKEN: "bridge-token",
+          },
+        }
+      },
+    })
+
+    await manager.start("apple-calendar-mcp")
+    const result = await manager.retry("apple-calendar-mcp", "retry_bridge_start")
+
+    expect(result).toEqual({
+      ok: true,
+      pluginId: "apple-calendar-mcp",
+      status: "active",
+    })
+    expect(readinessEvents).toEqual([
+      {
+        readiness: "bridge_unavailable",
+        previousReadiness: undefined,
+        retryClass: undefined,
+      },
+      {
+        readiness: "bridge_starting",
+        previousReadiness: "bridge_unavailable",
+        retryClass: "retry_bridge_start",
+      },
+      {
+        readiness: "ready",
+        previousReadiness: "bridge_starting",
+        retryClass: "retry_bridge_start",
+      },
+    ])
+  })
+
+  test("captures MCP runtime logs with correlation ids during tool calls", async () => {
+    const sandbox = new FakeSandbox()
+    sandbox.listedTools = [{ name: "getCalendars", description: "List calendars" }]
+    sandbox.callTool = async () => {
+      sandbox.emitRuntimeLog("Tool emitted stderr")
+      return {
+        content: [{ type: "text", text: "ok" }],
+        isError: false,
+      }
+    }
+    const runtimeLogs: Array<{
+      pluginId: string
+      source: string
+      message: string
+      correlationId?: string
+    }> = []
+    const manager = new PluginManager({
+      registry: createRegistry(appleEntry),
+      createSandbox: () => sandbox,
+      emitRuntimeLog: (entry) => {
+        runtimeLogs.push({
+          pluginId: entry.pluginId,
+          source: entry.source,
+          message: entry.message,
+          correlationId: entry.correlationId,
+        })
+      },
+      prepareRuntime: async () => ({
+        readiness: "ready",
+        env: {
+          MAC_API_BRIDGE_URL: "http://127.0.0.1:53412",
+          MAC_API_BRIDGE_TOKEN: "bridge-token",
+        },
+      }),
+    })
+
+    await manager.start("apple-calendar-mcp")
+    await manager.callTool("apple-calendar-mcp", "getCalendars", {})
+
+    expect(runtimeLogs).toHaveLength(1)
+    expect(runtimeLogs[0]).toMatchObject({
+      pluginId: "apple-calendar-mcp",
+      source: "mcp",
+      message: "Tool emitted stderr",
+    })
+    expect(runtimeLogs[0]?.correlationId).toEqual(expect.any(String))
+  })
+
+  test("recomputes Apple Calendar readiness when an enabled runtime is recreated", async () => {
+    const userDataPath = createTempDir()
+    const enabledStore = new PluginEnabledStore(userDataPath)
+    enabledStore.setEnabled("apple-calendar-mcp", true)
+
+    const firstSandbox = new FakeSandbox()
+    firstSandbox.listedTools = [{ name: "getCalendars", description: "List calendars" }]
+    const secondSandbox = new FakeSandbox()
+    secondSandbox.listedTools = [{ name: "getCalendars", description: "List calendars" }]
+    let prepareCalls = 0
+    let cleanupCalls = 0
+
+    const createManager = (sandbox: FakeSandbox) => new PluginManager({
+      registry: createRegistry(appleEntry),
+      createSandbox: () => sandbox,
+      enabledStore: new PluginEnabledStore(userDataPath),
+      prepareRuntime: async () => {
+        prepareCalls += 1
+        return {
+          readiness: "ready",
+          env: {
+            MAC_API_BRIDGE_URL: `http://127.0.0.1:${53412 + prepareCalls}`,
+            MAC_API_BRIDGE_TOKEN: `bridge-token-${prepareCalls}`,
+          },
+        }
+      },
+      cleanupRuntime: async () => {
+        cleanupCalls += 1
+      },
+    })
+
+    const firstManager = createManager(firstSandbox)
+    await firstManager.autoStartEnabled()
+    expect(firstManager.getStatus("apple-calendar-mcp")).toMatchObject({
+      kind: "available",
+      status: "active",
+      readiness: "ready",
+    })
+    await firstManager.dispose()
+
+    const secondManager = createManager(secondSandbox)
+    await secondManager.autoStartEnabled()
+    expect(secondManager.getStatus("apple-calendar-mcp")).toMatchObject({
+      kind: "available",
+      status: "active",
+      readiness: "ready",
+    })
+    await secondManager.dispose()
+
+    expect(prepareCalls).toBe(2)
+    expect(cleanupCalls).toBe(2)
+    expect(firstSandbox.startCalls).toBe(1)
+    expect(secondSandbox.startCalls).toBe(1)
   })
 
   test("retries with backoff until a later attempt succeeds", async () => {

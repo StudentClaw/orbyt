@@ -1,5 +1,6 @@
-import { app, BrowserWindow, nativeImage } from "electron"
+import { app, BrowserWindow, dialog, nativeImage } from "electron"
 import { existsSync } from "node:fs"
+import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { IpcChannel } from "@student-claw/contracts"
@@ -51,6 +52,8 @@ async function ensureServerProcess(): Promise<ServerProcess> {
         currentDir,
         isPackaged: app.isPackaged,
         userDataPath: app.getPath("userData"),
+        platform: process.platform,
+        systemVersion: os.release(),
         emitLifecycleEvent: (event) => {
           const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
           for (const window of windows) {
@@ -58,6 +61,12 @@ async function ensureServerProcess(): Promise<ServerProcess> {
           }
 
           void pluginGateway?.notifyToolInventoryChanged()
+        },
+        emitReadinessEvent: (event) => {
+          const windows = typeof BrowserWindow.getAllWindows === "function" ? BrowserWindow.getAllWindows() : []
+          for (const window of windows) {
+            window.webContents.send(IpcChannel.PLUGIN_READINESS, event)
+          }
         },
       })
       pluginManager = runtime.manager
@@ -73,6 +82,9 @@ async function ensureServerProcess(): Promise<ServerProcess> {
 
       const nextServerProcess = await spawnServer(gateway.config, {
         userDataPath: app.getPath("userData"),
+      }, {
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
       })
       serverProcess = nextServerProcess
 
@@ -87,6 +99,7 @@ async function ensureServerProcess(): Promise<ServerProcess> {
           pluginManager: runtime.manager,
           pluginAuthService: runtime.authService,
           pluginEnabledStore: runtime.enabledStore,
+          pluginRuntimeLogs: runtime.runtimeLogs,
           pushManager,
         },
       ).pluginManager
@@ -146,6 +159,15 @@ async function bootstrap(): Promise<void> {
   mainWindow = await createAppWindow()
 }
 
+function showStartupFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`Failed to start Electron app: ${message}\n`)
+  dialog.showErrorBox(
+    "Student Claw failed to start",
+    `Student Claw could not finish startup.\n\n${message}`,
+  )
+}
+
 if (gotSingleInstanceLock) {
   app.on("second-instance", async () => {
     const existingWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null
@@ -159,7 +181,12 @@ if (gotSingleInstanceLock) {
     }
 
     if (app.isReady()) {
-      mainWindow = await createAppWindow()
+      try {
+        mainWindow = await createAppWindow()
+      } catch (error) {
+        showStartupFailure(error)
+        app.quit()
+      }
     }
   })
 
@@ -169,7 +196,12 @@ if (gotSingleInstanceLock) {
 
       app.on("activate", async () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-          mainWindow = await createAppWindow()
+          try {
+            mainWindow = await createAppWindow()
+          } catch (error) {
+            showStartupFailure(error)
+            app.quit()
+          }
           return
         }
 
@@ -178,7 +210,7 @@ if (gotSingleInstanceLock) {
       })
     })
     .catch((error) => {
-      process.stderr.write(`Failed to start Electron app: ${String(error)}\n`)
+      showStartupFailure(error)
       app.quit()
     })
 }

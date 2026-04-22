@@ -9,6 +9,7 @@ function makeItem(overrides: Partial<PrioritizedItem>): PrioritizedItem {
   return {
     id: "item-1",
     title: "Default Item",
+    courseId: "course-1",
     courseCode: "CS 101",
     effectiveDueAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
     estimatedMinutes: 120,

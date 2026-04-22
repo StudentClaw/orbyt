@@ -4,6 +4,9 @@ import { render, screen } from "@testing-library/react"
 const hookMocks = vi.hoisted(() => ({
   unreadCount: 0,
   pathname: "/",
+  open: true,
+  openMobile: false,
+  isMobile: false,
 }))
 
 vi.mock("@tanstack/react-router", () => ({
@@ -31,7 +34,11 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarMenuButton: ({ children }: { children: React.ReactNode; asChild?: boolean; isActive?: boolean }) => <>{children}</>,
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <li>{children}</li>,
   SidebarTrigger: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
-  useSidebar: () => ({ isMobile: false, open: true, openMobile: false }),
+  useSidebar: () => ({
+    isMobile: hookMocks.isMobile,
+    open: hookMocks.open,
+    openMobile: hookMocks.openMobile,
+  }),
   SidebarSeparator: () => <hr />,
 }))
 
@@ -49,6 +56,9 @@ describe("AppSidebar activity badge", () => {
   beforeEach(() => {
     hookMocks.unreadCount = 0
     hookMocks.pathname = "/"
+    hookMocks.open = true
+    hookMocks.openMobile = false
+    hookMocks.isMobile = false
   })
 
   test("does not show badge when unread count is 0", () => {
@@ -82,5 +92,39 @@ describe("AppSidebar activity badge", () => {
   test("renders the embedded chat history section", () => {
     render(<AppSidebar />)
     expect(screen.getByTestId("chat-history")).toBeDefined()
+  })
+
+  test("renders the updated Orybt brand label", () => {
+    render(<AppSidebar />)
+    expect(screen.getByText("Orybt")).toBeDefined()
+    expect(screen.getByTestId("sidebar-brand-icon")).toBeDefined()
+    expect(screen.queryByText("Student Claw")).toBeNull()
+  })
+
+  test("keeps the logo visible when the desktop sidebar is collapsed", () => {
+    hookMocks.open = false
+    render(<AppSidebar />)
+
+    expect(screen.getByTestId("sidebar-brand-icon")).toBeDefined()
+    expect(screen.queryByText("Orybt")).toBeNull()
+  })
+
+  test("keeps settings available when the desktop sidebar is collapsed", () => {
+    hookMocks.open = false
+    render(<AppSidebar />)
+
+    expect(screen.getByTestId("sidebar-settings-link")).toBeDefined()
+    expect(screen.getByLabelText("Settings")).toBeDefined()
+  })
+
+  test("does not render a chat nav entry", () => {
+    render(<AppSidebar />)
+    expect(screen.queryByText("Chat")).toBeNull()
+  })
+
+  test("renders settings as a footer icon control", () => {
+    render(<AppSidebar />)
+    expect(screen.getByTestId("sidebar-settings-link")).toBeDefined()
+    expect(screen.getByLabelText("Settings")).toBeDefined()
   })
 })

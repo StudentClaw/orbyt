@@ -1,16 +1,16 @@
-import type { Database } from "bun:sqlite"
+import type { RuntimeSqliteDatabase } from "../runtime-sqlite.js"
 
 export const version = 13
 
-export function run(db: Database): void {
+export function run(db: RuntimeSqliteDatabase): void {
   const courseworkTableExists = db
-    .query<{ name: string }, []>(
+    .query<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='coursework_items'",
     )
     .get()
   const courseworkColumns = courseworkTableExists
     ? db
-        .query<{ name: string }, []>("PRAGMA table_info(coursework_items)")
+        .query<{ name: string }>("PRAGMA table_info(coursework_items)")
         .all()
         .map((row) => row.name)
     : []

@@ -2,10 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/museomoderno";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --font-brand: "MuseoModerno Variable", "MuseoModerno", var(--font-sans);
     --font-heading: var(--font-sans);
     --font-sans: "Geist Variable", Geist, Inter, sans-serif;
     --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
@@ -43,6 +45,9 @@
     --color-foreground: var(--foreground);
     --color-background: var(--background);
     --color-skill: var(--skill);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-info: var(--info);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -88,6 +93,9 @@
     --diff-added: oklch(0.646 0.175 147.2);
     --diff-removed: oklch(0.591 0.241 26.6);
     --skill: oklch(0.564 0.292 305.8);
+    --success: oklch(0.646 0.175 147.2);
+    --warning: oklch(0.774 0.173 80.2);
+    --info: oklch(0.623 0.127 224.5);
 }
 
 .dark {
@@ -125,6 +133,9 @@
     --diff-added: oklch(0.651 0.197 146.4);
     --diff-removed: oklch(0.626 0.223 23);
     --skill: oklch(0.557 0.219 306.6);
+    --success: oklch(0.651 0.197 146.4);
+    --warning: oklch(0.774 0.173 80.2);
+    --info: oklch(0.74 0.11 201.5);
 }
 
 @layer base {
@@ -147,6 +158,35 @@
   html {
     @apply font-sans;
     }
+}
+
+@layer utilities {
+  .window-drag {
+    -webkit-app-region: drag;
+  }
+
+  .window-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+
+/* Flat surface for dashboard tiles — no glass, no tint variants. */
+@layer components {
+  .pagelet {
+    position: relative;
+    border-radius: var(--radius-2xl);
+    background-color: var(--card);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  .pagelet-sm {
+    border-radius: var(--radius-lg);
+  }
+
+  /* Sonner: keep dismiss control visible without relying on hover. */
+  [data-sonner-toast] [data-close-button] {
+    opacity: 1 !important;
+  }
 }
 
 @keyframes slide-in-down {

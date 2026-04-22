@@ -552,7 +552,11 @@ describe("ThreadRuntimeManager", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(stalledFailure).not.toBeNull()
-    expect(stalledFailure?.code).toBe("codex_turn_stalled")
+    if (!stalledFailure) {
+      throw new Error("Expected stalledFailure to be set by the watchdog")
+    }
+    const failure = stalledFailure as ProviderRuntimeFailure
+    expect(failure.code).toBe("codex_turn_stalled")
     // Slot should be destroyed, not kept warm, so the runtime was shut down.
     expect(runtimes[0]?.shutdownCount).toBeGreaterThanOrEqual(1)
     expect(manager.getSnapshot().activeRuntimeCount).toBe(0)

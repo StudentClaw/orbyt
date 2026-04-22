@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
+import { Database as BunDatabase } from "bun:sqlite"
 import type {
   CanvasAssignmentDetailsResult,
   GatewayToolCallResult,
@@ -7,20 +7,11 @@ import type {
 import type { PluginGatewayService } from "../mcp/PluginGateway.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { DatabaseService } from "../db/Database.js"
-import { runMigrations } from "../db/migrations/runner.js"
 import { createSyncService } from "../canvas/CanvasSyncService.js"
+import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 function createDatabaseService(db: BunDatabase): DatabaseService {
-  return {
-    db,
-    get: <T>(sql: string, params: SQLQueryBindings[] = []) => (db.query(sql).get(...params) as T | null) ?? null,
-    query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
-    execute: (sql: string, params: SQLQueryBindings[] = []) => {
-      db.run(sql, params)
-    },
-    transaction: <T>(fn: () => T) => db.transaction(fn)(),
-    close: () => db.close(),
-  }
+  return createBunDatabaseService(db)
 }
 
 function createPushBusStub(): {
@@ -80,7 +71,7 @@ function createSuccess(
 describe("CanvasSyncService", () => {
   test("syncs student-first Canvas state from the updated MCP tool surface", async () => {
     const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    runBunMigrations(db)
 
     const database = createDatabaseService(db)
     const { pushBus, events } = createPushBusStub()
@@ -257,7 +248,7 @@ describe("CanvasSyncService", () => {
 
   test("sync soft-fails optional student surfaces and still completes", async () => {
     const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    runBunMigrations(db)
 
     const database = createDatabaseService(db)
     const { pushBus, events } = createPushBusStub()
@@ -325,7 +316,7 @@ describe("CanvasSyncService", () => {
 
   test("passes through assignment detail lookups to the updated Canvas MCP surface", async () => {
     const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    runBunMigrations(db)
     const database = createDatabaseService(db)
     const { pushBus } = createPushBusStub()
 

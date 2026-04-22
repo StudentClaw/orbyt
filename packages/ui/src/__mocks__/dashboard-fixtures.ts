@@ -7,7 +7,7 @@ import type {
 } from "@student-claw/contracts"
 import type { PrioritizedItem } from "@/components/dashboard/priority-model"
 import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
-import type { InsightAction, InsightStripItem } from "@/components/dashboard/InsightStrip"
+import type { InsightAction, InsightWithAction } from "@/components/dashboard/insight-types"
 
 // --- Helper factories ---
 
@@ -478,7 +478,7 @@ export const MOCK_ANNOUNCEMENTS: ReadonlyArray<AnnouncementData> = [
 
 export type { InsightAction }
 
-export type InsightData = InsightStripItem
+export type InsightData = InsightWithAction
 
 export const MOCK_INSIGHTS: ReadonlyArray<InsightData> = [
   {
@@ -513,12 +513,13 @@ export const MOCK_INSIGHTS: ReadonlyArray<InsightData> = [
   },
 ]
 
-// --- Mock Priority Items (pre-computed for PriorityQueue) ---
+// --- Mock priority items (for tests / demos) ---
 
 export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(2) as string,
     title: "Lab Report: Synthesis of Aspirin",
+    courseId: courseId(2) as string,
     courseCode: "CHEM 202",
     effectiveDueAt: daysFromNow(1),
     estimatedMinutes: 120,
@@ -528,6 +529,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(7) as string,
     title: "Pre-lab Quiz: Distillation",
+    courseId: courseId(2) as string,
     courseCode: "CHEM 202",
     effectiveDueAt: daysFromNow(1),
     estimatedMinutes: 20,
@@ -537,6 +539,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(15) as string,
     title: "Reading: Chapter 12",
+    courseId: courseId(1) as string,
     courseCode: "CS 101",
     effectiveDueAt: daysFromNow(1),
     estimatedMinutes: 45,
@@ -546,6 +549,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(1) as string,
     title: "Problem Set 5: Recursion",
+    courseId: courseId(1) as string,
     courseCode: "CS 101",
     effectiveDueAt: daysFromNow(2),
     estimatedMinutes: 180,
@@ -555,6 +559,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(9) as string,
     title: "Quiz 4: Vector Spaces",
+    courseId: courseId(4) as string,
     courseCode: "MATH 240",
     effectiveDueAt: daysFromNow(2),
     estimatedMinutes: 60,
@@ -564,6 +569,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(4) as string,
     title: "Homework 7: Eigenvalues",
+    courseId: courseId(4) as string,
     courseCode: "MATH 240",
     effectiveDueAt: daysFromNow(3),
     estimatedMinutes: 90,
@@ -573,6 +579,7 @@ export const MOCK_PRIORITY_ITEMS: ReadonlyArray<PrioritizedItem> = [
   {
     id: itemId(6) as string,
     title: "Chapter 8 Reading Response",
+    courseId: courseId(5) as string,
     courseCode: "PSYCH 100",
     effectiveDueAt: daysFromNow(4),
     estimatedMinutes: 30,

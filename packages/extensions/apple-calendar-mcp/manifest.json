@@ -1,0 +1,49 @@
+{
+  "id": "apple-calendar-mcp",
+  "name": "Apple Calendar",
+  "description": "Bundled Apple Calendar tools for reading and editing local macOS calendars.",
+  "version": "1.0.0",
+  "transport": {
+    "type": "local_stdio",
+    "entry": "dist/index.js"
+  },
+  "permissions": [
+    "local_os.calendar.read",
+    "local_os.calendar.write"
+  ],
+  "auth": {
+    "type": "none"
+  },
+  "tools": [
+    {
+      "name": "getCalendars",
+      "description": "List all available Apple calendars."
+    },
+    {
+      "name": "getCalendarEvents",
+      "description": "Get events from a specific Apple calendar."
+    },
+    {
+      "name": "createCalendar",
+      "description": "Create a new Apple calendar."
+    },
+    {
+      "name": "createCalendarEvent",
+      "description": "Create a new event in an Apple calendar."
+    },
+    {
+      "name": "updateCalendarEvent",
+      "description": "Update an existing event in an Apple calendar."
+    },
+    {
+      "name": "deleteCalendarEvent",
+      "description": "Delete an event from an Apple calendar."
+    },
+    {
+      "name": "deleteCalendar",
+      "description": "Delete an Apple calendar."
+    }
+  ],
+  "author": "student-claw",
+  "homepage": "https://github.com/StudentClaw/student-claw"
+}

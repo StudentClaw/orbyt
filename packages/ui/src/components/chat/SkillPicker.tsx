@@ -17,9 +17,10 @@ interface SkillPickerProps {
   readonly skills: readonly SkillPickerEntry[]
   readonly filter: string
   readonly onSelect: (skill: SkillPickerEntry) => void
-  readonly onDismiss: () => void
+  readonly onDismiss?: () => void
 }
 
+export function SkillPicker({ skills, filter, onSelect, onDismiss: _onDismiss }: SkillPickerProps) {
 export function SkillPicker({ skills, filter, onSelect, onDismiss: _onDismiss }: SkillPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 

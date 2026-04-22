@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { RouterProvider } from "@tanstack/react-router"
 import { AppStartupScreen } from "@/components/runtime/AppStartupScreen"
+import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useRuntimeStartupState } from "@/hooks/useAppRuntime"
 import { useTheme } from "@/hooks/useTheme"
@@ -33,6 +34,7 @@ function App() {
   return (
     <TooltipProvider>
       <RouterProvider router={router} />
+      <Toaster position="bottom-right" richColors closeButton />
     </TooltipProvider>
   )
 }

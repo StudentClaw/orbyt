@@ -1,6 +1,9 @@
 import { EventEmitter } from "node:events"
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { describe, test, expect } from "bun:test"
-import { healthCheck, spawnServer } from "../server/lifecycle.js"
+import { healthCheck, resolveServerLaunchSpec, spawnServer } from "../server/lifecycle.js"
 
 class FakeWebSocket extends EventEmitter {
   constructor(
@@ -104,5 +107,39 @@ describe("Server lifecycle", () => {
     )
 
     expect(result).toBeNull()
+  })
+
+  test("resolveServerLaunchSpec uses bun against the source entry in development", () => {
+    const spec = resolveServerLaunchSpec({
+      isPackaged: false,
+    })
+
+    expect(spec.packaged).toBe(false)
+    expect(spec.command).toBe("bun")
+    expect(spec.args[0]).toBe("run")
+    expect(spec.serverPath.endsWith("/packages/server/src/index.ts")).toBe(true)
+  })
+
+  test("resolveServerLaunchSpec uses the packaged server entry when the app is packaged", () => {
+    const resourcesRoot = mkdtempSync(path.join(tmpdir(), "student-claw-server-launch-"))
+    const serverPath = path.join(resourcesRoot, "app.asar", "node_modules", "@student-claw", "server", "dist", "index.js")
+    mkdirSync(path.dirname(serverPath), { recursive: true })
+    writeFileSync(serverPath, "console.log('server')\n", "utf8")
+
+    try {
+      const spec = resolveServerLaunchSpec({
+        isPackaged: true,
+        resourcesPath: resourcesRoot,
+      })
+
+      expect(spec).toEqual({
+        command: process.execPath,
+        args: [serverPath],
+        serverPath,
+        packaged: true,
+      })
+    } finally {
+      rmSync(resourcesRoot, { recursive: true, force: true })
+    }
   })
 })

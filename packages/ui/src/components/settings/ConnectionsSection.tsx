@@ -1,90 +1,273 @@
-import { useEffect, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import {
+  Alert02Icon,
+  ApiIcon,
+  BookOpen02Icon,
+  BrainIcon,
+  Calendar03Icon,
+  CodeIcon,
+  Link01Icon,
+  PackageIcon,
+  SearchIcon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import {
   IpcChannel,
   type ExtensionAuthField,
   type ExtensionAuthManualTokenSchema,
   type ExtensionRegistryAvailableEntry,
   type ExtensionRegistryEntry,
+  type ExtensionRuntimeReadiness,
+  type ExtensionToolSummary,
   type PluginAuthStatus,
-  type ProviderRuntimeState,
 } from "@student-claw/contracts"
 import {
-  useOrchestrationActions,
   useRuntimeCanvasSyncProgress,
   useRuntimeBootstrap,
-  useRuntimeOrchestrationSnapshot,
+  useSkills,
+  type SkillEntry,
 } from "@/hooks/useAppRuntime"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { connectCodexAccount } from "@/lib/codexAuth"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 
 const MIN_SECRET_LENGTH = 20
 
+type ManagerTab = "plugins" | "mcps" | "skills"
 type AuthFormValues = Record<string, string>
 type AuthStatusMap = Record<string, PluginAuthStatus | undefined>
 type AuthFieldErrorMap = Record<string, Record<string, string>>
+type NoAuthExtensionEntry = ExtensionRegistryAvailableEntry & {
+  manifest: ExtensionRegistryAvailableEntry["manifest"] & { auth: { type: "none" } }
+}
+type ReadinessActionKind = "enable" | "disable" | "retry_bridge" | "grant_access" | "retry_plugin"
+type ReadinessPanelModel = {
+  label: string
+  body: string
+  actionLabel?: string
+  actionKind?: ReadinessActionKind
+}
+
+type ConnectionsSectionProps = {
+  selectedPluginId?: string | null
+  onSelectPlugin?: (pluginId: string) => void
+  onBackToRegistry?: () => void
+}
 
 function getEntryName(entry: ExtensionRegistryEntry): string {
   return entry.kind === "available" ? entry.manifest.name : entry.displayName
 }
+
+function getEntryDescription(entry: ExtensionRegistryEntry): string {
+  if (entry.kind === "available") {
+    return entry.manifest.description
+  }
+
+  return "Manifest validation failed for this plugin."
+}
+
 function getEntryVersion(entry: ExtensionRegistryEntry): string {
   return entry.kind === "available" ? entry.manifest.version : "Invalid manifest"
 }
+
 function getEntryPluginId(entry: ExtensionRegistryEntry): string {
   return entry.kind === "available" ? entry.manifest.id : entry.pluginId
 }
+
 function formatInstallSource(entry: ExtensionRegistryEntry): string {
   switch (entry.installSource) {
-    case "bundled": return "Bundled"
-    case "user": return "User"
-    case "system": return "System"
+    case "bundled":
+      return "Bundled"
+    case "user":
+      return "User"
+    case "system":
+      return "System"
   }
+
   return entry.installSource
 }
+
 function getStatusBadgeVariant(entry: ExtensionRegistryEntry): "default" | "secondary" | "destructive" | "outline" {
   if (entry.kind === "invalid" || entry.status === "error") return "destructive"
   if (entry.status === "discovered") return "secondary"
+  if (entry.status === "active" || entry.status === "ready") return "default"
   return "outline"
 }
+
+function getReadinessLabel(readiness: ExtensionRuntimeReadiness): string {
+  switch (readiness) {
+    case "ready":
+      return "Ready"
+    case "bridge_starting":
+      return "Starting bridge"
+    case "bridge_unavailable":
+      return "Bridge unavailable"
+    case "permission_required":
+      return "Permission required"
+    case "bridge_crash_loop":
+      return "Bridge keeps crashing"
+    case "platform_unsupported":
+      return "Not available on this platform"
+    case "error":
+      return "Error"
+  }
+
+  return "Unknown"
+}
+
 function hasManualTokenAuth(entry: ExtensionRegistryEntry): entry is ExtensionRegistryAvailableEntry & {
   manifest: ExtensionRegistryAvailableEntry["manifest"] & { auth: ExtensionAuthManualTokenSchema }
 } {
   return entry.kind === "available" && entry.manifest.auth.type === "manual_token"
 }
-function buildEmptyAuthValues(auth: ExtensionAuthManualTokenSchema): AuthFormValues {
-  return Object.fromEntries(auth.fields.map((f) => [f.key, ""]))
+
+function hasNoAuthExtension(entry: ExtensionRegistryEntry): entry is NoAuthExtensionEntry {
+  return entry.kind === "available" && entry.manifest.auth.type === "none"
 }
+
+function buildEmptyAuthValues(auth: ExtensionAuthManualTokenSchema): AuthFormValues {
+  return Object.fromEntries(auth.fields.map((field) => [field.key, ""]))
+}
+
 function getAuthStatusVariant(status?: PluginAuthStatus): "default" | "secondary" | "destructive" | "outline" {
   if (!status || status.status === "not_configured") return "secondary"
   if (status.status === "error") return "destructive"
   return "default"
 }
+
 function getAuthStatusLabel(status?: PluginAuthStatus): string {
   if (!status) return "Loading"
   switch (status.status) {
-    case "configured": return "Configured"
-    case "error": return "Error"
-    case "not_configured": return "Not configured"
+    case "configured":
+      return "Configured"
+    case "error":
+      return "Error"
+    case "not_configured":
+      return "Not configured"
   }
+
+  return "Unknown"
 }
+
 function getInputType(field: ExtensionAuthField): string {
   if (field.type === "secret") return "password"
   if (field.type === "base_url") return "url"
   return "text"
 }
+
+function getReadinessActionLabel(entry: NoAuthExtensionEntry, action: ReadinessActionKind): string {
+  switch (action) {
+    case "enable":
+      return "Enable"
+    case "disable":
+      return "Disable"
+    case "retry_bridge":
+      return "Retry bridge"
+    case "grant_access":
+      return entry.manifest.id === "apple-calendar-mcp" ? "Grant Calendar access" : "Grant access"
+    case "retry_plugin":
+      return "Retry"
+  }
+}
+
+function getReadinessPanelModel(entry: NoAuthExtensionEntry): ReadinessPanelModel {
+  const name = entry.manifest.name
+
+  if (!entry.enabled) {
+    return {
+      label: "Disabled",
+      body: `${name} is off. Enable it to use its tools.`,
+      actionLabel: getReadinessActionLabel(entry, "enable"),
+      actionKind: "enable",
+    }
+  }
+
+  switch (entry.readiness) {
+    case "bridge_starting":
+      return {
+        label: "Starting",
+        body: `Student Claw is starting the local bridge for ${name}.`,
+      }
+    case "bridge_unavailable":
+      return {
+        label: "Bridge unavailable",
+        body: entry.lastError ?? `The local bridge for ${name} did not start. You can retry it.`,
+        actionLabel: getReadinessActionLabel(entry, "retry_bridge"),
+        actionKind: "retry_bridge",
+      }
+    case "permission_required":
+      return {
+        label: "Permission required",
+        body: entry.lastError ?? `Grant local permissions in macOS Settings so Student Claw can use ${name}.`,
+        actionLabel: getReadinessActionLabel(entry, "grant_access"),
+        actionKind: "grant_access",
+      }
+    case "bridge_crash_loop":
+      return {
+        label: "Bridge keeps crashing",
+        body: entry.lastError ?? `The local bridge for ${name} has repeatedly failed to start. Retry is rate-limited.`,
+        actionLabel: getReadinessActionLabel(entry, "retry_bridge"),
+        actionKind: "retry_bridge",
+      }
+    case "ready":
+      return {
+        label: "Ready",
+        body: `${name} tools are available.`,
+        actionLabel: getReadinessActionLabel(entry, "disable"),
+        actionKind: "disable",
+      }
+    case "error":
+      return {
+        label: "Error",
+        body: entry.lastError ?? `${name} hit an error. You can retry it.`,
+        actionLabel: getReadinessActionLabel(entry, "retry_plugin"),
+        actionKind: "retry_plugin",
+      }
+    case "platform_unsupported":
+      return {
+        label: "Not available on this platform",
+        body: `${name} is not available on this platform.`,
+      }
+  }
+
+  if (entry.status === "starting") {
+    return {
+      label: "Starting",
+      body: `Student Claw is starting ${name}.`,
+    }
+  }
+
+  if (entry.status === "ready" || entry.status === "active") {
+    return {
+      label: "Ready",
+      body: `${name} tools are available.`,
+      actionLabel: getReadinessActionLabel(entry, "disable"),
+      actionKind: "disable",
+    }
+  }
+
+  return {
+    label: "Error",
+    body: entry.lastError ?? `${name} is waiting for local runtime readiness.`,
+    actionLabel: getReadinessActionLabel(entry, "retry_plugin"),
+    actionKind: "retry_plugin",
+  }
+}
+
 function isValidCanvasBaseUrl(value: string): boolean {
   try {
     const url = new URL(value)
     return url.protocol === "https:" && url.hostname.length > 0
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
+
 function validateAuthField(field: ExtensionAuthField, value: string): string | null {
   const trimmed = value.trim()
   if (field.required && trimmed.length === 0) return `${field.label} is required.`
@@ -93,6 +276,7 @@ function validateAuthField(field: ExtensionAuthField, value: string): string | n
   if (field.type === "secret" && trimmed.length < MIN_SECRET_LENGTH) return `Enter at least ${MIN_SECRET_LENGTH} characters.`
   return null
 }
+
 function validateAuthValues(auth: ExtensionAuthManualTokenSchema, values: AuthFormValues): Record<string, string> {
   const errors: Record<string, string> = {}
   for (const field of auth.fields) {
@@ -101,74 +285,490 @@ function validateAuthValues(auth: ExtensionAuthManualTokenSchema, values: AuthFo
   }
   return errors
 }
-function getCodexStatusBadgeVariant(runtime: ProviderRuntimeState | null): "default" | "secondary" | "destructive" | "outline" {
-  if (!runtime) return "secondary"
-  if (runtime.authState === "authenticated") return "default"
-  if (runtime.authState === "auth_required" || runtime.authState === "expired") return "destructive"
-  if (runtime.status === "degraded" || runtime.status === "rate_limited") return "destructive"
-  return "secondary"
-}
-function getCodexStatusLabel(runtime: ProviderRuntimeState | null): string {
-  if (!runtime) return "Checking runtime"
-  if (runtime.authState === "authenticated") {
-    if (runtime.status === "initializing") return "Connecting"
-    if (runtime.status === "degraded") return "Degraded"
-    if (runtime.status === "rate_limited") return "Rate limited"
-    return "Connected"
-  }
-  if (runtime.authState === "expired") return "Session expired"
-  if (runtime.authState === "auth_required" || runtime.status === "auth_required") return "Sign-in required"
-  if (runtime.status === "initializing") return "Initializing"
-  return "Not connected"
-}
-function getCodexStatusDescription(runtime: ProviderRuntimeState | null): string {
-  if (!runtime) return "Waiting for the local runtime to report Codex availability."
-  if (runtime.authState === "authenticated") return runtime.lastError?.message ?? "Codex is authenticated and available to the chat runtime."
-  if (runtime.lastError?.message) return runtime.lastError.message
-  if (runtime.authState === "expired") return "Your Codex session expired. Sign in again to restore chat access."
-  return "Codex is not authenticated in this app runtime yet."
+
+function isMcpEntry(entry: ExtensionRegistryEntry): boolean {
+  return getEntryPluginId(entry).endsWith("-mcp")
 }
 
-export function ConnectionsSection() {
+function matchesPluginSearch(entry: ExtensionRegistryEntry, query: string): boolean {
+  const haystack = [
+    getEntryName(entry),
+    getEntryDescription(entry),
+    getEntryPluginId(entry),
+    formatInstallSource(entry),
+    entry.kind === "available" ? entry.manifest.author : "",
+  ].join(" ").toLowerCase()
+  return haystack.includes(query)
+}
+
+function matchesSkillSearch(skill: SkillEntry, query: string): boolean {
+  return `${skill.name} ${skill.description} ${skill.id}`.toLowerCase().includes(query)
+}
+
+function resolvePluginIcon(entry: ExtensionRegistryEntry) {
+  const pluginId = getEntryPluginId(entry)
+
+  if (entry.kind === "invalid") return Alert02Icon
+  if (pluginId === "canvas-mcp") return BookOpen02Icon
+  if (pluginId === "apple-calendar-mcp") return Calendar03Icon
+  if (isMcpEntry(entry)) return ApiIcon
+  return PackageIcon
+}
+
+function getPluginTone(entry: ExtensionRegistryEntry): string {
+  if (entry.kind === "invalid") return "bg-destructive/10 text-destructive"
+  if (isMcpEntry(entry)) return "bg-primary/10 text-primary"
+  return "bg-muted text-foreground"
+}
+
+function PluginMark({
+  entry,
+  className = "size-11 rounded-2xl",
+  iconSize = 22,
+}: {
+  entry: ExtensionRegistryEntry
+  className?: string
+  iconSize?: number
+}) {
+  return (
+    <div className={`${className} ${getPluginTone(entry)} flex shrink-0 items-center justify-center`}>
+      <HugeiconsIcon icon={resolvePluginIcon(entry)} size={iconSize} strokeWidth={1.8} />
+    </div>
+  )
+}
+
+function MetadataBadge({ children }: { children: React.ReactNode }) {
+  return <Badge variant="outline" className="bg-transparent">{children}</Badge>
+}
+
+function PluginCard({
+  entry,
+  pendingPluginId,
+  onSelect,
+  onToggle,
+}: {
+  entry: ExtensionRegistryEntry
+  pendingPluginId: string | null
+  onSelect: (pluginId: string) => void
+  onToggle: (pluginId: string, enabled: boolean) => void
+}) {
+  const pluginId = getEntryPluginId(entry)
+  const isPending = pendingPluginId === pluginId
+  const isInvalid = entry.kind === "invalid"
+
+  return (
+    <div
+      className="flex h-full flex-col rounded-3xl border border-border/70 bg-card/30 p-4 transition-colors hover:border-border hover:bg-card/50"
+      data-testid={`settings-plugin-row-${pluginId}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <PluginMark entry={entry} />
+        <div
+          className="shrink-0"
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <Switch
+            size="sm"
+            checked={entry.enabled && entry.kind === "available"}
+            disabled={isPending || isInvalid}
+            onCheckedChange={(checked) => {
+              onToggle(pluginId, checked)
+            }}
+            aria-label={`${entry.enabled ? "Disable" : "Enable"} ${getEntryName(entry)}`}
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="mt-4 flex flex-1 flex-col items-start rounded-2xl text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60"
+        data-testid={`settings-plugin-manage-${pluginId}`}
+        onClick={() => onSelect(pluginId)}
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <p className="truncate text-base font-medium text-foreground">{getEntryName(entry)}</p>
+          <Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge>
+          {entry.kind === "available" && entry.readiness && (
+            <MetadataBadge>{getReadinessLabel(entry.readiness)}</MetadataBadge>
+          )}
+        </div>
+        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{getEntryDescription(entry)}</p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <MetadataBadge>{isMcpEntry(entry) ? "MCP" : "Plugin"}</MetadataBadge>
+          <MetadataBadge>{formatInstallSource(entry)}</MetadataBadge>
+          <MetadataBadge>v{getEntryVersion(entry)}</MetadataBadge>
+          {entry.kind === "available" && <MetadataBadge>{entry.manifest.tools.length} tools</MetadataBadge>}
+        </div>
+
+        <p className="mt-auto pt-4 text-xs text-muted-foreground">{pluginId}</p>
+      </button>
+    </div>
+  )
+}
+
+function PluginDetailView({
+  entry,
+  pendingPluginId,
+  pendingAuthPluginId,
+  pendingSyncPluginId,
+  pendingReadinessPluginId,
+  isCanvasSyncing,
+  authStatus,
+  auth,
+  values,
+  fieldErrors,
+  saveError,
+  onToggle,
+  onSaveAuth,
+  onSyncCanvas,
+  onRunReadinessAction,
+  onChangeAuthField,
+}: {
+  entry: ExtensionRegistryEntry
+  pendingPluginId: string | null
+  pendingAuthPluginId: string | null
+  pendingSyncPluginId: string | null
+  pendingReadinessPluginId: string | null
+  isCanvasSyncing: boolean
+  authStatus?: PluginAuthStatus
+  auth?: ExtensionAuthManualTokenSchema
+  values?: AuthFormValues
+  fieldErrors: Record<string, string>
+  saveError: string | null | undefined
+  onToggle: (pluginId: string, enabled: boolean) => void
+  onSaveAuth: () => void
+  onSyncCanvas: () => void
+  onRunReadinessAction: () => void
+  onChangeAuthField: (fieldKey: string, nextValue: string) => void
+}) {
+  const pluginId = getEntryPluginId(entry)
+  const isPending = pendingPluginId === pluginId
+  const isInvalid = entry.kind === "invalid"
+  const isManualAuth = hasManualTokenAuth(entry)
+  const isNoAuth = hasNoAuthExtension(entry)
+  const readiness = isNoAuth ? getReadinessPanelModel(entry) : null
+  const tools = entry.kind === "available" ? entry.manifest.tools : []
+
+  return (
+    <div className="space-y-6" data-testid={`settings-plugin-detail-${pluginId}`}>
+      <div className="flex flex-col gap-5 rounded-[2rem] border border-border/70 bg-card/30 p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <PluginMark entry={entry} className="size-14 rounded-[1.35rem]" iconSize={28} />
+            <div className="min-w-0 space-y-3">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-semibold tracking-tight">{getEntryName(entry)}</h2>
+                <p className="text-sm text-muted-foreground">{getEntryDescription(entry)}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge>
+                <MetadataBadge>{isMcpEntry(entry) ? "MCP" : "Plugin"}</MetadataBadge>
+                <MetadataBadge>{formatInstallSource(entry)}</MetadataBadge>
+                <MetadataBadge>v{getEntryVersion(entry)}</MetadataBadge>
+                {entry.kind === "available" && entry.readiness && (
+                  <MetadataBadge>{getReadinessLabel(entry.readiness)}</MetadataBadge>
+                )}
+                {entry.kind === "available" && <MetadataBadge>{entry.manifest.tools.length} tools</MetadataBadge>}
+                {isManualAuth && <Badge variant={getAuthStatusVariant(authStatus)}>{getAuthStatusLabel(authStatus)}</Badge>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-4xl border border-border/70 bg-background/40 px-3 py-2">
+              <span className="text-sm text-muted-foreground">Enabled</span>
+              <Switch
+                checked={entry.enabled && entry.kind === "available"}
+                disabled={isPending || isInvalid}
+                onCheckedChange={(checked) => {
+                  onToggle(pluginId, checked)
+                }}
+                aria-label={`${entry.enabled ? "Disable" : "Enable"} ${getEntryName(entry)}`}
+              />
+            </div>
+
+            {pluginId === "canvas-mcp" && isManualAuth && (
+              <Button
+                variant="outline"
+                disabled={pendingSyncPluginId === pluginId || isCanvasSyncing}
+                onClick={onSyncCanvas}
+                data-testid={`settings-plugin-sync-${pluginId}`}
+              >
+                {pendingSyncPluginId === pluginId || isCanvasSyncing ? "Syncing..." : "Sync Now"}
+              </Button>
+            )}
+
+            {isManualAuth && (
+              <Button
+                disabled={pendingAuthPluginId === pluginId}
+                onClick={onSaveAuth}
+                data-testid={`settings-plugin-auth-save-${pluginId}`}
+              >
+                Save credentials
+              </Button>
+            )}
+
+            {isNoAuth && readiness?.actionKind && readiness.actionLabel && (
+              <Button
+                variant={readiness.actionKind === "disable" ? "outline" : "default"}
+                disabled={pendingReadinessPluginId === pluginId}
+                onClick={onRunReadinessAction}
+                data-testid={`settings-plugin-readiness-action-${pluginId}`}
+              >
+                {readiness.actionLabel}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <section className="space-y-4 rounded-3xl border border-border/70 bg-background/30 p-5">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Overview</p>
+              <p className="text-sm text-muted-foreground">Core identity, transport, and discovery metadata.</p>
+            </div>
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Plugin ID</dt>
+                <dd className="text-sm text-foreground">{pluginId}</dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Install source</dt>
+                <dd className="text-sm text-foreground">{formatInstallSource(entry)}</dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Version</dt>
+                <dd className="text-sm text-foreground">v{getEntryVersion(entry)}</dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Type</dt>
+                <dd className="text-sm text-foreground">{isMcpEntry(entry) ? "MCP" : "Plugin"}</dd>
+              </div>
+              {entry.kind === "available" && (
+                <>
+                  <div className="space-y-1">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Transport</dt>
+                    <dd className="text-sm text-foreground">{entry.manifest.transport.type}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Entry</dt>
+                    <dd className="truncate text-sm text-foreground">{entry.manifest.transport.entry}</dd>
+                  </div>
+                </>
+              )}
+            </dl>
+            {entry.kind === "available" && (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span>{entry.manifest.author}</span>
+                <span className="text-border">•</span>
+                <a
+                  href={entry.manifest.homepage}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-foreground hover:text-primary"
+                >
+                  <HugeiconsIcon icon={Link01Icon} size={14} strokeWidth={2} />
+                  <span>Homepage</span>
+                </a>
+              </div>
+            )}
+          </section>
+
+          {isInvalid ? (
+            <section
+              className="space-y-3 rounded-3xl border border-destructive/30 bg-destructive/5 p-5"
+              data-testid={`settings-plugin-error-card-${pluginId}`}
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Manifest error</p>
+                <p className="text-sm text-muted-foreground">{entry.lastError}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{entry.manifestPath}</p>
+            </section>
+          ) : isNoAuth && readiness ? (
+            <section
+              className="space-y-4 rounded-3xl border border-border/70 bg-background/30 p-5"
+              data-testid={`settings-plugin-readiness-card-${pluginId}`}
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Readiness</p>
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid={`settings-plugin-readiness-body-${pluginId}`}
+                >
+                  {readiness.body}
+                </p>
+              </div>
+              {entry.lastError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Runtime detail</AlertTitle>
+                  <AlertDescription>{entry.lastError}</AlertDescription>
+                </Alert>
+              )}
+
+              {readiness.actionKind && readiness.actionLabel && (
+                <div className="flex justify-end">
+                  <Button
+                    variant={readiness.actionKind === "disable" ? "outline" : "default"}
+                    disabled={pendingReadinessPluginId === pluginId}
+                    onClick={onRunReadinessAction}
+                    data-testid={`settings-plugin-readiness-action-${pluginId}`}
+                  >
+                    {readiness.actionLabel}
+                  </Button>
+                </div>
+              )}
+            </section>
+          ) : null}
+        </div>
+      </div>
+
+      {isManualAuth && values && auth && (
+        <section
+          className="space-y-4 rounded-[2rem] border border-border/70 bg-card/30 p-6"
+          data-testid={`settings-plugin-auth-card-${pluginId}`}
+        >
+          <div className="space-y-2">
+            <p className="text-base font-medium text-foreground">Credentials</p>
+            <p className="text-sm text-muted-foreground">{auth.instructions}</p>
+            <p className="text-sm text-muted-foreground">Status: {getAuthStatusLabel(authStatus)}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {auth.fields.map((field) => (
+              <div key={field.key} className="space-y-2">
+                <Label htmlFor={`${pluginId}-${field.key}`}>{field.label}</Label>
+                <Input
+                  id={`${pluginId}-${field.key}`}
+                  type={getInputType(field)}
+                  placeholder={field.placeholder}
+                  value={values[field.key] ?? ""}
+                  onChange={(event) => {
+                    onChangeAuthField(field.key, event.target.value)
+                  }}
+                  data-testid={`settings-plugin-auth-input-${pluginId}-${field.key}`}
+                />
+                {fieldErrors[field.key] && (
+                  <p
+                    className="text-sm text-destructive"
+                    data-testid={`settings-plugin-auth-field-error-${pluginId}-${field.key}`}
+                  >
+                    {fieldErrors[field.key]}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {authStatus?.error && (
+            <Alert variant="destructive" data-testid={`settings-plugin-auth-status-error-${pluginId}`}>
+              <AlertTitle>Credential state error</AlertTitle>
+              <AlertDescription>{authStatus.error}</AlertDescription>
+            </Alert>
+          )}
+
+          {saveError && (
+            <Alert variant="destructive" data-testid={`settings-plugin-auth-save-error-${pluginId}`}>
+              <AlertTitle>Unable to save credentials</AlertTitle>
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
+        </section>
+      )}
+
+      {entry.kind === "available" && (
+        <section
+          className="space-y-4 rounded-[2rem] border border-border/70 bg-card/30 p-6"
+          data-testid={`settings-plugin-tools-${pluginId}`}
+        >
+          <div className="space-y-1">
+            <p className="text-base font-medium text-foreground">Exposed tools</p>
+            <p className="text-sm text-muted-foreground">Tools this plugin contributes to the runtime.</p>
+          </div>
+
+          {tools.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {tools.map((tool: ExtensionToolSummary) => (
+                <div
+                  key={tool.name}
+                  className="rounded-3xl border border-border/70 bg-background/30 p-4"
+                  data-testid={`settings-plugin-tool-${pluginId}-${tool.name}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <HugeiconsIcon icon={CodeIcon} size={18} strokeWidth={1.8} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">{tool.name}</p>
+                      <p className="text-sm text-muted-foreground">{tool.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty className="rounded-3xl border border-dashed border-border/70 bg-background/20 p-8">
+              <EmptyHeader>
+                <EmptyTitle>No tools declared</EmptyTitle>
+                <EmptyDescription>This plugin is discovered, but its manifest does not currently expose any tools.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </section>
+      )}
+    </div>
+  )
+}
+
+export function ConnectionsSection({
+  selectedPluginId = null,
+  onSelectPlugin,
+}: ConnectionsSectionProps = {}) {
   const bootstrap = useRuntimeBootstrap()
-  const snapshot = useRuntimeOrchestrationSnapshot()
   const syncProgress = useRuntimeCanvasSyncProgress()
-  const orchestrationActions = useOrchestrationActions()
+  const skills = useSkills()
   const [registryEntries, setRegistryEntries] = useState<ExtensionRegistryEntry[]>([])
   const [registryState, setRegistryState] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const [registryError, setRegistryError] = useState<string | null>(null)
   const [pendingPluginId, setPendingPluginId] = useState<string | null>(null)
   const [pendingAuthPluginId, setPendingAuthPluginId] = useState<string | null>(null)
-  const [pendingCodexAction, setPendingCodexAction] = useState<"connect" | "retry" | null>(null)
-  const [codexActionError, setCodexActionError] = useState<string | null>(null)
   const [authStatuses, setAuthStatuses] = useState<AuthStatusMap>({})
   const [authForms, setAuthForms] = useState<Record<string, AuthFormValues>>({})
   const [authErrors, setAuthErrors] = useState<Record<string, string | null>>({})
   const [authFieldErrors, setAuthFieldErrors] = useState<AuthFieldErrorMap>({})
   const [pendingSyncPluginId, setPendingSyncPluginId] = useState<string | null>(null)
+  const [pendingReadinessPluginId, setPendingReadinessPluginId] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ManagerTab>("plugins")
+  const [searchQuery, setSearchQuery] = useState("")
 
-  const providerRuntime = snapshot?.providerRuntime ?? null
-  const codexNeedsAuth =
-    !providerRuntime
-    || providerRuntime.authState === "unknown"
-    || providerRuntime.authState === "auth_required"
-    || providerRuntime.authState === "expired"
-    || providerRuntime.status === "auth_required"
-  const codexCanRetry =
-    providerRuntime !== null
-    && !codexNeedsAuth
-    && (providerRuntime.status === "offline" || providerRuntime.status === "degraded" || providerRuntime.status === "rate_limited")
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase())
   const isCanvasSyncing = syncProgress?.status === "syncing"
 
   function upsertRegistryEntry(nextEntry: ExtensionRegistryEntry): void {
     setRegistryEntries((current) => {
-      const index = current.findIndex((e) => getEntryPluginId(e) === getEntryPluginId(nextEntry))
+      const index = current.findIndex((entry) => getEntryPluginId(entry) === getEntryPluginId(nextEntry))
       if (index === -1) return [...current, nextEntry]
       const updated = [...current]
       updated[index] = nextEntry
       return updated
     })
+  }
+
+  function patchReadiness(pluginId: string, readiness: ExtensionRuntimeReadiness, lastError?: string): void {
+    setRegistryEntries((current) => current.map((entry) => {
+      if (entry.kind !== "available" || entry.manifest.id !== pluginId) {
+        return entry
+      }
+
+      return {
+        ...entry,
+        readiness,
+        lastError,
+      }
+    }))
   }
 
   function ensureAuthForms(entries: ExtensionRegistryEntry[]): void {
@@ -185,13 +785,17 @@ export function ConnectionsSection() {
   async function refreshAuthStatus(pluginId: string): Promise<void> {
     if (!window.electronAPI?.invoke) return
     const nextStatus = await window.electronAPI.invoke(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId })
-    if (nextStatus) setAuthStatuses((c) => ({ ...c, [pluginId]: nextStatus }))
+    if (nextStatus) {
+      setAuthStatuses((current) => ({ ...current, [pluginId]: nextStatus }))
+    }
   }
 
   async function refreshPlugin(pluginId: string): Promise<void> {
     if (!window.electronAPI?.invoke) return
     const nextEntry = await window.electronAPI.invoke(IpcChannel.PLUGIN_GET_STATUS, { pluginId })
-    if (nextEntry) upsertRegistryEntry(nextEntry)
+    if (nextEntry) {
+      upsertRegistryEntry(nextEntry)
+    }
   }
 
   async function togglePlugin(pluginId: string, enabled: boolean): Promise<void> {
@@ -199,16 +803,20 @@ export function ConnectionsSection() {
       setRegistryError("Desktop bridge unavailable for plugin toggle.")
       return
     }
+
     setPendingPluginId(pluginId)
     setRegistryError(null)
+
     try {
       const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_SET_ENABLED, { pluginId, enabled })
       await refreshPlugin(pluginId)
-      if (!result.ok) setRegistryError(`Failed to ${enabled ? "enable" : "disable"} ${pluginId}: ${result.reason}`)
+      if (!result.ok) {
+        setRegistryError(`Failed to ${enabled ? "enable" : "disable"} ${pluginId}: ${result.reason}`)
+      }
     } catch (error) {
       setRegistryError(error instanceof Error ? error.message : String(error))
     } finally {
-      setPendingPluginId((c) => (c === pluginId ? null : c))
+      setPendingPluginId((current) => (current === pluginId ? null : current))
     }
   }
 
@@ -216,38 +824,103 @@ export function ConnectionsSection() {
     entry: ExtensionRegistryAvailableEntry & { manifest: ExtensionRegistryAvailableEntry["manifest"] & { auth: ExtensionAuthManualTokenSchema } },
   ): Promise<void> {
     if (!window.electronAPI?.invoke) {
-      setAuthErrors((c) => ({ ...c, [entry.manifest.id]: "Desktop bridge unavailable for plugin credentials." }))
+      setAuthErrors((current) => ({ ...current, [entry.manifest.id]: "Desktop bridge unavailable for plugin credentials." }))
       return
     }
+
     const pluginId = entry.manifest.id
     const values = authForms[pluginId] ?? buildEmptyAuthValues(entry.manifest.auth)
     const localFieldErrors = validateAuthValues(entry.manifest.auth, values)
-    setAuthFieldErrors((c) => ({ ...c, [pluginId]: localFieldErrors }))
+    setAuthFieldErrors((current) => ({ ...current, [pluginId]: localFieldErrors }))
+
     if (Object.keys(localFieldErrors).length > 0) {
-      setAuthErrors((c) => ({ ...c, [pluginId]: "Credentials are incomplete or invalid." }))
+      setAuthErrors((current) => ({ ...current, [pluginId]: "Credentials are incomplete or invalid." }))
       return
     }
+
     setPendingAuthPluginId(pluginId)
-    setAuthErrors((c) => ({ ...c, [pluginId]: null }))
+    setAuthErrors((current) => ({ ...current, [pluginId]: null }))
+
     try {
       const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_SAVE_AUTH, { pluginId, values })
       if (result.ok) {
-        setAuthStatuses((c) => ({ ...c, [pluginId]: { pluginId, status: result.status } }))
-        setAuthFieldErrors((c) => ({ ...c, [pluginId]: {} }))
+        setAuthStatuses((current) => ({ ...current, [pluginId]: { pluginId, status: result.status } }))
+        setAuthFieldErrors((current) => ({ ...current, [pluginId]: {} }))
         return
       }
-      setAuthErrors((c) => ({ ...c, [pluginId]: result.error }))
-      setAuthFieldErrors((c) => ({ ...c, [pluginId]: result.fieldErrors ?? {} }))
+
+      setAuthErrors((current) => ({ ...current, [pluginId]: result.error }))
+      setAuthFieldErrors((current) => ({ ...current, [pluginId]: result.fieldErrors ?? {} }))
       await refreshAuthStatus(pluginId)
     } catch (error) {
-      setAuthErrors((c) => ({ ...c, [pluginId]: error instanceof Error ? error.message : String(error) }))
+      setAuthErrors((current) => ({ ...current, [pluginId]: error instanceof Error ? error.message : String(error) }))
     } finally {
-      setPendingAuthPluginId((c) => (c === pluginId ? null : c))
+      setPendingAuthPluginId((current) => (current === pluginId ? null : current))
+    }
+  }
+
+  async function syncCanvasPlugin(): Promise<void> {
+    const pluginId = "canvas-mcp"
+
+    setPendingSyncPluginId(pluginId)
+    setSyncError(null)
+    try {
+      await getPrimaryWsRpcClient().canvas.sync()
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPendingSyncPluginId(null)
+    }
+  }
+
+  async function runReadinessAction(entry: NoAuthExtensionEntry): Promise<void> {
+    if (!window.electronAPI?.invoke) {
+      setRegistryError("Desktop bridge unavailable for extension readiness actions.")
+      return
+    }
+
+    const pluginId = entry.manifest.id
+    const panel = getReadinessPanelModel(entry)
+    if (!panel.actionKind) return
+
+    setPendingReadinessPluginId(pluginId)
+    setRegistryError(null)
+
+    try {
+      if (panel.actionKind === "enable" || panel.actionKind === "disable") {
+        await togglePlugin(pluginId, panel.actionKind === "enable")
+        return
+      }
+
+      if (panel.actionKind === "grant_access") {
+        const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS, { pluginId })
+        if (!result?.ok) {
+          setRegistryError(`Unable to open permission settings for ${pluginId}.`)
+        }
+        return
+      }
+
+      const retryClass = panel.actionKind === "retry_bridge"
+        ? "retry_bridge_start"
+        : "retry_plugin_start"
+      const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_RETRY, {
+        pluginId,
+        retryClass,
+      })
+      await refreshPlugin(pluginId)
+      if (!result.ok) {
+        setRegistryError(`Failed to retry ${pluginId}: ${result.reason}`)
+      }
+    } catch (error) {
+      setRegistryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPendingReadinessPluginId((current) => (current === pluginId ? null : current))
     }
   }
 
   useEffect(() => {
     let cancelled = false
+
     if (!bootstrap?.featureFlags.pluginSystem) {
       setRegistryEntries([])
       setRegistryState("idle")
@@ -255,33 +928,44 @@ export function ConnectionsSection() {
       setAuthStatuses({})
       setAuthErrors({})
       setAuthFieldErrors({})
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+      }
     }
+
     if (!window.electronAPI?.invoke) {
       setRegistryEntries([])
       setRegistryState("error")
       setRegistryError("Desktop bridge unavailable for plugin registry reads.")
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+      }
     }
+
     setRegistryState("loading")
     setRegistryError(null)
+
     window.electronAPI.invoke(IpcChannel.PLUGIN_LIST)
       .then(async (entries) => {
         if (cancelled) return
         setRegistryEntries(entries)
         ensureAuthForms(entries)
         setRegistryState("ready")
+
         const manualEntries = entries.filter(hasManualTokenAuth)
         const nextStatuses = await Promise.all(
-          manualEntries.map(async (entry) => {
+          manualEntries.map(async (entry: ExtensionRegistryAvailableEntry & {
+            manifest: ExtensionRegistryAvailableEntry["manifest"] & { auth: ExtensionAuthManualTokenSchema }
+          }) => {
             const status = await window.electronAPI!.invoke(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId: entry.manifest.id })
             return [entry.manifest.id, status] as const
           }),
         )
+
         if (cancelled) return
-        setAuthStatuses((c) => ({
-          ...c,
-          ...(Object.fromEntries(nextStatuses.filter(([, s]) => Boolean(s))) as AuthStatusMap),
+        setAuthStatuses((current) => ({
+          ...current,
+          ...(Object.fromEntries(nextStatuses.filter(([, status]) => Boolean(status))) as AuthStatusMap),
         }))
       })
       .catch((error: unknown) => {
@@ -290,7 +974,10 @@ export function ConnectionsSection() {
         setRegistryState("error")
         setRegistryError(error instanceof Error ? error.message : String(error))
       })
-    return () => { cancelled = true }
+
+    return () => {
+      cancelled = true
+    }
   }, [bootstrap])
 
   useEffect(() => {
@@ -302,270 +989,230 @@ export function ConnectionsSection() {
     })
   }, [bootstrap])
 
-  async function syncCanvasPlugin(pluginId: string): Promise<void> {
-    setPendingSyncPluginId(pluginId)
-    setSyncError(null)
-    try {
-      await getPrimaryWsRpcClient().canvas.sync()
-    } catch (error: unknown) {
-      setSyncError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setPendingSyncPluginId(null)
-    }
-  }
+  useEffect(() => {
+    if (!bootstrap?.featureFlags.pluginSystem || !window.electronAPI?.on) return
+    return window.electronAPI.on(IpcChannel.PLUGIN_READINESS, (payload) => {
+      patchReadiness(payload.pluginId, payload.readiness, payload.lastError)
+    })
+  }, [bootstrap])
 
-  const manualAuthEntries = registryEntries.filter(hasManualTokenAuth)
+  const pluginEntries = bootstrap?.featureFlags.pluginSystem ? registryEntries : []
+  const pluginCount = pluginEntries.length
+  const mcpCount = pluginEntries.filter(isMcpEntry).length
+  const skillCount = skills.length
+
+  const visiblePluginEntries = useMemo(() => {
+    const baseEntries = activeTab === "mcps"
+      ? pluginEntries.filter(isMcpEntry)
+      : pluginEntries
+
+    if (!deferredSearchQuery) return baseEntries
+    return baseEntries.filter((entry) => matchesPluginSearch(entry, deferredSearchQuery))
+  }, [activeTab, deferredSearchQuery, pluginEntries])
+
+  const visibleSkills = useMemo(() => {
+    if (!deferredSearchQuery) return skills
+    return skills.filter((skill) => matchesSkillSearch(skill, deferredSearchQuery))
+  }, [deferredSearchQuery, skills])
+
+  const selectedEntry = useMemo(
+    () => selectedPluginId
+      ? pluginEntries.find((entry) => getEntryPluginId(entry) === selectedPluginId) ?? null
+      : null,
+    [pluginEntries, selectedPluginId],
+  )
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Connections</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Manage AI provider and extension connections.</p>
-      </div>
+      {selectedEntry ? (
+        <PluginDetailView
+          entry={selectedEntry}
+          pendingPluginId={pendingPluginId}
+          pendingAuthPluginId={pendingAuthPluginId}
+          pendingSyncPluginId={pendingSyncPluginId}
+          pendingReadinessPluginId={pendingReadinessPluginId}
+          isCanvasSyncing={isCanvasSyncing}
+          authStatus={hasManualTokenAuth(selectedEntry) ? authStatuses[getEntryPluginId(selectedEntry)] : undefined}
+          auth={hasManualTokenAuth(selectedEntry) ? selectedEntry.manifest.auth : undefined}
+          values={hasManualTokenAuth(selectedEntry) ? (authForms[getEntryPluginId(selectedEntry)] ?? buildEmptyAuthValues(selectedEntry.manifest.auth)) : undefined}
+          fieldErrors={authFieldErrors[getEntryPluginId(selectedEntry)] ?? {}}
+          saveError={authErrors[getEntryPluginId(selectedEntry)]}
+          onToggle={(pluginId, enabled) => {
+            void togglePlugin(pluginId, enabled)
+          }}
+          onSaveAuth={() => {
+            if (hasManualTokenAuth(selectedEntry)) {
+              void savePluginAuth(selectedEntry)
+            }
+          }}
+          onSyncCanvas={() => {
+            void syncCanvasPlugin()
+          }}
+          onRunReadinessAction={() => {
+            if (hasNoAuthExtension(selectedEntry)) {
+              void runReadinessAction(selectedEntry)
+            }
+          }}
+          onChangeAuthField={(fieldKey, nextValue) => {
+            const pluginId = getEntryPluginId(selectedEntry)
+            if (!hasManualTokenAuth(selectedEntry)) return
 
-      <Card data-testid="settings-codex-card">
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle>Codex Connection</CardTitle>
-              <CardDescription>This is the account and runtime used by Student Claw chat.</CardDescription>
+            setAuthForms((current) => ({
+              ...current,
+              [pluginId]: {
+                ...(current[pluginId] ?? buildEmptyAuthValues(selectedEntry.manifest.auth)),
+                [fieldKey]: nextValue,
+              },
+            }))
+            setAuthFieldErrors((current) => ({
+              ...current,
+              [pluginId]: {
+                ...(current[pluginId] ?? {}),
+                [fieldKey]: "",
+              },
+            }))
+            setAuthErrors((current) => ({ ...current, [pluginId]: null }))
+          }}
+        />
+      ) : (
+        <>
+          <div className="flex max-w-md flex-col gap-3">
+            <div className="relative w-full">
+              <HugeiconsIcon
+                icon={SearchIcon}
+                strokeWidth={2}
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={activeTab === "skills" ? "Search skills" : "Search plugins"}
+                className="rounded-4xl pl-10"
+                data-testid="settings-plugin-search"
+              />
             </div>
-            <Badge variant={getCodexStatusBadgeVariant(providerRuntime)} data-testid="settings-codex-status">
-              {pendingCodexAction === "connect" ? "Connecting" : pendingCodexAction === "retry" ? "Retrying" : getCodexStatusLabel(providerRuntime)}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {pendingCodexAction === "connect"
-              ? "Finishing the Codex login flow and reloading the local runtime."
-              : pendingCodexAction === "retry"
-                ? "Retrying the local Codex runtime."
-                : getCodexStatusDescription(providerRuntime)}
-          </p>
-          {providerRuntime && (
-            <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-              <div data-testid="settings-codex-auth-state">
-                <span className="font-medium text-foreground">Auth state:</span> {providerRuntime.authState}
-              </div>
-              <div data-testid="settings-codex-runtime-state">
-                <span className="font-medium text-foreground">Runtime state:</span> {providerRuntime.status}
-              </div>
-            </div>
-          )}
-          {codexActionError && (
-            <Alert variant="destructive" data-testid="settings-codex-error">
-              <AlertTitle>Codex connection failed</AlertTitle>
-              <AlertDescription>{codexActionError}</AlertDescription>
-            </Alert>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {codexNeedsAuth && (
-              <Button
-                disabled={pendingCodexAction !== null}
-                onClick={() => {
-                  setPendingCodexAction("connect")
-                  setCodexActionError(null)
-                  void connectCodexAccount()
-                    .then((result) => {
-                      if (result.status !== "connected") setCodexActionError(result.error)
-                    })
-                    .catch((error) => { setCodexActionError(error instanceof Error ? error.message : String(error)) })
-                    .finally(() => { setPendingCodexAction(null) })
-                }}
-                data-testid="settings-codex-connect"
-              >
-                Connect Codex
-              </Button>
-            )}
-            {codexCanRetry && (
-              <Button
-                variant="outline"
-                disabled={pendingCodexAction !== null}
-                onClick={() => {
-                  setPendingCodexAction("retry")
-                  setCodexActionError(null)
-                  Promise.resolve(orchestrationActions.retryProviderInitialize())
-                    .catch((error) => { setCodexActionError(error instanceof Error ? error.message : String(error)) })
-                    .finally(() => { setPendingCodexAction(null) })
-                }}
-                data-testid="settings-codex-retry"
-              >
-                Retry Runtime
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Extension Registry</CardTitle>
-          <CardDescription>
-            Phase 04 keeps extension lifecycle and credential setup in one place while plugin auth becomes real.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!bootstrap?.featureFlags.pluginSystem && (
-            <Alert data-testid="settings-plugin-disabled">
-              <AlertTitle>Plugin system disabled</AlertTitle>
-              <AlertDescription>The plugin registry stays dark until the desktop feature flag is enabled.</AlertDescription>
-            </Alert>
-          )}
-          {bootstrap?.featureFlags.pluginSystem && registryState === "loading" && (
-            <Alert data-testid="settings-plugin-loading">
-              <AlertTitle>Loading discovered extensions</AlertTitle>
-              <AlertDescription>Reading bundled and user extension manifests from the desktop runtime.</AlertDescription>
-            </Alert>
-          )}
-          {bootstrap?.featureFlags.pluginSystem && registryState === "error" && (
-            <Alert variant="destructive" data-testid="settings-plugin-error">
-              <AlertTitle>Plugin registry unavailable</AlertTitle>
-              <AlertDescription>{registryError ?? "Unknown registry failure"}</AlertDescription>
-            </Alert>
-          )}
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: "plugins", label: "Plugins", count: pluginCount },
+                { id: "mcps", label: "MCPs", count: mcpCount },
+                { id: "skills", label: "Skills", count: skillCount },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  data-testid={`settings-plugin-filter-${tab.id}`}
+                  className={`inline-flex items-center gap-2 rounded-4xl px-4 py-2 text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? "bg-foreground text-background"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={activeTab === tab.id ? "text-background/75" : "text-muted-foreground"}>{tab.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {syncError && (
             <Alert variant="destructive" data-testid="settings-canvas-sync-error">
               <AlertTitle>Canvas sync failed</AlertTitle>
               <AlertDescription>{syncError}</AlertDescription>
             </Alert>
           )}
-          {bootstrap?.featureFlags.pluginSystem && registryState === "ready" && (
-            <div className="space-y-3" data-testid="settings-plugin-registry">
-              <p className="text-sm text-muted-foreground">
-                {registryEntries.length} discovered {registryEntries.length === 1 ? "extension" : "extensions"}
-              </p>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Extension</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Version</TableHead>
-                    <TableHead>Actions</TableHead>
-                    <TableHead>Enabled</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {registryEntries.map((entry) => {
-                    const pluginId = getEntryPluginId(entry)
-                    const isPending = pendingPluginId === pluginId
-                    return (
-                      <TableRow key={`${entry.installSource}:${pluginId}`}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium">{getEntryName(entry)}</span>
-                            <span className="font-mono text-xs text-muted-foreground">{pluginId}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatInstallSource(entry)}</TableCell>
-                        <TableCell><Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge></TableCell>
-                        <TableCell>{getEntryVersion(entry)}</TableCell>
-                        <TableCell>
-                          {pluginId === "canvas-mcp" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={pendingSyncPluginId === pluginId || isCanvasSyncing}
-                              onClick={() => { void syncCanvasPlugin(pluginId) }}
-                            >
-                              {pendingSyncPluginId === pluginId || isCanvasSyncing ? "Syncing..." : "Sync Now"}
-                            </Button>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={entry.enabled && entry.kind === "available"}
-                            disabled={isPending || entry.kind === "invalid"}
-                            onCheckedChange={(checked) => { void togglePlugin(pluginId, checked) }}
-                            aria-label={`${entry.enabled ? "Disable" : "Enable"} ${getEntryName(entry)}`}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {bootstrap?.featureFlags.pluginSystem && manualAuthEntries.length > 0 && (
-        <div className="space-y-4" data-testid="settings-plugin-auth">
-          <div className="space-y-1">
-            <h2 className="text-xl font-semibold">Extension Credentials</h2>
-            <p className="text-sm text-muted-foreground">
-              Credentials are saved through Electron Main and delivered only to the owning plugin runtime after start.
-            </p>
-          </div>
-          {manualAuthEntries.map((entry) => {
-            const pluginId = entry.manifest.id
-            const auth = entry.manifest.auth
-            const authStatus = authStatuses[pluginId]
-            const values = authForms[pluginId] ?? buildEmptyAuthValues(auth)
-            const fieldErrors = authFieldErrors[pluginId] ?? {}
-            const saveError = authErrors[pluginId]
-            return (
-              <Card key={pluginId} data-testid={`settings-plugin-auth-card-${pluginId}`}>
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <CardTitle>{entry.manifest.name}</CardTitle>
-                      <CardDescription>{auth.instructions}</CardDescription>
-                    </div>
-                    <Badge variant={getAuthStatusVariant(authStatus)}>{getAuthStatusLabel(authStatus)}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {auth.fields.map((field) => (
-                      <div key={field.key} className="space-y-2">
-                        <Label htmlFor={`${pluginId}-${field.key}`}>{field.label}</Label>
-                        <Input
-                          id={`${pluginId}-${field.key}`}
-                          type={getInputType(field)}
-                          placeholder={field.placeholder}
-                          value={values[field.key] ?? ""}
-                          onChange={(event) => {
-                            const nextValue = event.target.value
-                            setAuthForms((c) => ({ ...c, [pluginId]: { ...(c[pluginId] ?? buildEmptyAuthValues(auth)), [field.key]: nextValue } }))
-                            setAuthFieldErrors((c) => ({ ...c, [pluginId]: { ...(c[pluginId] ?? {}), [field.key]: "" } }))
-                            setAuthErrors((c) => ({ ...c, [pluginId]: null }))
-                          }}
-                          data-testid={`settings-plugin-auth-input-${pluginId}-${field.key}`}
-                        />
-                        {fieldErrors[field.key] && (
-                          <p className="text-sm text-destructive" data-testid={`settings-plugin-auth-field-error-${pluginId}-${field.key}`}>
-                            {fieldErrors[field.key]}
-                          </p>
-                        )}
+          {registryError && (
+            <Alert variant="destructive" data-testid="settings-plugin-error">
+              <AlertTitle>Plugin registry unavailable</AlertTitle>
+              <AlertDescription>{registryError}</AlertDescription>
+            </Alert>
+          )}
+
+          {!bootstrap?.featureFlags.pluginSystem && activeTab !== "skills" && (
+            <Alert data-testid="settings-plugin-disabled">
+              <AlertTitle>Plugin system disabled</AlertTitle>
+              <AlertDescription>The plugin registry stays dark until the desktop feature flag is enabled.</AlertDescription>
+            </Alert>
+          )}
+
+          {bootstrap?.featureFlags.pluginSystem && registryState === "loading" && activeTab !== "skills" && (
+            <Alert data-testid="settings-plugin-loading">
+              <AlertTitle>Loading discovered plugins</AlertTitle>
+              <AlertDescription>Reading bundled and user manifests from the desktop runtime.</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4" data-testid="settings-plugin-registry">
+            {activeTab === "skills" ? (
+              visibleSkills.length > 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleSkills.map((skill) => (
+                    <div
+                      key={skill.id}
+                      className="flex h-full flex-col gap-4 rounded-3xl border border-border/70 bg-card/30 p-4"
+                      data-testid={`settings-skill-row-${skill.id}`}
+                    >
+                      <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                        <HugeiconsIcon icon={BrainIcon} size={22} strokeWidth={1.8} />
                       </div>
-                    ))}
-                  </div>
-                  {authStatus?.error && (
-                    <Alert variant="destructive" data-testid={`settings-plugin-auth-status-error-${pluginId}`}>
-                      <AlertTitle>Credential state error</AlertTitle>
-                      <AlertDescription>{authStatus.error}</AlertDescription>
-                    </Alert>
-                  )}
-                  {saveError && (
-                    <Alert variant="destructive" data-testid={`settings-plugin-auth-save-error-${pluginId}`}>
-                      <AlertTitle>Unable to save credentials</AlertTitle>
-                      <AlertDescription>{saveError}</AlertDescription>
-                    </Alert>
-                  )}
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">Status: {getAuthStatusLabel(authStatus)}</p>
-                    <Button disabled={pendingAuthPluginId === pluginId} onClick={() => { void savePluginAuth(entry) }} data-testid={`settings-plugin-auth-save-${pluginId}`}>
-                      Save credentials
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{skill.name}</p>
+                          <MetadataBadge>Skill</MetadataBadge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{skill.description}</p>
+                      </div>
+                      <p className="mt-auto text-xs text-muted-foreground">{skill.id}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty className="rounded-3xl border border-dashed border-border/70 bg-card/20">
+                  <EmptyHeader>
+                    <EmptyTitle>No skills match this search</EmptyTitle>
+                    <EmptyDescription>Try a different name or clear the search field.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )
+            ) : visiblePluginEntries.length > 0 ? (
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+                {visiblePluginEntries.map((entry: ExtensionRegistryEntry) => (
+                  <PluginCard
+                    key={`${entry.installSource}:${getEntryPluginId(entry)}`}
+                    entry={entry}
+                    pendingPluginId={pendingPluginId}
+                    onSelect={(pluginId) => {
+                      onSelectPlugin?.(pluginId)
+                    }}
+                    onToggle={(pluginId, enabled) => {
+                      void togglePlugin(pluginId, enabled)
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Empty className="rounded-3xl border border-dashed border-border/70 bg-card/20">
+                <EmptyHeader>
+                  <EmptyTitle>{deferredSearchQuery ? "No matches found" : activeTab === "mcps" ? "No MCPs discovered" : "No plugins discovered"}</EmptyTitle>
+                  <EmptyDescription>
+                    {deferredSearchQuery
+                      ? "Try a different search term or switch filters."
+                      : activeTab === "mcps"
+                        ? "Bundled and user MCP plugins will appear here when the desktop runtime finds them."
+                        : "Bundled and user plugins will appear here when the desktop runtime finds them."}
+                  </EmptyDescription>
+                </EmptyHeader>
+                {deferredSearchQuery && (
+                  <EmptyMedia variant="icon">
+                    <HugeiconsIcon icon={SearchIcon} size={20} strokeWidth={1.8} />
+                  </EmptyMedia>
+                )}
+              </Empty>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

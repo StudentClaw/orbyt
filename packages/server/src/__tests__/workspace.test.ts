@@ -3,7 +3,6 @@ import { Database as BunDatabase } from "bun:sqlite"
 import { mkdirSync, renameSync, rmdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { runMigrations } from "../db/migrations/runner.js"
 import type { DatabaseService } from "../db/Database.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
@@ -14,24 +13,14 @@ import {
   type OrchestrationRuntimeDeps,
 } from "../orchestration/OrchestrationService.js"
 import { defaultConfig } from "../config/defaults.js"
+import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
 function makeDatabaseService(db: BunDatabase): DatabaseService {
-  return {
-    db,
-    get: <T>(sql: string, params: unknown[] = []): T | null =>
-      (db.query(sql).get(...(params as Parameters<typeof db.query>[0][])) as T | null) ?? null,
-    query: <T>(sql: string, params: unknown[] = []): T[] =>
-      db.query(sql).all(...(params as Parameters<typeof db.query>[0][])) as T[],
-    execute: (sql: string, params: unknown[] = []): void => {
-      db.run(sql, params as Parameters<typeof db.run>[1])
-    },
-    transaction: <T>(fn: () => T): T => db.transaction(fn)(),
-    close: () => db.close(),
-  }
+  return createBunDatabaseService(db)
 }
 
 function makeMockPushBus(): PushBusService {
@@ -109,7 +98,7 @@ describe("workspace operations", () => {
     db = new BunDatabase(":memory:")
     db.run("PRAGMA journal_mode = WAL")
     db.run("PRAGMA foreign_keys = ON")
-    runMigrations(db)
+    runBunMigrations(db)
     database = makeDatabaseService(db)
 
     tmpFolder = join(tmpdir(), `student-claw-test-${Date.now()}`)

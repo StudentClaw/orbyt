@@ -1,17 +1,16 @@
 import { describe, test, expect } from "bun:test"
-import { Database as BunDatabase } from "bun:sqlite"
-import { runMigrations } from "../db/migrations/runner.js"
+import { createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
 describe("Database migrations", () => {
   test("creates SQLite DB in memory", () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     expect(db).toBeDefined()
     db.close()
   })
 
   test("migrations create all expected tables", () => {
-    const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
 
     const tables = db
       .query<{ name: string }, []>(
@@ -49,9 +48,9 @@ describe("Database migrations", () => {
   })
 
   test("migrations are idempotent", () => {
-    const db = new BunDatabase(":memory:")
-    runMigrations(db)
-    runMigrations(db) // run again
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
+    runBunMigrations(db) // run again
 
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
@@ -62,8 +61,8 @@ describe("Database migrations", () => {
   })
 
   test("schema_version tracks applied versions", () => {
-    const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
 
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
@@ -76,7 +75,7 @@ describe("Database migrations", () => {
   })
 
   test("existing version 1 databases are upgraded to include orchestration tables", () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     db.run(`
       CREATE TABLE IF NOT EXISTS schema_version (
         version INTEGER PRIMARY KEY,
@@ -101,7 +100,7 @@ describe("Database migrations", () => {
     `)
     db.run("INSERT INTO schema_version (version) VALUES (1)")
 
-    runMigrations(db)
+    runBunMigrations(db)
 
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
@@ -134,8 +133,8 @@ describe("Database migrations", () => {
   })
 
   test("migrations replace plaintext canvas tokens with credential references", () => {
-    const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
 
     const columns = db
       .query<{ name: string }, []>("PRAGMA table_info(canvas_accounts)")
@@ -149,8 +148,8 @@ describe("Database migrations", () => {
   })
 
   test("migration adds workspace ownership and imports legacy chats", () => {
-    const db = new BunDatabase(":memory:")
-    runMigrations(db)
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
 
     const legacyWorkspace = db
       .query<{
@@ -180,7 +179,7 @@ describe("Database migrations", () => {
   })
 
   test("migration preserves canvas account metadata while clearing plaintext credentials", () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     db.run(`
       CREATE TABLE schema_version (
         version INTEGER PRIMARY KEY,
@@ -213,7 +212,7 @@ describe("Database migrations", () => {
     )
     db.run("INSERT INTO schema_version (version) VALUES (2)")
 
-    runMigrations(db)
+    runBunMigrations(db)
 
     const row = db
       .query<{
@@ -239,7 +238,7 @@ describe("Database migrations", () => {
   })
 
   test("repair migration backfills provider runtime tables for existing version 5 databases", () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     db.run(`
       CREATE TABLE schema_version (
         version INTEGER PRIMARY KEY,
@@ -280,16 +279,16 @@ describe("Database migrations", () => {
     `)
     db.run("INSERT INTO schema_version (version) VALUES (5)")
 
-    runMigrations(db)
+    runBunMigrations(db)
 
     const tables = db
       .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
       .all()
-      .map((table) => table.name)
+      .map((table: { name: string }) => table.name)
     const sessionColumns = db
       .query<{ name: string }, []>("PRAGMA table_info(provider_runtime_sessions)")
       .all()
-      .map((column) => column.name)
+      .map((column: { name: string }) => column.name)
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
@@ -306,7 +305,7 @@ describe("Database migrations", () => {
     const threadColumns = db
       .query<{ name: string }, []>("PRAGMA table_info(orchestration_threads)")
       .all()
-      .map((column) => column.name)
+      .map((column: { name: string }) => column.name)
 
     expect(threadColumns).toContain("access_mode")
 
@@ -314,7 +313,7 @@ describe("Database migrations", () => {
   })
 
   test("repair migration upgrades legacy onboarding tables for fully versioned databases", () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     db.run(`
       CREATE TABLE schema_version (
         version INTEGER PRIMARY KEY,
@@ -365,7 +364,7 @@ describe("Database migrations", () => {
       db.run("INSERT INTO schema_version (version) VALUES (?)", [version])
     }
 
-    runMigrations(db)
+    runBunMigrations(db)
 
     const userPreferenceColumns = db
       .query<{ name: string }, []>("PRAGMA table_info(user_preferences)")

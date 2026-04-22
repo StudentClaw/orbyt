@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite"
+import type { RuntimeSqliteDatabase } from "../runtime-sqlite.js"
 import * as migration001 from "./001-initial.js"
 import * as migration002 from "./002-orchestration-runtime.js"
 import * as migration003 from "./003-secure-canvas-credentials.js"
@@ -20,7 +20,7 @@ type SqlMigration = {
 
 type ProgrammaticMigration = {
   readonly version: number
-  readonly run: (db: Database) => void
+  readonly run: (db: RuntimeSqliteDatabase) => void
 }
 
 const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
@@ -39,7 +39,7 @@ const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration013,
 ]
 
-export function runMigrations(db: Database): void {
+export function runMigrations(db: RuntimeSqliteDatabase): void {
   db.run(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER PRIMARY KEY,
@@ -48,7 +48,7 @@ export function runMigrations(db: Database): void {
   `)
 
   const currentVersion = db
-    .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
+    .query<{ version: number }>("SELECT MAX(version) as version FROM schema_version")
     .get()?.version ?? 0
 
   const isDuplicateColumn = (error: unknown): boolean =>

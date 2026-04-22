@@ -7,6 +7,7 @@ import {
   ExtensionManifest,
   ExtensionRegistryEntry,
   ExtensionManifestValidationError,
+  ExtensionRuntimeReadiness,
   ExtensionTransport,
   parseExtensionManifestSync,
 } from "./index.js"
@@ -65,8 +66,38 @@ describe("Extension contracts", () => {
     ).toThrow()
   })
 
+  test("transport schema accepts runtime-injected env values", () => {
+    const parsed = Schema.decodeUnknownSync(ExtensionTransport)({
+      type: "local_stdio",
+      entry: "dist/index.js",
+      env: {
+        MAC_API_BRIDGE_URL: "http://127.0.0.1:53412",
+        MAC_API_BRIDGE_TOKEN: "token-123",
+      },
+    })
+
+    expect(parsed.env?.MAC_API_BRIDGE_URL).toBe("http://127.0.0.1:53412")
+    expect(parsed.env?.MAC_API_BRIDGE_TOKEN).toBe("token-123")
+  })
+
   test("lifecycle status rejects invalid values", () => {
     expect(() => Schema.decodeUnknownSync(ExtensionLifecycleStatus)("inactive")).toThrow()
+  })
+
+  test("runtime readiness accepts the locked bridge-aware states", () => {
+    const decode = Schema.decodeUnknownSync(ExtensionRuntimeReadiness)
+
+    expect(decode("ready")).toBe("ready")
+    expect(decode("bridge_starting")).toBe("bridge_starting")
+    expect(decode("bridge_unavailable")).toBe("bridge_unavailable")
+    expect(decode("permission_required")).toBe("permission_required")
+    expect(decode("bridge_crash_loop")).toBe("bridge_crash_loop")
+    expect(decode("platform_unsupported")).toBe("platform_unsupported")
+    expect(decode("error")).toBe("error")
+  })
+
+  test("runtime readiness rejects invalid states", () => {
+    expect(() => Schema.decodeUnknownSync(ExtensionRuntimeReadiness)("disabled")).toThrow()
   })
 
   test("install source accepts system provenance", () => {
@@ -105,8 +136,10 @@ describe("Extension contracts", () => {
       installSource: "bundled",
       status: "discovered",
       enabled: true,
+      readiness: "permission_required",
     })
     expect(available.kind).toBe("available")
+    expect(available.readiness).toBe("permission_required")
 
     const invalid = decode({
       kind: "invalid",
