@@ -60,6 +60,18 @@ describe("validateWebSocketHandshake", () => {
     expect(result).toEqual({ ok: false, reason: "Unexpected origin" })
   })
 
+  test("accepts packaged desktop file origins", () => {
+    const result = validateWebSocketHandshake(
+      createRequest({
+        origin: "file://",
+        "sec-websocket-protocol": `student-claw.v1, auth.${authToken}`,
+      }),
+      { allowedOrigins, expectedAuthToken: authToken },
+    )
+
+    expect(result).toEqual({ ok: true })
+  })
+
   test("selects the Student Claw subprotocol during handshake", () => {
     expect(
       selectWebSocketProtocol(new Set(["student-claw.v1", `auth.${authToken}`])),

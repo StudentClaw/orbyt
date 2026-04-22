@@ -1,6 +1,6 @@
 # Phase 05 - Packaged Runtime And Hardening
 
-Last updated: 2026-04-20
+Last updated: 2026-04-21
 
 ## Orientation Note
 
@@ -29,7 +29,17 @@ bar required before the extension is treated as production-ready.
 - Apple Calendar adds a second runtime surface, the Swift bridge, which increases packaged-runtime risk.
 - Apple Calendar is inherently platform-specific because it depends on macOS EventKit.
 - The repo now has shared packaged bridge path resolution, host-gated Apple Calendar discovery, enriched readiness events, and an IPC-readable runtime diagnostics buffer in Electron main.
-- Restart-style readiness recomputation for enabled Apple Calendar runtimes is covered in tests, but packaged signed-smoke evidence is still pending behind Phase 03b.
+- The packaged desktop server no longer depends on Bun-only runtime APIs:
+  - SQLite now uses a runtime-neutral adapter that selects `bun:sqlite` in Bun dev and `node:sqlite` under packaged Electron/Node.
+  - packaged startup no longer depends on Bun being installed on the user machine.
+  - Bun-only server path handling such as `import.meta.dir` skill discovery has been replaced with packaged-safe filesystem resolution.
+- Bundled extension runtime dependencies are now staged into packaged resources for `template-mcp`, `canvas-mcp`, and `apple-calendar-mcp`, so packaged plugin startup no longer relies on repo-local `node_modules` or Bun.
+- Packaged smoke evidence now proves the app can:
+  - start the packaged server under Electron/Node
+  - launch bundled curated extensions from `Contents/Resources/extensions/...`
+  - launch the Apple Calendar bridge from packaged resources
+  - create and show the Electron shell window at normal bounds during a fresh packaged launch
+- The remaining gap is no longer core packaged-runtime plumbing. Phase 05 is now waiting on the final Apple Calendar end-to-end packaged smoke evidence: permission flow, tool call, restart persistence, and degraded-state capture.
 
 ### Out Of Scope
 
@@ -76,6 +86,17 @@ The packaged macOS smoke should prove:
 4. Calendar permission bootstrap can complete
 5. the plugin starts
 6. one Apple Calendar tool call succeeds
+
+Static packaged-runtime proof is now already captured for the earlier steps in
+that chain:
+
+- the packaged server starts under Electron/Node without Bun on the machine
+- bundled curated extensions resolve runtime imports from packaged resources
+- the Apple Calendar bridge launches from packaged resources outside `asar`
+- the packaged shell reaches a shown window state at normal bounds
+
+The remaining manual smoke work is therefore the user-facing Apple Calendar
+flow, not the old packaged bootstrapping failures.
 
 The automation boundary for this phase is intentionally hybrid:
 
@@ -147,6 +168,7 @@ Anti-requirements (explicitly out of scope for this phase):
   - enabled Apple Calendar readiness is recomputed when the runtime is recreated from persisted plugin prefs
 - Manual smoke:
   - build the app on macOS
+  - launch the packaged app and confirm the main window appears
   - Enable Apple Calendar
   - grant permission
   - call one tool
@@ -160,8 +182,14 @@ Anti-requirements (explicitly out of scope for this phase):
 ### Evidence To Capture
 
 - packaged build spawn log
+- packaged runtime evidence showing:
+  - packaged server started under Electron/Node
+  - bundled curated extensions launched from packaged resources
+  - the Apple Calendar bridge launched from packaged resources outside `asar`
+  - the packaged shell reached a shown window state at normal bounds
 - one successful restart persistence example
 - one clean degraded-state example on missing bridge runtime
+- one packaged Apple Calendar permission-flow example on macOS
 
 ## End
 
@@ -182,4 +210,7 @@ checklist from the Apple Calendar canary work.
 
 ### First Recommended Next Step
 
-Start [Phase 06 - Curated Extension Template And Next Plugins](phase-06-curated-extension-template-and-next-plugins.md).
+Run the packaged Apple Calendar manual smoke on the current macOS build
+(permission prompt, one tool call, restart, one tool call again), then repeat
+that smoke on the signed/notarized artifact before marking this phase
+`complete`.

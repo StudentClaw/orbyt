@@ -1,7 +1,7 @@
 const DESKTOP_SIDEBAR_WIDTH_STORAGE_KEY = "student-claw:desktop-sidebar-width"
 
 export const MIN_DESKTOP_SIDEBAR_WIDTH = 240
-export const DEFAULT_DESKTOP_SIDEBAR_WIDTH = 320
+export const DEFAULT_DESKTOP_SIDEBAR_WIDTH = 420
 export const MAX_DESKTOP_SIDEBAR_WIDTH = 480
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">

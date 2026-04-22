@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage } from "electron"
+import { app, BrowserWindow, dialog, nativeImage } from "electron"
 import { existsSync } from "node:fs"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
@@ -146,6 +146,15 @@ async function bootstrap(): Promise<void> {
   mainWindow = await createAppWindow()
 }
 
+function showStartupFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`Failed to start Electron app: ${message}\n`)
+  dialog.showErrorBox(
+    "Student Claw failed to start",
+    `Student Claw could not finish startup.\n\n${message}`,
+  )
+}
+
 if (gotSingleInstanceLock) {
   app.on("second-instance", async () => {
     const existingWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null
@@ -159,7 +168,12 @@ if (gotSingleInstanceLock) {
     }
 
     if (app.isReady()) {
-      mainWindow = await createAppWindow()
+      try {
+        mainWindow = await createAppWindow()
+      } catch (error) {
+        showStartupFailure(error)
+        app.quit()
+      }
     }
   })
 
@@ -169,7 +183,12 @@ if (gotSingleInstanceLock) {
 
       app.on("activate", async () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-          mainWindow = await createAppWindow()
+          try {
+            mainWindow = await createAppWindow()
+          } catch (error) {
+            showStartupFailure(error)
+            app.quit()
+          }
           return
         }
 
@@ -178,7 +197,7 @@ if (gotSingleInstanceLock) {
       })
     })
     .catch((error) => {
-      process.stderr.write(`Failed to start Electron app: ${String(error)}\n`)
+      showStartupFailure(error)
       app.quit()
     })
 }

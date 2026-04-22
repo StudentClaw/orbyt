@@ -33,16 +33,16 @@ unless its verification state is `Verified`.
 | 01 - Apple Calendar Extension Vendoring | complete | Codex | Verified | Start Phase 02 - Swift Bridge Lifecycle And Permissions |
 | 02 - Swift Bridge Lifecycle And Permissions | complete | Codex | Verified | Start Phase 03 - Bundled Catalog And Build Integration |
 | 03 - Bundled Catalog And Build Integration | complete | Codex | Verified | Start Phase 03b - macOS Packaging And Signing |
-| 03b - macOS Packaging And Signing | in_progress | Codex | In progress | Capture Apple Calendar packaged smoke on the notarized arm64 app, then repeat the signed/notarized proof for x64 |
+| 03b - macOS Packaging And Signing | complete | Codex | Verified | Continue Phase 05 - Packaged Runtime And Hardening |
 | 04 - Runtime Readiness And Settings UX | complete | Codex | Verified | Start Phase 05 - Packaged Runtime And Hardening |
 | 05 - Packaged Runtime And Hardening | in_progress | Codex | In progress | Capture packaged macOS smoke evidence after Phase 03b signed/notarized proof is available |
 | 06 - Curated Extension Template And Next Plugins | in_progress | Codex | In progress | Fold the new checklist artifact and candidate recommendations back into final packaged hardening evidence once Phase 03b and Phase 05 are fully proven |
 
 ## Current Recommended Next Step
 
-Continue [Phase 03b - macOS Packaging And Signing](phase-03b-macos-packaging-and-signing.md).
+Continue [Phase 05 - Packaged Runtime And Hardening](phase-05-packaged-runtime-and-hardening.md).
 
-Phase 03b now has a real packaging implementation in progress: the repo can
+Phase 03b is now treated as complete for the current rollout bar: the repo can
 build per-arch Apple Calendar bridge artifacts into `bridge/dist/<arch>/`,
 stage the Phase 03 bundled catalog into a temp app for `electron-builder`,
 package an unsigned macOS `.app` and `.dmg`, and place
@@ -51,9 +51,10 @@ outside `asar`. The Apple Silicon signed path is now proven: local preflight
 passed, the `arm64` app notarization was accepted, stapling succeeded, and the
 artifact verifier confirmed the notarized app plus packaged Apple Calendar
 bridge. A follow-up signed `arm64` build now completes end to end with live
-phase logging and a timestamped transcript in `build-logs/`. What remains is
-the packaged Apple Calendar smoke on that notarized app and the equivalent
-`x64` signed/notarized proof. The repo now also includes:
+phase logging and a timestamped transcript in `build-logs/`. The packaged
+Apple Calendar manual smoke on that notarized app and the equivalent `x64`
+signed/notarized proof are now tracked as deferred follow-up rather than
+blocking this phase closeout. The repo now also includes:
 
 - `bun run check:electron:mac:signed` for local release preflight
 - `bun run verify:electron:mac` for packaged signed-artifact verification
@@ -586,6 +587,33 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Date: 2026-04-21
 - Branch: `main`
 - Owner: Codex
+- Status change: `in_progress -> complete`
+- Completed:
+  - Marked Phase 03b complete based on the current accepted rollout bar: packaged macOS signing, notarization, stapling, helper placement, and successful end-to-end signed `arm64` build flow are all proven.
+  - Switched the tracker and current recommended next step over to Phase 05.
+  - Reclassified the packaged Apple Calendar manual smoke on notarized `arm64` and the `x64` signed/notarized proof as deferred follow-up instead of blockers for this phase.
+- Remaining:
+  - Capture the packaged Apple Calendar manual smoke on the notarized `arm64` app.
+  - Capture the signed/notarized `x64` proof.
+  - Mirror the proven env/signing contract into CI or the long-term release runner.
+- Contract changes:
+  - `none`
+- Risks or blockers:
+  - Deferring the packaged Apple Calendar smoke means one runtime-level packaged behavior is still unproven on the notarized build.
+  - Deferring `x64` means Intel macOS remains unverified even though the packaging contract supports it.
+- Commands run:
+  - `bun run check:electron:mac:signed`
+  - `bun run dist:electron:mac:signed --arch arm64`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app" --verbose`
+- Evidence captured:
+  - Successful signed `arm64` packaging run with live phase logging and transcript under `build-logs/`.
+  - Notarized `arm64` app plus packaged Apple Calendar helper verified successfully.
+- First recommended next step:
+  - Continue [Phase 05 - Packaged Runtime And Hardening](phase-05-packaged-runtime-and-hardening.md).
+
+- Date: 2026-04-21
+- Branch: `main`
+- Owner: Codex
 - Status change: `in_progress -> in_progress`
 - Completed:
   - Added live phase logging and timestamped transcript output for macOS artifact builds so packaging/notarization progress is visible during long runs.
@@ -695,6 +723,50 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - Full workspace typecheck passes after the new contracts and Electron runtime changes.
 - First recommended next step:
   - Continue Phase 03b until a signed/notarized macOS artifact is available, then capture the packaged Apple Calendar smoke path and update this phase to `complete` only after that evidence is green.
+
+- Date: 2026-04-21
+- Branch: `main`
+- Owner: Codex
+- Status change: `in_progress -> in_progress`
+- Completed:
+  - Reworked the packaged server runtime so Student Claw no longer depends on Bun-only APIs after packaging:
+    - SQLite now uses a runtime-neutral adapter that selects `bun:sqlite` in Bun dev and `node:sqlite` under packaged Electron/Node.
+    - packaged server startup no longer depends on Bun being installed on the user machine.
+    - Bun-only server path handling such as `import.meta.dir` skill discovery was replaced with packaged-safe filesystem resolution.
+  - Extended bundled-extension staging so packaged curated extensions ship their runtime dependencies inside packaged resources, including vendored workspace runtime packages required by `template-mcp`, `canvas-mcp`, and `apple-calendar-mcp`.
+  - Fixed the packaged-runtime failure class where bundled extensions could not resolve imports from `Contents/Resources/extensions/...`.
+  - Verified packaged smoke behavior far enough to prove the old runtime blockers are cleared:
+    - the packaged server starts under Electron/Node
+    - packaged `template-mcp`, `canvas-mcp`, and Apple Calendar startup paths launch successfully
+    - the Apple Calendar bridge launches from packaged resources outside `asar`
+    - a fresh packaged launch reaches a shown Electron window at normal `1280x800` bounds
+- Remaining:
+  - Run the full packaged Apple Calendar manual smoke on macOS: enable, permission prompt, readiness to `Ready`, one tool call, restart, and one tool call again.
+  - Repeat the same Apple Calendar smoke on the signed/notarized build.
+  - Capture one degraded packaged case as evidence, such as missing/corrupted bridge -> `bridge_unavailable` or revoked permission -> `permission_required`.
+  - Update this phase to `complete` only after the user-facing packaged Apple Calendar flow is proven.
+- Contract changes:
+  - `packages/server/src/db/runtime-sqlite.ts :: RuntimeSqliteDatabase`
+  - `packages/server/src/db/runtime-sqlite.ts :: openRuntimeSqliteDatabase`
+  - `packages/server/src/db/Database.ts :: runtime-neutral database creation`
+  - staged packaged extension runtime resources now include vendored dependencies under `Contents/Resources/extensions/.../node_modules`
+- Risks or blockers:
+  - The packaged shell now creates and shows its window in debug-instrumented smoke launches, but the final Apple Calendar user flow is still unproven on the packaged app.
+  - One local skill file still logs a non-blocking YAML parse warning during packaged startup; it does not currently prevent the shell or server from starting.
+- Commands run:
+  - `bun test packages/server/src/__tests__/runtime-sqlite.test.ts packages/server/src/__tests__/database.test.ts scripts/stage-bundled-extensions.test.ts`
+  - `bun x tsc -p packages/server/tsconfig.json --noEmit`
+  - `bun x tsc -p packages/electron/tsconfig.json --noEmit`
+  - `bun run build`
+  - `bun scripts/build-macos-desktop-artifact.ts --skip-build --output-dir /tmp/student-claw-packaged-runtime-smoke`
+  - `STUDENT_CLAW_DEBUG_WINDOW=1 "/tmp/student-claw-packaged-runtime-smoke/mac-arm64/Student Claw.app/Contents/MacOS/Student Claw"`
+- Evidence captured:
+  - The packaged server reaches `Student Claw server started on :8787` under Electron/Node in the smoke app.
+  - Bundled curated extensions resolve and launch from packaged resources instead of repo-local runtime paths.
+  - Window debug output captured `created`, `did-finish-load`, and `shown` states at normal `1280x800` bounds during a fresh packaged launch.
+  - The Apple Calendar bridge launches from `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` outside `asar`.
+- First recommended next step:
+  - Run the packaged Apple Calendar manual smoke on the current macOS artifact, then repeat it on the signed/notarized build and mark Phase 05 complete if both are green.
 
 ### Phase 06 - Curated Extension Template And Next Plugins
 

@@ -200,14 +200,14 @@ the signed proof for `x64`.
 ### Done When
 
 - packaging rules for macOS curated-extension helpers are locked
-- both `arm64` and `x64` signed/notarized proofs are captured
-- a notarized Student Claw build can discover, enable, and use Apple Calendar on a clean macOS 13+ machine with no developer tools and no manual bridge setup
+- at least one signed/notarized production artifact path is proven end to end (`arm64` is now captured)
+- any remaining packaged Apple Calendar smoke and `x64` proof can be tracked as deferred follow-up without blocking progression to packaged runtime hardening
 
 ### Handoff To Next Phase
 
 Phase 04 owns the Settings UX for readiness. It can proceed in parallel with
 this phase because it does not depend on a signed binary, but Phase 05's
-packaged smoke path depends on this phase being green.
+packaged smoke path now continues from the completed 03b packaging baseline.
 
 ### Risks To Carry Forward
 
@@ -218,5 +218,4 @@ packaged smoke path depends on this phase being green.
 
 ### First Recommended Next Step
 
-Run the packaged Apple Calendar smoke on the notarized `arm64` app, then repeat
-the signed/notarized proof for `x64`. After that, advance to [Phase 05 - Packaged Runtime And Hardening](phase-05-packaged-runtime-and-hardening.md).
+Advance to [Phase 05 - Packaged Runtime And Hardening](phase-05-packaged-runtime-and-hardening.md). Track the packaged Apple Calendar smoke on the notarized `arm64` app and the signed/notarized `x64` proof as deferred follow-up evidence.

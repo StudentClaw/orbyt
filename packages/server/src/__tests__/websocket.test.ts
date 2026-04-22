@@ -1,17 +1,16 @@
 import { describe, test, expect } from "bun:test"
-import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"
-import { runMigrations } from "../db/migrations/runner.js"
+import { createBunDatabaseService, createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
 const mockWs = { readyState: 1, send: () => undefined } as never
 
 function makeDependencies() {
   const threadId = "thread_1" as ThreadId
   const turnId = "turn_1" as TurnId
-  const db = new BunDatabase(":memory:")
-  runMigrations(db)
+  const db = createBunTestDatabase(":memory:")
+  runBunMigrations(db)
   return {
     config: {
       ...defaultConfig,
@@ -94,16 +93,7 @@ function makeDependencies() {
       respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
       shutdown: async () => undefined,
     },
-    database: {
-      db,
-      get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
-      query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
-      execute: (sql: string, params: SQLQueryBindings[] = []) => {
-        db.run(sql, params as never)
-      },
-      transaction: <T>(fn: () => T) => fn(),
-      close: () => db.close(),
-    },
+    database: createBunDatabaseService(db),
     canvasSync: {
       sync: async () => undefined,
       listCourses: () => [],

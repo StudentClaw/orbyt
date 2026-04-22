@@ -1,21 +1,34 @@
 import { Context, Layer, Effect } from "effect"
-import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { homedir } from "node:os"
 import { ConfigService } from "../config/ConfigService.js"
 import { runMigrations } from "./migrations/runner.js"
+import { type RuntimeSqliteDatabase, type SqliteQueryBindings, openRuntimeSqliteDatabase } from "./runtime-sqlite.js"
 
 /**
  * SQLite access helpers used by the server runtime.
  */
 export interface DatabaseService {
-  readonly db: BunDatabase
-  readonly get: <T>(sql: string, params?: SQLQueryBindings[]) => T | null
-  readonly query: <T>(sql: string, params?: SQLQueryBindings[]) => T[]
-  readonly execute: (sql: string, params?: SQLQueryBindings[]) => void
+  readonly get: <T>(sql: string, params?: SqliteQueryBindings) => T | null
+  readonly query: <T>(sql: string, params?: SqliteQueryBindings) => T[]
+  readonly execute: (sql: string, params?: SqliteQueryBindings) => void
   readonly transaction: <T>(fn: () => T) => T
   readonly close: () => void
+}
+
+export function createDatabaseService(db: RuntimeSqliteDatabase): DatabaseService {
+  return {
+    get: <T>(sql: string, params: SqliteQueryBindings = []): T | null =>
+      db.query<T>(sql).get(...params),
+    query: <T>(sql: string, params: SqliteQueryBindings = []): T[] =>
+      db.query<T>(sql).all(...params),
+    execute: (sql: string, params: SqliteQueryBindings = []): void => {
+      db.run(sql, params)
+    },
+    transaction: <T>(fn: () => T): T => db.transaction(fn)(),
+    close: () => db.close(),
+  }
 }
 
 /**
@@ -36,23 +49,12 @@ export const DatabaseLive = Layer.effect(
 
     const dbPath = config.dbPath.replace(/^~/, homedir())
     mkdirSync(dirname(dbPath), { recursive: true })
-    const db = new BunDatabase(dbPath)
+    const db: RuntimeSqliteDatabase = yield* Effect.promise(() => openRuntimeSqliteDatabase(dbPath))
     db.run("PRAGMA journal_mode = WAL")
     db.run("PRAGMA foreign_keys = ON")
 
     runMigrations(db)
 
-    return {
-      db,
-      get: <T>(sql: string, params: SQLQueryBindings[] = []): T | null =>
-        (db.query(sql).get(...params) as T | null) ?? null,
-      query: <T>(sql: string, params: SQLQueryBindings[] = []): T[] =>
-        db.query(sql).all(...params) as T[],
-      execute: (sql: string, params: SQLQueryBindings[] = []): void => {
-        db.run(sql, params)
-      },
-      transaction: <T>(fn: () => T): T => db.transaction(fn)(),
-      close: () => db.close(),
-    }
+    return createDatabaseService(db)
   }),
 )

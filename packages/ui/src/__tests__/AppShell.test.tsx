@@ -9,6 +9,7 @@ const shellMocks = vi.hoisted(() => ({
   navigateFn: vi.fn(),
   onboardingComplete: true,
   isMobile: false,
+  pluginName: "Canvas Assistant",
   snapshot: null as OrchestrationSnapshot | null,
   connectionStatus: {
     phase: "connected",
@@ -34,8 +35,17 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("../hooks/useAppRuntime", () => ({
   useIsOnboardingComplete: () => shellMocks.onboardingComplete,
   useIsServerHydrationComplete: () => true,
+  useRuntimeBootstrap: () => ({
+    featureFlags: {
+      pluginSystem: true,
+    },
+  }),
   useRuntimeConnectionStatus: () => shellMocks.connectionStatus,
   useRuntimeOrchestrationSnapshot: () => shellMocks.snapshot,
+}))
+
+vi.mock("../hooks/usePluginRegistry", () => ({
+  usePluginDisplayName: (pluginId: string | null) => (pluginId ? shellMocks.pluginName : null),
 }))
 
 vi.mock("../hooks/use-mobile", () => ({
@@ -43,19 +53,14 @@ vi.mock("../hooks/use-mobile", () => ({
 }))
 
 vi.mock("../components/shell/AppSidebar", async () => {
-  const { SidebarTrigger, useSidebar } = await import("../components/ui/sidebar")
+  const { useSidebar } = await import("../components/ui/sidebar")
 
   return {
     AppSidebar: () => <div data-testid="mobile-sidebar">Sidebar</div>,
     AppSidebarContent: () => {
       const { open } = useSidebar()
 
-      return (
-        <div>
-          <SidebarTrigger data-testid="shell-sidebar-trigger" />
-          {open ? <div data-testid="desktop-sidebar-content">Sidebar</div> : null}
-        </div>
-      )
+      return <>{open ? <div data-testid="desktop-sidebar-content">Sidebar</div> : null}</>
     },
   }
 })
@@ -72,6 +77,7 @@ describe("AppShell", () => {
     shellMocks.navigateFn.mockReset()
     shellMocks.onboardingComplete = true
     shellMocks.isMobile = false
+    shellMocks.pluginName = "Canvas Assistant"
     shellMocks.snapshot = null
     shellMocks.connectionStatus = {
       phase: "connected",
@@ -82,8 +88,10 @@ describe("AppShell", () => {
     window.localStorage.clear()
   })
 
-  test("renders the sidebar and outlet", () => {
+  test("renders the sidebar, universal navbar, and outlet", () => {
     render(<AppShell />)
+    expect(screen.getByTestId("root-navbar")).toBeDefined()
+    expect(screen.getByTestId("root-navbar-title").textContent).toBe("Dashboard")
     expect(screen.getByTestId("desktop-sidebar-content")).toBeDefined()
     expect(screen.getByText("Outlet")).toBeDefined()
   })
@@ -111,10 +119,11 @@ describe("AppShell", () => {
     render(<AppShell />)
 
     expect(screen.getByTestId("mobile-sidebar")).toBeDefined()
+    expect(screen.getByTestId("root-navbar")).toBeDefined()
     expect(screen.queryByTestId("desktop-sidebar-content")).toBeNull()
   })
 
-  test("shows the active chat thread in the top breadcrumb", () => {
+  test("shows the active chat thread in the root breadcrumb", () => {
     shellMocks.pathname = "/chat/workspace-1/thread-1"
     shellMocks.snapshot = {
       workspaces: [
@@ -163,7 +172,7 @@ describe("AppShell", () => {
     expect(screen.getByTestId("chat-status-badge").textContent).toContain("Ready")
   })
 
-  test("shows an offline chat badge in the top bar when the runtime disconnects", () => {
+  test("shows an offline chat badge only on chat routes", () => {
     shellMocks.pathname = "/chat"
     shellMocks.connectionStatus = {
       phase: "disconnected",
@@ -175,5 +184,43 @@ describe("AppShell", () => {
     render(<AppShell />)
 
     expect(screen.getByTestId("chat-status-badge").textContent).toContain("Offline")
+  })
+
+  test("shows settings section titles in the root navbar", () => {
+    shellMocks.pathname = "/settings/schedule"
+
+    render(<AppShell />)
+
+    expect(screen.getByTestId("root-navbar-title").textContent).toBe("Schedule & Preferences")
+    expect(screen.queryByTestId("chat-status-badge")).toBeNull()
+  })
+
+  test("shows the activity title in the root navbar", () => {
+    shellMocks.pathname = "/activity"
+
+    render(<AppShell />)
+
+    expect(screen.getByTestId("root-navbar-title").textContent).toBe("Activity")
+  })
+
+  test("shows plugin detail breadcrumbs in the root navbar", () => {
+    shellMocks.pathname = "/settings/plugins/canvas-mcp"
+
+    render(<AppShell />)
+
+    expect(screen.getByLabelText("breadcrumb")).toBeDefined()
+    expect(screen.getByText("Settings")).toBeDefined()
+    expect(screen.getByText("Plugins")).toBeDefined()
+    expect(screen.getByText("Canvas Assistant")).toBeDefined()
+    expect(screen.queryByTestId("chat-status-badge")).toBeNull()
+  })
+
+  test("hides the root navbar on onboarding", () => {
+    shellMocks.pathname = "/onboarding"
+
+    render(<AppShell />)
+
+    expect(screen.queryByTestId("root-navbar")).toBeNull()
+    expect(screen.queryByTestId("shell-sidebar-trigger")).toBeNull()
   })
 })

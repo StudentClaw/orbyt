@@ -1,15 +1,14 @@
 import { describe, test, expect } from "bun:test"
-import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { RPC_METHODS } from "@student-claw/contracts"
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"
-import { runMigrations } from "../db/migrations/runner.js"
+import { createBunDatabaseService, createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
 const mockWs = { readyState: 1, send: () => undefined } as never
 
 function makeDependencies() {
-  const db = new BunDatabase(":memory:")
-  runMigrations(db)
+  const db = createBunTestDatabase(":memory:")
+  runBunMigrations(db)
   return {
     config: {
       ...defaultConfig,
@@ -77,14 +76,7 @@ function makeDependencies() {
       respondToProviderApproval: async () => ({ approvalRequestId: "a1", resolved: true }),
       shutdown: async () => undefined,
     },
-    database: {
-      db,
-      get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
-      query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
-      execute: (sql: string, params: SQLQueryBindings[] = []) => { db.run(sql, params as never) },
-      transaction: <T>(fn: () => T) => fn(),
-      close: () => db.close(),
-    },
+    database: createBunDatabaseService(db),
     canvasSync: {
       sync: async () => undefined,
       listCourses: () => [],
@@ -163,7 +155,7 @@ describe("onboarding.getPreferences", () => {
   })
 
   test("legacy onboarding schema is repaired before preferences and routines are read", async () => {
-    const db = new BunDatabase(":memory:")
+    const db = createBunTestDatabase(":memory:")
     db.run(`
       CREATE TABLE schema_version (
         version INTEGER PRIMARY KEY,
@@ -194,20 +186,13 @@ describe("onboarding.getPreferences", () => {
     for (let version = 1; version <= 10; version += 1) {
       db.run("INSERT INTO schema_version (version) VALUES (?)", [version])
     }
-    runMigrations(db)
+    runBunMigrations(db)
 
     const baseDeps = makeDependencies()
     baseDeps.database.close()
     const deps = {
       ...baseDeps,
-      database: {
-        db,
-        get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
-        query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
-        execute: (sql: string, params: SQLQueryBindings[] = []) => { db.run(sql, params as never) },
-        transaction: <T>(fn: () => T) => fn(),
-        close: () => db.close(),
-      },
+      database: createBunDatabaseService(db),
     }
 
     const preferences = JSON.parse(

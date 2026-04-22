@@ -4,8 +4,8 @@ import { WebSocket } from "ws"
 import { Database as BunDatabase } from "bun:sqlite"
 import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
 import { defaultConfig } from "../config/defaults.js"
-import { runMigrations } from "../db/migrations/runner.js"
 import { routeMessage } from "../ws/Router.js"
+import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 function getRandomPort(): number {
   return 10000 + Math.floor(Math.random() * 50000)
@@ -24,7 +24,7 @@ describe("Server integration", () => {
     db = new BunDatabase(":memory:")
     db.run("PRAGMA journal_mode = WAL")
     db.run("PRAGMA foreign_keys = ON")
-    runMigrations(db)
+    runBunMigrations(db)
 
     // Setup WS server on random port
     port = getRandomPort()
@@ -114,14 +114,7 @@ describe("Server integration", () => {
             respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
             shutdown: async () => undefined,
           },
-          database: {
-            db,
-            get: () => null,
-            query: () => [],
-            execute: () => undefined,
-            transaction: <T>(fn: () => T) => fn(),
-            close: () => undefined,
-          },
+          database: createBunDatabaseService(db),
           canvasSync: {
             sync: async () => undefined,
             listCourses: () => [],

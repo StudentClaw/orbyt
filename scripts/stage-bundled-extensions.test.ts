@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { PluginRegistry } from "../packages/electron/src/plugins/plugin-registry.js"
-import { stageBundledExtensions } from "./stage-bundled-extensions"
+import { createBundledExtensionRuntimePackageJson, stageBundledExtensions } from "./stage-bundled-extensions"
 
 const tempDirs: string[] = []
 
@@ -34,11 +34,50 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
     author: "student-claw",
     homepage: "https://github.com/StudentClaw/student-claw",
   }, null, 2))
+  writeFileSync(path.join(extensionDir, "package.json"), JSON.stringify({
+    name: `@student-claw/${pluginId}`,
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    dependencies: pluginId === "canvas-mcp"
+      ? {
+        "@effect/schema": "^0.75.5",
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "@student-claw/contracts": "workspace:*",
+        zod: "^4.1.12",
+      }
+      : {
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "@student-claw/contracts": "workspace:*",
+      },
+  }, null, 2))
   writeFileSync(path.join(extensionDir, "dist", "index.js"), `console.log("${pluginId}")\n`)
   writeFileSync(path.join(extensionDir, "dist", "server.test.js"), `console.log("${pluginId}-test")\n`)
   writeFileSync(path.join(extensionDir, "src", "index.ts"), "export {}\n")
   writeFileSync(path.join(extensionDir, "README.md"), `# ${pluginId}\n`)
   return extensionDir
+}
+
+function writeContractsPackage(repoRoot: string): void {
+  const contractsDir = path.join(repoRoot, "packages", "contracts")
+  mkdirSync(path.join(contractsDir, "dist"), { recursive: true })
+  writeFileSync(path.join(contractsDir, "dist", "index.js"), "export const contract = true\n")
+  writeFileSync(path.join(contractsDir, "package.json"), JSON.stringify({
+    name: "@student-claw/contracts",
+    version: "0.1.0",
+    private: true,
+    type: "module",
+    main: "dist/index.js",
+    exports: {
+      ".": {
+        default: "./dist/index.js",
+      },
+    },
+    dependencies: {
+      "@effect/schema": "^0.75.5",
+      effect: "^3.21.0",
+    },
+  }, null, 2))
 }
 
 afterEach(() => {
@@ -55,9 +94,10 @@ describe("stageBundledExtensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
     writeRuntimeExtension(extensionsRoot, "template-mcp")
 
-    const stagedPluginIds = stageBundledExtensions({ extensionsRoot, outputRoot })
+    const stagedPluginIds = stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
 
     expect(stagedPluginIds).toEqual(["template-mcp"])
     expect(existsSync(path.join(outputRoot, "template-mcp", "manifest.json"))).toBe(true)
@@ -71,6 +111,7 @@ describe("stageBundledExtensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
     const extensionDir = writeRuntimeExtension(extensionsRoot, "apple-calendar-mcp")
     const directReleaseDir = path.join(extensionDir, "bridge", ".build", "release")
     const archReleaseDir = path.join(extensionDir, "bridge", ".build", "arm64-apple-macosx", "release")
@@ -79,7 +120,7 @@ describe("stageBundledExtensions", () => {
     writeFileSync(path.join(directReleaseDir, "CalendarAPIBridge"), "direct-release")
     writeFileSync(path.join(archReleaseDir, "CalendarAPIBridge"), "arch-release")
 
-    stageBundledExtensions({ extensionsRoot, outputRoot })
+    stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
 
     expect(readFileSync(path.join(outputRoot, "apple-calendar-mcp", "bridge", "CalendarAPIBridge"), "utf8"))
       .toBe("direct-release")
@@ -89,12 +130,13 @@ describe("stageBundledExtensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
     const extensionDir = writeRuntimeExtension(extensionsRoot, "apple-calendar-mcp")
     const archReleaseDir = path.join(extensionDir, "bridge", ".build", "arm64-apple-macosx", "release")
     mkdirSync(archReleaseDir, { recursive: true })
     writeFileSync(path.join(archReleaseDir, "CalendarAPIBridge"), "arch-release")
 
-    stageBundledExtensions({ extensionsRoot, outputRoot })
+    stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
 
     expect(readFileSync(path.join(outputRoot, "apple-calendar-mcp", "bridge", "CalendarAPIBridge"), "utf8"))
       .toBe("arch-release")
@@ -104,9 +146,10 @@ describe("stageBundledExtensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
     writeRuntimeExtension(extensionsRoot, "apple-calendar-mcp")
 
-    expect(() => stageBundledExtensions({ extensionsRoot, outputRoot })).not.toThrow()
+    expect(() => stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })).not.toThrow()
     expect(existsSync(path.join(outputRoot, "apple-calendar-mcp", "manifest.json"))).toBe(true)
     expect(existsSync(path.join(outputRoot, "apple-calendar-mcp", "bridge", "CalendarAPIBridge"))).toBe(false)
   })
@@ -115,10 +158,11 @@ describe("stageBundledExtensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
     writeRuntimeExtension(extensionsRoot, "template-mcp")
     writeRuntimeExtension(extensionsRoot, "canvas-mcp")
 
-    stageBundledExtensions({ extensionsRoot, outputRoot })
+    stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
 
     const registry = new PluginRegistry({
       bundledCatalogDir: outputRoot,
@@ -130,5 +174,74 @@ describe("stageBundledExtensions", () => {
       .map((entry) => entry.manifest.id)
 
     expect(availableIds).toEqual(["canvas-mcp", "template-mcp"])
+  })
+
+  test("generates a shared runtime package manifest for bundled extension dependencies", () => {
+    const repoRoot = createTempDir()
+    const extensionsRoot = path.join(repoRoot, "packages", "extensions")
+    const templateDir = writeRuntimeExtension(extensionsRoot, "template-mcp")
+    const canvasDir = writeRuntimeExtension(extensionsRoot, "canvas-mcp")
+
+    const packageJson = createBundledExtensionRuntimePackageJson({
+      repoRoot,
+      extensionDirs: [templateDir, canvasDir],
+    })
+
+    expect(packageJson.dependencies).toEqual({
+      "@effect/schema": "^0.75.5",
+      "@modelcontextprotocol/sdk": "^1.29.0",
+      "@student-claw/contracts": "file:vendor/contracts",
+      zod: "^4.1.12",
+    })
+  })
+
+  test("stages the shared node_modules contract dependencies for packaged extensions", () => {
+    const repoRoot = createTempDir()
+    const extensionsRoot = path.join(repoRoot, "packages", "extensions")
+    const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
+    writeRuntimeExtension(extensionsRoot, "template-mcp")
+
+    stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
+
+    expect(JSON.parse(readFileSync(path.join(outputRoot, "package.json"), "utf8"))).toMatchObject({
+      name: "student-claw-bundled-extension-runtime",
+      dependencies: {
+        "@student-claw/contracts": "file:vendor/contracts",
+      },
+    })
+    expect(existsSync(path.join(outputRoot, "vendor", "contracts", "dist", "index.js"))).toBe(true)
+  })
+
+  test("copies packaged runtime dependencies into each staged extension when node_modules exist", () => {
+    const repoRoot = createTempDir()
+    const extensionsRoot = path.join(repoRoot, "packages", "extensions")
+    const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
+    writeRuntimeExtension(extensionsRoot, "template-mcp")
+
+    const originalPath = process.env.PATH
+    const bunStubDir = path.join(repoRoot, "bin")
+    mkdirSync(bunStubDir, { recursive: true })
+    writeFileSync(
+      path.join(bunStubDir, "bun"),
+      [
+        "#!/bin/sh",
+        "mkdir -p \"$PWD/node_modules/@student-claw/contracts/dist\"",
+        "printf 'export const staged = true\\n' > \"$PWD/node_modules/@student-claw/contracts/dist/index.js\"",
+      ].join("\n"),
+      { mode: 0o755 },
+    )
+
+    process.env.PATH = `${bunStubDir}:${originalPath ?? ""}`
+
+    try {
+      stageBundledExtensions({ extensionsRoot, outputRoot })
+    } finally {
+      process.env.PATH = originalPath
+    }
+
+    expect(existsSync(path.join(outputRoot, "node_modules", "@student-claw", "contracts", "dist", "index.js"))).toBe(true)
+    expect(existsSync(path.join(outputRoot, "template-mcp", "node_modules", "@student-claw", "contracts", "dist", "index.js"))).toBe(true)
   })
 })

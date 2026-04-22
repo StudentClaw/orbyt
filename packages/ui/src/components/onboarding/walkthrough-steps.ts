@@ -7,33 +7,33 @@ export interface WalkthroughStep {
 
 export const DASHBOARD_WALKTHROUGH_STEPS: ReadonlyArray<WalkthroughStep> = [
   {
-    targetTestId: "section-priorityQueue",
-    title: "Priority Queue",
-    description: "Your most urgent tasks, ranked by deadline and importance.",
+    targetTestId: "dashboard-filter-tabs",
+    title: "Filters",
+    description: "Switch between Today, This Week, Upcoming, and Overdue to focus your workload.",
     placement: "bottom",
   },
   {
-    targetTestId: "section-deadlines",
-    title: "Upcoming Deadlines",
-    description: "All your assignments organized by due date for the next 14 days.",
+    targetTestId: "dashboard-assignments",
+    title: "Coursework",
+    description: "Assignments grouped by course. Each block shows what’s due next for that class.",
     placement: "bottom",
   },
   {
-    targetTestId: "section-grades",
-    title: "Grade Overview",
-    description: "Track your grades across all courses with trend indicators.",
+    targetTestId: "grade-insights-widget",
+    title: "Grade Insights",
+    description: "Current standing by course, projected GPA, and whether grades are trending up or down.",
     placement: "bottom",
   },
   {
-    targetTestId: "section-calendar",
-    title: "Weekly Calendar",
-    description: "Your study sessions planned for the week, color-coded by course.",
+    targetTestId: "weekly-outlook-widget",
+    title: "Weekly Outlook",
+    description: "A compact timeline of study sessions and deadlines for the week.",
     placement: "bottom",
   },
   {
-    targetTestId: "quick-actions",
-    title: "Quick Actions",
-    description: "Start a conversation with your AI study assistant from here.",
+    targetTestId: "plan-my-week",
+    title: "Plan my week",
+    description: "Jump into chat with a pre-filled prompt to build a study plan with your assistant.",
     placement: "top",
   },
 ]

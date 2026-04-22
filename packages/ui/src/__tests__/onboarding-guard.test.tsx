@@ -23,6 +23,11 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/hooks/useAppRuntime", () => ({
   useIsOnboardingComplete: () => hookMocks.onboardingComplete,
   useIsServerHydrationComplete: () => hookMocks.hydrationComplete,
+  useRuntimeBootstrap: () => ({
+    featureFlags: {
+      pluginSystem: true,
+    },
+  }),
   useRuntimeConnectionStatus: () => ({
     phase: "connected" as const,
     wsUrl: "ws://127.0.0.1:8787",
@@ -30,6 +35,10 @@ vi.mock("@/hooks/useAppRuntime", () => ({
     lastError: null,
   }),
   useRuntimeOrchestrationSnapshot: () => null,
+}))
+
+vi.mock("@/hooks/usePluginRegistry", () => ({
+  usePluginDisplayName: () => null,
 }))
 
 vi.mock("@/hooks/use-mobile", () => ({

@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite"
+import type { RuntimeSqliteDatabase } from "../runtime-sqlite.js"
 
 export const version = 11
 
@@ -25,22 +25,22 @@ const USER_PREFERENCES_COLUMNS = [
   "updated_at",
 ] as const
 
-function tableExists(db: Database, tableName: string): boolean {
-  return db.query<{ name: string }, [string]>(
+function tableExists(db: RuntimeSqliteDatabase, tableName: string): boolean {
+  return db.query<{ name: string }>(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
   ).get(tableName) !== null
 }
 
-function getColumnNames(db: Database, tableName: string): Set<string> {
+function getColumnNames(db: RuntimeSqliteDatabase, tableName: string): Set<string> {
   if (!tableExists(db, tableName)) return new Set()
   return new Set(
-    db.query<{ name: string }, []>(`PRAGMA table_info(${tableName})`)
+    db.query<{ name: string }>(`PRAGMA table_info(${tableName})`)
       .all()
       .map((column) => column.name),
   )
 }
 
-function createUserPreferencesTable(db: Database): void {
+function createUserPreferencesTable(db: RuntimeSqliteDatabase): void {
   db.run(`
     CREATE TABLE user_preferences (
       id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -58,7 +58,7 @@ function createUserPreferencesTable(db: Database): void {
   `)
 }
 
-function createOnboardingStateTable(db: Database): void {
+function createOnboardingStateTable(db: RuntimeSqliteDatabase): void {
   db.run(`
     CREATE TABLE onboarding_state (
       step_name TEXT PRIMARY KEY
@@ -78,7 +78,7 @@ function createOnboardingStateTable(db: Database): void {
   `)
 }
 
-function createOnboardingMetaTable(db: Database): void {
+function createOnboardingMetaTable(db: RuntimeSqliteDatabase): void {
   db.run(`
     CREATE TABLE IF NOT EXISTS onboarding_meta (
       key TEXT PRIMARY KEY,
@@ -92,7 +92,7 @@ function createOnboardingMetaTable(db: Database): void {
   `)
 }
 
-function createRoutinesTable(db: Database): void {
+function createRoutinesTable(db: RuntimeSqliteDatabase): void {
   db.run(`
     CREATE TABLE IF NOT EXISTS routines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +104,7 @@ function createRoutinesTable(db: Database): void {
   `)
 }
 
-function ensureAiAuthStateTable(db: Database): void {
+function ensureAiAuthStateTable(db: RuntimeSqliteDatabase): void {
   if (!tableExists(db, "ai_auth_state")) {
     db.run(`
       CREATE TABLE ai_auth_state (
@@ -175,7 +175,7 @@ function normalizeCalendarIntegration(value: unknown): "none" | "google" | "appl
   return value === "google" || value === "apple" ? value : "none"
 }
 
-function repairUserPreferencesTable(db: Database): void {
+function repairUserPreferencesTable(db: RuntimeSqliteDatabase): void {
   if (!tableExists(db, "user_preferences")) {
     createUserPreferencesTable(db)
     return
@@ -187,7 +187,7 @@ function repairUserPreferencesTable(db: Database): void {
     return
   }
 
-  const legacyRow = db.query<Record<string, unknown>, []>(
+  const legacyRow = db.query<Record<string, unknown>>(
     "SELECT * FROM user_preferences ORDER BY id LIMIT 1",
   ).get()
   const parsedNotificationPrefs = parseNotificationPrefs(legacyRow?.notification_prefs)
@@ -228,7 +228,7 @@ function repairUserPreferencesTable(db: Database): void {
   db.run("DROP TABLE user_preferences_legacy_011")
 }
 
-function repairOnboardingStateTable(db: Database): void {
+function repairOnboardingStateTable(db: RuntimeSqliteDatabase): void {
   if (!tableExists(db, "onboarding_state")) {
     createOnboardingStateTable(db)
     return
@@ -241,7 +241,7 @@ function repairOnboardingStateTable(db: Database): void {
   }
 
   const legacyRows = columns.has("step")
-    ? db.query<{ step: number; status: string; completed_at: string | null }, []>(
+    ? db.query<{ step: number; status: string; completed_at: string | null }>(
       "SELECT step, status, completed_at FROM onboarding_state ORDER BY step",
     ).all()
     : []
@@ -263,7 +263,7 @@ function repairOnboardingStateTable(db: Database): void {
   db.run("DROP TABLE onboarding_state_legacy_011")
 }
 
-function repairRoutinesTable(db: Database): void {
+function repairRoutinesTable(db: RuntimeSqliteDatabase): void {
   if (!tableExists(db, "routines")) {
     createRoutinesTable(db)
     return
@@ -278,7 +278,7 @@ function repairRoutinesTable(db: Database): void {
   createRoutinesTable(db)
 }
 
-export function run(db: Database): void {
+export function run(db: RuntimeSqliteDatabase): void {
   repairUserPreferencesTable(db)
   repairOnboardingStateTable(db)
   createOnboardingMetaTable(db)

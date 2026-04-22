@@ -28,7 +28,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/components/ui/**/*.{ts,tsx}', 'src/components/dashboard/DashboardLayout.tsx'],
+    files: ['src/components/ui/**/*.{ts,tsx}', 'src/components/dashboard/DashboardShell.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

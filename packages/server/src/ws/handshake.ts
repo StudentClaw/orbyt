@@ -35,9 +35,18 @@ function isLocalhostOrigin(origin: string): boolean {
   }
 }
 
+function isPackagedDesktopOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).protocol === "file:"
+  } catch {
+    return false
+  }
+}
+
 function isAllowedOrigin(origin: string | undefined, allowedOrigins: readonly string[]): boolean {
   if (!origin || origin === "null") return true
   if (allowedOrigins.includes(origin)) return true
+  if (isPackagedDesktopOrigin(origin)) return true
   return isLocalhostOrigin(origin)
 }
 

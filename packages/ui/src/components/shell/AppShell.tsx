@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import {
   useIsOnboardingComplete,
+  useRuntimeBootstrap,
   useIsServerHydrationComplete,
   useRuntimeConnectionStatus,
   useRuntimeOrchestrationSnapshot,
 } from "@/hooks/useAppRuntime"
 import { ChatStatusBadge } from "@/components/chat/ChatStatusBadge"
+import { usePluginDisplayName } from "@/hooks/usePluginRegistry"
 import { useNativeNotification } from "@/hooks/useNativeNotification"
 import {
   Breadcrumb,
@@ -32,7 +34,13 @@ import {
   MAX_DESKTOP_SIDEBAR_WIDTH,
 } from "@/lib/sidebarLayout"
 import { resolveChatState, resolveCurrentThread, resolveCurrentWorkspace } from "@/hooks/chat-model"
-import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
+import { resolveChatRouteSelection } from "@/lib/chatRoutes"
+import {
+  extractSettingsPluginId,
+  resolveRootNavbarContext,
+  shouldShowRootNavbar,
+  type RootNavbarContext,
+} from "@/lib/rootNavbar"
 import type { PanelImperativeHandle } from "react-resizable-panels"
 import { AppSidebar, AppSidebarContent } from "./AppSidebar"
 
@@ -60,12 +68,14 @@ export function AppShell() {
 }
 
 function AppShellLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { isMobile, open, openMobile } = useSidebar()
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null)
   const [desktopSidebarWidth, setDesktopSidebarWidth] = useState(readDesktopSidebarWidth)
   const sidebarLabel = isMobile
     ? openMobile ? "Hide sidebar" : "Show sidebar"
     : open ? "Hide sidebar" : "Show sidebar"
+  const showNavbar = shouldShowRootNavbar(pathname)
 
   useEffect(() => {
     if (isMobile) {
@@ -82,65 +92,68 @@ function AppShellLayout() {
 
   if (isMobile) {
     return (
-      <div className="flex h-full w-full min-h-0">
-        <AppSidebar />
-        <ShellMain showSidebarTrigger sidebarLabel={sidebarLabel} />
+      <div className="flex h-full w-full min-h-0 flex-col">
+        {showNavbar ? <RootNavbar sidebarLabel={sidebarLabel} /> : null}
+        <div className="flex min-h-0 flex-1">
+          <AppSidebar />
+          <ShellMain />
+        </div>
       </div>
     )
   }
 
   return (
-    <ResizablePanelGroup className="h-full w-full min-h-0" orientation="horizontal">
-      <ResizablePanel
-        panelRef={sidebarPanelRef}
-        id="app-shell-sidebar"
-        collapsible
-        collapsedSize={48}
-        defaultSize={desktopSidebarWidth}
-        minSize={MIN_DESKTOP_SIDEBAR_WIDTH}
-        maxSize={MAX_DESKTOP_SIDEBAR_WIDTH}
-        groupResizeBehavior="preserve-pixel-size"
-        className="min-w-0"
-        onResize={(panelSize) => {
-          if (panelSize.inPixels <= 0) {
-            return
-          }
+    <div className="flex h-full w-full min-h-0 flex-col">
+      {showNavbar ? <RootNavbar sidebarLabel={sidebarLabel} /> : null}
+      <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
+        <ResizablePanel
+          panelRef={sidebarPanelRef}
+          id="app-shell-sidebar"
+          collapsible
+          collapsedSize={48}
+          defaultSize={desktopSidebarWidth}
+          minSize={MIN_DESKTOP_SIDEBAR_WIDTH}
+          maxSize={MAX_DESKTOP_SIDEBAR_WIDTH}
+          groupResizeBehavior="preserve-pixel-size"
+          className="min-w-0"
+          onResize={(panelSize) => {
+            if (panelSize.inPixels <= 0) {
+              return
+            }
 
-          setDesktopSidebarWidth(persistDesktopSidebarWidth(panelSize.inPixels))
-        }}
-      >
-        <aside
-          className="group flex h-full min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground"
-          data-state={open ? "expanded" : "collapsed"}
-          data-collapsible={open ? "" : "icon"}
-          data-testid="desktop-sidebar"
+            setDesktopSidebarWidth(persistDesktopSidebarWidth(panelSize.inPixels))
+          }}
         >
-          <AppSidebarContent />
-        </aside>
-      </ResizablePanel>
-      <ResizableHandle
-        withHandle
-        disabled={!open}
-        className={!open ? "hidden" : "transition-colors hover:bg-sidebar-accent"}
-      />
-      <ResizablePanel id="app-shell-main" minSize={0}>
-        <ShellMain />
-      </ResizablePanel>
-    </ResizablePanelGroup>
+          <aside
+            className="group flex h-full min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground"
+            data-state={open ? "expanded" : "collapsed"}
+            data-collapsible={open ? "" : "icon"}
+            data-testid="desktop-sidebar"
+          >
+            <AppSidebarContent />
+          </aside>
+        </ResizablePanel>
+        <ResizableHandle
+          withHandle
+          disabled={!open}
+          className={!open ? "hidden" : "transition-colors hover:bg-sidebar-accent"}
+        />
+        <ResizablePanel id="app-shell-main" minSize={0}>
+          <ShellMain />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   )
 }
 
-function ShellMain({
-  showSidebarTrigger = false,
-  sidebarLabel = "Toggle sidebar",
-}: {
-  showSidebarTrigger?: boolean
-  sidebarLabel?: string
-}) {
+function RootNavbar({ sidebarLabel }: { sidebarLabel: string }) {
+  const { isMobile } = useSidebar()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const bootstrap = useRuntimeBootstrap()
   const snapshot = useRuntimeOrchestrationSnapshot()
   const connectionStatus = useRuntimeConnectionStatus()
   const chatSelection = resolveChatRouteSelection(pathname)
+  const pluginId = extractSettingsPluginId(pathname)
   const currentThread = useMemo(
     () => resolveCurrentThread(snapshot, chatSelection.threadId),
     [chatSelection.threadId, snapshot],
@@ -153,27 +166,50 @@ function ShellMain({
     () => resolveChatState(snapshot, currentThread, connectionStatus),
     [connectionStatus, currentThread, snapshot],
   )
-  const showChatChrome = isChatPath(pathname)
+  const pluginName = usePluginDisplayName(pluginId, Boolean(pluginId && bootstrap?.featureFlags.pluginSystem))
+  const navbarContext = useMemo(
+    () => resolveRootNavbarContext({
+      pathname,
+      workspaceName: currentWorkspace?.name ?? null,
+      threadTitle: currentThread?.title ?? null,
+      pluginName,
+    }),
+    [currentThread?.title, currentWorkspace?.name, pathname, pluginName],
+  )
+
+  if (!navbarContext) {
+    return null
+  }
 
   return (
+    <header
+      className={
+        isMobile
+          ? "window-drag flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur"
+          : "window-drag flex h-12 shrink-0 items-center border-b bg-background/95 pr-3 pl-20 backdrop-blur"
+      }
+      data-testid="root-navbar"
+    >
+      <div className="window-no-drag flex w-10 shrink-0 items-center justify-center">
+        <SidebarTrigger
+          aria-label={sidebarLabel}
+          data-testid="shell-sidebar-trigger"
+          className="h-8 w-8 shrink-0"
+        />
+      </div>
+      <div className="ml-2 min-w-0 flex-1">
+        <NavbarContextView context={navbarContext} />
+      </div>
+      {navbarContext.rightSlot === "chat-status" ? (
+        <ChatStatusBadge className="window-no-drag ml-3" status={chatState.status} />
+      ) : null}
+    </header>
+  )
+}
+
+function ShellMain() {
+  return (
     <div className="flex h-full min-h-0 flex-col">
-      {(showSidebarTrigger || showChatChrome) && (
-        <div className="flex h-12 shrink-0 items-center border-b bg-background/95 px-3 backdrop-blur">
-          {showSidebarTrigger ? (
-            <SidebarTrigger aria-label={sidebarLabel} data-testid="shell-sidebar-trigger" />
-          ) : null}
-          {showChatChrome ? (
-            <>
-              <ChatBreadcrumb
-                workspaceName={currentWorkspace?.name ?? null}
-                threadTitle={currentThread?.title ?? null}
-                className={showSidebarTrigger ? "ml-3" : undefined}
-              />
-              <ChatStatusBadge className="ml-auto" status={chatState.status} />
-            </>
-          ) : null}
-        </div>
-      )}
       <main className="min-h-0 flex-1 overflow-auto">
         <Outlet />
       </main>
@@ -181,41 +217,39 @@ function ShellMain({
   )
 }
 
-function ChatBreadcrumb({
-  workspaceName,
-  threadTitle,
-  className,
-}: {
-  workspaceName: string | null
-  threadTitle: string | null
-  className?: string
-}) {
+function NavbarContextView({ context }: { context: RootNavbarContext }) {
+  if (context.kind === "title") {
+    return (
+      <h1
+        className="truncate text-base font-semibold tracking-tight"
+        data-testid="root-navbar-title"
+      >
+        {context.title}
+      </h1>
+    )
+  }
+
   return (
-    <Breadcrumb className={`min-w-0 flex-1 ${className ?? ""}`.trim()}>
+    <Breadcrumb className="min-w-0 flex-1">
       <BreadcrumbList className="min-w-0 flex-nowrap overflow-hidden">
-        <BreadcrumbItem className="shrink-0 text-sm text-muted-foreground">
-          <span>Chat</span>
-        </BreadcrumbItem>
-        {workspaceName ? (
-          <>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem className="min-w-0 shrink">
-              {threadTitle ? (
-                <span className="truncate text-sm text-muted-foreground">{workspaceName}</span>
-              ) : (
-                <BreadcrumbPage className="truncate text-sm">{workspaceName}</BreadcrumbPage>
-              )}
-            </BreadcrumbItem>
-          </>
-        ) : null}
-        {threadTitle ? (
-          <>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem className="min-w-0 shrink">
-              <BreadcrumbPage className="truncate text-sm">{threadTitle}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </>
-        ) : null}
+        {context.breadcrumbs.map((item, index) => {
+          const isLast = index === context.breadcrumbs.length - 1
+
+          return (
+            <Fragment key={`${item.label}-${index}`}>
+              {index > 0 ? <BreadcrumbSeparator /> : null}
+              <BreadcrumbItem
+                className={isLast ? "min-w-0 shrink" : "shrink-0 text-sm text-muted-foreground"}
+              >
+                {isLast ? (
+                  <BreadcrumbPage className="truncate text-sm">{item.label}</BreadcrumbPage>
+                ) : (
+                  <span className="text-sm text-muted-foreground">{item.label}</span>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          )
+        })}
       </BreadcrumbList>
     </Breadcrumb>
   )

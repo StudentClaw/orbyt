@@ -6,6 +6,7 @@
 export interface PrioritizedItem {
   readonly id: string
   readonly title: string
+  readonly courseId: string
   readonly courseCode: string
   readonly effectiveDueAt: string
   readonly estimatedMinutes: number

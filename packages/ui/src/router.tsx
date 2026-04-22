@@ -1,10 +1,11 @@
-import { createRouter, createRootRoute, createRoute } from "@tanstack/react-router"
+import { createRouter, createRootRoute, createRoute, useNavigate } from "@tanstack/react-router"
 import { AppShell } from "@/components/shell/AppShell"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { ChatPage } from "@/pages/ChatPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { ActivityPage } from "@/pages/ActivityPage"
+import type { SettingsSection } from "@/components/settings/SettingsSidebar"
 import { createAppHistory } from "@/lib/routerHistory"
 
 const rootRoute = createRootRoute({
@@ -41,10 +42,114 @@ const onboardingRoute = createRoute({
   component: OnboardingPage,
 })
 
-const settingsRoute = createRoute({
+function resolveSettingsPath(section: SettingsSection): "/settings" | "/settings/schedule" | "/settings/plugins" | "/settings/notifications" {
+  switch (section) {
+    case "general":
+      return "/settings"
+    case "schedule":
+      return "/settings/schedule"
+    case "connections":
+      return "/settings/plugins"
+    case "notifications":
+      return "/settings/notifications"
+  }
+}
+
+function SettingsGeneralRouteComponent() {
+  const navigate = useNavigate()
+
+  return (
+    <SettingsPage
+      activeSection="general"
+      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
+      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
+      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    />
+  )
+}
+
+function SettingsScheduleRouteComponent() {
+  const navigate = useNavigate()
+
+  return (
+    <SettingsPage
+      activeSection="schedule"
+      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
+      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
+      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    />
+  )
+}
+
+function SettingsConnectionsRouteComponent() {
+  const navigate = useNavigate()
+
+  return (
+    <SettingsPage
+      activeSection="connections"
+      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
+      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
+      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    />
+  )
+}
+
+function SettingsPluginDetailRouteComponent() {
+  const navigate = useNavigate()
+  const { pluginId } = settingsPluginDetailRoute.useParams()
+
+  return (
+    <SettingsPage
+      activeSection="connections"
+      selectedPluginId={pluginId}
+      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
+      onPluginSelect={(nextPluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId: nextPluginId } })}
+      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    />
+  )
+}
+
+function SettingsNotificationsRouteComponent() {
+  const navigate = useNavigate()
+
+  return (
+    <SettingsPage
+      activeSection="notifications"
+      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
+      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
+      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    />
+  )
+}
+
+const settingsGeneralRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: SettingsPage,
+  component: SettingsGeneralRouteComponent,
+})
+
+const settingsScheduleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/schedule",
+  component: SettingsScheduleRouteComponent,
+})
+
+const settingsConnectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/plugins",
+  component: SettingsConnectionsRouteComponent,
+})
+
+const settingsPluginDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/plugins/$pluginId",
+  component: SettingsPluginDetailRouteComponent,
+})
+
+const settingsNotificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/notifications",
+  component: SettingsNotificationsRouteComponent,
 })
 
 const activityRoute = createRoute({
@@ -59,7 +164,11 @@ const routeTree = rootRoute.addChildren([
   chatWorkspaceRoute,
   chatThreadRoute,
   onboardingRoute,
-  settingsRoute,
+  settingsGeneralRoute,
+  settingsScheduleRoute,
+  settingsConnectionsRoute,
+  settingsPluginDetailRoute,
+  settingsNotificationsRoute,
   activityRoute,
 ])
 

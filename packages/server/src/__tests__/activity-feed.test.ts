@@ -1,5 +1,4 @@
 import { describe, test, expect } from "bun:test"
-import { Database as BunDatabase, type SQLQueryBindings } from "bun:sqlite"
 import { runMigrations } from "../db/migrations/runner.js"
 import {
   generateWeeklyInsight,
@@ -7,26 +6,14 @@ import {
   recordWorkflowCompletionActivity,
 } from "../activity/feed.js"
 import { defaultConfig } from "../config/defaults.js"
+import { createBunDatabaseService, createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
-function createDatabase(): BunDatabase {
-  const db = new BunDatabase(":memory:")
+function createDatabase() {
+  const db = createBunTestDatabase(":memory:")
   db.run("PRAGMA journal_mode = WAL")
   db.run("PRAGMA foreign_keys = ON")
-  runMigrations(db)
+  runBunMigrations(db)
   return db
-}
-
-function createDatabaseService(db: BunDatabase) {
-  return {
-    db,
-    get: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).get(...params) as T | null,
-    query: <T>(sql: string, params: SQLQueryBindings[] = []) => db.query(sql).all(...params) as T[],
-    execute: (sql: string, params: SQLQueryBindings[] = []) => {
-      db.run(sql, params as never)
-    },
-    transaction: <T>(fn: () => T) => fn(),
-    close: () => db.close(),
-  }
 }
 
 describe("activity feed", () => {
@@ -47,7 +34,7 @@ describe("activity feed", () => {
     )
 
     const entry = await recordWorkflowCompletionActivity({
-      database: createDatabaseService(db),
+      database: createBunDatabaseService(db),
       pushBus: {
         registerClient: () => undefined,
         removeClient: () => undefined,
@@ -103,7 +90,7 @@ describe("activity feed", () => {
     const db = createDatabase()
 
     await recordActivityEntry({
-      database: createDatabaseService(db),
+      database: createBunDatabaseService(db),
       pushBus: {
         registerClient: () => undefined,
         removeClient: () => undefined,
@@ -123,7 +110,7 @@ describe("activity feed", () => {
     })
 
     await recordActivityEntry({
-      database: createDatabaseService(db),
+      database: createBunDatabaseService(db),
       pushBus: {
         registerClient: () => undefined,
         removeClient: () => undefined,
@@ -143,7 +130,7 @@ describe("activity feed", () => {
     })
 
     const result = await generateWeeklyInsight({
-      database: createDatabaseService(db),
+      database: createBunDatabaseService(db),
       config: {
         ...defaultConfig,
         wsAuthToken: "a".repeat(64),
