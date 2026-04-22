@@ -2,6 +2,8 @@ import { describe, test, expect } from "bun:test"
 import { join } from "node:path"
 import {
   createMemoryPaths,
+  resolveDefaultMemoryGraphDir,
+  resolveMemoryGraphDir,
   resolveMemoryRoot,
 } from "../memory/paths.js"
 
@@ -30,6 +32,30 @@ describe("resolveMemoryRoot", () => {
   })
 })
 
+describe("resolveMemoryGraphDir", () => {
+  test("defaults to a visible Documents folder when no override is set", () => {
+    const graphDir = resolveDefaultMemoryGraphDir({ env: {}, home: fakeHome })
+    expect(graphDir).toBe("/home/tester/Documents/Student Claw Memory Graph")
+  })
+
+  test("uses STUDENT_CLAW_HOME for the default graph path when provided", () => {
+    const graphDir = resolveDefaultMemoryGraphDir({
+      env: { STUDENT_CLAW_HOME: "/tmp/sc-test" },
+      home: fakeHome,
+    })
+    expect(graphDir).toBe("/tmp/sc-test/memory/graph")
+  })
+
+  test("honors an explicit graph path override", () => {
+    const graphDir = resolveMemoryGraphDir({
+      env: {},
+      graphDirOverride: "~/Desktop/custom-graph",
+      home: fakeHome,
+    })
+    expect(graphDir).toBe("/home/tester/Desktop/custom-graph")
+  })
+})
+
 describe("createMemoryPaths", () => {
   const paths = createMemoryPaths({
     env: { STUDENT_CLAW_HOME: "/tmp/sc" },
@@ -43,6 +69,17 @@ describe("createMemoryPaths", () => {
     expect(paths.dailyDir).toBe("/tmp/sc/memory/daily")
     expect(paths.weeklyDir).toBe("/tmp/sc/memory/weekly")
     expect(paths.graphDir).toBe("/tmp/sc/memory/graph")
+  })
+
+  test("can point the graph at a separate user-visible folder", () => {
+    const customPaths = createMemoryPaths({
+      env: {},
+      graphDirOverride: "/tmp/student-graph",
+      home: fakeHome,
+    })
+    expect(customPaths.root).toBe("/home/tester/.student-claw/memory")
+    expect(customPaths.graphDir).toBe("/tmp/student-graph")
+    expect(customPaths.branchIndex("routine")).toBe("/tmp/student-graph/routine/index.md")
   })
 
   test("resolves scaffold branch index files", () => {

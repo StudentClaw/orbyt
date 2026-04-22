@@ -1,6 +1,12 @@
+import { useEffect, useState } from "react"
+import { IpcChannel } from "@student-claw/contracts"
 import { useTheme, type Theme } from "@/hooks/useTheme"
 import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRuntime"
+import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { DevOnboardingControls } from "@/components/dev/DevOnboardingControls"
 
 interface ThemeOptionProps {
@@ -77,6 +83,73 @@ export function GeneralSection() {
   const { theme, setTheme } = useTheme()
   const bootstrap = useRuntimeBootstrap()
   const serverConfig = useRuntimeServerConfig()
+  const [memoryGraphPath, setMemoryGraphPath] = useState("")
+  const [draftPath, setDraftPath] = useState("")
+  const [pathMode, setPathMode] = useState<"default" | "custom">("default")
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [pickerState, setPickerState] = useState<"idle" | "opening">("idle")
+
+  useEffect(() => {
+    let cancelled = false
+
+    void waitForPrimaryWsRpcClient()
+      .then((client) => client.onboarding.getPreferences())
+      .then((preferences) => {
+        if (cancelled) return
+        setMemoryGraphPath(preferences.memoryGraphPath)
+        setDraftPath(preferences.memoryGraphPath)
+        setPathMode(preferences.memoryGraphPathMode)
+        setLoadState("ready")
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error")
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const hasDraftChanges = draftPath.trim() !== memoryGraphPath
+
+  async function saveMemoryGraphPath(nextPath: string | null) {
+    setSaveState("saving")
+    try {
+      const client = await waitForPrimaryWsRpcClient()
+      const preferences = await client.onboarding.setPreferences({ memoryGraphPath: nextPath })
+      setMemoryGraphPath(preferences.memoryGraphPath)
+      setDraftPath(preferences.memoryGraphPath)
+      setPathMode(preferences.memoryGraphPathMode)
+      setLoadState("ready")
+      setSaveState("saved")
+    } catch {
+      setSaveState("error")
+    }
+  }
+
+  async function browseForMemoryGraphPath() {
+    if (!window.electronAPI?.invoke) {
+      setSaveState("error")
+      return
+    }
+
+    setPickerState("opening")
+    try {
+      const selected = await window.electronAPI.invoke(IpcChannel.FILE_OPEN_DIALOG, {
+        directory: true,
+      })
+
+      if (typeof selected === "string" && selected.length > 0) {
+        setDraftPath(selected)
+        setSaveState("idle")
+      }
+    } catch {
+      setSaveState("error")
+    } finally {
+      setPickerState("idle")
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -100,6 +173,80 @@ export function GeneralSection() {
             <ThemeOption mode="auto" label="Auto" selected={theme === "auto"} onClick={() => setTheme("auto")} />
             <ThemeOption mode="dark" label="Dark" selected={theme === "dark"} onClick={() => setTheme("dark")} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="settings-memory-graph-card">
+        <CardHeader>
+          <CardTitle>Memory Graph</CardTitle>
+          <CardDescription>
+            Choose where Student Claw writes the durable memory graph. By default it lives in your Documents folder.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="memory-graph-path">Graph folder</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                id="memory-graph-path"
+                value={draftPath}
+                readOnly
+                disabled={loadState === "loading" || saveState === "saving"}
+                placeholder="Loading memory graph path"
+                data-testid="settings-memory-graph-path"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void browseForMemoryGraphPath()}
+                disabled={loadState !== "ready" || saveState === "saving" || pickerState === "opening"}
+                data-testid="settings-memory-graph-browse"
+              >
+                {pickerState === "opening" ? "Opening..." : "Browse..."}
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground" data-testid="settings-memory-graph-mode">
+            {loadState === "loading"
+              ? "Loading your current graph location."
+              : loadState === "error"
+                ? "Could not load the current graph location."
+                : pathMode === "default"
+                  ? "Using the default Documents location."
+                  : "Using a custom graph location."}
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void saveMemoryGraphPath(draftPath)}
+              disabled={loadState !== "ready" || saveState === "saving" || draftPath.trim().length === 0 || !hasDraftChanges}
+              data-testid="settings-memory-graph-save"
+            >
+              {saveState === "saving" ? "Saving..." : "Save Location"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void saveMemoryGraphPath(null)}
+              disabled={loadState !== "ready" || saveState === "saving" || pathMode === "default"}
+              data-testid="settings-memory-graph-reset"
+            >
+              Use Default
+            </Button>
+          </div>
+
+          {saveState === "saved" && (
+            <p className="text-sm text-muted-foreground" data-testid="settings-memory-graph-status">
+              Memory graph location updated.
+            </p>
+          )}
+          {saveState === "error" && (
+            <p className="text-sm text-destructive" data-testid="settings-memory-graph-status">
+              Could not save the memory graph location.
+            </p>
+          )}
         </CardContent>
       </Card>
 

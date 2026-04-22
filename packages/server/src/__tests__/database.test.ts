@@ -55,7 +55,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(13)
+    expect(version?.version).toBe(15)
 
     db.close()
   })
@@ -67,8 +67,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(13)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    expect(rows.length).toBe(15)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -112,7 +112,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(13)
+    expect(version?.version).toBe(15)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -122,12 +122,19 @@ describe("Database migrations", () => {
     expect(tables).toContain("canvas_accounts")
 
     const columns = db
+      .query<{ name: string }, []>("PRAGMA table_info(courses)")
+      .all()
+      .map((column) => column.name)
+
+    expect(columns).toContain("color")
+
+    const accountColumns = db
       .query<{ name: string }, []>("PRAGMA table_info(canvas_accounts)")
       .all()
       .map((column) => column.name)
 
-    expect(columns).toContain("credential_ref")
-    expect(columns).not.toContain("api_token")
+    expect(accountColumns).toContain("credential_ref")
+    expect(accountColumns).not.toContain("api_token")
 
     db.close()
   })
@@ -144,6 +151,38 @@ describe("Database migrations", () => {
     expect(columns).toContain("credential_ref")
     expect(columns).not.toContain("api_token")
 
+    db.close()
+  })
+
+  test("migration backfills a color for existing courses", () => {
+    const db = createBunTestDatabase(":memory:")
+    db.run(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run(`
+      CREATE TABLE courses (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        professor TEXT,
+        canvas_id TEXT,
+        term TEXT,
+        last_sync_at TEXT
+      )
+    `)
+    db.run("INSERT INTO courses (id, name, code) VALUES ('course-1', 'Intro to CS', 'CS101')")
+    db.run("INSERT INTO schema_version (version) VALUES (13)")
+
+    runBunMigrations(db)
+
+    const row = db
+      .query<{ color: string | null }, []>("SELECT color FROM courses WHERE id = 'course-1'")
+      .get()
+
+    expect(row?.color).toBeTruthy()
     db.close()
   })
 
@@ -293,7 +332,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(13)
+    expect(version?.version).toBe(15)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -385,6 +424,7 @@ describe("Database migrations", () => {
         quiet_hours_start: string
         quiet_hours_end: string
         calendar_integration: string
+        memory_graph_path: string | null
       }, []>("SELECT * FROM user_preferences WHERE id = 1")
       .get()
     const onboardingRow = db
@@ -401,9 +441,10 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(13)
+    expect(version?.version).toBe(15)
     expect(userPreferenceColumns).toContain("max_session_mins")
     expect(userPreferenceColumns).toContain("quiet_hours_start")
+    expect(userPreferenceColumns).toContain("memory_graph_path")
     expect(onboardingColumns).toContain("step_name")
     expect(onboardingColumns).not.toContain("step")
     expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'routines'").get()).toBeDefined()
@@ -417,6 +458,7 @@ describe("Database migrations", () => {
       quiet_hours_start: "23:00",
       quiet_hours_end: "07:00",
       calendar_integration: "none",
+      memory_graph_path: null,
     }))
     expect(onboardingRow).toEqual({
       step_name: "ai-auth",

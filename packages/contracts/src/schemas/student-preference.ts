@@ -12,6 +12,8 @@ export const StudentPreference = Schema.Struct({
   quietHoursStart: Schema.String,
   quietHoursEnd: Schema.String,
   calendarIntegration: CalendarIntegration,
+  memoryGraphPath: Schema.String,
+  memoryGraphPathMode: Schema.Literal("default", "custom"),
 })
 export type StudentPreference = Schema.Schema.Type<typeof StudentPreference>
 
@@ -24,5 +26,6 @@ export const UpdatePreferencesParams = Schema.Struct({
   quietHoursStart: Schema.optional(Schema.String),
   quietHoursEnd: Schema.optional(Schema.String),
   calendarIntegration: Schema.optional(CalendarIntegration),
+  memoryGraphPath: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type UpdatePreferencesParams = Schema.Schema.Type<typeof UpdatePreferencesParams>

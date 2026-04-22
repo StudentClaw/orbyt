@@ -28,7 +28,12 @@ export function computeMostRecentPassedSlot(now: Date): Date {
   return slotForHour(yesterday, EVENING_RUN_HOUR)
 }
 
-export function memorizeRunNeeded(lastRunAt: Date | null, now: Date): boolean {
+export function memorizeRunNeeded(
+  lastRunAt: Date | null,
+  now: Date,
+  graphFolderEmpty = false,
+): boolean {
+  if (graphFolderEmpty) return true
   const mostRecent = computeMostRecentPassedSlot(now)
   if (!lastRunAt) return true
   return lastRunAt < mostRecent

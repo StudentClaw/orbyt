@@ -12,6 +12,7 @@ import type { ParsedCandidate } from "./candidate-parser.js"
 const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
 const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 type GraphCandidateInput = Pick<ParsedCandidate, "branch" | "text">
+type GraphCandidateInput = Pick<ParsedCandidate, "branch" | "text">
 
 function validateBranchSegments(branch: string): void {
   const segments = branch.split("/").filter(Boolean)
@@ -178,6 +179,24 @@ function seedCourseNode(slug: string): string {
     NONE_PLACEHOLDER,
     "",
   ].join("\n")
+}
+
+export function ensureGraphScaffold(paths: MemoryPaths): string[] {
+  mkdirSync(paths.graphDir, { recursive: true })
+  mkdirSync(paths.coursesDir, { recursive: true })
+  mkdirSync(paths.playbooksDir, { recursive: true })
+
+  const created: string[] = []
+
+  for (const branch of SCAFFOLD_BRANCHES) {
+    const filePath = paths.branchIndex(branch)
+    if (existsSync(filePath)) continue
+    mkdirSync(dirname(filePath), { recursive: true })
+    writeFileSync(filePath, seedBaseNode(branch), "utf-8")
+    created.push(filePath)
+  }
+
+  return created
 }
 
 export function writeGraphCandidate(
