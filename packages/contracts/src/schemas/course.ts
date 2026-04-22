@@ -7,6 +7,7 @@ const MAX_COURSE_PROFESSOR_LENGTH = 200
 const MAX_COURSE_CANVAS_ID_LENGTH = 100
 const MAX_COURSE_TERM_LENGTH = 200
 const MAX_ISO_TIMESTAMP_LENGTH = 64
+const MAX_COURSE_COLOR_LENGTH = 64
 
 export const Course = Schema.Struct({
   id: CourseId,
@@ -16,5 +17,6 @@ export const Course = Schema.Struct({
   canvasId: Schema.optional(Schema.String.pipe(Schema.maxLength(MAX_COURSE_CANVAS_ID_LENGTH))),
   term: Schema.optional(Schema.String.pipe(Schema.maxLength(MAX_COURSE_TERM_LENGTH))),
   lastSyncAt: Schema.optional(Schema.String.pipe(Schema.maxLength(MAX_ISO_TIMESTAMP_LENGTH))),
+  color: Schema.optional(Schema.String.pipe(Schema.maxLength(MAX_COURSE_COLOR_LENGTH))),
 })
 export type Course = Schema.Schema.Type<typeof Course>

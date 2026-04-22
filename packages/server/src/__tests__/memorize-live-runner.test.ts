@@ -7,7 +7,7 @@ import { MemorizeStateStore } from "../memory/state-store.js"
 import { LiveMemorizeTurnRunner } from "../memory/live-runner.js"
 import type { MemorizeDistiller } from "../memory/distiller.js"
 import type { DatabaseService } from "../db/Database.js"
-import type { SQLQueryBindings } from "bun:sqlite"
+import type { SqliteQueryBindings } from "../db/runtime-sqlite.js"
 
 const tempDirs: string[] = []
 
@@ -28,9 +28,8 @@ afterEach(() => {
 
 function mockDb(turns: { id: string; thread_id: string; input_text: string; output_text: string; completed_at: string }[]): DatabaseService {
   return {
-    db: {} as never,
     get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) => turns as unknown as T[],
+    query: <T>(_sql: string, _params?: SqliteQueryBindings) => turns as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),
     close: () => {},

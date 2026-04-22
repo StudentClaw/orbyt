@@ -82,8 +82,10 @@ describe("Course schema", () => {
       code: "CS101",
       professor: "Dr. Smith",
       term: "Fall 2026",
+      color: "oklch(0.72 0.15 42)",
     })
     expect(result.professor).toBe("Dr. Smith")
+    expect(result.color).toBe("oklch(0.72 0.15 42)")
   })
 })
 

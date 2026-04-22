@@ -150,6 +150,9 @@ describe("Server integration", () => {
             resolve: () => null,
             listAll: () => [],
           },
+          memorize: {
+            runIfNeeded: async () => ({ ran: false, result: null }),
+          },
         })
         ws.send(response.response)
       })

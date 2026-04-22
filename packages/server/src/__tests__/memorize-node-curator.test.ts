@@ -2,10 +2,10 @@ import { describe, test, expect, afterEach } from "bun:test"
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import type { SQLQueryBindings } from "bun:sqlite"
 import { createMemoryPaths } from "../memory/paths.js"
 import { markStaleCourseNodes } from "../memory/node-curator.js"
 import type { DatabaseService } from "../db/Database.js"
+import type { SqliteQueryBindings } from "../db/runtime-sqlite.js"
 
 const tempDirs: string[] = []
 
@@ -25,9 +25,8 @@ afterEach(() => {
 
 function mockDb(codes: string[]): DatabaseService {
   return {
-    db: {} as never,
     get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) =>
+    query: <T>(_sql: string, _params?: SqliteQueryBindings) =>
       codes.map((code) => ({ code })) as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),
