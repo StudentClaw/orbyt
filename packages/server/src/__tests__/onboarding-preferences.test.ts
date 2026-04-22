@@ -113,6 +113,9 @@ function makeDependencies() {
       resolve: () => null,
       listAll: () => [],
     },
+    memorize: {
+      runIfNeeded: async () => ({ ran: false, result: null }),
+    },
   }
 }
 

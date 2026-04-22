@@ -7,9 +7,9 @@ import { MemorizeStateStore } from "../memory/state-store.js"
 import { LiveMemorizeTurnRunner } from "../memory/live-runner.js"
 import type { MemorizeDistiller } from "../memory/distiller.js"
 import type { DatabaseService } from "../db/Database.js"
-import type { SQLQueryBindings } from "bun:sqlite"
 
 const tempDirs: string[] = []
+type QueryParams = Parameters<DatabaseService["query"]>[1]
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-live-runner-"))
@@ -28,9 +28,8 @@ afterEach(() => {
 
 function mockDb(turns: { id: string; thread_id: string; input_text: string; output_text: string; completed_at: string }[]): DatabaseService {
   return {
-    db: {} as never,
-    get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) => turns as unknown as T[],
+    get: <T>(_sql: string, _params?: QueryParams) => null as T | null,
+    query: <T>(_sql: string, _params?: QueryParams) => turns as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),
     close: () => {},

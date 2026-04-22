@@ -6,9 +6,9 @@ import { Database as BunDatabase } from "bun:sqlite"
 import { createMemoryPaths } from "../memory/paths.js"
 import { MemorizeStateStore } from "../memory/state-store.js"
 import { LiveMemorizeTurnRunner } from "../memory/live-runner.js"
-import { runMigrations } from "../db/migrations/runner.js"
 import type { DatabaseService } from "../db/Database.js"
 import type { MemorizeDistiller } from "../memory/distiller.js"
+import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 const tempDirs: string[] = []
 
@@ -19,24 +19,14 @@ function setup() {
   const dbPath = join(dir, "test.db")
   const bunDb = new BunDatabase(dbPath)
   bunDb.run("PRAGMA journal_mode = WAL")
-  runMigrations(bunDb)
-
-  const db: DatabaseService = {
-    db: bunDb,
-    get: <T>(sql: string, params?: unknown[]) =>
-      bunDb.query<T, unknown[]>(sql).get(params ?? []) as T | null,
-    query: <T>(sql: string, params?: unknown[]) =>
-      bunDb.query<T, unknown[]>(sql).all(params ?? []) as T[],
-    execute: (sql: string, params?: unknown[]) => bunDb.run(sql, params ?? []),
-    transaction: <T>(fn: () => T) => bunDb.transaction(fn)(),
-    close: () => bunDb.close(),
-  }
+  runBunMigrations(bunDb)
+  const db = createBunDatabaseService(bunDb)
 
   const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
   mkdirSync(paths.root, { recursive: true })
   const store = new MemorizeStateStore(paths)
 
-  return { db, bunDb, paths, store, dir }
+  return { db, paths, store, dir }
 }
 
 afterEach(() => {

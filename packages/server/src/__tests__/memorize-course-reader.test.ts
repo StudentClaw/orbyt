@@ -1,15 +1,14 @@
 import { describe, test, expect } from "bun:test"
 import { readCourseContext } from "../memory/course-reader.js"
 import type { DatabaseService } from "../db/Database.js"
-import type { SQLQueryBindings } from "bun:sqlite"
 
 type CourseRow = { id: string; name: string; code: string }
+type QueryParams = Parameters<DatabaseService["query"]>[1]
 
 function mockDb(rows: CourseRow[]): DatabaseService {
   return {
-    db: {} as never,
-    get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) => rows as unknown as T[],
+    get: <T>(_sql: string, _params?: QueryParams) => null as T | null,
+    query: <T>(_sql: string, _params?: QueryParams) => rows as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),
     close: () => {},

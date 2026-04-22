@@ -116,20 +116,23 @@ function makeDependencies() {
         frontPage: undefined,
         courses: undefined,
       }),
-            getCourseStructure: async () => ({ course: undefined, modules: [], courses: undefined }),
-            downloadCourseFile: async () => ({
-              success: true,
-              courseId: "course_1" as any,
-              fileId: "file_1",
-              filename: "file.txt",
-              savedPath: "/tmp/file.txt",
-              overwritten: false,
-              message: "downloaded",
-            }),
-          },
+      getCourseStructure: async () => ({ course: undefined, modules: [], courses: undefined }),
+      downloadCourseFile: async () => ({
+        success: true,
+        courseId: "course_1" as any,
+        fileId: "file_1",
+        filename: "file.txt",
+        savedPath: "/tmp/file.txt",
+        overwritten: false,
+        message: "downloaded",
+      }),
+    },
     skillResolver: {
       resolve: () => null,
       listAll: () => [],
+    },
+    memorize: {
+      runIfNeeded: async () => ({ ran: false, result: null }),
     },
   }
 }

@@ -11,6 +11,7 @@ import type { ParsedCandidate } from "./candidate-parser.js"
 
 const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
 const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+type GraphCandidateInput = Pick<ParsedCandidate, "branch" | "text">
 
 function validateBranchSegments(branch: string): void {
   const segments = branch.split("/").filter(Boolean)
@@ -181,7 +182,7 @@ function seedCourseNode(slug: string): string {
 
 export function writeGraphCandidate(
   paths: MemoryPaths,
-  candidate: ParsedCandidate,
+  candidate: GraphCandidateInput,
   now: Date,
 ): string {
   const filePath = resolvePath(paths, candidate.branch)

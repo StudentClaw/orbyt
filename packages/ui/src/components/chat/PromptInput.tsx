@@ -52,6 +52,9 @@ interface PromptInputProps {
   readonly connectionState: WsConnectionPhase
   readonly disabled?: boolean
   readonly disabledReason?: string | null
+  readonly loading?: boolean
+  readonly loadingLabel?: string | null
+  readonly loadingDetail?: string | null
   readonly availableModels: readonly ChatModel[]
   readonly selectedModel: string
   readonly onModelChange: (model: string) => void
@@ -61,6 +64,8 @@ interface PromptInputProps {
   readonly pendingApproval?: ProviderPendingApproval | null
   readonly onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
   readonly approvalDecisionPending?: boolean
+  readonly interruptPending?: boolean
+  readonly interruptError?: string | null
 }
 
 type ComposerAttachment = TurnAttachmentInput & {
@@ -305,6 +310,9 @@ export function PromptInput({
   connectionState,
   disabled = false,
   disabledReason = null,
+  loading = false,
+  loadingLabel = null,
+  loadingDetail = null,
   availableModels,
   selectedModel,
   onModelChange,
@@ -314,6 +322,8 @@ export function PromptInput({
   pendingApproval = null,
   onRespondToApproval,
   approvalDecisionPending = false,
+  interruptPending = false,
+  interruptError = null,
   skills = [],
 }: PromptInputProps) {
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
@@ -328,15 +338,17 @@ export function PromptInput({
   const composerRef = useRef<RichComposerHandle>(null)
 
   const isConnected = connectionState === "connected"
-  const isStreaming = status === "streaming"
-  const canSend = (!isComposerEmpty || attachments.length > 0) && !isStreaming && isConnected && !disabled
+  const stopPending = status === "interrupting" || interruptPending
+  const showStopButton = status === "streaming" || status === "queued" || stopPending
+  const waitingForTurn = status === "streaming" || status === "queued" || stopPending
+  const canSend = (!isComposerEmpty || attachments.length > 0) && !waitingForTurn && isConnected && !disabled
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
-  const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || isStreaming
+  const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || waitingForTurn
   const canDropFiles = !attachmentControlsDisabled && Boolean(typeof window !== "undefined" && window.electronAPI?.getPathForFile)
   const accessControlDisabled =
     !isConnected
     || !accessMode
-    || isStreaming
+    || waitingForTurn
     || accessModeUpdatePending
     || pendingApproval !== null
     || approvalDecisionPending
@@ -443,7 +455,7 @@ export function PromptInput({
   const handleActualSubmit = useCallback(async () => {
     const text = composerRef.current?.getText() ?? ""
     const skillId = composerRef.current?.getSkillId() ?? null
-    if ((!text && attachments.length === 0 && !skillId) || isStreaming || !isConnected || disabled) {
+    if ((!text && attachments.length === 0 && !skillId) || waitingForTurn || !isConnected || disabled) {
       return
     }
 
@@ -461,7 +473,7 @@ export function PromptInput({
     composerRef.current?.clear()
     setAttachments([])
     setAttachmentError(null)
-  }, [attachments.length, disabled, isConnected, isStreaming, onSend, validateAttachments])
+  }, [attachments.length, disabled, isConnected, onSend, validateAttachments, waitingForTurn])
 
   const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
     await handleActualSubmit()
@@ -539,7 +551,7 @@ export function PromptInput({
     e.stopPropagation()
 
     const getPathForFile = window.electronAPI?.getPathForFile
-    if (!getPathForFile || !isConnected || disabled || isStreaming) return
+    if (!getPathForFile || !isConnected || disabled || waitingForTurn) return
 
     const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) return
@@ -560,7 +572,7 @@ export function PromptInput({
     }
 
     setAttachments(current => mergeComposerAttachments(current, metadata.map(toComposerAttachment)))
-  }, [disabled, isConnected, isStreaming, resolveAttachmentMetadata])
+  }, [disabled, isConnected, resolveAttachmentMetadata, waitingForTurn])
 
   const handleDefaultAccessSelect = useCallback(() => {
     if (accessMode !== "default") {
@@ -593,6 +605,30 @@ export function PromptInput({
           onDragOver={handleDragOver}
           onDrop={(e) => { void handleDrop(e) }}
         >
+          {loading ? (
+            <div
+              data-testid="composer-loading-overlay"
+              className="absolute inset-0 z-40 flex items-center justify-center rounded-[2rem] bg-background/75 px-4 backdrop-blur-sm"
+            >
+              <div className="w-full max-w-sm rounded-[1.5rem] border border-border/70 bg-card/95 px-4 py-3 shadow-sm">
+                <div
+                  role="progressbar"
+                  aria-label="Runtime readiness progress"
+                  aria-valuetext={loadingLabel ?? "Preparing"}
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                >
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
+                </div>
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  {loadingLabel ?? "Preparing"}
+                </p>
+                {loadingDetail ? (
+                  <p className="mt-1 text-xs text-muted-foreground">{loadingDetail}</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {isDragOver && (
             <div
               data-testid="drag-drop-overlay"
@@ -635,7 +671,7 @@ export function PromptInput({
                     ? "Reconnecting..."
                   : disabled && disabledReason
                     ? disabledReason
-                  : isStreaming
+                  : waitingForTurn
                     ? "Wait for response..."
                     : "What would you like to know?"
               }
@@ -662,7 +698,7 @@ export function PromptInput({
                     models={availableModels}
                     selectedModel={selectedModel}
                     onModelChange={onModelChange}
-                    disabled={!isConnected || isStreaming}
+                    disabled={!isConnected || waitingForTurn}
                   />
 
                   <DropdownMenu>
@@ -711,10 +747,12 @@ export function PromptInput({
                   </DropdownMenu>
                 </PromptInputTools>
 
-                {isStreaming ? (
+                {showStopButton ? (
                   <PromptInputButton
-                    aria-label="Stop generating"
-                    onClick={onInterrupt}
+                    aria-label={stopPending ? "Stopping…" : "Stop generating"}
+                    disabled={stopPending}
+                    data-pending={stopPending ? "true" : undefined}
+                    onClick={stopPending ? undefined : onInterrupt}
                     className="size-10 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     <SquareIcon className="size-4 fill-current" />
@@ -734,6 +772,25 @@ export function PromptInput({
 
       {attachmentError ? (
         <p className="mt-2 px-1 text-xs text-destructive">{attachmentError}</p>
+      ) : null}
+
+      {stopPending ? (
+        <p
+          data-testid="interrupt-pending-hint"
+          className="mt-2 px-1 text-xs text-muted-foreground"
+        >
+          Stopping current response...
+        </p>
+      ) : null}
+
+      {interruptError ? (
+        <p
+          data-testid="interrupt-error"
+          role="alert"
+          className="mt-2 px-1 text-xs text-destructive"
+        >
+          {interruptError}
+        </p>
       ) : null}
 
       <AlertDialog open={fullAccessDialogOpen} onOpenChange={setFullAccessDialogOpen}>

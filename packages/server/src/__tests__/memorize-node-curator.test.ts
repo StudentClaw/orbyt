@@ -8,6 +8,7 @@ import { markStaleCourseNodes } from "../memory/node-curator.js"
 import type { DatabaseService } from "../db/Database.js"
 
 const tempDirs: string[] = []
+type QueryParams = Parameters<DatabaseService["query"]>[1]
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-curator-"))
@@ -25,9 +26,8 @@ afterEach(() => {
 
 function mockDb(codes: string[]): DatabaseService {
   return {
-    db: {} as never,
-    get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) =>
+    get: <T>(_sql: string, _params?: QueryParams) => null as T | null,
+    query: <T>(_sql: string, _params?: QueryParams) =>
       codes.map((code) => ({ code })) as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),

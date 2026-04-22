@@ -2,7 +2,6 @@ import { describe, test, expect, afterEach } from "bun:test"
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import type { SQLQueryBindings } from "bun:sqlite"
 import { createMemoryPaths } from "../memory/paths.js"
 import { MemorizeStateStore } from "../memory/state-store.js"
 import { LiveMemorizeTurnRunner } from "../memory/live-runner.js"
@@ -10,6 +9,7 @@ import type { MemorizeDistiller } from "../memory/distiller.js"
 import type { DatabaseService } from "../db/Database.js"
 
 const tempDirs: string[] = []
+type QueryParams = Parameters<DatabaseService["query"]>[1]
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-recovery-"))
@@ -28,9 +28,8 @@ afterEach(() => {
 
 function mockDb(): DatabaseService {
   return {
-    db: {} as never,
-    get: () => null,
-    query: <T>(_sql: string, _params?: SQLQueryBindings[]) => [] as unknown as T[],
+    get: <T>(_sql: string, _params?: QueryParams) => null as T | null,
+    query: <T>(_sql: string, _params?: QueryParams) => [] as unknown as T[],
     execute: () => {},
     transaction: <T>(fn: () => T) => fn(),
     close: () => {},
@@ -132,9 +131,8 @@ describe("LiveMemorizeTurnRunner — recovery path", () => {
     }
 
     const db: DatabaseService = {
-      db: {} as never,
-      get: () => null,
-      query: <T>(_sql: string, _params?: SQLQueryBindings[]) =>
+      get: <T>(_sql: string, _params?: QueryParams) => null as T | null,
+      query: <T>(_sql: string, _params?: QueryParams) =>
         [{ id: "t1", thread_id: "th1", input_text: "q", output_text: "a", completed_at: "2026-04-19T06:00:00.000Z" }] as unknown as T[],
       execute: () => {},
       transaction: <T>(fn: () => T) => fn(),
