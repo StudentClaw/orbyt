@@ -112,6 +112,9 @@ function makeDependencies() {
       resolve: () => null,
       listAll: () => [],
     },
+    memorize: {
+      runIfNeeded: async () => ({ ran: false, result: null }),
+    },
   }
 }
 
@@ -131,6 +134,8 @@ describe("onboarding.getPreferences", () => {
     expect(res.result.quietHoursStart).toBe("22:00")
     expect(res.result.quietHoursEnd).toBe("08:00")
     expect(res.result.calendarIntegration).toBe("none")
+    expect(res.result.memoryGraphPath).toContain("/Documents/Student Claw Memory Graph")
+    expect(res.result.memoryGraphPathMode).toBe("default")
   })
 
   test("returns persisted values after setPreferences", async () => {
@@ -152,6 +157,7 @@ describe("onboarding.getPreferences", () => {
     expect(res.result.notificationEnabled).toBe(false)
     expect(res.result.quietHoursStart).toBe("23:00")
     expect(res.result.quietHoursEnd).toBe("07:00")
+    expect(res.result.memoryGraphPathMode).toBe("default")
   })
 
   test("legacy onboarding schema is repaired before preferences and routines are read", async () => {
@@ -206,6 +212,7 @@ describe("onboarding.getPreferences", () => {
     expect(preferences.result.studyTimes).toEqual(["evening"])
     expect(preferences.result.quietHoursStart).toBe("00:00")
     expect(preferences.result.quietHoursEnd).toBe("06:00")
+    expect(preferences.result.memoryGraphPathMode).toBe("default")
     expect(routines.ok).toBe(true)
     expect(routines.result.cells).toEqual([])
 
@@ -231,6 +238,26 @@ describe("onboarding.setPreferences", () => {
     expect(res.result.maxSessionMins).toBe(60)
     expect(res.result.offLimitDays).toEqual([5, 6])
     expect(res.result.calendarIntegration).toBe("google")
+  })
+
+  test("persists a custom memory graph path and can reset to the default", async () => {
+    const deps = makeDependencies()
+
+    const customRaw = await routeMessage(rpc(RPC_METHODS.ONBOARDING_SET_PREFERENCES, {
+      memoryGraphPath: "/tmp/student-memory-graph",
+    }), mockWs, deps)
+    const customRes = JSON.parse(customRaw.response)
+    expect(customRes.ok).toBe(true)
+    expect(customRes.result.memoryGraphPath).toBe("/tmp/student-memory-graph")
+    expect(customRes.result.memoryGraphPathMode).toBe("custom")
+
+    const resetRaw = await routeMessage(rpc(RPC_METHODS.ONBOARDING_SET_PREFERENCES, {
+      memoryGraphPath: null,
+    }), mockWs, deps)
+    const resetRes = JSON.parse(resetRaw.response)
+    expect(resetRes.ok).toBe(true)
+    expect(resetRes.result.memoryGraphPath).toContain("/Documents/Student Claw Memory Graph")
+    expect(resetRes.result.memoryGraphPathMode).toBe("default")
   })
 
   test("partial update merges with existing values", async () => {

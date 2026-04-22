@@ -1,4 +1,5 @@
 import { Context, Effect, Layer } from "effect"
+import { existsSync, readdirSync } from "node:fs"
 import type { MemorizeRunResult } from "@student-claw/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 import { Database } from "../db/Database.js"
@@ -10,8 +11,15 @@ import { LiveMemorizeTurnRunner } from "./live-runner.js"
 import { memorizeRunNeeded } from "./timer.js"
 import { markStaleCourseNodes } from "./node-curator.js"
 import { appendMemorizeError } from "./error-log.js"
+import { ensureGraphScaffold } from "./graph-writer.js"
 
 type ActiveTurnRow = { cnt: number }
+type MemoryGraphPreferenceRow = { memory_graph_path: string | null }
+
+function isGraphFolderEmpty(graphDir: string): boolean {
+  if (!existsSync(graphDir)) return true
+  return readdirSync(graphDir).length === 0
+}
 
 export interface MemorizeServiceShape {
   readonly runIfNeeded: (now: Date) => Promise<{ ran: boolean; result: MemorizeRunResult | null }>
@@ -29,10 +37,7 @@ export const MemorizeServiceLive = Layer.effect(
     const db = yield* Database
     const codex = yield* CodexCli
 
-    const paths = createMemoryPaths({ env: process.env })
-    const store = new MemorizeStateStore(paths)
     const distiller = new CodexMemorizeDistiller(codex)
-    const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller })
 
     // Seed a synthetic orchestration thread for the Memorize pipeline so that
     // CodexCli.streamTurn can upsert provider_runtime_sessions without hitting
@@ -48,6 +53,16 @@ export const MemorizeServiceLive = Layer.effect(
 
     let isRunning = false
 
+    const resolvePaths = () => {
+      const row = db.get<MemoryGraphPreferenceRow>(
+        "SELECT memory_graph_path FROM user_preferences WHERE id = 1",
+      )
+      return createMemoryPaths({
+        env: process.env,
+        graphDirOverride: row?.memory_graph_path ?? null,
+      })
+    }
+
     return {
       runIfNeeded: async (now: Date) => {
         if (isRunning) {
@@ -57,18 +72,35 @@ export const MemorizeServiceLive = Layer.effect(
         // Read state inside the lock so we never act on a stale lastRunAt
         // from before a completed prior run.
         isRunning = true
+        const paths = resolvePaths()
+        const store = new MemorizeStateStore(paths)
+        const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller })
         try {
           const state = store.read()
+          const graphFolderEmpty = isGraphFolderEmpty(paths.graphDir)
 
-          if (!memorizeRunNeeded(state.lastRunAt, now)) {
+          if (!memorizeRunNeeded(state.lastRunAt, now, graphFolderEmpty)) {
             return { ran: false, result: null }
           }
+
+          const scaffoldedGraphNodes = graphFolderEmpty
+            ? ensureGraphScaffold(paths)
+            : []
 
           const activeTurns = db.query<ActiveTurnRow>(
             `SELECT COUNT(*) as cnt FROM orchestration_turns WHERE status = 'streaming'`,
           )
           if ((activeTurns[0]?.cnt ?? 0) > 0) {
-            return { ran: false, result: null }
+            return {
+              ran: scaffoldedGraphNodes.length > 0,
+              result: scaffoldedGraphNodes.length > 0
+                ? {
+                    dailyFileWritten: null,
+                    weeklyFileWritten: null,
+                    graphNodesUpdated: scaffoldedGraphNodes,
+                  }
+                : null,
+            }
           }
 
           const sinceCursor = state.lastProcessedThreadCursor
@@ -82,7 +114,18 @@ export const MemorizeServiceLive = Layer.effect(
             }
           }
 
-          return { ran: true, result: outcome.ok ? outcome.result : null }
+          return {
+            ran: true,
+            result: outcome.ok
+              ? {
+                  ...outcome.result,
+                  graphNodesUpdated: [
+                    ...scaffoldedGraphNodes,
+                    ...outcome.result.graphNodesUpdated,
+                  ],
+                }
+              : null,
+          }
         } catch (err) {
           appendMemorizeError(paths, "service.runIfNeeded", err)
           return { ran: true, result: null }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, mkdirSync } from "node:f
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { createMemoryPaths } from "../memory/paths.js"
-import { writeGraphCandidate } from "../memory/graph-writer.js"
+import { ensureGraphScaffold, writeGraphCandidate } from "../memory/graph-writer.js"
 import { candidateFingerprint } from "../memory/candidate-parser.js"
 
 const tempDirs: string[] = []
@@ -39,6 +39,31 @@ function candidate(text: string, branch: string) {
 const NOW = new Date("2026-04-19T07:00:00.000Z")
 
 describe("writeGraphCandidate — scaffold branches", () => {
+  test("ensureGraphScaffold creates base branch files and directories", () => {
+    const { paths } = setup()
+    const created = ensureGraphScaffold(paths)
+
+    expect(created).toHaveLength(5)
+    expect(existsSync(paths.branchIndex("school"))).toBe(true)
+    expect(existsSync(paths.branchIndex("work"))).toBe(true)
+    expect(existsSync(paths.branchIndex("relationships"))).toBe(true)
+    expect(existsSync(paths.branchIndex("personality"))).toBe(true)
+    expect(existsSync(paths.branchIndex("routine"))).toBe(true)
+    expect(existsSync(paths.coursesDir)).toBe(true)
+    expect(existsSync(paths.playbooksDir)).toBe(true)
+  })
+
+  test("ensureGraphScaffold does not overwrite existing branch content", () => {
+    const { paths } = setup()
+    writeGraphCandidate(paths, candidate("I prefer async communication", "personality"), NOW)
+
+    const created = ensureGraphScaffold(paths)
+    const content = readFileSync(paths.branchIndex("personality"), "utf-8")
+
+    expect(created).not.toContain(paths.branchIndex("personality"))
+    expect(content).toContain("I prefer async communication")
+  })
+
   test("creates new file for scaffold branch", () => {
     const { paths } = setup()
     writeGraphCandidate(paths, candidate("I study best in the morning", "personality"), NOW)

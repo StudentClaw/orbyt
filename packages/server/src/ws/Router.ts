@@ -44,6 +44,7 @@ import type { DatabaseService } from "../db/Database.js"
 import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import type { SkillResolverService } from "../skills/SkillResolver.js"
 import type { MemorizeServiceShape } from "../memory/service.js"
+import { resolveMemoryGraphDir } from "../memory/paths.js"
 
 type RouteDependencies = {
   readonly config: AppConfig
@@ -54,6 +55,18 @@ type RouteDependencies = {
   readonly canvasSync: CanvasSyncServiceShape
   readonly skillResolver: SkillResolverService
   readonly memorize: MemorizeServiceShape
+}
+
+type UserPreferencesRow = {
+  study_times: string
+  course_ranking: string
+  max_session_mins: number
+  off_limit_days: string
+  notification_enabled: number
+  quiet_hours_start: string
+  quiet_hours_end: string
+  calendar_integration: string
+  memory_graph_path: string | null
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -134,6 +147,45 @@ function decodeParams<A>(
   return decoded._tag === "Left"
     ? encodeError(id, "invalid_params", message)
     : decoded.right
+}
+
+function ensureUserPreferencesRow(database: DatabaseService): void {
+  database.execute(
+    `INSERT OR IGNORE INTO user_preferences
+       (id, study_times, course_ranking, max_session_mins, off_limit_days,
+        notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration, memory_graph_path)
+     VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none', NULL)`,
+  )
+}
+
+function readUserPreferencesRow(database: DatabaseService): UserPreferencesRow | null {
+  return database.get<UserPreferencesRow>("SELECT * FROM user_preferences WHERE id = 1")
+}
+
+function normalizeMemoryGraphPath(value: string | null): string | null {
+  if (value === null) return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function toStudentPreference(row: UserPreferencesRow) {
+  const memoryGraphOverride = normalizeMemoryGraphPath(row.memory_graph_path)
+
+  return {
+    studyTimes: JSON.parse(row.study_times) as string[],
+    courseRanking: JSON.parse(row.course_ranking) as string[],
+    maxSessionMins: row.max_session_mins,
+    offLimitDays: JSON.parse(row.off_limit_days) as number[],
+    notificationEnabled: row.notification_enabled === 1,
+    quietHoursStart: row.quiet_hours_start,
+    quietHoursEnd: row.quiet_hours_end,
+    calendarIntegration: row.calendar_integration,
+    memoryGraphPath: resolveMemoryGraphDir({
+      env: process.env,
+      graphDirOverride: memoryGraphOverride,
+    }),
+    memoryGraphPathMode: memoryGraphOverride ? "custom" as const : "default" as const,
+  }
 }
 
 async function handleServerMethod(
@@ -681,45 +733,15 @@ async function handleOnboardingMethod(
       return encodeSuccess(id, { ok: true })
     }
     case RPC_METHODS.ONBOARDING_GET_PREFERENCES: {
-      // Ensure a default row exists, then return it.
-      database.execute(
-        `INSERT OR IGNORE INTO user_preferences
-           (id, study_times, course_ranking, max_session_mins, off_limit_days,
-            notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration)
-         VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none')`,
-      )
-      const row = database.get<{
-        study_times: string
-        course_ranking: string
-        max_session_mins: number
-        off_limit_days: string
-        notification_enabled: number
-        quiet_hours_start: string
-        quiet_hours_end: string
-        calendar_integration: string
-      }>("SELECT * FROM user_preferences WHERE id = 1")
+      ensureUserPreferencesRow(database)
+      const row = readUserPreferencesRow(database)
       if (!row) return encodeError(id, "internal_error", "Could not read preferences")
-      return encodeSuccess(id, {
-        studyTimes: JSON.parse(row.study_times) as string[],
-        courseRanking: JSON.parse(row.course_ranking) as string[],
-        maxSessionMins: row.max_session_mins,
-        offLimitDays: JSON.parse(row.off_limit_days) as number[],
-        notificationEnabled: row.notification_enabled === 1,
-        quietHoursStart: row.quiet_hours_start,
-        quietHoursEnd: row.quiet_hours_end,
-        calendarIntegration: row.calendar_integration,
-      })
+      return encodeSuccess(id, toStudentPreference(row))
     }
     case RPC_METHODS.ONBOARDING_SET_PREFERENCES: {
       const decoded = decodeParams(UpdatePreferencesParams, params, id, "setPreferences params are invalid")
       if (typeof decoded === "string") return decoded
-      // Ensure default row exists before merging.
-      database.execute(
-        `INSERT OR IGNORE INTO user_preferences
-           (id, study_times, course_ranking, max_session_mins, off_limit_days,
-            notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration)
-         VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none')`,
-      )
+      ensureUserPreferencesRow(database)
       const now = new Date().toISOString()
       if (decoded.studyTimes !== undefined) {
         database.execute(
@@ -769,27 +791,15 @@ async function handleOnboardingMethod(
           [decoded.calendarIntegration, now],
         )
       }
-      const row = database.get<{
-        study_times: string
-        course_ranking: string
-        max_session_mins: number
-        off_limit_days: string
-        notification_enabled: number
-        quiet_hours_start: string
-        quiet_hours_end: string
-        calendar_integration: string
-      }>("SELECT * FROM user_preferences WHERE id = 1")
+      if (decoded.memoryGraphPath !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET memory_graph_path = ?, updated_at = ? WHERE id = 1",
+          [normalizeMemoryGraphPath(decoded.memoryGraphPath), now],
+        )
+      }
+      const row = readUserPreferencesRow(database)
       if (!row) return encodeError(id, "internal_error", "Could not read updated preferences")
-      return encodeSuccess(id, {
-        studyTimes: JSON.parse(row.study_times) as string[],
-        courseRanking: JSON.parse(row.course_ranking) as string[],
-        maxSessionMins: row.max_session_mins,
-        offLimitDays: JSON.parse(row.off_limit_days) as number[],
-        notificationEnabled: row.notification_enabled === 1,
-        quietHoursStart: row.quiet_hours_start,
-        quietHoursEnd: row.quiet_hours_end,
-        calendarIntegration: row.calendar_integration,
-      })
+      return encodeSuccess(id, toStudentPreference(row))
     }
     case RPC_METHODS.ONBOARDING_GET_ROUTINES: {
       const cells = database.query<{ day_of_week: number; hour_of_day: number }>(

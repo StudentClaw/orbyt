@@ -11,6 +11,8 @@ import {
 
 const STUDENT_CLAW_HOME_ENV = "STUDENT_CLAW_HOME"
 const DEFAULT_HOME_DIR = ".student-claw"
+const DEFAULT_GRAPH_DIR = "Student Claw Memory Graph"
+const DOCUMENTS_DIR = "Documents"
 const MEMORY_DIR = "memory"
 const COURSES_DIR = "courses"
 const PLAYBOOKS_DIR = "playbooks"
@@ -18,6 +20,7 @@ const SCHOOL_BRANCH: ScaffoldBranch = "school"
 
 export interface MemoryPathsResolverInput {
   readonly env?: NodeJS.ProcessEnv
+  readonly graphDirOverride?: string | null
   readonly home?: () => string
 }
 
@@ -62,6 +65,19 @@ function assertSlug(value: string): void {
   }
 }
 
+function resolvePathLike(
+  value: string,
+  home: () => string,
+): string {
+  const trimmed = value.trim()
+  const expanded = trimmed === "~"
+    ? home()
+    : trimmed.startsWith("~/")
+      ? join(home(), trimmed.slice(2))
+      : trimmed
+  return resolve(expanded)
+}
+
 export function resolveMemoryRoot(
   input: MemoryPathsResolverInput = {},
 ): string {
@@ -69,16 +85,41 @@ export function resolveMemoryRoot(
   const home = input.home ?? homedir
   const raw = env[STUDENT_CLAW_HOME_ENV]?.trim()
   const base = raw && raw.length > 0
-    ? resolve(raw)
+    ? resolvePathLike(raw, home)
     : join(home(), DEFAULT_HOME_DIR)
   return join(base, MEMORY_DIR)
+}
+
+export function resolveDefaultMemoryGraphDir(
+  input: MemoryPathsResolverInput = {},
+): string {
+  const env = input.env ?? process.env
+  const home = input.home ?? homedir
+  const raw = env[STUDENT_CLAW_HOME_ENV]?.trim()
+
+  if (raw && raw.length > 0) {
+    return join(resolvePathLike(raw, home), MEMORY_DIR, GRAPH_DIR)
+  }
+
+  return join(home(), DOCUMENTS_DIR, DEFAULT_GRAPH_DIR)
+}
+
+export function resolveMemoryGraphDir(
+  input: MemoryPathsResolverInput = {},
+): string {
+  const home = input.home ?? homedir
+  const override = input.graphDirOverride?.trim()
+  if (override && override.length > 0) {
+    return resolvePathLike(override, home)
+  }
+  return resolveDefaultMemoryGraphDir(input)
 }
 
 export function createMemoryPaths(
   input: MemoryPathsResolverInput = {},
 ): MemoryPaths {
   const root = resolveMemoryRoot(input)
-  const graphDir = join(root, GRAPH_DIR)
+  const graphDir = resolveMemoryGraphDir(input)
   const schoolDir = join(graphDir, SCHOOL_BRANCH)
   const coursesDir = join(schoolDir, COURSES_DIR)
   const playbooksDir = join(schoolDir, PLAYBOOKS_DIR)

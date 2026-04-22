@@ -73,4 +73,10 @@ describe("memorizeRunNeeded", () => {
     const now = new Date(2026, 3, 19, 7, 0)
     expect(memorizeRunNeeded(lastRunAt, now)).toBe(false)
   })
+
+  test("returns true when the graph folder is empty even if the slot is already satisfied", () => {
+    const lastRunAt = new Date(2026, 3, 19, 8, 0).toISOString()
+    const now = new Date(2026, 3, 19, 12, 0)
+    expect(memorizeRunNeeded(lastRunAt, now, true)).toBe(true)
+  })
 })

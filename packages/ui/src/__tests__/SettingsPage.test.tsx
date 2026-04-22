@@ -40,6 +40,7 @@ const notificationMocks = vi.hoisted(() => ({
 
 const appRuntimeMocks = vi.hoisted(() => ({
   canvasSync: vi.fn(),
+  waitForPrimaryWsRpcClient: vi.fn(),
 }))
 
 vi.mock("@/lib/codexAuth", () => ({
@@ -56,6 +57,7 @@ vi.mock("@/rpc/appRuntime", () => ({
       sync: appRuntimeMocks.canvasSync,
     },
   }),
+  waitForPrimaryWsRpcClient: appRuntimeMocks.waitForPrimaryWsRpcClient,
 }))
 
 import { SettingsPage } from "../pages/SettingsPage"
@@ -155,6 +157,34 @@ describe("SettingsPage", () => {
     codexAuthMocks.connectCodexAccount.mockResolvedValue({ status: "connected" })
     notificationMocks.requestPermission.mockResolvedValue("granted")
     appRuntimeMocks.canvasSync.mockResolvedValue(undefined)
+    appRuntimeMocks.waitForPrimaryWsRpcClient.mockResolvedValue({
+      onboarding: {
+        getPreferences: vi.fn().mockResolvedValue({
+          studyTimes: [],
+          courseRanking: [],
+          maxSessionMins: 90,
+          offLimitDays: [],
+          notificationEnabled: true,
+          quietHoursStart: "22:00",
+          quietHoursEnd: "08:00",
+          calendarIntegration: "none",
+          memoryGraphPath: "/Users/tester/Documents/Student Claw Memory Graph",
+          memoryGraphPathMode: "default",
+        }),
+        setPreferences: vi.fn().mockResolvedValue({
+          studyTimes: [],
+          courseRanking: [],
+          maxSessionMins: 90,
+          offLimitDays: [],
+          notificationEnabled: true,
+          quietHoursStart: "22:00",
+          quietHoursEnd: "08:00",
+          calendarIntegration: "none",
+          memoryGraphPath: "/Users/tester/Documents/Student Claw Memory Graph",
+          memoryGraphPathMode: "default",
+        }),
+      },
+    })
 
     class MockNotification {
       static permission: NotificationPermission = "default"

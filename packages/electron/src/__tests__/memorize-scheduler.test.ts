@@ -86,6 +86,12 @@ describe("memorizeRunNeeded", () => {
     const now = d(9, 0)
     expect(memorizeRunNeeded(lastRun, now)).toBe(false)
   })
+
+  test("true when the graph folder is empty even if the slot is already satisfied", () => {
+    const lastRun = d(7, 30)
+    const now = d(9, 0)
+    expect(memorizeRunNeeded(lastRun, now, true)).toBe(true)
+  })
 })
 
 describe("MemorizeScheduler", () => {

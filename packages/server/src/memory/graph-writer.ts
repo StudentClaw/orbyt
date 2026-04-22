@@ -7,7 +7,11 @@ import {
 import { dirname } from "node:path"
 import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@student-claw/contracts"
 import type { MemoryPaths } from "./paths.js"
-import type { ParsedCandidate } from "./candidate-parser.js"
+
+type GraphCandidate = {
+  readonly branch: string
+  readonly text: string
+}
 
 const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
 const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -179,9 +183,27 @@ function seedCourseNode(slug: string): string {
   ].join("\n")
 }
 
+export function ensureGraphScaffold(paths: MemoryPaths): string[] {
+  mkdirSync(paths.graphDir, { recursive: true })
+  mkdirSync(paths.coursesDir, { recursive: true })
+  mkdirSync(paths.playbooksDir, { recursive: true })
+
+  const created: string[] = []
+
+  for (const branch of SCAFFOLD_BRANCHES) {
+    const filePath = paths.branchIndex(branch)
+    if (existsSync(filePath)) continue
+    mkdirSync(dirname(filePath), { recursive: true })
+    writeFileSync(filePath, seedBaseNode(branch), "utf-8")
+    created.push(filePath)
+  }
+
+  return created
+}
+
 export function writeGraphCandidate(
   paths: MemoryPaths,
-  candidate: ParsedCandidate,
+  candidate: GraphCandidate,
   now: Date,
 ): string {
   const filePath = resolvePath(paths, candidate.branch)

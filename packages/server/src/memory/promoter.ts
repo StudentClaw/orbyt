@@ -91,7 +91,7 @@ export async function runPromotion(
 
   for (const candidate of queue) {
     if (shouldPromote(candidate)) {
-      const filePath = writeGraphCandidate(paths, { ...candidate, fingerprint: candidateFingerprint(candidate.text) }, now)
+      const filePath = writeGraphCandidate(paths, candidate, now)
       promoted.push(filePath)
       newFingerprints.push(candidateFingerprint(candidate.text))
     } else {
