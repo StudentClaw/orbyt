@@ -25,12 +25,12 @@ before any code vendoring or runtime changes begin.
 
 ### Current State
 
-- The existing plugin system rollout already defines discovery, lifecycle, gateway, auth, install-management, and packaged-runtime phases for Student Claw’s extension system.
+- The existing plugin system rollout already defines discovery, lifecycle, gateway, auth, install-management, and packaged-runtime phases for Orbyt’s extension system.
 - Apple Calendar currently exists outside this repo as a standalone MCP package with:
   - a TypeScript stdio MCP server
   - a Swift EventKit HTTP bridge
   - README and publishing notes
-- Student Claw does not yet have a documented pattern for vendoring and owning a curated extension that depends on a local helper runtime.
+- Orbyt does not yet have a documented pattern for vendoring and owning a curated extension that depends on a local helper runtime.
 
 ### Out Of Scope
 
@@ -51,7 +51,7 @@ before any code vendoring or runtime changes begin.
   - external TypeScript MCP server
   - external Swift bridge
   - external README and publishing notes
-- The rollout states that Student Claw will maintain a monorepo-native extension package instead of shelling out to tarballs at runtime.
+- The rollout states that Orbyt will maintain a monorepo-native extension package instead of shelling out to tarballs at runtime.
 
 ## Middle
 
@@ -136,12 +136,12 @@ source record.
 
 ### Handoff To Next Phase
 
-Phase 01 should turn the source-ingestion boundary into a concrete Student Claw
+Phase 01 should turn the source-ingestion boundary into a concrete Orbyt
 package shape for `packages/extensions/apple-calendar-mcp/`.
 
 ### Risks To Carry Forward
 
-- if vendoring rules stay vague, later phases may accidentally mix source-of-truth ownership between Student Claw and the external package
+- if vendoring rules stay vague, later phases may accidentally mix source-of-truth ownership between Orbyt and the external package
 - if this rollout silently expands into remote catalog work, the phased implementation will lose focus
 
 ### First Recommended Next Step

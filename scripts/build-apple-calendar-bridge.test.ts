@@ -12,7 +12,7 @@ import {
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-bridge-build-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-bridge-build-"))
   tempDirs.push(dir)
   return dir
 }
@@ -36,10 +36,10 @@ describe("build-apple-calendar-bridge", () => {
       outputBinaryPath: `/repo/packages/extensions/apple-calendar-mcp/bridge/dist/arm64/${APPLE_BRIDGE_BINARY_NAME}`,
       outputVersionPath: "/repo/packages/extensions/apple-calendar-mcp/bridge/dist/arm64/version.json",
       swiftTriple: "arm64-apple-macosx13.0",
-      scratchPath: "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/student-claw/arm64",
+      scratchPath: "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/orbyt/arm64",
       builtBinaryCandidates: [
-        "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/student-claw/arm64/release/CalendarAPIBridge",
-        "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/student-claw/arm64/arm64-apple-macosx13.0/release/CalendarAPIBridge",
+        "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/orbyt/arm64/release/CalendarAPIBridge",
+        "/repo/packages/extensions/apple-calendar-mcp/bridge/.build/orbyt/arm64/arm64-apple-macosx13.0/release/CalendarAPIBridge",
       ],
     })
     expect(resolveAppleBridgePaths(repoRoot, "x64").swiftTriple).toBe("x86_64-apple-macosx13.0")

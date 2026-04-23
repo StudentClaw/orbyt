@@ -8,7 +8,7 @@ import {
   MOCK_PLANNED_SESSIONS,
   MOCK_CANVAS_ACTIVITY_FEED,
 } from "../__mocks__/dashboard-fixtures"
-import type { CanvasStudentCourseGradeSummary } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary } from "@orbyt/contracts"
 
 function buildMockCourseGradeSummaries(): ReadonlyArray<CanvasStudentCourseGradeSummary> {
   return MOCK_COURSES.map((course) => {

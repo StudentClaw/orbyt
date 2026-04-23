@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/canvas-mcp",
+  "name": "@orbyt/canvas-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   "dependencies": {
     "@effect/schema": "^0.75.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@student-claw/contracts": "workspace:*",
+    "@orbyt/contracts": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

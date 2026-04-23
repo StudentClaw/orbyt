@@ -4,7 +4,7 @@ Last updated: 2026-04-18
 
 ## Orientation Note
 
-- Target feature: define how `~/Documents/calendar/apple-calendar-mcp` becomes a monorepo-native Student Claw extension package
+- Target feature: define how `~/Documents/calendar/apple-calendar-mcp` becomes a monorepo-native Orbyt extension package
 - Key dependencies: Phase 00 source-ingestion boundary, current bundled extension conventions under `packages/extensions/`, existing shared extension manifest contract
 - Constraints and boundaries:
   - keep Apple Calendar aligned with the current bundled extension system
@@ -20,7 +20,7 @@ Last updated: 2026-04-18
 
 ### Objective
 
-Specify the exact Student Claw package shape for the vendored Apple Calendar
+Specify the exact Orbyt package shape for the vendored Apple Calendar
 extension so implementation can copy or adapt external source into the repo
 without architectural guesswork.
 
@@ -40,7 +40,7 @@ without architectural guesswork.
 
 - The extension target path is fixed at `packages/extensions/apple-calendar-mcp/`.
 - The bridge target path is fixed at `packages/extensions/apple-calendar-mcp/bridge/`.
-- The Student Claw package shape matches current bundled extensions:
+- The Orbyt package shape matches current bundled extensions:
   - `manifest.json`
   - `package.json`
   - `src/`
@@ -56,7 +56,7 @@ without architectural guesswork.
 
 1. Create the package directory and normalized file layout.
 2. Normalize package metadata and runtime entry conventions.
-3. Normalize manifest metadata to the shared Student Claw extension contract.
+3. Normalize manifest metadata to the shared Orbyt extension contract.
 4. Decide tool naming and tool inventory policy.
 5. Define test and workspace participation expectations.
 
@@ -74,12 +74,12 @@ The vendored package should be structured as:
 
 ### Manifest Normalization Rules
 
-The vendored extension should normalize these fields to Student Claw conventions:
+The vendored extension should normalize these fields to Orbyt conventions:
 
 - `id`:
   - use `apple-calendar-mcp`
 - `name`:
-  - use a Student Claw-facing name such as `Apple Calendar`
+  - use a Orbyt-facing name such as `Apple Calendar`
 - `transport`:
   - `type` remains `local_stdio`
   - `entry` points at the vendored runtime entry in `dist/`
@@ -93,8 +93,8 @@ The vendored extension should normalize these fields to Student Claw conventions
   - for Apple Calendar: `["local_os.calendar.read", "local_os.calendar.write"]`
   - free-form strings outside that vocabulary are not acceptable for curated extensions going forward
 - `author` and `homepage`:
-  - `author` reflects Student Claw ownership of the vendored runtime
-  - `homepage` points at the Student Claw repository
+  - `author` reflects Orbyt ownership of the vendored runtime
+  - `homepage` points at the Orbyt repository
   - upstream attribution is preserved in the package `README.md` under a `Vendored From` heading, not in the manifest
 - `tools`:
   - list every supported Apple Calendar tool in the shared manifest inventory, with names unchanged from upstream per the tool-naming house rule below
@@ -119,7 +119,7 @@ Concretely, the Apple Calendar manifest keeps the upstream camelCase inventory:
 Rationale:
 
 - upstream sync correctness outweighs inter-extension convention uniformity
-- the Student Claw gateway namespaces tool exposure, so the camelCase names are scoped by extension id at call time
+- the Orbyt gateway namespaces tool exposure, so the camelCase names are scoped by extension id at call time
 - renaming tools here would create avoidable translation and maintenance work on every upstream sync
 
 Trade-off acknowledged:
@@ -169,7 +169,7 @@ not like an opaque imported artifact.
 
 ### Done When
 
-- Apple Calendar has a fully specified Student Claw package shape
+- Apple Calendar has a fully specified Orbyt package shape
 - implementation can vendor code into the repo without reopening layout, metadata, or naming decisions
 
 ### Handoff To Next Phase

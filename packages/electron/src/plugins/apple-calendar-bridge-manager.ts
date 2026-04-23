@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto"
 import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
-import type { PluginRuntimeLogEntry } from "@student-claw/contracts"
+import type { PluginRuntimeLogEntry } from "@orbyt/contracts"
 import type { PluginRuntimePreparation } from "./plugin-runtime-preparation.js"
 import { APPLE_BRIDGE_BINARY_NAME, resolvePackagedAppleCalendarBridgePaths } from "./apple-calendar-bridge-paths.js"
 

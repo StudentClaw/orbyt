@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import { existsSync, readdirSync } from "node:fs"
-import type { MemorizeRunResult } from "@student-claw/contracts"
+import type { MemorizeRunResult } from "@orbyt/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 import { Database } from "../db/Database.js"
 import { CodexCli } from "../ai/CodexCli.js"

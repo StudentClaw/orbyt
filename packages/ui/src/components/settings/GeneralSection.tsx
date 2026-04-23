@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 import { useTheme, type Theme } from "@/hooks/useTheme"
 import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRuntime"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
@@ -180,7 +180,7 @@ export function GeneralSection() {
         <CardHeader>
           <CardTitle>Memory Graph</CardTitle>
           <CardDescription>
-            Choose where Student Claw writes the durable memory graph. By default it lives in your Documents folder.
+            Choose where Orbyt writes the durable memory graph. By default it lives in your Documents folder.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

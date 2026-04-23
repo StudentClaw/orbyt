@@ -3,7 +3,7 @@ import type {
   OrchestrationSnapshot,
   OrchestrationThread,
   OrchestrationTurn,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { resolveChatState } from "../hooks/chat-model"
 import type { WsConnectionStatus } from "../rpc/wsConnectionState"
 

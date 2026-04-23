@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http"
-import { WS_PROTOCOL } from "@student-claw/contracts"
+import { WS_PROTOCOL } from "@orbyt/contracts"
 
 const AUTH_PROTOCOL_PREFIX = "auth."
 
@@ -64,7 +64,7 @@ export function validateWebSocketHandshake(
 
   const protocols = parseRequestedProtocols(request)
   if (!protocols.includes(WS_PROTOCOL)) {
-    return { ok: false, reason: "Missing Student Claw protocol" }
+    return { ok: false, reason: "Missing Orbyt protocol" }
   }
 
   const authProtocol = `${AUTH_PROTOCOL_PREFIX}${config.expectedAuthToken}`
@@ -76,7 +76,7 @@ export function validateWebSocketHandshake(
 }
 
 /**
- * Selects the single supported Student Claw WebSocket subprotocol.
+ * Selects the single supported Orbyt WebSocket subprotocol.
  */
 export function selectWebSocketProtocol(protocols: Set<string>): string | false {
   return protocols.has(WS_PROTOCOL) ? WS_PROTOCOL : false

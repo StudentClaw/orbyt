@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest"
-import type { ActivityFeedEntry } from "@student-claw/contracts"
+import type { ActivityFeedEntry } from "@orbyt/contracts"
 import {
   applyActivityFeedUpsertEvent,
   filterActivityEntries,

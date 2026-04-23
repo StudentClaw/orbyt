@@ -4,8 +4,8 @@ import {
   RpcServerEnvelope,
   type DesktopBootstrap,
   type RpcPushEnvelope,
-} from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+} from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 
 /**
  * Connection lifecycle phases emitted by the authenticated WebSocket transport.

@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { parseExtensionManifestSync } from "@student-claw/contracts"
+import { parseExtensionManifestSync } from "@orbyt/contracts"
 
 export const templateManifest = parseExtensionManifestSync({
   id: "template-mcp",
@@ -21,8 +21,8 @@ export const templateManifest = parseExtensionManifestSync({
       description: "Placeholder tool metadata for registry and lifecycle testing.",
     },
   ],
-  author: "student-claw",
-  homepage: "https://github.com/StudentClaw/student-claw",
+  author: "orbyt",
+  homepage: "https://github.com/Orbyt/orbyt",
 })
 
 export function createTemplateMcpServer(): McpServer {
@@ -35,7 +35,7 @@ export function createTemplateMcpServer(): McpServer {
       capabilities: {
         tools: {},
       },
-      instructions: "Use template_ping to validate that the Student Claw local MCP lifecycle is working.",
+      instructions: "Use template_ping to validate that the Orbyt local MCP lifecycle is working.",
     },
   )
 

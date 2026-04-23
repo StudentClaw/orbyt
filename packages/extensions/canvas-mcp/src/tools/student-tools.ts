@@ -40,7 +40,7 @@ import {
   type CanvasFile,
   type CanvasModule,
   type CanvasModuleItem,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { decodeCourseId, encodeCourseId } from "../ids.js"
 import { normalizeAssignment, normalizeCourse, normalizeGrade } from "../normalizers/assignments.js"
 import {

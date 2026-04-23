@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import type { ExtensionRegistryEntry } from "@student-claw/contracts"
+import type { ExtensionRegistryEntry } from "@orbyt/contracts"
 import { PluginAuthService } from "../plugins/plugin-auth-service.js"
 import { PluginVault } from "../plugins/plugin-vault.js"
 
@@ -41,8 +41,8 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
       ],
     },
     tools: [{ name: "list_courses", description: "List courses" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   },
   installSource: "bundled",
   status: "discovered",
@@ -50,7 +50,7 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
 }
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-plugin-auth-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-plugin-auth-"))
   tempDirs.push(dir)
   return dir
 }

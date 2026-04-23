@@ -16,8 +16,8 @@ export interface RuntimeStartupState {
 
 const INITIAL_RUNTIME_STARTUP_STATE: RuntimeStartupState = {
   phase: "bootstrapping",
-  label: "Starting Student Claw",
-  detail: "Connecting to Student Claw",
+  label: "Starting Orbyt",
+  detail: "Connecting to Orbyt",
   error: null,
 }
 

@@ -2,7 +2,7 @@
 
 ## Design North Star
 
-Student Claw should feel calm, focused, and intelligent. The interface should prioritize clarity, velocity, and trust over ornament.
+Orbyt should feel calm, focused, and intelligent. The interface should prioritize clarity, velocity, and trust over ornament.
 
 ## Interface Model
 

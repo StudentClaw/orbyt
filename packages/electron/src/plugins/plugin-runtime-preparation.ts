@@ -1,4 +1,4 @@
-import type { ExtensionRuntimeReadiness } from "@student-claw/contracts"
+import type { ExtensionRuntimeReadiness } from "@orbyt/contracts"
 
 export type PluginRuntimePreparation =
   | {

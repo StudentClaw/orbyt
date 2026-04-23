@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 
 const READINESS_STAGE_LABELS = [
-  "Connecting to Student Claw",
+  "Connecting to Orbyt",
   "Loading chat state",
   "Preparing Codex",
 ] as const

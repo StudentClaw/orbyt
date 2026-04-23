@@ -1,7 +1,7 @@
 import type {
   OrchestrationTurnAttachment,
   TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   Attachment,
   Attachments,

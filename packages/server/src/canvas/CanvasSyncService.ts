@@ -25,7 +25,7 @@ import {
   type Course,
   type CourseWorkItem,
   type GatewayToolCallFailure,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PluginGateway, type PluginGatewayService } from "../mcp/PluginGateway.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"

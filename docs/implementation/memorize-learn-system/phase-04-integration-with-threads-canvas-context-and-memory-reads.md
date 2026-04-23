@@ -34,7 +34,7 @@ Last updated: 2026-04-19
 
 ### Objective
 
-Define how the memory system plugs into existing Student Claw conversation and
+Define how the memory system plugs into existing Orbyt conversation and
 Canvas context so memorize operates on real product signals rather than an
 isolated side channel.
 

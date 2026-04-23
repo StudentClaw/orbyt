@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { DeadlineTimeline } from "../components/dashboard/DeadlineTimeline"
-import type { CourseWorkItem } from "@student-claw/contracts"
+import type { CourseWorkItem } from "@orbyt/contracts"
 
 function makeItem(
   id: string,

@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-17
 
-This docs package is the implementation source of truth for the Canvas student-surface redesign in Student Claw.
+This docs package is the implementation source of truth for the Canvas student-surface redesign in Orbyt.
 
 It is intentionally separate from [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md), which still describes the current Canvas integration and should not be rewritten as part of creating this rollout package.
 
@@ -23,7 +23,7 @@ It is intentionally separate from [docs/features/02-canvas-integration.md](../..
 
 ## Planning Principles For This Rollout
 
-- Keep the existing Student Claw plugin, gateway, and vault architecture.
+- Keep the existing Orbyt plugin, gateway, and vault architecture.
 - Replace the Canvas student-facing MCP surface deliberately instead of widening the current legacy 6-tool contract.
 - Prefer student-safe Canvas endpoint patterns over instructor-oriented or gradebook-style reads.
 - Treat student capability differences across courses as a normal part of the product, not as plugin failure.

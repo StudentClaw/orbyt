@@ -1,6 +1,6 @@
 import type {
   ProviderPendingApproval,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   type CodexCliService,
   ProviderRuntimeFailure,

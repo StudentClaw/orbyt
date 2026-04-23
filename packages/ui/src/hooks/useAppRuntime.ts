@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { getPrimaryWsRpcClient, waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import {
   clearChatSelection,
@@ -49,7 +49,7 @@ import {
 import { useRuntimeStartupState as useStartupState } from "@/rpc/runtimeStartupState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
-import type { TurnAttachmentInput } from "@student-claw/contracts"
+import type { TurnAttachmentInput } from "@orbyt/contracts"
 
 export function useRuntimeConnectionStatus() {
   return useWsConnectionStatus()
@@ -221,31 +221,53 @@ export type SkillEntry = {
   readonly id: string
   readonly name: string
   readonly description: string
+  readonly tier?: "curated" | "custom"
+  readonly version?: string
+  readonly requestedCapabilities?: readonly string[]
+  readonly grantedCapabilities?: readonly string[]
+  readonly missingCapabilities?: readonly string[]
+  readonly forkedFrom?: string | null
+  readonly editable?: boolean
 }
 
 export function useSkills(): readonly SkillEntry[] {
+  const { skills } = useSkillsState()
+  return skills
+}
+
+export type SkillsState = {
+  readonly skills: readonly SkillEntry[]
+  readonly refresh: () => Promise<void>
+}
+
+export function useSkillsState(): SkillsState {
   const [skills, setSkills] = useState<readonly SkillEntry[]>([])
+
+  const refresh = useCallback(async () => {
+    try {
+      const client = await waitForPrimaryWsRpcClient()
+      const result = await client.skills.list()
+      setSkills(result.skills as readonly SkillEntry[])
+    } catch {
+      setSkills([])
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
-
-    void waitForPrimaryWsRpcClient()
-      .then((client) => client.skills.list())
-      .then((result) => {
-        if (!cancelled) {
-          setSkills(result.skills)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSkills([])
-        }
-      })
-
+    void (async () => {
+      try {
+        const client = await waitForPrimaryWsRpcClient()
+        const result = await client.skills.list()
+        if (!cancelled) setSkills(result.skills as readonly SkillEntry[])
+      } catch {
+        if (!cancelled) setSkills([])
+      }
+    })()
     return () => {
       cancelled = true
     }
   }, [])
 
-  return skills
+  return { skills, refresh }
 }

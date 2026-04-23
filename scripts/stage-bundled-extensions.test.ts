@@ -8,7 +8,7 @@ import { createBundledExtensionRuntimePackageJson, stageBundledExtensions } from
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-stage-bundled-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-stage-bundled-"))
   tempDirs.push(dir)
   return dir
 }
@@ -31,11 +31,11 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
       type: "none",
     },
     tools: [{ name: `${pluginId}_ping`, description: "Ping" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   }, null, 2))
   writeFileSync(path.join(extensionDir, "package.json"), JSON.stringify({
-    name: `@student-claw/${pluginId}`,
+    name: `@orbyt/${pluginId}`,
     version: "1.0.0",
     private: true,
     type: "module",
@@ -43,12 +43,12 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
       ? {
         "@effect/schema": "^0.75.5",
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
         zod: "^4.1.12",
       }
       : {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
       },
   }, null, 2))
   writeFileSync(path.join(extensionDir, "dist", "index.js"), `console.log("${pluginId}")\n`)
@@ -63,7 +63,7 @@ function writeContractsPackage(repoRoot: string): void {
   mkdirSync(path.join(contractsDir, "dist"), { recursive: true })
   writeFileSync(path.join(contractsDir, "dist", "index.js"), "export const contract = true\n")
   writeFileSync(path.join(contractsDir, "package.json"), JSON.stringify({
-    name: "@student-claw/contracts",
+    name: "@orbyt/contracts",
     version: "0.1.0",
     private: true,
     type: "module",
@@ -190,7 +190,7 @@ describe("stageBundledExtensions", () => {
     expect(packageJson.dependencies).toEqual({
       "@effect/schema": "^0.75.5",
       "@modelcontextprotocol/sdk": "^1.29.0",
-      "@student-claw/contracts": "file:vendor/contracts",
+      "@orbyt/contracts": "file:vendor/contracts",
       zod: "^4.1.12",
     })
   })
@@ -205,9 +205,9 @@ describe("stageBundledExtensions", () => {
     stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })
 
     expect(JSON.parse(readFileSync(path.join(outputRoot, "package.json"), "utf8"))).toMatchObject({
-      name: "student-claw-bundled-extension-runtime",
+      name: "orbyt-bundled-extension-runtime",
       dependencies: {
-        "@student-claw/contracts": "file:vendor/contracts",
+        "@orbyt/contracts": "file:vendor/contracts",
       },
     })
     expect(existsSync(path.join(outputRoot, "vendor", "contracts", "dist", "index.js"))).toBe(true)
@@ -227,8 +227,8 @@ describe("stageBundledExtensions", () => {
       path.join(bunStubDir, "bun"),
       [
         "#!/bin/sh",
-        "mkdir -p \"$PWD/node_modules/@student-claw/contracts/dist\"",
-        "printf 'export const staged = true\\n' > \"$PWD/node_modules/@student-claw/contracts/dist/index.js\"",
+        "mkdir -p \"$PWD/node_modules/@orbyt/contracts/dist\"",
+        "printf 'export const staged = true\\n' > \"$PWD/node_modules/@orbyt/contracts/dist/index.js\"",
       ].join("\n"),
       { mode: 0o755 },
     )
@@ -241,7 +241,7 @@ describe("stageBundledExtensions", () => {
       process.env.PATH = originalPath
     }
 
-    expect(existsSync(path.join(outputRoot, "node_modules", "@student-claw", "contracts", "dist", "index.js"))).toBe(true)
-    expect(existsSync(path.join(outputRoot, "template-mcp", "node_modules", "@student-claw", "contracts", "dist", "index.js"))).toBe(true)
+    expect(existsSync(path.join(outputRoot, "node_modules", "@orbyt", "contracts", "dist", "index.js"))).toBe(true)
+    expect(existsSync(path.join(outputRoot, "template-mcp", "node_modules", "@orbyt", "contracts", "dist", "index.js"))).toBe(true)
   })
 })

@@ -1,4 +1,4 @@
-# Student Claw â€” V1 Dependency Trees & Implementation Plan
+# Orbyt â€” V1 Dependency Trees & Implementation Plan
 
 ---
 
@@ -309,7 +309,7 @@ Extensibility layer for AI behavior.
   trigger: auto | manual | keyword
   keywords: ["plan", "schedule", "week"]
   version: 1.0
-  author: StudentClaw
+  author: Orbyt
   ---
 
   # Instructions
@@ -402,7 +402,7 @@ First-run experience. Must be frictionless.
 | Shared contracts | Effect Schema definitions for WebSocket messages between UI and server |
 
 ```
-studentclaw/
+orbyt/
 â”œâ”€â”€ packages/
 â”‚   â”œâ”€â”€ electron/          â† Electron main process
 â”‚   â”œâ”€â”€ server/            â† Effect-TS local server

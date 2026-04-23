@@ -7,7 +7,7 @@ Last updated: 2026-04-17
 - Target feature: reset the Canvas rollout around a student-role MCP surface and make the replacement contract explicit before implementation starts
 - Key dependencies: [PLAN.md](../../../PLAN.md), [docs/features/INDEX.md](../../features/INDEX.md), [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md), [docs/architecture/05-external-services.md](../../architecture/05-external-services.md), current Canvas extension files under `packages/extensions/canvas-mcp/`
 - Constraints and boundaries:
-  - keep the existing Student Claw plugin, gateway, and vault architecture
+  - keep the existing Orbyt plugin, gateway, and vault architecture
   - treat this as a breaking contract reset for Canvas tools
   - do not update the feature spec in this phase
   - do not implement endpoint changes yet
@@ -27,7 +27,7 @@ Define the new Canvas student-facing contract, manifest expectations, and schema
 
 - The current Canvas extension manifest exposes six tools centered on coursework, grades, announcements, and sync behavior.
 - The current feature spec still describes that legacy surface and broader sync-oriented behavior.
-- Discovery work shows the desired direction is a student-role tool inventory modeled after the reference repo, while preserving Student Claw's own runtime architecture.
+- Discovery work shows the desired direction is a student-role tool inventory modeled after the reference repo, while preserving Orbyt's own runtime architecture.
 
 ### Out Of Scope
 

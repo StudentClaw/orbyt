@@ -8,7 +8,7 @@ const DEFAULT_WINDOW_WIDTH = 1280
 const DEFAULT_WINDOW_HEIGHT = 800
 
 function debugWindow(message: string, win: BrowserWindow): void {
-  if (process.env.STUDENT_CLAW_DEBUG_WINDOW !== "1") {
+  if (process.env.ORBYT_DEBUG_WINDOW !== "1" && process.env.STUDENT_CLAW_DEBUG_WINDOW !== "1") {
     return
   }
 
@@ -47,7 +47,7 @@ export function createWindow(): BrowserWindow {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     show: false,
     icon,
-    title: "Student Claw",
+    title: "Orbyt",
     webPreferences: {
       preload: resolvePreloadPath(),
       contextIsolation: true,

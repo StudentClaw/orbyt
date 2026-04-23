@@ -6,7 +6,7 @@ import {
   type IpcEventPayloadMap,
   type IpcInvokeArgsMap,
   type IpcInvokeResultMap,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 
 type InvokableChannel = keyof IpcInvokeArgsMap & keyof IpcInvokeResultMap
 

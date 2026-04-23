@@ -16,7 +16,7 @@ describe("validateWebSocketHandshake", () => {
     const result = validateWebSocketHandshake(
       createRequest({
         origin: "http://localhost:5173",
-        "sec-websocket-protocol": `student-claw.v1, auth.${authToken}`,
+        "sec-websocket-protocol": `orbyt.v1, auth.${authToken}`,
       }),
       { allowedOrigins, expectedAuthToken: authToken },
     )
@@ -28,7 +28,7 @@ describe("validateWebSocketHandshake", () => {
     const result = validateWebSocketHandshake(
       createRequest({
         origin: "http://localhost:5173",
-        "sec-websocket-protocol": "student-claw.v1",
+        "sec-websocket-protocol": "orbyt.v1",
       }),
       { allowedOrigins, expectedAuthToken: authToken },
     )
@@ -40,7 +40,7 @@ describe("validateWebSocketHandshake", () => {
     const result = validateWebSocketHandshake(
       createRequest({
         origin: "http://localhost:5173",
-        "sec-websocket-protocol": `student-claw.v1, auth.${"b".repeat(64)}`,
+        "sec-websocket-protocol": `orbyt.v1, auth.${"b".repeat(64)}`,
       }),
       { allowedOrigins, expectedAuthToken: authToken },
     )
@@ -52,7 +52,7 @@ describe("validateWebSocketHandshake", () => {
     const result = validateWebSocketHandshake(
       createRequest({
         origin: "https://evil.example",
-        "sec-websocket-protocol": `student-claw.v1, auth.${authToken}`,
+        "sec-websocket-protocol": `orbyt.v1, auth.${authToken}`,
       }),
       { allowedOrigins, expectedAuthToken: authToken },
     )
@@ -64,7 +64,7 @@ describe("validateWebSocketHandshake", () => {
     const result = validateWebSocketHandshake(
       createRequest({
         origin: "file://",
-        "sec-websocket-protocol": `student-claw.v1, auth.${authToken}`,
+        "sec-websocket-protocol": `orbyt.v1, auth.${authToken}`,
       }),
       { allowedOrigins, expectedAuthToken: authToken },
     )
@@ -72,10 +72,10 @@ describe("validateWebSocketHandshake", () => {
     expect(result).toEqual({ ok: true })
   })
 
-  test("selects the Student Claw subprotocol during handshake", () => {
+  test("selects the Orbyt subprotocol during handshake", () => {
     expect(
-      selectWebSocketProtocol(new Set(["student-claw.v1", `auth.${authToken}`])),
-    ).toBe("student-claw.v1")
+      selectWebSocketProtocol(new Set(["orbyt.v1", `auth.${authToken}`])),
+    ).toBe("orbyt.v1")
     expect(selectWebSocketProtocol(new Set([`auth.${authToken}`]))).toBe(false)
   })
 })

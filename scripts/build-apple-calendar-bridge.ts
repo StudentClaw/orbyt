@@ -25,7 +25,7 @@ export function resolveAppleBridgePaths(repoRoot: string, arch: AppleBridgeArch)
   const outputBinaryPath = path.join(distDir, APPLE_BRIDGE_BINARY_NAME)
   const outputVersionPath = path.join(distDir, "version.json")
   const swiftTriple = resolveAppleBridgeSwiftTriple(arch)
-  const scratchPath = path.join(bridgeRoot, ".build", "student-claw", arch)
+  const scratchPath = path.join(bridgeRoot, ".build", "orbyt", arch)
 
   return {
     bridgeRoot,
@@ -145,7 +145,10 @@ if (import.meta.main) {
     ? process.argv[process.argv.indexOf("--app-version") + 1]
     : undefined
   const arch = (archArg === "arm64" || archArg === "x64" ? archArg : resolveHostArch()) as AppleBridgeArch
-  const appVersion = appVersionArg ?? process.env.STUDENT_CLAW_APP_VERSION ?? "0.1.0"
+  const appVersion = appVersionArg
+    ?? process.env.ORBYT_APP_VERSION
+    ?? process.env.STUDENT_CLAW_APP_VERSION
+    ?? "0.1.0"
   const verbose = process.argv.includes("--verbose")
   const paths = buildAppleCalendarBridge({
     repoRoot,

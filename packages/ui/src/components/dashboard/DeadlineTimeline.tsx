@@ -1,4 +1,4 @@
-import type { CourseWorkItem } from "@student-claw/contracts"
+import type { CourseWorkItem } from "@orbyt/contracts"
 import { Badge } from "@/components/ui/badge"
 import {
   Popover,

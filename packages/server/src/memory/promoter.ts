@@ -1,10 +1,10 @@
-import { createId } from "@student-claw/shared-runtime"
+import { createId } from "@orbyt/shared-runtime"
 import {
   EVIDENCE_COUNT_THRESHOLD,
   IMMEDIATE_PROMOTION_CONFIDENCE,
   type MemorizeState,
   type PromotionCandidate,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   candidateFingerprint,
   parseDailyCandidates,

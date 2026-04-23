@@ -36,7 +36,7 @@ batch. If no turns are found, the cursor is unchanged.
 
 ### 3.1 Location
 
-`~/.student-claw/memory/daily/YYYY-MM-DD.md`
+`~/.orbyt/memory/daily/YYYY-MM-DD.md`
 
 ### 3.2 Structure
 
@@ -93,7 +93,7 @@ Observations, Learning Signals, Promotion Candidates.
 
 ### 4.1 Location
 
-`~/.student-claw/memory/weekly/YYYY-Www.md`
+`~/.orbyt/memory/weekly/YYYY-Www.md`
 
 ### 4.2 Accumulation Model
 

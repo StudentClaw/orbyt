@@ -130,7 +130,7 @@ When a phase changes state, append a new entry to the relevant phase section bel
 
 ### Curated Extension
 
-A first-party extension Student Claw chooses to ship or support intentionally.
+A first-party extension Orbyt chooses to ship or support intentionally.
 In this rollout, Apple Calendar is the canary curated extension beyond Canvas.
 
 ### Bundled Catalog
@@ -174,7 +174,7 @@ bridge-dependent curated extensions.
 
 ### Bridge Runtime
 
-A non-MCP helper process owned by Student Claw that a plugin depends on for
+A non-MCP helper process owned by Orbyt that a plugin depends on for
 local OS access. Apple Calendar’s Swift EventKit bridge is the first such
 runtime in this rollout.
 
@@ -217,7 +217,7 @@ than stored secrets.
 ### Tool Inventory
 
 The active-tool view sourced from running extensions after startup. Inventory
-changes must continue to propagate through the existing Student Claw gateway and
+changes must continue to propagate through the existing Orbyt gateway and
 local server after curated extensions are added.
 
 ### Curated Extension Template
@@ -241,7 +241,7 @@ The set of checks that must be green before a phase can be marked complete:
 ## Defaults Locked By This Rollout
 
 - Apple Calendar will be vendored into the monorepo instead of consumed from tarballs at runtime.
-- The Swift bridge is app-owned and bundled with Student Claw.
+- The Swift bridge is app-owned and bundled with Orbyt.
 - Bundled curated extensions remain local-only plugins in v1. MCP transport is always `local_stdio`; bridges may use localhost HTTP or a UNIX domain socket (see `Bridge Transport Policy`).
 - Remote download and catalog work is out of scope for this rollout unless a later phase explicitly expands it.
 - The Apple Calendar vendored package target is `packages/extensions/apple-calendar-mcp/`.
@@ -322,8 +322,8 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Owner: Codex
 - Status change: `not_started -> complete`
 - Completed:
-  - Vendored Apple Calendar into `packages/extensions/apple-calendar-mcp/` with Student Claw package metadata, `manifest.json`, `src/`, `tsconfig.json`, and a colocated `bridge/` directory.
-  - Preserved the upstream camelCase Apple Calendar tool names and wrapped them in a Student Claw MCP server entrypoint.
+  - Vendored Apple Calendar into `packages/extensions/apple-calendar-mcp/` with Orbyt package metadata, `manifest.json`, `src/`, `tsconfig.json`, and a colocated `bridge/` directory.
+  - Preserved the upstream camelCase Apple Calendar tool names and wrapped them in a Orbyt MCP server entrypoint.
   - Added a bundled-registry test proving `apple-calendar-mcp` is discovered from `packages/extensions/`.
   - Added an Apple Calendar package test proving the registered tools match the manifest tool inventory.
   - Updated the Settings test fixture so Apple Calendar appears through the existing plugin registry UI path.
@@ -496,7 +496,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Remaining:
   - Run the signed/notarized macOS packaging path on a machine with full Xcode and real release secrets.
   - Capture `codesign`, `spctl`, and `stapler` evidence for the signed artifact.
-  - Confirm the Student Claw-branded Calendar permission prompt and one end-to-end Apple Calendar tool call on the signed build.
+  - Confirm the Orbyt-branded Calendar permission prompt and one end-to-end Apple Calendar tool call on the signed build.
 - Contract changes:
   - none
 - Risks or blockers:
@@ -509,9 +509,9 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun test scripts/verify-macos-desktop-artifact.test.ts`
   - `bun run build:apple-calendar-bridge:arm64`
   - `bun run stage:bundled-extensions`
-  - `bun run dist:electron:mac --skip-build --output-dir /tmp/student-claw-release-smoke --verbose`
+  - `bun run dist:electron:mac --skip-build --output-dir /tmp/orbyt-release-smoke --verbose`
 - Evidence captured:
-  - Unsigned packaging smoke completed and produced `/tmp/student-claw-release-smoke/Student-Claw-0.1.0-arm64.dmg`.
+  - Unsigned packaging smoke completed and produced `/tmp/orbyt-release-smoke/Student-Claw-0.1.0-arm64.dmg`.
   - Built app contains `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` and `version.json` outside `app.asar`.
   - Unit tests cover packaging config, signing-mode gating, per-arch helper staging, and bridge version verification.
 - First recommended next step:
@@ -556,7 +556,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - Imported a valid Developer ID Application identity into the login keychain and installed the missing Apple Developer ID G2 intermediate so `security find-identity -v -p codesigning` recognized the signing identity.
   - Ran the local release preflight successfully with full Xcode and real Apple signing/notarization credentials.
   - Built and submitted the signed `arm64` macOS artifact for notarization, waited for Apple processing, and received `Accepted`.
-  - Stapled the notarization ticket onto `release/mac-arm64/Student Claw.app`.
+  - Stapled the notarization ticket onto `release/mac-arm64/Orbyt.app`.
   - Updated the packaged-artifact verifier so it validates the notarized app bundle with `spctl` and the packaged Apple Calendar helper with `codesign`, while still confirming the helper lives outside `asar`.
   - Verified the notarized `arm64` app and packaged Apple Calendar bridge successfully.
 - Remaining:
@@ -574,12 +574,12 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun run dist:electron:mac:signed --arch arm64`
   - `xcrun notarytool history --key /Users/paul/Documents/AuthKey_LDBXSSJ7F3.p8 --key-id LDBXSSJ7F3 --issuer d8928cd2-5f2d-4ea4-a0ef-a5eda5caf7f1`
   - `xcrun notarytool wait bedaa1eb-fcff-4448-9b4e-4743dcb5671e --key /Users/paul/Documents/AuthKey_LDBXSSJ7F3.p8 --key-id LDBXSSJ7F3 --issuer d8928cd2-5f2d-4ea4-a0ef-a5eda5caf7f1`
-  - `xcrun stapler staple "/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app"`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app" --verbose`
+  - `xcrun stapler staple "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app"`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose`
 - Evidence captured:
   - `arm64` notarization submission `bedaa1eb-fcff-4448-9b4e-4743dcb5671e` completed with `status: Accepted`.
   - `xcrun stapler staple` reported `The staple and validate action worked!`.
-  - Final artifact verification succeeded for `/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app`.
+  - Final artifact verification succeeded for `/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app`.
   - The packaged Apple Calendar bridge at `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` is signed and confirmed outside `app.asar`.
 - First recommended next step:
   - Run the notarized `arm64` Apple Calendar manual smoke, then perform the `x64` signed/notarized pass before marking Phase 03b complete.
@@ -604,7 +604,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Commands run:
   - `bun run check:electron:mac:signed`
   - `bun run dist:electron:mac:signed --arch arm64`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app" --verbose`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose`
 - Evidence captured:
   - Successful signed `arm64` packaging run with live phase logging and transcript under `build-logs/`.
   - Notarized `arm64` app plus packaged Apple Calendar helper verified successfully.
@@ -618,7 +618,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Completed:
   - Added live phase logging and timestamped transcript output for macOS artifact builds so packaging/notarization progress is visible during long runs.
   - Fixed packaged app startup so the bundled Electron app no longer tries to spawn `bun` for the local server runtime and instead uses the packaged compiled server entry.
-  - Fixed signed post-package verification to resolve the real `release/mac-arm64/Student Claw.app` path produced by `electron-builder`.
+  - Fixed signed post-package verification to resolve the real `release/mac-arm64/Orbyt.app` path produced by `electron-builder`.
   - Re-ran `bun run dist:electron:mac:signed --arch arm64` successfully end to end after the logging and packaged-runtime fixes landed.
 - Remaining:
   - Run the packaged Apple Calendar manual smoke on the notarized `arm64` app: launch, permission prompt, readiness to `Ready`, one tool call, and clean bridge shutdown.
@@ -638,7 +638,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun run dist:electron:mac:signed --arch arm64`
 - Evidence captured:
   - The signed `arm64` build now reaches `Build complete` from the main packaging command without manual post-run recovery.
-  - The post-package verification phase succeeds against `release/mac-arm64/Student Claw.app`.
+  - The post-package verification phase succeeds against `release/mac-arm64/Orbyt.app`.
   - Build transcript `build-logs/mac-desktop-artifact-20260421-130827-arm64-signed.log` captures the full successful signed run.
 - First recommended next step:
   - Run the notarized `arm64` Apple Calendar manual smoke, then perform the `x64` signed/notarized pass before marking Phase 03b complete.
@@ -678,7 +678,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - Contracts tests pass for `PLUGIN_READINESS`, typed retry params, and permission-settings IPC payloads.
   - Electron tests pass for separate readiness emission, invalid retry-class rejection, typed permission retry routing, and platform-gated permission reveal.
   - Targeted Settings tests pass for auth-form suppression, readiness-card rendering, and live updates from the dedicated readiness event.
-  - Electron typecheck passes after rebuilding `@student-claw/contracts`.
+  - Electron typecheck passes after rebuilding `@orbyt/contracts`.
 - First recommended next step:
   - Continue [Phase 03b - macOS Packaging And Signing](phase-03b-macos-packaging-and-signing.md) to close the signed/notarized verification gap, then start [Phase 05 - Packaged Runtime And Hardening](phase-05-packaged-runtime-and-hardening.md).
 
@@ -729,7 +729,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Owner: Codex
 - Status change: `in_progress -> in_progress`
 - Completed:
-  - Reworked the packaged server runtime so Student Claw no longer depends on Bun-only APIs after packaging:
+  - Reworked the packaged server runtime so Orbyt no longer depends on Bun-only APIs after packaging:
     - SQLite now uses a runtime-neutral adapter that selects `bun:sqlite` in Bun dev and `node:sqlite` under packaged Electron/Node.
     - packaged server startup no longer depends on Bun being installed on the user machine.
     - Bun-only server path handling such as `import.meta.dir` skill discovery was replaced with packaged-safe filesystem resolution.
@@ -758,10 +758,10 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun x tsc -p packages/server/tsconfig.json --noEmit`
   - `bun x tsc -p packages/electron/tsconfig.json --noEmit`
   - `bun run build`
-  - `bun scripts/build-macos-desktop-artifact.ts --skip-build --output-dir /tmp/student-claw-packaged-runtime-smoke`
-  - `STUDENT_CLAW_DEBUG_WINDOW=1 "/tmp/student-claw-packaged-runtime-smoke/mac-arm64/Student Claw.app/Contents/MacOS/Student Claw"`
+  - `bun scripts/build-macos-desktop-artifact.ts --skip-build --output-dir /tmp/orbyt-packaged-runtime-smoke`
+  - `ORBYT_DEBUG_WINDOW=1 "/tmp/orbyt-packaged-runtime-smoke/mac-arm64/Orbyt.app/Contents/MacOS/Orbyt"`
 - Evidence captured:
-  - The packaged server reaches `Student Claw server started on :8787` under Electron/Node in the smoke app.
+  - The packaged server reaches `Orbyt server started on :8787` under Electron/Node in the smoke app.
   - Bundled curated extensions resolve and launch from packaged resources instead of repo-local runtime paths.
   - Window debug output captured `created`, `did-finish-load`, and `shown` states at normal `1280x800` bounds during a fresh packaged launch.
   - The Apple Calendar bridge launches from `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` outside `asar`.

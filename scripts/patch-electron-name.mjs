@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Patches the local Electron binary's Info.plist so the macOS dock shows
-// "Student Claw" instead of "Electron" during development.
+// "Orbyt" instead of "Electron" during development.
 import { execSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
@@ -20,8 +20,8 @@ if (!plist) {
 }
 
 const pb = (cmd) => execSync(`/usr/libexec/PlistBuddy -c "${cmd}" "${plist}"`, { stdio: "pipe" })
-const APP_NAME = "Student Claw"
-const APP_BUNDLE_ID = "com.studentclaw.dev"
+const APP_NAME = "Orbyt"
+const APP_BUNDLE_ID = "com.orbyt.dev"
 
 try {
   pb(`Set :CFBundleName '${APP_NAME}'`)

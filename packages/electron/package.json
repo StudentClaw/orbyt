@@ -1,6 +1,6 @@
 {
-  "name": "@student-claw/electron",
-  "productName": "Student Claw",
+  "name": "@orbyt/electron",
+  "productName": "Orbyt",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex": "^0.120.0",
-    "@student-claw/contracts": "workspace:*",
-    "@student-claw/shared-runtime": "workspace:*",
+    "@orbyt/contracts": "workspace:*",
+    "@orbyt/shared-runtime": "workspace:*",
     "electron": "^41.1.1",
     "web-push": "^3.6.7",
     "ws": "^8.20.0"

@@ -1,5 +1,5 @@
 import { Schema } from "@effect/schema"
-import { HealthPong } from "@student-claw/shared"
+import { HealthPong } from "@orbyt/shared"
 
 const startTime = Date.now()
 

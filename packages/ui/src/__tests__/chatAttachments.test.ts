@@ -4,7 +4,7 @@ import {
   extractDisplayContent,
   fileUrlFromPath,
 } from "../lib/chatAttachments"
-import type { TurnAttachmentInput } from "@student-claw/contracts"
+import type { TurnAttachmentInput } from "@orbyt/contracts"
 
 const makeAttachment = (path: string): TurnAttachmentInput => ({
   path,

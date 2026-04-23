@@ -2,13 +2,13 @@
 
 ## What It Is
 
-Onboarding is the first-run experience that transforms a freshly installed Student Claw from an empty app into a fully connected, personalized academic assistant. It walks the student through Canvas credentials, AI authentication, extension setup, preferences, and a first sync with guided walkthrough.
+Onboarding is the first-run experience that transforms a freshly installed Orbyt from an empty app into a fully connected, personalized academic assistant. It walks the student through Canvas credentials, AI authentication, extension setup, preferences, and a first sync with guided walkthrough.
 
 ---
 
 ## Why It Exists
 
-Student Claw requires setup that most students aren't accustomed to — generating API tokens, authorizing AI services, understanding what MCP plugins are. Onboarding must make this painless. A confused student who can't get past setup is a lost user. The goal is: **installed to productive in under 5 minutes**.
+Orbyt requires setup that most students aren't accustomed to — generating API tokens, authorizing AI services, understanding what MCP plugins are. Onboarding must make this painless. A confused student who can't get past setup is a lost user. The goal is: **installed to productive in under 5 minutes**.
 
 ---
 
@@ -46,7 +46,7 @@ Shared Contracts ────→ Onboarding (StudentPreference, OnboardingState 
 
 A warm, non-intimidating welcome screen.
 
-- Brief explanation: "Student Claw connects to your Canvas and helps you plan your academic life."
+- Brief explanation: "Orbyt connects to your Canvas and helps you plan your academic life."
 - Set expectations: "Setup takes about 3-4 minutes."
 - Privacy assurance: "Your data stays on your computer. Nothing is sent to us."
 
@@ -63,9 +63,9 @@ The most critical step. Students need to generate a Canvas personal access token
    - "Click your profile picture → Settings"
    - "Scroll to Approved Integrations"
    - "Click + New Access Token"
-   - "Name it 'Student Claw', **leave the expiry date blank**, and click Generate Token"
+   - "Name it 'Orbyt', **leave the expiry date blank**, and click Generate Token"
    - "Copy the token (you won't see it again!)"
-3. Paste the token into Student Claw
+3. Paste the token into Orbyt
 4. Validate by making a test API call (`GET /api/v1/users/self`)
 5. Show success: "Connected! Found [name] at [university]"
 
@@ -76,7 +76,7 @@ The most critical step. Students need to generate a Canvas personal access token
 
 ### Step 3: AI Authentication
 
-Connect to the LLM that powers Student Claw's intelligence. **This step is required — AI is the core of the app.** Students must connect before proceeding.
+Connect to the LLM that powers Orbyt's intelligence. **This step is required — AI is the core of the app.** Students must connect before proceeding.
 
 **ChatGPT Subscription via Codex CLI (only path)**
 - Requires a ChatGPT Plus, Pro, or Team subscription

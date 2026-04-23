@@ -66,7 +66,7 @@ async function render(): Promise<void> {
     }).then((result) => {
       if (status) {
         status.textContent = result.status === "paired"
-          ? "Phone paired. You can return to Student Claw on desktop."
+          ? "Phone paired. You can return to Orbyt on desktop."
           : result.status === "install_required"
             ? "Add this app to your Home Screen first on iPhone."
             : "Notification permission was denied."

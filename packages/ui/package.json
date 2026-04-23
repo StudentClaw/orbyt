@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/ui",
+  "name": "@orbyt/ui",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -19,8 +19,8 @@
     "@hugeicons/core-free-icons": "^4.1.1",
     "@hugeicons/react": "^1.1.6",
     "@rive-app/react-webgl2": "^4.28.0",
-    "@student-claw/contracts": "workspace:*",
-    "@student-claw/shared-runtime": "workspace:*",
+    "@orbyt/contracts": "workspace:*",
+    "@orbyt/shared-runtime": "workspace:*",
     "@tanstack/react-router": "^1.168.10",
     "ai": "^6.0.162",
     "class-variance-authority": "^0.7.1",

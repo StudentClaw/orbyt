@@ -1,4 +1,4 @@
-import type { PushPairingCompletion, WebPushSubscriptionRecord } from "@student-claw/contracts"
+import type { PushPairingCompletion, WebPushSubscriptionRecord } from "@orbyt/contracts"
 
 export function detectPhonePlatform(userAgent: string): "ios" | "android" | "unknown" {
   if (/iphone|ipad|ipod/i.test(userAgent)) {

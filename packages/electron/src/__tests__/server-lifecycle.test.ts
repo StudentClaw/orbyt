@@ -53,7 +53,7 @@ describe("Server lifecycle", () => {
 
         expect(request.id).toBe("health-check")
         expect(socket.protocols).toEqual([
-          "student-claw.v1",
+          "orbyt.v1",
           `auth.${bootstrap.wsAuthToken}`,
         ])
 
@@ -121,8 +121,8 @@ describe("Server lifecycle", () => {
   })
 
   test("resolveServerLaunchSpec uses the packaged server entry when the app is packaged", () => {
-    const resourcesRoot = mkdtempSync(path.join(tmpdir(), "student-claw-server-launch-"))
-    const serverPath = path.join(resourcesRoot, "app.asar", "node_modules", "@student-claw", "server", "dist", "index.js")
+    const resourcesRoot = mkdtempSync(path.join(tmpdir(), "orbyt-server-launch-"))
+    const serverPath = path.join(resourcesRoot, "app.asar", "node_modules", "@orbyt", "server", "dist", "index.js")
     mkdirSync(path.dirname(serverPath), { recursive: true })
     writeFileSync(serverPath, "console.log('server')\n", "utf8")
 

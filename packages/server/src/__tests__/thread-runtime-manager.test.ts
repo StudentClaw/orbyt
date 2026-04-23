@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type {
   ProviderApprovalDecision,
   ProviderPendingApproval,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   createThreadRuntimeManager,
   type ManagedTurnInput,

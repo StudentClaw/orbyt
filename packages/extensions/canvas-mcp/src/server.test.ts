@@ -4,7 +4,7 @@ import path from "node:path"
 import { tmpdir } from "node:os"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { CanvasApiError, CanvasPermissionError } from "@student-claw/contracts"
+import { CanvasApiError, CanvasPermissionError } from "@orbyt/contracts"
 import { canvasServerInstructions, createCanvasMcpServer } from "./server.js"
 import { CanvasCredentialStore } from "./runtime.js"
 import { canvasStudentReplacementToolInventory } from "./student-tool-contract.js"
@@ -12,7 +12,7 @@ import { canvasStudentReplacementToolInventory } from "./student-tool-contract.j
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-canvas-mcp-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-canvas-mcp-"))
   tempDirs.push(dir)
   return dir
 }

@@ -1,7 +1,7 @@
 export const defaultConfig = {
   port: 8787,
   wsHost: "127.0.0.1",
-  dbPath: "~/.student-claw/data.db",
+  dbPath: "~/.orbyt/data.db",
   wsHeartbeatInterval: 30000,
   wsMaxPayloadBytes: 256 * 1024,
   allowedOrigins: ["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -16,7 +16,7 @@ export const defaultConfig = {
   pluginGatewayBridgeToken: undefined,
   pluginGatewayMcpUrl: undefined,
   pluginGatewayMcpBearerToken: undefined,
-  pluginGatewayMcpServerName: "student-claw",
+  pluginGatewayMcpServerName: "orbyt",
 } as const
 
 export type AppConfig = {

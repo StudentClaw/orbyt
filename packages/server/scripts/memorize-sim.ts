@@ -557,7 +557,7 @@ const dir = mkdtempSync(join(tmpdir(), "memorize-sim-"))
 console.log(`\n📁 Memory root: ${dir}/memory\n`)
 
 const db = makeDb(dir)
-const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
 const store = new MemorizeStateStore(paths)
 const dayIdx = { current: 0 }
 const weeklyFoldCounts: Record<string, number> = {}

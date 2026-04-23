@@ -18,7 +18,7 @@ The React UI is the frontend layer — everything the student sees and interacts
 
 The Chat Interface leverages [shadcn.io/ai](https://www.shadcn.io/ai/chatbot) — a set of production-ready React components specifically built for AI chat experiences:
 
-| Component | Student Claw Use |
+| Component | Orbyt Use |
 |---|---|
 | **Conversation** | Chat container with auto-scroll and scroll-to-bottom |
 | **Message** | User/assistant message bubbles with markdown rendering |
@@ -27,7 +27,7 @@ The Chat Interface leverages [shadcn.io/ai](https://www.shadcn.io/ai/chatbot) �
 | **Sources** | Citation links when the AI references Canvas data or files |
 | **Model Selector** | (Adapted) Skill selector — switch active skills from the chat |
 
-These components are unstyled/customizable, so they'll be themed to match Student Claw's design system.
+These components are unstyled/customizable, so they'll be themed to match Orbyt's design system.
 
 ### State Management
 
@@ -90,7 +90,7 @@ Each section maps to a feature branch:
 
 ## Design System
 
-Student Claw needs a cohesive visual language across all sections.
+Orbyt needs a cohesive visual language across all sections.
 
 **Design principles:**
 - **Academic, not corporate**: Warm and approachable, not cold SaaS

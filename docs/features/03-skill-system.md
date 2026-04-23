@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The Skill System gives Student Claw specialized modes of behavior without turning every interaction into an ad hoc prompt. In v1 it is a **two-tier system**:
+The Skill System gives Orbyt specialized modes of behavior without turning every interaction into an ad hoc prompt. In v1 it is a **two-tier system**:
 
 1. **Curated skills** — first-party, reviewed workflows shipped with the app
 2. **Custom skills** — student-authored markdown workflows that start useful but constrained
@@ -15,7 +15,7 @@ The flagship skill is **plan-mode**, which orchestrates weekly academic planning
 
 ## Why It Exists
 
-A general-purpose AI assistant is okay at everything but great at nothing. Skills let Student Claw behave like a specialist when it needs to:
+A general-purpose AI assistant is okay at everything but great at nothing. Skills let Orbyt behave like a specialist when it needs to:
 
 - `plan-mode` follows a planning workflow instead of improvising
 - `essay-reviewer` stays focused on feedback rather than rewriting the paper
@@ -133,7 +133,7 @@ Students can create and edit custom skills directly in the app.
 
 ### 8. Pre-Installed Skills
 
-Student Claw ships with curated skills for common academic tasks:
+Orbyt ships with curated skills for common academic tasks:
 
 | Skill | Tier | What it does |
 |---|---|---|
@@ -206,7 +206,7 @@ triggers:
   - plan my week
   - what should I work on
   - schedule my assignments
-author: student-claw
+author: orbyt
 version: 1.0
 requested_capabilities:
   - canvas.coursework.read

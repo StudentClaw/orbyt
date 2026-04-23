@@ -1,5 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { reconcileBundledSkills } from "./skill-reconciler.js"
+
+export type PrepareIsolatedCodexRuntimeOptions = {
+  readonly bundleSkillsRoot?: string
+}
 
 export type PluginGatewayLaunchConfig = {
   readonly bridgeUrl: string
@@ -10,7 +15,7 @@ export type PluginGatewayLaunchConfig = {
   readonly mcpServerName: string
 }
 
-const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
+const ORBYT_GATEWAY_TOKEN_ENV = "ORBYT_GATEWAY_BEARER_TOKEN"
 
 function copyIfMissing(sourcePath: string, destinationPath: string): void {
   if (!existsSync(sourcePath) || existsSync(destinationPath)) {
@@ -28,15 +33,30 @@ function buildIsolatedConfigToml(gateway?: PluginGatewayLaunchConfig): string {
   return [
     `[mcp_servers.${JSON.stringify(gateway.mcpServerName)}]`,
     `url = ${JSON.stringify(gateway.mcpUrl)}`,
-    `bearer_token_env_var = ${JSON.stringify(STUDENT_CLAW_GATEWAY_TOKEN_ENV)}`,
+    `bearer_token_env_var = ${JSON.stringify(ORBYT_GATEWAY_TOKEN_ENV)}`,
     `enabled = true`,
     "",
   ].join("\n")
 }
 
+function resolveBundledSkillsRoot(explicit?: string): string | null {
+  if (explicit) {
+    return existsSync(explicit) ? explicit : null
+  }
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  if (resourcesPath) {
+    const packagedPath = path.join(resourcesPath, "skills")
+    if (existsSync(packagedPath)) {
+      return packagedPath
+    }
+  }
+  return null
+}
+
 export function prepareIsolatedCodexRuntime(
   userDataPath: string,
   gateway?: PluginGatewayLaunchConfig,
+  options?: PrepareIsolatedCodexRuntimeOptions,
 ): {
   readonly codexHomePath: string
   readonly codexProcessHomePath: string
@@ -46,7 +66,17 @@ export function prepareIsolatedCodexRuntime(
 
   mkdirSync(codexHomePath, { recursive: true })
   mkdirSync(codexProcessHomePath, { recursive: true })
-  mkdirSync(path.join(codexProcessHomePath, ".agents", "skills"), { recursive: true })
+  const userSkillsDir = path.join(codexProcessHomePath, ".agents", "skills")
+  mkdirSync(userSkillsDir, { recursive: true })
+
+  const bundleRoot = resolveBundledSkillsRoot(options?.bundleSkillsRoot)
+  if (bundleRoot) {
+    reconcileBundledSkills({
+      bundleRoot,
+      userSkillsDir,
+      statePath: path.join(codexProcessHomePath, ".agents", "skills.state.json"),
+    })
+  }
 
   const globalCodexHome = path.join(process.env.HOME ?? "", ".codex")
   copyIfMissing(path.join(globalCodexHome, "auth.json"), path.join(codexHomePath, "auth.json"))
@@ -66,15 +96,16 @@ export function prepareIsolatedCodexRuntime(
 export function buildIsolatedCodexEnv(
   userDataPath: string,
   gateway?: PluginGatewayLaunchConfig,
+  options?: PrepareIsolatedCodexRuntimeOptions,
 ): NodeJS.ProcessEnv {
-  const isolatedCodexRuntime = prepareIsolatedCodexRuntime(userDataPath, gateway)
+  const isolatedCodexRuntime = prepareIsolatedCodexRuntime(userDataPath, gateway, options)
 
   return {
     ...process.env,
     CODEX_HOME: isolatedCodexRuntime.codexHomePath,
     HOME: isolatedCodexRuntime.codexProcessHomePath,
     ...(gateway?.mcpBearerToken
-      ? { [STUDENT_CLAW_GATEWAY_TOKEN_ENV]: gateway.mcpBearerToken }
+      ? { [ORBYT_GATEWAY_TOKEN_ENV]: gateway.mcpBearerToken }
       : {}),
   }
 }

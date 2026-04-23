@@ -29,7 +29,7 @@ The current codebase contains a substantial portion of the intended Phase 0 scaf
 
 The main gaps are:
 
-1. `@student-claw/shared` is not reliably consumable by downstream workspaces.
+1. `@orbyt/shared` is not reliably consumable by downstream workspaces.
 2. Cross-cutting typecheck is failing in both server and UI.
 3. Server runtime verification is blocked because the server cannot boot cleanly.
 4. Electron Phase 0 helpers exist, but the main process is still a placeholder and the dev command fails before startup.
@@ -40,7 +40,7 @@ The main gaps are:
 The stabilization pass succeeds when all of the following are true:
 
 - Shared contracts build into a consumable workspace package with usable root entrypoints.
-- Server imports `@student-claw/shared` cleanly in dev, typecheck, and tests.
+- Server imports `@orbyt/shared` cleanly in dev, typecheck, and tests.
 - Server boots on the configured port, creates the SQLite database, runs migration 1, and responds to `health.ping`.
 - UI typecheck passes without changing the existing Phase 0 shell scope.
 - Electron dev startup launches the app shell, starts the server child process, registers IPC, and loads the renderer.
@@ -50,7 +50,7 @@ The stabilization pass succeeds when all of the following are true:
 ## Constraints
 
 - Favor the fastest path to a genuinely green Phase 0 verification run.
-- Packaging-level fixes are allowed where needed, especially in `@student-claw/shared`.
+- Packaging-level fixes are allowed where needed, especially in `@orbyt/shared`.
 - Keep implementation focused on current findings and Phase 0 acceptance.
 - Preserve the existing architecture direction unless a packaging or startup fix requires a small structural adjustment.
 
@@ -58,7 +58,7 @@ The stabilization pass succeeds when all of the following are true:
 
 ### 1. Shared package stabilization
 
-Make `@student-claw/shared` a reliable internal package for Bun, TypeScript, and downstream workspaces.
+Make `@orbyt/shared` a reliable internal package for Bun, TypeScript, and downstream workspaces.
 
 This work includes:
 
@@ -168,7 +168,7 @@ Mitigation:
 
 ## Implementation Order
 
-1. Fix `@student-claw/shared` packaging and resolution.
+1. Fix `@orbyt/shared` packaging and resolution.
 2. Fix remaining typecheck blockers in server and UI.
 3. Re-run shared, server, and root verification commands.
 4. Implement and verify Electron main-process startup.
@@ -183,7 +183,7 @@ Mitigation:
 
 ## Expected Deliverables
 
-- Reliable `@student-claw/shared` workspace package behavior
+- Reliable `@orbyt/shared` workspace package behavior
 - Passing Phase 0 typecheck and test commands
 - Runnable server development entrypoint
 - Runnable Electron development entrypoint

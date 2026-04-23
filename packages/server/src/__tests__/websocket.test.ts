@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { RPC_METHODS, type ThreadId, type TurnId } from "@student-claw/contracts"
+import { RPC_METHODS, type ThreadId, type TurnId } from "@orbyt/contracts"
 import { getWeekKey } from "../activity/feed.js"
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"

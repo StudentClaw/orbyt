@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import type { ChatModel } from "@student-claw/contracts"
+import type { ChatModel } from "@orbyt/contracts"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowDown01Icon, Tick01Icon } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"

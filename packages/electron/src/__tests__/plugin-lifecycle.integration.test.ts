@@ -11,7 +11,7 @@ const bundledCatalogDir = path.resolve(repoRoot, "packages/extensions")
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = path.join(tmpdir(), `student-claw-plugin-runtime-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  const dir = path.join(tmpdir(), `orbyt-plugin-runtime-${Date.now()}-${Math.random().toString(16).slice(2)}`)
   mkdirSync(dir, { recursive: true })
   tempDirs.push(dir)
   return dir

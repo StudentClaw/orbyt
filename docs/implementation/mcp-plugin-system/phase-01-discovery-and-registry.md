@@ -20,7 +20,7 @@ Last updated: 2026-04-11
 
 ### Objective
 
-Prove that Student Claw can find installable extensions and represent their state deterministically before runtime behavior is added.
+Prove that Orbyt can find installable extensions and represent their state deterministically before runtime behavior is added.
 
 ### Current State
 

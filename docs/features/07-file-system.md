@@ -2,13 +2,13 @@
 
 ## What It Is
 
-The File System manages local storage for downloaded assignments, research materials, notes, and any files the student works with through Student Claw. It provides markdown and PDF viewing within the app and handles file organization, so the AI can reference and work with the student's documents.
+The File System manages local storage for downloaded assignments, research materials, notes, and any files the student works with through Orbyt. It provides markdown and PDF viewing within the app and handles file organization, so the AI can reference and work with the student's documents.
 
 ---
 
 ## Why It Exists
 
-Students constantly deal with files — assignment PDFs, lecture notes, research papers, their own essay drafts. The File System gives Student Claw a place to store and organize these files locally, view them without leaving the app, and make them accessible to the AI for context (e.g., "summarize this PDF" or "review my draft").
+Students constantly deal with files — assignment PDFs, lecture notes, research papers, their own essay drafts. The File System gives Orbyt a place to store and organize these files locally, view them without leaving the app, and make them accessible to the AI for context (e.g., "summarize this PDF" or "review my draft").
 
 It also underpins the Memory System (markdown files) and the Skill System (skill files are stored on disk).
 
@@ -44,20 +44,20 @@ Shared Contracts ──→ File System (FileEntry schema)
 All storage is local-only — no cloud sync. No storage cap; students manage their own disk.
 
 **Storage locations:**
-- `~/.student-claw/files/` — General file storage
-- `~/.student-claw/files/courses/<course>/` — Per-course file organization
-- `~/.student-claw/files/downloads/` — Files downloaded from Canvas
-- `~/.student-claw/trash/` — Soft-deleted files (purged after 30 days or on manual empty)
-- `~/.student-claw/memory/` — Memory markdown files (shared with Memory System)
-- `~/.student-claw/skills/` — Skill files (shared with Skill System)
+- `~/.orbyt/files/` — General file storage
+- `~/.orbyt/files/courses/<course>/` — Per-course file organization
+- `~/.orbyt/files/downloads/` — Files downloaded from Canvas
+- `~/.orbyt/trash/` — Soft-deleted files (purged after 30 days or on manual empty)
+- `~/.orbyt/memory/` — Memory markdown files (shared with Memory System)
+- `~/.orbyt/skills/` — Skill files (shared with Skill System)
 
 ### 2. File Import
 
 Every import copies the file into the app's storage directory. The app always works with its own copy — no references to external paths that could break if the student moves or deletes the original.
 
-- **Drag and drop**: Drop a file onto the app window — copied into `~/.student-claw/files/`
-- **File picker**: Native Electron file dialog — copied into `~/.student-claw/files/`
-- **Canvas download**: Downloaded and copied into `~/.student-claw/files/downloads/`
+- **Drag and drop**: Drop a file onto the app window — copied into `~/.orbyt/files/`
+- **File picker**: Native Electron file dialog — copied into `~/.orbyt/files/`
+- **Canvas download**: Downloaded and copied into `~/.orbyt/files/downloads/`
 - **AI-generated**: When the AI creates a study guide or outline, saved directly into storage
 
 ### 3. Markdown Viewer
@@ -139,7 +139,7 @@ interface FileContext {
 | **Send to AI** | Right-click → "Ask AI about this" | Inject file content into chat context |
 | **Open Externally** | Share button → "Open in [App]" | `shell.openPath()` to OS default app |
 | **Export** | Share button → "Save a Copy…" | OS save dialog — copies file to user-chosen location |
-| **Delete** | Right-click → Delete | Move to trash (`~/.student-claw/trash/`); purged after 30 days or manual empty |
+| **Delete** | Right-click → Delete | Move to trash (`~/.orbyt/trash/`); purged after 30 days or manual empty |
 | **Restore** | Trash → Restore | Move file back to its original location and re-index |
 | **Organize** | Drag to course folder | Associate file with a course |
 

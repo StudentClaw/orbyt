@@ -14,7 +14,7 @@ import {
   skipOnboardingStep,
 } from "./onboardingState"
 
-const STORAGE_KEY = "student-claw:onboarding"
+const STORAGE_KEY = "orbyt:onboarding"
 
 function getLocalStorageMock() {
   let store: Record<string, string> = {}

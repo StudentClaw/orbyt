@@ -14,6 +14,7 @@ import * as migration012 from "./012-coursework-canvas-fields.js"
 import * as migration013 from "./013-canvas-student-runtime.js"
 import * as migration014 from "./014-course-colors.js"
 import * as migration015 from "./015-memory-graph-path-preference.js"
+import * as migration016 from "./016-default-access-mode-preference.js"
 
 type SqlMigration = {
   readonly version: number
@@ -41,6 +42,7 @@ const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration013,
   migration014,
   migration015,
+  migration016,
 ]
 
 export function runMigrations(db: RuntimeSqliteDatabase): void {

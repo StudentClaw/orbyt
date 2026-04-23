@@ -46,8 +46,8 @@ const validManifest = {
     { name: "list_courses", description: "List Canvas courses visible to the authenticated student." },
     { name: "get_my_upcoming_assignments", description: "List upcoming assignments across the student's active Canvas courses." },
   ],
-  author: "student-claw",
-  homepage: "https://github.com/StudentClaw/student-claw",
+  author: "orbyt",
+  homepage: "https://github.com/Orbyt/orbyt",
 } as const
 
 describe("Extension contracts", () => {

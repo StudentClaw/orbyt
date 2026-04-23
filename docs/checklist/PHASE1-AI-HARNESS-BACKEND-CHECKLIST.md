@@ -61,7 +61,7 @@ Use this checklist to verify the backend Codex-harness slice that now sits behin
 bun run typecheck
 bun run test
 bun run build
-sqlite3 ~/.student-claw/data.db "select provider,status,auth_state,last_error_code,last_error_message,queued_turn_count,last_updated_at from provider_runtime_state;"
-sqlite3 ~/.student-claw/data.db "select thread_id,provider,status,last_error,provider_thread_id,auth_state,updated_at from provider_runtime_sessions order by updated_at desc limit 5;"
-sqlite3 ~/.student-claw/data.db "select id,thread_id,input_text,output_text,status,started_at,completed_at from orchestration_turns order by started_at desc limit 5;"
+sqlite3 ~/.orbyt/data.db "select provider,status,auth_state,last_error_code,last_error_message,queued_turn_count,last_updated_at from provider_runtime_state;"
+sqlite3 ~/.orbyt/data.db "select thread_id,provider,status,last_error,provider_thread_id,auth_state,updated_at from provider_runtime_sessions order by updated_at desc limit 5;"
+sqlite3 ~/.orbyt/data.db "select id,thread_id,input_text,output_text,status,started_at,completed_at from orchestration_turns order by started_at desc limit 5;"
 ```

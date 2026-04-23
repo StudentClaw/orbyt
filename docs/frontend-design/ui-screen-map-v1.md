@@ -1,4 +1,4 @@
-# Student Claw UI Screen Map (v1)
+# Orbyt UI Screen Map (v1)
 
 Lightweight inventory of v1 UI/UX surfaces based on `docs/features`.
 

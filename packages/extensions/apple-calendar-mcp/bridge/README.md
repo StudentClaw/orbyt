@@ -13,6 +13,6 @@ Electron Main ownership of its build, lifecycle, permissions, and packaging.
 ## Current Role
 
 - Source is vendored for continuity and packaging planning.
-- Student Claw does not yet manage this bridge lifecycle in Phase 01.
+- Orbyt does not yet manage this bridge lifecycle in Phase 01.
 - Later rollout phases will move bridge startup, health checks, permission
   prompts, and packaged binary handling under Electron Main.

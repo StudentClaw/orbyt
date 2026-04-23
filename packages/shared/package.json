@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/shared",
+  "name": "@orbyt/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@student-claw/contracts": "workspace:*",
-    "@student-claw/shared-runtime": "workspace:*"
+    "@orbyt/contracts": "workspace:*",
+    "@orbyt/shared-runtime": "workspace:*"
   }
 }

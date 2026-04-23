@@ -15,12 +15,12 @@ import {
 } from "./build-apple-calendar-bridge"
 import { resolvePackagedAppleCalendarBridgePathsFromApp } from "../packages/electron/src/plugins/apple-calendar-bridge-paths.js"
 
-const STUDENT_CLAW_APP_ID = "com.studentclaw.app"
-const STUDENT_CLAW_PRODUCT_NAME = "Student Claw"
+const ORBYT_APP_ID = "com.orbyt.app"
+const ORBYT_PRODUCT_NAME = "Orbyt"
 const CALENDAR_USAGE_DESCRIPTION =
-  "Student Claw needs calendar access to read class schedules and help plan study sessions, deadlines, and events."
+  "Orbyt needs calendar access to read class schedules and help plan study sessions, deadlines, and events."
 const CALENDAR_FULL_ACCESS_DESCRIPTION =
-  "Student Claw needs full calendar access to create and update study sessions, deadlines, and other events you ask it to manage."
+  "Orbyt needs full calendar access to create and update study sessions, deadlines, and other events you ask it to manage."
 
 type BuildLogger = {
   readonly logPath: string
@@ -72,6 +72,10 @@ export function createMacPackagingConfig(options: {
       {
         from: path.join(options.stageAppDir, "extra-resources", "extensions"),
         to: "extensions",
+      },
+      {
+        from: path.join(options.stageAppDir, "extra-resources", "skills"),
+        to: "skills",
       },
     ],
     afterSign: options.afterSignPath ?? path.join(options.stageAppDir, "build-resources", "notarize.mjs"),
@@ -153,7 +157,7 @@ function createBuildLogger(options: {
     }
   }
 
-  writeLine(`[build] Student Claw macOS artifact build started (${options.arch}, ${options.signed ? "signed" : "unsigned"})`)
+  writeLine(`[build] Orbyt macOS artifact build started (${options.arch}, ${options.signed ? "signed" : "unsigned"})`)
 
   return {
     logPath,
@@ -193,6 +197,10 @@ function resolveElectronDistSource(repoRoot: string): string {
 
 function resolveStagedExtensionsSource(repoRoot: string): string {
   return path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+}
+
+function resolveStagedSkillsSource(repoRoot: string): string {
+  return path.join(repoRoot, "packages", "electron", "dist", "resources", "skills")
 }
 
 export function resolvePackagedAppPath(options: {
@@ -323,7 +331,7 @@ function normalizeAppleApiKeyEnv(env: NodeJS.ProcessEnv, stageRoot: string): Nod
     return nextEnv
   }
 
-  const apiKeyPath = path.join(stageRoot, `AuthKey_${env.APPLE_API_KEY_ID ?? "StudentClaw"}.p8`)
+  const apiKeyPath = path.join(stageRoot, `AuthKey_${env.APPLE_API_KEY_ID ?? "Orbyt"}.p8`)
   writeFileSync(apiKeyPath, rawKey, "utf8")
   nextEnv.APPLE_API_KEY = apiKeyPath
   return nextEnv
@@ -366,7 +374,7 @@ function stageRuntimeWorkspacePackage(stageVendorDir: string, pkg: {
   if (packageJson.dependencies && typeof packageJson.dependencies === "object") {
     for (const [dependency, value] of Object.entries(packageJson.dependencies as Record<string, string>)) {
       if (value === "workspace:*") {
-        packageJson.dependencies[dependency] = dependency === "@student-claw/contracts"
+        packageJson.dependencies[dependency] = dependency === "@orbyt/contracts"
           ? "file:../contracts"
           : "file:../shared-runtime"
       }
@@ -378,17 +386,17 @@ function stageRuntimeWorkspacePackage(stageVendorDir: string, pkg: {
 export function createStagePackageJson(stageAppDir: string, signed: boolean) {
   const repoRoot = resolveRepoRoot()
   return {
-    name: "student-claw-desktop-build",
+    name: "orbyt-desktop-build",
     version: rootPackageJson.version,
     packageManager: String(rootPackageJson.packageManager ?? "bun@1.3.5"),
     private: true,
-    description: "Student Claw desktop build",
-    author: "Student Claw",
+    description: "Orbyt desktop build",
+    author: "Orbyt",
     type: "module",
     main: "dist/main/main.js",
     build: createMacPackagingConfig({
-      productName: STUDENT_CLAW_PRODUCT_NAME,
-      appId: STUDENT_CLAW_APP_ID,
+      productName: ORBYT_PRODUCT_NAME,
+      appId: ORBYT_APP_ID,
       stageAppDir,
       outputDir: path.join(stageAppDir, "release"),
       signed,
@@ -397,10 +405,10 @@ export function createStagePackageJson(stageAppDir: string, signed: boolean) {
     dependencies: {
       "@modelcontextprotocol/sdk": electronPackageJson.dependencies["@modelcontextprotocol/sdk"],
       "@openai/codex": electronPackageJson.dependencies["@openai/codex"],
-      "@student-claw/contracts": "file:vendor/contracts",
-      "@student-claw/server": "file:vendor/server",
-      "@student-claw/shared": "file:vendor/shared",
-      "@student-claw/shared-runtime": "file:vendor/shared-runtime",
+      "@orbyt/contracts": "file:vendor/contracts",
+      "@orbyt/server": "file:vendor/server",
+      "@orbyt/shared": "file:vendor/shared",
+      "@orbyt/shared-runtime": "file:vendor/shared-runtime",
       "web-push": electronPackageJson.dependencies["web-push"],
       "ws": electronPackageJson.dependencies.ws,
     },
@@ -437,12 +445,16 @@ function stageDesktopApp(options: {
   const electronResourcesSource = resolveElectronResourcesSource(options.repoRoot)
   const buildResourcesSource = resolveBuildResourcesSource(options.repoRoot)
   const stagedExtensionsSource = resolveStagedExtensionsSource(options.repoRoot)
+  const stagedSkillsSource = resolveStagedSkillsSource(options.repoRoot)
 
   if (!existsSync(electronDistSource)) {
     throw new Error(`Missing Electron dist output at ${electronDistSource}. Run bun run build first.`)
   }
   if (!existsSync(stagedExtensionsSource)) {
     throw new Error(`Missing staged bundled extensions at ${stagedExtensionsSource}. Run bun run stage:bundled-extensions first.`)
+  }
+  if (!existsSync(stagedSkillsSource)) {
+    throw new Error(`Missing staged bundled skills at ${stagedSkillsSource}. Run bun run stage:bundled-skills first.`)
   }
 
   const stageBuildResourcesDir = path.join(options.stageAppDir, "build-resources")
@@ -459,6 +471,7 @@ function stageDesktopApp(options: {
   cpSync(path.join(electronResourcesSource, "icon.png"), path.join(stageBuildResourcesDir, "icon.png"))
   cpSync(buildResourcesSource, stageBuildResourcesDir, { recursive: true })
   cpSync(stagedExtensionsSource, path.join(stageExtraResourcesDir, "extensions"), { recursive: true })
+  cpSync(stagedSkillsSource, path.join(stageExtraResourcesDir, "skills"), { recursive: true })
   createMacIcon(stageBuildResourcesDir, path.join(stageBuildResourcesDir, "icon.png"), options.verbose, options.logger)
 
   options.logger.phase("Staging Apple Calendar bridge assets")
@@ -530,11 +543,17 @@ function buildDesktopArtifact(options: {
       verbose,
       logger,
     })
+    logger.phase("Staging bundled skills")
+    runCommand("bun", ["run", "stage:bundled-skills"], {
+      cwd: options.repoRoot,
+      verbose,
+      logger,
+    })
   } else {
     logger.phase("Skipping workspace rebuild and reusing existing build outputs")
   }
 
-  const stageAppDir = mkdtempSync(path.join(tmpdir(), "student-claw-mac-build-"))
+  const stageAppDir = mkdtempSync(path.join(tmpdir(), "orbyt-mac-build-"))
   logger.info(`Temporary stage directory: ${stageAppDir}`)
   stageDesktopApp({
     repoRoot: options.repoRoot,
@@ -576,7 +595,7 @@ function buildDesktopArtifact(options: {
   if (options.signed) {
     const appDir = resolvePackagedAppPath({
       releaseDir,
-      productName: STUDENT_CLAW_PRODUCT_NAME,
+      productName: ORBYT_PRODUCT_NAME,
       arch: options.arch,
     })
     const helperPath = resolvePackagedAppleCalendarBridgePathsFromApp(appDir).executablePath
@@ -627,6 +646,6 @@ if (import.meta.main) {
     verbose,
   })
 
-  process.stdout.write(`Built Student Claw macOS artifact in ${result.releaseDir}\n`)
+  process.stdout.write(`Built Orbyt macOS artifact in ${result.releaseDir}\n`)
   process.stdout.write(`Build log saved to ${result.logPath}\n`)
 }

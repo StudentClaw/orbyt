@@ -1,4 +1,4 @@
-import type { PluginRuntimeLogEntry } from "@student-claw/contracts"
+import type { PluginRuntimeLogEntry } from "@orbyt/contracts"
 
 export type PluginRuntimeLogQuery = {
   pluginId?: string

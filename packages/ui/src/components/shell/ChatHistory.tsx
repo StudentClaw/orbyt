@@ -8,8 +8,8 @@ import {
   FolderAddIcon,
   MoreHorizontalCircle01Icon,
 } from "@hugeicons/core-free-icons"
-import { IpcChannel } from "@student-claw/contracts"
-import type { OrchestrationThread } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
+import type { OrchestrationThread } from "@orbyt/contracts"
 import {
   useOrchestrationActions,
   useRuntimeConnectionStatus,
@@ -37,8 +37,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-const COLLAPSED_WORKSPACE_STORAGE_KEY = "student-claw:chat-collapsed-workspaces"
-const SEEN_THREAD_TURNS_STORAGE_KEY = "student-claw:chat-seen-thread-turns"
+const COLLAPSED_WORKSPACE_STORAGE_KEY = "orbyt:chat-collapsed-workspaces"
+const SEEN_THREAD_TURNS_STORAGE_KEY = "orbyt:chat-seen-thread-turns"
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -357,7 +357,7 @@ export function ChatHistory() {
   ) => {
     const chatLabel = threadCount === 1 ? "chat" : "chats"
     const confirmed = window.confirm(
-      `Remove "${workspaceName}" and delete ${threadCount} ${chatLabel} from Student Claw? The real folder on disk will not be deleted.`,
+      `Remove "${workspaceName}" and delete ${threadCount} ${chatLabel} from Orbyt? The real folder on disk will not be deleted.`,
     )
     if (!confirmed) {
       return
@@ -441,7 +441,7 @@ export function ChatHistory() {
     title: string,
   ) => {
     const confirmed = window.confirm(
-      `Delete "${title}" and remove its message history from Student Claw?`,
+      `Delete "${title}" and remove its message history from Orbyt?`,
     )
     if (!confirmed) {
       return

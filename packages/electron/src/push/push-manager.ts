@@ -9,7 +9,7 @@ import {
   type PushSendTestResult,
   type UpdatePhonePushSettingsParams,
   type WeeklyInsight,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PushActivityBridge } from "./push-activity-bridge.js"
 import { PushDeliveryService } from "./push-delivery-service.js"
 import { PushPairingClient } from "./push-pairing-client.js"

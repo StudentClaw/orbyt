@@ -32,7 +32,7 @@ these rules.
 
 ### Current State
 
-- Student Claw packages desktop artifacts through a dedicated `electron-builder` script layered on top of the Electron build output and Phase 03's staged bundled catalog.
+- Orbyt packages desktop artifacts through a dedicated `electron-builder` script layered on top of the Electron build output and Phase 03's staged bundled catalog.
 - The Apple Calendar bridge is built into `packages/extensions/apple-calendar-mcp/bridge/dist/<arch>/CalendarAPIBridge` with matching `version.json` metadata.
 - Unsigned local `.app` and `.dmg` packaging works without Apple signing credentials.
 - Signed and notarized release packaging is wired behind env-driven secrets and requires full Xcode on the release runner.
@@ -43,9 +43,9 @@ these rules.
 - The local `arm64` signed/notarized proof is now captured:
   - `bun run check:electron:mac:signed` passes on a full-Xcode macOS machine
   - notarization submission `bedaa1eb-fcff-4448-9b4e-4743dcb5671e` completed with `Accepted`
-  - `xcrun stapler staple` succeeded for `release/mac-arm64/Student Claw.app`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Student Claw.app" --verbose` succeeded
-  - `bun run dist:electron:mac:signed --arch arm64` now completes end to end with post-package verification against `release/mac-arm64/Student Claw.app`
+  - `xcrun stapler staple` succeeded for `release/mac-arm64/Orbyt.app`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose` succeeded
+  - `bun run dist:electron:mac:signed --arch arm64` now completes end to end with post-package verification against `release/mac-arm64/Orbyt.app`
 
 ### Out Of Scope
 
@@ -83,7 +83,7 @@ The packaged Electron app's `Info.plist` must declare, at a minimum:
 - `NSCalendarsUsageDescription`: required on macOS < 14 and as a fallback description
 - `NSCalendarsFullAccessUsageDescription`: required on macOS 14+ for write access to calendars and events
 
-The strings must be user-facing and explain why Student Claw needs Calendar
+The strings must be user-facing and explain why Orbyt needs Calendar
 access. The strings live in the main `Info.plist` regardless of whether the
 Swift helper is a separate binary; macOS attributes the prompt to the parent
 `.app` that owns the binary.
@@ -94,7 +94,7 @@ a product copy decision.
 ### Deployment Target And Minimum macOS
 
 - The Swift helper targets macOS 13.0 (matches upstream) unless a later product decision raises it.
-- The Student Claw app's minimum supported macOS must be ≥ the Swift helper deployment target. If they diverge, the lower one wins for Apple Calendar availability.
+- The Orbyt app's minimum supported macOS must be ≥ the Swift helper deployment target. If they diverge, the lower one wins for Apple Calendar availability.
 - Below the minimum macOS, Apple Calendar is hidden (non-macOS-level invisibility per Phase 05). `platform_unsupported` readiness is only reachable via config migration, not normal discovery.
 
 ### Per-Architecture Helper Packaging
@@ -140,7 +140,7 @@ file is checked in and reviewed, not invented per build.
 
 ### Bridge Binary Versioning
 
-- The bridge emits version metadata (`version.json`) matching the Student Claw app version at build time.
+- The bridge emits version metadata (`version.json`) matching the Orbyt app version at build time.
 - Packaging verifies the version metadata before embedding the helper into the packaged app.
 - The bridge manager can log or surface the packaged helper version during diagnostics. A mismatch between the expected version and the packaged helper metadata is a build-time failure for packaged artifacts.
 - A cached or user-overridden bridge binary must never shadow the packaged one. Packaged builds always resolve the bridge from inside the packaged resources.
@@ -167,7 +167,7 @@ file is checked in and reviewed, not invented per build.
   - packaged-artifact verification resolves the `.app` and helper path, confirms the helper is outside `asar`, and runs the full `codesign`, `spctl`, and `stapler` command set
 - Manual smoke:
   - notarized `.app` boots on a clean macOS 13+ machine
-  - enabling Apple Calendar triggers the macOS Calendar permission prompt attributed to Student Claw
+  - enabling Apple Calendar triggers the macOS Calendar permission prompt attributed to Orbyt
   - granting access transitions readiness to `ready`
   - one tool call round-trips successfully
   - quitting the app leaves no orphaned bridge process
@@ -183,7 +183,7 @@ file is checked in and reviewed, not invented per build.
 - `codesign --verify --deep --strict --verbose=2` output for the shipped bridge
 - `spctl --assess --type execute` output for the notarized `.app`
 - path evidence showing `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` exists outside `asar`
-- one screenshot of the macOS Calendar permission prompt triggered by the notarized Student Claw build
+- one screenshot of the macOS Calendar permission prompt triggered by the notarized Orbyt build
 - preflight output from `bun run check:electron:mac:signed`
 - notarization acceptance for submission `bedaa1eb-fcff-4448-9b4e-4743dcb5671e`
 - successful `xcrun stapler staple` output for the notarized `arm64` app

@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The Local Server is the brain of Student Claw. It's an Effect-TS application running as a child process spawned by Electron. It hosts the WebSocket server for real-time UI communication, manages SQLite and feature services, coordinates the AI harness, and orchestrates backend behavior. Every feature's policy and domain logic lives here, while Electron Main owns desktop process hosting and plugin process control.
+The Local Server is the brain of Orbyt. It's an Effect-TS application running as a child process spawned by Electron. It hosts the WebSocket server for real-time UI communication, manages SQLite and feature services, coordinates the AI harness, and orchestrates backend behavior. Every feature's policy and domain logic lives here, while Electron Main owns desktop process hosting and plugin process control.
 
 ---
 
@@ -50,7 +50,7 @@ Local persistence layer for all structured data.
 Loads app configuration from multiple sources.
 
 - Default values (hardcoded sensible defaults)
-- Config file (`~/.student-claw/config.json`)
+- Config file (`~/.orbyt/config.json`)
 - Environment variables (from Electron Main Process)
 - Student preferences (from SQLite, set during Onboarding)
 

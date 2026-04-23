@@ -8,7 +8,7 @@ import type {
   PushPairingStatusResult,
   UpdatePhonePushSettingsParams,
   WebPushSubscriptionRecord,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import webPush from "web-push"
 
 type InternalLinkedDevice = PushLinkedDevice & {

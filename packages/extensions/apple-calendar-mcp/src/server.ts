@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { parseExtensionManifestSync } from "@student-claw/contracts"
+import { parseExtensionManifestSync } from "@orbyt/contracts"
 import { z } from "zod"
 import * as bridgeCalendars from "./calendars.js"
 
@@ -52,14 +52,14 @@ export const appleCalendarManifest = parseExtensionManifestSync({
     type: "none",
   },
   tools: [...appleCalendarToolInventory],
-  author: "student-claw",
-  homepage: "https://github.com/StudentClaw/student-claw",
+  author: "orbyt",
+  homepage: "https://github.com/Orbyt/orbyt",
 })
 
 const appleCalendarInstructions = [
   "Use the Apple Calendar tools to inspect or modify the local macOS Calendar database.",
   "These tools preserve the upstream camelCase tool names for compatibility with the vendored source.",
-  "Bridge lifecycle, readiness, and OS permission handling are managed by Student Claw outside this MCP process.",
+  "Bridge lifecycle, readiness, and OS permission handling are managed by Orbyt outside this MCP process.",
 ].join(" ")
 
 type AppleCalendarBridgeClient = typeof bridgeCalendars

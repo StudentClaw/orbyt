@@ -1,4 +1,4 @@
-import { CourseWorkItem, type CanvasCourse, type CanvasModuleItem } from "@student-claw/contracts"
+import { CourseWorkItem, type CanvasCourse, type CanvasModuleItem } from "@orbyt/contracts"
 import { encodeCourseId, encodeCourseWorkItemId } from "../ids.js"
 import { validateContract } from "../utils.js"
 

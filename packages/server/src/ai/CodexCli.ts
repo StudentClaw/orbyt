@@ -6,7 +6,7 @@ import {
   shouldAutoApproveShellCommand,
   type ProviderApprovalDecision,
   type ThreadAccessMode,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 import type { AppConfig } from "../config/defaults.js"
 import { PluginGateway } from "../mcp/PluginGateway.js"
@@ -17,7 +17,7 @@ import {
   PendingApprovalEntry,
   ProviderMcpToolCallEvent,
   ProviderRuntimeFailure,
-  STUDENT_CLAW_GATEWAY_TOKEN_ENV,
+  ORBYT_GATEWAY_TOKEN_ENV,
   buildCodexAppServerArgs,
   buildInitializeParams,
   emitReasoningText,
@@ -104,9 +104,9 @@ export interface CodexCliService {
     onInterrupted: () => Promise<void>
     onError: (error: ProviderRuntimeFailure) => Promise<void>
     onMcpToolCall: (event: ProviderMcpToolCallEvent) => Promise<void>
-    onApprovalRequest: (approval: import("@student-claw/contracts").ProviderPendingApproval) => Promise<void>
+    onApprovalRequest: (approval: import("@orbyt/contracts").ProviderPendingApproval) => Promise<void>
   }) => Promise<void>
-  readonly listPendingApprovals: () => ReadonlyArray<import("@student-claw/contracts").ProviderPendingApproval>
+  readonly listPendingApprovals: () => ReadonlyArray<import("@orbyt/contracts").ProviderPendingApproval>
   readonly respondToApproval: (
     approvalRequestId: string,
     decision: ProviderApprovalDecision,
@@ -645,7 +645,7 @@ export function createCodexRuntimeInstance(
           ...(homePath ? { CODEX_HOME: homePath } : {}),
           ...(processHomePath ? { HOME: processHomePath } : {}),
           ...(config.pluginGatewayMcpBearerToken
-            ? { [STUDENT_CLAW_GATEWAY_TOKEN_ENV]: config.pluginGatewayMcpBearerToken }
+            ? { [ORBYT_GATEWAY_TOKEN_ENV]: config.pluginGatewayMcpBearerToken }
             : {}),
         },
         stdio: ["pipe", "pipe", "pipe"],

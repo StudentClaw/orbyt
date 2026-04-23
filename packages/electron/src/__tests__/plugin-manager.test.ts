@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import type { ExtensionRegistryEntry } from "@student-claw/contracts"
+import type { ExtensionRegistryEntry } from "@orbyt/contracts"
 import { PluginManager, applyPluginSandboxEnv, buildSandboxOptions } from "../plugins/plugin-manager.js"
 import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 
@@ -22,8 +22,8 @@ const availableEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
       type: "none",
     },
     tools: [{ name: "template_ping", description: "Ping" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   },
   installSource: "bundled",
   status: "discovered",
@@ -63,8 +63,8 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
       ],
     },
     tools: [{ name: "list_courses", description: "List courses" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   },
   installSource: "bundled",
   status: "discovered",
@@ -87,8 +87,8 @@ const appleEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
       type: "none",
     },
     tools: [{ name: "getCalendars", description: "List calendars" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   },
   installSource: "bundled",
   status: "discovered",
@@ -98,7 +98,7 @@ const appleEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-plugin-manager-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-plugin-manager-"))
   tempDirs.push(dir)
   return dir
 }

@@ -6,7 +6,7 @@ export function WelcomeStep({ onNext }: OnboardingStepProps) {
   return (
     <Card data-testid="welcome-step">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Welcome to Student Claw</CardTitle>
+        <CardTitle className="text-2xl">Welcome to Orbyt</CardTitle>
         <CardDescription>
           Your AI-powered study companion that keeps you on track.
         </CardDescription>
@@ -14,7 +14,7 @@ export function WelcomeStep({ onNext }: OnboardingStepProps) {
       <CardContent className="space-y-6 text-center">
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Student Claw connects to your Canvas LMS, understands your assignments,
+            Orbyt connects to your Canvas LMS, understands your assignments,
             deadlines, and course progress, and helps you plan your study sessions intelligently.
           </p>
           <p>

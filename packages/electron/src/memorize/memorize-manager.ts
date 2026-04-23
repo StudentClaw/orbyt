@@ -1,6 +1,6 @@
 import { WebSocket } from "ws"
-import { RPC_METHODS, WS_PROTOCOL } from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+import { RPC_METHODS, WS_PROTOCOL } from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 import { MemorizeScheduler } from "./memorize-scheduler.js"
 
 const AUTH_PROTOCOL_PREFIX = "auth."

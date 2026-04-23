@@ -1,4 +1,4 @@
-import type { CanvasStudentCourseGradeSummary, Course } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course } from "@orbyt/contracts"
 import {
   ChartContainer,
   ChartTooltip,
@@ -77,6 +77,21 @@ const BAR_COLORS = [
   "var(--color-chart-5)",
 ] as const
 
+function gpaToneClass(gpa: number): string {
+  if (gpa >= 3.7) return "text-success"
+  if (gpa >= 3.0) return "text-foreground"
+  if (gpa >= 2.0) return "text-warning"
+  return "text-destructive"
+}
+
+function growthMeta(growth: string): { readonly tone: string; readonly arrow: string } {
+  if (growth.startsWith("Improving")) return { tone: "text-success", arrow: "↑" }
+  if (growth.startsWith("Declining")) return { tone: "text-destructive", arrow: "↓" }
+  if (growth.startsWith("Mixed")) return { tone: "text-warning", arrow: "→" }
+  if (growth === "Steady") return { tone: "text-info", arrow: "→" }
+  return { tone: "text-muted-foreground", arrow: "·" }
+}
+
 export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProps) {
   if (grades.length === 0) {
     return (
@@ -127,6 +142,8 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
   )
 
   const growth = aggregateGrowthLabel(courses, grades)
+  const growthTone = growthMeta(growth)
+  const gpaTone = gpaToneClass(avgGpa)
 
   return (
     <div className="pagelet p-5" data-testid="grade-insights-widget">
@@ -160,7 +177,10 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
       <div className="grid grid-cols-2 gap-4 border-t border-border/60 pt-4">
         <div data-testid="grade-metric-gpa">
           <p className="text-xs text-muted-foreground">Current GPA</p>
-          <p className="text-lg font-semibold tabular-nums" data-testid="grade-gpa-value">
+          <p
+            className={`text-lg font-semibold tabular-nums ${gpaTone}`}
+            data-testid="grade-gpa-value"
+          >
             {avgGpa.toFixed(2)}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -169,8 +189,14 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
         </div>
         <div data-testid="grade-metric-growth">
           <p className="text-xs text-muted-foreground">Growth</p>
-          <p className="text-sm font-medium leading-snug" data-testid="grade-growth-value">
-            {growth}
+          <p
+            className={`flex items-center gap-1.5 text-sm font-medium leading-snug ${growthTone.tone}`}
+            data-testid="grade-growth-value"
+          >
+            <span aria-hidden className="text-base leading-none">
+              {growthTone.arrow}
+            </span>
+            <span>{growth}</span>
           </p>
         </div>
       </div>

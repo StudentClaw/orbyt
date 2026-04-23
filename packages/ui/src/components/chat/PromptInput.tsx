@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   IpcChannel,
   classifyShellCommandForApproval,
@@ -7,10 +7,10 @@ import {
   type ProviderPendingApproval,
   type ThreadAccessMode,
   type TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PlusIcon, SquareIcon } from "lucide-react"
 import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
-import { SkillPicker, type SkillPickerEntry } from "@/components/chat/SkillPicker"
+import { SkillPicker, filterSkills, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
 import {
   type PromptInputMessage,
@@ -47,6 +47,8 @@ interface PromptInputProps {
     skillId?: string | null
   }) => void | Promise<void>
   readonly skills?: readonly SkillPickerEntry[]
+  readonly onForkSkill?: (skill: SkillPickerEntry) => void
+  readonly onManageSkillPermissions?: (skill: SkillPickerEntry) => void
   readonly onInterrupt: () => void
   readonly status: ChatStatus
   readonly connectionState: WsConnectionPhase
@@ -325,6 +327,8 @@ export function PromptInput({
   interruptPending = false,
   interruptError = null,
   skills = [],
+  onForkSkill,
+  onManageSkillPermissions,
 }: PromptInputProps) {
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
@@ -333,6 +337,7 @@ export function PromptInput({
   const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
   const [showSkillPicker, setShowSkillPicker] = useState(false)
   const [skillFilter, setSkillFilter] = useState("")
+  const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0)
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounterRef = useRef(0)
   const composerRef = useRef<RichComposerHandle>(null)
@@ -435,9 +440,23 @@ export function PromptInput({
     return stripComposerAttachmentIds(refreshedAttachments)
   }, [attachments, resolveAttachmentMetadata])
 
+  const visibleSkills = useMemo(
+    () => filterSkills(skills, skillFilter),
+    [skills, skillFilter],
+  )
+
+  useEffect(() => {
+    setHighlightedSkillIndex((current) => {
+      if (visibleSkills.length === 0) return 0
+      if (current >= visibleSkills.length) return 0
+      return current
+    })
+  }, [visibleSkills.length, skillFilter])
+
   const handleSkillDismiss = useCallback(() => {
     setShowSkillPicker(false)
     setSkillFilter("")
+    setHighlightedSkillIndex(0)
     composerRef.current?.focus()
   }, [])
 
@@ -445,11 +464,15 @@ export function PromptInput({
     composerRef.current?.insertSkill(skill)
     setShowSkillPicker(false)
     setSkillFilter("")
+    setHighlightedSkillIndex(0)
   }, [])
 
   const handleSkillTrigger = useCallback((filter: string, show: boolean) => {
     setShowSkillPicker(show)
     setSkillFilter(show ? filter : "")
+    if (show) {
+      setHighlightedSkillIndex(0)
+    }
   }, [])
 
   const handleActualSubmit = useCallback(async () => {
@@ -489,32 +512,43 @@ export function PromptInput({
 
   const handleComposerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (showSkillPicker && (event.key === "Enter" || event.key === "Tab")) {
-        event.preventDefault()
-        const query = skillFilter.toLowerCase()
-        const firstMatch = skills.find(
-          (skill) =>
-            query === ""
-            || skill.id.toLowerCase().includes(query)
-            || skill.name.toLowerCase().includes(query),
-        )
+      if (!showSkillPicker) return
 
-        if (firstMatch) {
-          composerRef.current?.insertSkill(firstMatch)
+      if (visibleSkills.length > 0) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault()
+          setHighlightedSkillIndex((current) => (current + 1) % visibleSkills.length)
+          return
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault()
+          setHighlightedSkillIndex(
+            (current) => (current - 1 + visibleSkills.length) % visibleSkills.length,
+          )
+          return
+        }
+      }
+
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault()
+        const selected = visibleSkills[highlightedSkillIndex]
+        if (selected) {
+          composerRef.current?.insertSkill(selected)
           setShowSkillPicker(false)
           setSkillFilter("")
+          setHighlightedSkillIndex(0)
         } else {
           handleSkillDismiss()
         }
         return
       }
 
-      if (event.key === "Escape" && showSkillPicker) {
+      if (event.key === "Escape") {
         event.preventDefault()
         handleSkillDismiss()
       }
     },
-    [showSkillPicker, skillFilter, skills, handleSkillDismiss],
+    [showSkillPicker, visibleSkills, highlightedSkillIndex, handleSkillDismiss],
   )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
@@ -638,13 +672,61 @@ export function PromptInput({
               <span className="text-sm font-medium text-primary">Drop files here</span>
             </div>
           )}
-          {showSkillPicker ? (
-            <SkillPicker
-              skills={skills}
-              filter={skillFilter}
-              onSelect={handleSkillSelect}
-            />
-          ) : null}
+          <DropdownMenu
+            open={showSkillPicker}
+            onOpenChange={(open) => {
+              if (!open) {
+                handleSkillDismiss()
+              }
+            }}
+            modal={false}
+          >
+            <DropdownMenuTrigger asChild>
+              <span
+                aria-hidden="true"
+                tabIndex={-1}
+                className="pointer-events-none absolute left-3 right-3 top-0 block h-0"
+                data-testid="skill-picker-anchor"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onInteractOutside={(e) => {
+                const target = e.target as Element | null
+                if (!target) return
+                if (target.closest('[data-testid="composer-area"]')) {
+                  e.preventDefault()
+                  return
+                }
+                if (target.closest('[data-slot="dropdown-menu-content"]')) {
+                  e.preventDefault()
+                }
+              }}
+              className="w-(--radix-dropdown-menu-trigger-width) min-w-[280px] p-1"
+              data-testid="skill-picker-content"
+            >
+              <SkillPicker
+                skills={skills}
+                filter={skillFilter}
+                highlightedIndex={highlightedSkillIndex}
+                onHighlightChange={setHighlightedSkillIndex}
+                fullAccess={accessMode === "full"}
+                onSelect={handleSkillSelect}
+                onFork={onForkSkill ? (skill) => {
+                  setShowSkillPicker(false)
+                  onForkSkill(skill)
+                } : undefined}
+                onManagePermissions={onManageSkillPermissions ? (skill) => {
+                  setShowSkillPicker(false)
+                  onManageSkillPermissions(skill)
+                } : undefined}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <RegistryPromptInput
             onSubmit={handleSubmit}
@@ -666,7 +748,7 @@ export function PromptInput({
               disabled={!isConnected || disabled}
               placeholder={
                 connectionState === "connecting"
-                  ? "Connecting to Student Claw..."
+                  ? "Connecting to Orbyt..."
                   : !isConnected
                     ? "Reconnecting..."
                   : disabled && disabledReason

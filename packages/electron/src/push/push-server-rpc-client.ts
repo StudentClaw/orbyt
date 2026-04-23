@@ -16,7 +16,7 @@ export class PushServerRpcClient {
     return new Promise((resolve, reject) => {
       const requestId = randomUUID()
       const ws = this.webSocketFactory(this.bootstrap.wsUrl, [
-        "student-claw.v1",
+        "orbyt.v1",
         `auth.${this.bootstrap.wsAuthToken}`,
       ])
 

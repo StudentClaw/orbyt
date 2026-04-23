@@ -20,7 +20,7 @@ import {
   type ExtensionRuntimeReadiness,
   type ExtensionToolSummary,
   type PluginAuthStatus,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   useRuntimeCanvasSyncProgress,
   useRuntimeBootstrap,
@@ -191,7 +191,7 @@ function getReadinessPanelModel(entry: NoAuthExtensionEntry): ReadinessPanelMode
     case "bridge_starting":
       return {
         label: "Starting",
-        body: `Student Claw is starting the local bridge for ${name}.`,
+        body: `Orbyt is starting the local bridge for ${name}.`,
       }
     case "bridge_unavailable":
       return {
@@ -203,7 +203,7 @@ function getReadinessPanelModel(entry: NoAuthExtensionEntry): ReadinessPanelMode
     case "permission_required":
       return {
         label: "Permission required",
-        body: entry.lastError ?? `Grant local permissions in macOS Settings so Student Claw can use ${name}.`,
+        body: entry.lastError ?? `Grant local permissions in macOS Settings so Orbyt can use ${name}.`,
         actionLabel: getReadinessActionLabel(entry, "grant_access"),
         actionKind: "grant_access",
       }
@@ -238,7 +238,7 @@ function getReadinessPanelModel(entry: NoAuthExtensionEntry): ReadinessPanelMode
   if (entry.status === "starting") {
     return {
       label: "Starting",
-      body: `Student Claw is starting ${name}.`,
+      body: `Orbyt is starting ${name}.`,
     }
   }
 

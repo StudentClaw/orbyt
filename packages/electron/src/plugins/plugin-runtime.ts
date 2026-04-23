@@ -1,4 +1,4 @@
-import { type PluginLifecycleEvent, type PluginReadinessEvent } from "@student-claw/contracts"
+import { type PluginLifecycleEvent, type PluginReadinessEvent } from "@orbyt/contracts"
 import { PluginAuthService } from "./plugin-auth-service.js"
 import { AppleCalendarBridgeManager } from "./apple-calendar-bridge-manager.js"
 import {
@@ -45,7 +45,7 @@ export function createPluginRuntime(options: {
   })
   const enabledStore = new PluginEnabledStore(options.userDataPath)
   const runtimeLogs = new PluginRuntimeLogBuffer()
-  const emitRuntimeLog = (entry: import("@student-claw/contracts").PluginRuntimeLogEntry) => {
+  const emitRuntimeLog = (entry: import("@orbyt/contracts").PluginRuntimeLogEntry) => {
     runtimeLogs.addEntry(entry)
   }
   const appleCalendarBridgeManager = new AppleCalendarBridgeManager({

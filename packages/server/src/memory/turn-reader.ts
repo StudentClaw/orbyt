@@ -1,5 +1,5 @@
 import type { DatabaseService } from "../db/Database.js"
-import type { MemorizeState } from "@student-claw/contracts"
+import type { MemorizeState } from "@orbyt/contracts"
 
 export const GLOBAL_CURSOR_KEY = "_global"
 

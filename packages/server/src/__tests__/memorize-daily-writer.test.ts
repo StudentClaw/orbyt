@@ -10,7 +10,7 @@ const tempDirs: string[] = []
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-daily-"))
   tempDirs.push(dir)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   mkdirSync(paths.dailyDir, { recursive: true })
   return { paths, dir }
 }

@@ -1,7 +1,22 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import DOMPurify from "dompurify"
 import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 import {
   loadAssignmentDetail,
@@ -23,6 +38,27 @@ type AssignmentQuickAction = {
   readonly id: AssignmentQuickActionId
   readonly label: string
 }
+
+type AssignmentThreadTarget = {
+  readonly threadId: string
+  readonly threadTitle: string
+  readonly workspaceId: string
+  readonly workspaceName: string
+}
+
+type AssignmentWorkspaceEntry = {
+  readonly workspaceId: string
+  readonly workspaceName: string
+  readonly threads: readonly AssignmentThreadTarget[]
+}
+
+type AssignmentActionTarget =
+  | { readonly kind: "thread"; readonly thread: AssignmentThreadTarget }
+  | {
+      readonly kind: "new-thread"
+      readonly workspaceId: string
+      readonly workspaceName: string
+    }
 
 const QUICK_ACTIONS: ReadonlyArray<AssignmentQuickAction> = [
   { id: "draft", label: "Draft Assignment" },
@@ -172,27 +208,99 @@ function AssignmentSummaryHeader({ entry }: { entry: AssignmentDetailEntry }) {
 }
 
 function AssignmentQuickActions({
+  workspaceEntries,
   onAction,
   disabled,
+  isForwarding,
 }: {
-  readonly onAction: (actionId: AssignmentQuickActionId) => void
+  readonly workspaceEntries: readonly AssignmentWorkspaceEntry[]
+  readonly onAction: (actionId: AssignmentQuickActionId, target: AssignmentActionTarget) => void
   readonly disabled: boolean
+  readonly isForwarding: boolean
 }) {
+  const [openActionId, setOpenActionId] = useState<AssignmentQuickActionId | null>(null)
+  const canPickTarget = !disabled && !isForwarding && workspaceEntries.length > 0
+
   return (
     <section className="pagelet p-5" data-testid="assignment-detail-actions">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-2 text-sm font-medium text-muted-foreground">Quick actions</p>
         {QUICK_ACTIONS.map((action) => (
-          <Button
+          <Popover
             key={action.id}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={() => onAction(action.id)}
+            open={openActionId === action.id}
+            onOpenChange={(open) => setOpenActionId(open ? action.id : null)}
           >
-            {action.label}
-          </Button>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canPickTarget}
+                onClick={() => setOpenActionId(action.id)}
+              >
+                {action.label}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-[24rem] gap-0 p-0"
+              data-testid={`assignment-thread-picker-${action.id}`}
+            >
+              <PopoverHeader className="px-4 pt-4 pb-2">
+                <PopoverTitle>Send to a chat</PopoverTitle>
+              </PopoverHeader>
+              <Command>
+                <CommandInput placeholder="Search chats or folders..." />
+                <CommandList>
+                  <CommandEmpty>No chats found.</CommandEmpty>
+                  {workspaceEntries.map((entry) => (
+                    <CommandGroup key={entry.workspaceId} heading={entry.workspaceName}>
+                      <CommandItem
+                        key={`new-thread-${entry.workspaceId}`}
+                        disabled={isForwarding}
+                        value={`New chat ${entry.workspaceName}`}
+                        data-testid={`assignment-new-thread-${entry.workspaceId}`}
+                        onSelect={() => {
+                          void onAction(action.id, {
+                            kind: "new-thread",
+                            workspaceId: entry.workspaceId,
+                            workspaceName: entry.workspaceName,
+                          })
+                          setOpenActionId(null)
+                        }}
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate text-sm font-medium">New chat</span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            Start a fresh chat in {entry.workspaceName}
+                          </span>
+                        </span>
+                      </CommandItem>
+                      {entry.threads.map((target) => (
+                        <CommandItem
+                          key={target.threadId}
+                          disabled={isForwarding}
+                          value={`${target.threadTitle} ${target.workspaceName}`}
+                          onSelect={() => {
+                            void onAction(action.id, { kind: "thread", thread: target })
+                            setOpenActionId(null)
+                          }}
+                        >
+                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="truncate text-sm">{target.threadTitle}</span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              {target.workspaceName}
+                            </span>
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         ))}
       </div>
       {disabled ? (
@@ -269,37 +377,96 @@ export function AssignmentDetailPage({ assignmentId }: AssignmentDetailPageProps
   const snapshot = useRuntimeOrchestrationSnapshot()
   const actions = useOrchestrationActions()
   const entry = useAssignmentDetailEntry(assignmentId)
-  const workspace = snapshot?.workspaces[0] ?? null
+  const [isForwarding, setIsForwarding] = useState<boolean>(false)
+  const workspaceEntries = useMemo<readonly AssignmentWorkspaceEntry[]>(() => {
+    if (!snapshot) {
+      return []
+    }
+
+    const threadsByWorkspace = new Map<string, AssignmentThreadTarget[]>()
+    const orderedThreads = [...snapshot.threads].sort(
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+    )
+
+    for (const workspace of snapshot.workspaces) {
+      threadsByWorkspace.set(workspace.id, [])
+    }
+
+    for (const thread of orderedThreads) {
+      const bucket = threadsByWorkspace.get(thread.workspaceId)
+      if (!bucket) {
+        continue
+      }
+      const workspaceName =
+        snapshot.workspaces.find((workspace) => workspace.id === thread.workspaceId)?.name ?? "Folder"
+      bucket.push({
+        threadId: thread.id,
+        threadTitle: thread.title,
+        workspaceId: thread.workspaceId,
+        workspaceName,
+      })
+    }
+
+    return snapshot.workspaces.map((workspace) => ({
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      threads: threadsByWorkspace.get(workspace.id) ?? [],
+    }))
+  }, [snapshot])
 
   useEffect(() => {
     void loadAssignmentDetail(assignmentId)
   }, [assignmentId])
 
-  const handleQuickAction = async (actionId: AssignmentQuickActionId) => {
-    if (!workspace) {
-      return
-    }
-
+  const handleQuickAction = async (
+    actionId: AssignmentQuickActionId,
+    target: AssignmentActionTarget,
+  ) => {
     const action = QUICK_ACTIONS.find((candidate) => candidate.id === actionId)
     if (!action) {
       return
     }
 
-    const threadId = await actions.createThread(workspace.id, `${action.label}: ${entry.preview?.title ?? "Assignment"}`)
-    await actions.sendTurn(threadId, buildAssignmentActionPrompt(actionId, entry), [], null, null)
-    await navigate({
-      to: "/chat/$workspaceId/$threadId",
-      params: {
-        workspaceId: workspace.id,
+    setIsForwarding(true)
+    try {
+      let threadId: string
+      let workspaceId: string
+      if (target.kind === "new-thread") {
+        threadId = await actions.createThread(target.workspaceId, action.label)
+        workspaceId = target.workspaceId
+      } else {
+        threadId = target.thread.threadId
+        workspaceId = target.thread.workspaceId
+      }
+
+      await actions.sendTurn(
         threadId,
-      },
-    })
+        buildAssignmentActionPrompt(actionId, entry),
+        [],
+        null,
+        null,
+      )
+      await navigate({
+        to: "/chat/$workspaceId/$threadId",
+        params: {
+          workspaceId,
+          threadId,
+        },
+      })
+    } finally {
+      setIsForwarding(false)
+    }
   }
 
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 p-6 lg:p-8" data-testid="assignment-detail-page">
       <AssignmentSummaryHeader entry={entry} />
-      <AssignmentQuickActions onAction={handleQuickAction} disabled={!workspace} />
+      <AssignmentQuickActions
+        workspaceEntries={workspaceEntries}
+        onAction={handleQuickAction}
+        disabled={!snapshot || snapshot.workspaces.length === 0}
+        isForwarding={isForwarding}
+      />
       <AssignmentBodySection entry={entry} onRetry={() => void loadAssignmentDetail(assignmentId)} />
     </div>
   )

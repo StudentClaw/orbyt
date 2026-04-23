@@ -5,7 +5,7 @@ Last updated: 2026-04-17
 ## Orientation Note
 
 - Target feature: define the student-side actions that remain in scope and the local download contract for Canvas files
-- Key dependencies: Phase 02 shared read surface, [docs/architecture/05-external-services.md](../../architecture/05-external-services.md), Student Claw workspace and writable-root constraints, current file and discussion tool patterns
+- Key dependencies: Phase 02 shared read surface, [docs/architecture/05-external-services.md](../../architecture/05-external-services.md), Orbyt workspace and writable-root constraints, current file and discussion tool patterns
 - Constraints and boundaries:
   - include student-safe Canvas-side effects only
   - all local writes must stay inside the active Codex cwd or writable roots
@@ -21,7 +21,7 @@ Last updated: 2026-04-17
 
 ### Objective
 
-Define the student-side effects that the new Canvas surface will support and make local file download behavior safe and predictable in the Student Claw environment.
+Define the student-side effects that the new Canvas surface will support and make local file download behavior safe and predictable in the Orbyt environment.
 
 ### Current State
 

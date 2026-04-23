@@ -5,13 +5,12 @@ import {
   mkdirSync,
 } from "node:fs"
 import { dirname } from "node:path"
-import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@student-claw/contracts"
+import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@orbyt/contracts"
 import type { MemoryPaths } from "./paths.js"
 import type { ParsedCandidate } from "./candidate-parser.js"
 
 const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
 const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-type GraphCandidateInput = Pick<ParsedCandidate, "branch" | "text">
 type GraphCandidateInput = Pick<ParsedCandidate, "branch" | "text">
 
 function validateBranchSegments(branch: string): void {

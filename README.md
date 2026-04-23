@@ -1,6 +1,6 @@
-# Student Claw
+# Orbyt
 
-Student Claw is a local-first desktop application that brings agentic AI workflows to everyday student tasks.
+Orbyt is a local-first desktop application that brings agentic AI workflows to everyday student tasks.
 It helps students plan study time, track assignments, and improve academic outcomes through a chat-first experience.
 
 ## Repository Status

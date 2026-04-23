@@ -32,7 +32,7 @@ verification state is `Verified`.
 | 00 - Contracts And Scaffolding | complete | Codex | Verified | Begin Phase 02 local spawn work using the canonical contracts and IPC shapes |
 | 01 - Discovery And Registry | complete | Codex | Verified | Begin Phase 02 local spawn and lifecycle implementation |
 | 02 - Local Spawn And Lifecycle | complete | Codex | Verified | Start Phase 03 gateway wiring using the live `template-mcp` lifecycle path as the routed canary |
-| 03 - Gateway And Codex Integration | not_started | Unassigned | Not run | Expose one Student Claw MCP gateway and route one fake tool end to end |
+| 03 - Gateway And Codex Integration | not_started | Unassigned | Not run | Expose one Orbyt MCP gateway and route one fake tool end to end |
 | 04 - Credentials And Auth UX | not_started | Unassigned | Not run | Add vault-backed auth schema rendering and secure credential handshake |
 | 05 - Installation And Extension Management | not_started | Unassigned | Not run | Add bundled install, enable/disable, uninstall, and live inventory refresh |
 | 06 - Canvas Vertical Slice | not_started | Unassigned | Not run | Drive one real Canvas tool through the full routed path |
@@ -42,7 +42,7 @@ verification state is `Verified`.
 
 Start [Phase 03 - Gateway And Codex Integration](phase-03-gateway-and-codex-integration.md).
 
-Phase 02 is complete. Use the live `template-mcp` lifecycle path as the Phase 03 canary: lifecycle IPC already exists, `plugin:list` / `plugin:get-status` / `plugin:lifecycle` are live, and Electron Main already has `PluginManager.callTool()` for routed canary calls. The missing work in this phase is the Main/server bridge plus the Student Claw-owned gateway that propagates tool inventory and routes one fake tool end to end.
+Phase 02 is complete. Use the live `template-mcp` lifecycle path as the Phase 03 canary: lifecycle IPC already exists, `plugin:list` / `plugin:get-status` / `plugin:lifecycle` are live, and Electron Main already has `PluginManager.callTool()` for routed canary calls. The missing work in this phase is the Main/server bridge plus the Orbyt-owned gateway that propagates tool inventory and routes one fake tool end to end.
 
 ## Handoff Update Protocol
 
@@ -89,7 +89,7 @@ When a phase changes state, append a new entry to the relevant phase section bel
 
 ### Extension
 
-The installable Student Claw unit described by the shared extension manifest. In the current rollout, an extension is a `local_stdio` MCP server bundle with declared tools, permissions, and auth requirements. Broader extension forms remain future work and are out of scope for Phase 03.
+The installable Orbyt unit described by the shared extension manifest. In the current rollout, an extension is a `local_stdio` MCP server bundle with declared tools, permissions, and auth requirements. Broader extension forms remain future work and are out of scope for Phase 03.
 
 ### Plugin Runtime
 
@@ -101,7 +101,7 @@ The canonical list of discovered and installed extensions plus their current lif
 
 ### Gateway
 
-The built-in, Main-owned Student Claw MCP surface that Codex connects to. It exposes extension tools through one stable Codex-facing entrypoint and hides the internal server-to-Main-to-plugin routing path. In this phase it should stay routing-only and avoid owning plugin business logic.
+The built-in, Main-owned Orbyt MCP surface that Codex connects to. It exposes extension tools through one stable Codex-facing entrypoint and hides the internal server-to-Main-to-plugin routing path. In this phase it should stay routing-only and avoid owning plugin business logic.
 
 ### System Extension
 
@@ -125,7 +125,7 @@ The post-start scoped message that delivers decrypted credentials to a plugin ru
 
 ### Tool Inventory
 
-The active-tool view sourced from running extensions after startup. Tool inventory changes must be propagated to both the local server and the Student Claw gateway so Codex sees one consistent routed surface as plugins start and stop.
+The active-tool view sourced from running extensions after startup. Tool inventory changes must be propagated to both the local server and the Orbyt gateway so Codex sees one consistent routed surface as plugins start and stop.
 
 ### Verification Gate
 
@@ -145,10 +145,10 @@ The set of checks that must be green before a phase can be marked complete:
 - Owner: Codex
 - Status change: `not_started -> in_progress`
 - Completed:
-  - Promoted `@student-claw/contracts` to the canonical owner of extension manifest, registry, lifecycle, auth, transport, IPC, and plugin error contracts.
+  - Promoted `@orbyt/contracts` to the canonical owner of extension manifest, registry, lifecycle, auth, transport, IPC, and plugin error contracts.
   - Added dark-default `featureFlags.pluginSystem` to `DesktopBootstrap` and `ServerConfig`.
   - Migrated the Canvas checked-in manifest to the shared `ExtensionManifest` shape and added schema/error coverage.
-  - Reworked `@student-claw/shared` plugin surfaces to re-export the canonical contracts and updated shared tests to assert that alignment.
+  - Reworked `@orbyt/shared` plugin surfaces to re-export the canonical contracts and updated shared tests to assert that alignment.
   - Added Electron preload/main-process stub handlers for plugin IPC channels that stay inert while the flag is off.
 - Remaining:
   - No open Phase 00 implementation work.
@@ -280,7 +280,7 @@ The set of checks that must be green before a phase can be marked complete:
   - Electron Main already has the local runtime ownership needed for routed calls via `PluginManager.callTool()`.
 - Remaining:
   - Add the typed Main/server bridge for tool inventory reads, routed tool calls, and tools-changed notifications.
-  - Introduce the Student Claw-owned gateway surface that publishes extension tools through one Codex-facing entrypoint.
+  - Introduce the Orbyt-owned gateway surface that publishes extension tools through one Codex-facing entrypoint.
   - Propagate active tool inventory updates after plugin start and stop and prove one fake routed tool call works end to end.
 - Risks or blockers:
   - Scope can drift if Phase 03 starts pulling in credentials, install UX, or real Canvas service calls before the fake routing path is proven.

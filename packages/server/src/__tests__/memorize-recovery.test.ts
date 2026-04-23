@@ -14,7 +14,7 @@ type QueryParams = Parameters<DatabaseService["query"]>[1]
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-recovery-"))
   tempDirs.push(dir)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   mkdirSync(paths.root, { recursive: true })
   const store = new MemorizeStateStore(paths)
   return { paths, store, dir }

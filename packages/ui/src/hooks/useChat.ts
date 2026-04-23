@@ -3,7 +3,7 @@ import type {
   ProviderApprovalDecision,
   ThreadAccessMode,
   TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   useChatUiActions,
   useOrchestrationActions,

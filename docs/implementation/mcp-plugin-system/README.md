@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-11
 
-This docs package is the implementation source of truth for the Student Claw MCP plugin system rollout.
+This docs package is the implementation source of truth for the Orbyt MCP plugin system rollout.
 
 It is intentionally separate from [docs/features/05-plugin-system.md](../../features/05-plugin-system.md), which is currently outdated and should not be used to sequence implementation work.
 
@@ -37,7 +37,7 @@ It is intentionally separate from [docs/features/05-plugin-system.md](../../feat
 - Shared extension and plugin contracts
 - Electron Main plugin runtime and vault
 - Server/Main bridge for MCP tool routing
-- Student Claw MCP gateway for Codex
+- Orbyt MCP gateway for Codex
 - Install and settings UX for bundled extensions
 - Canvas credentials and real Canvas tool path
 - Packaged Electron runtime that can spawn plugins outside dev mode

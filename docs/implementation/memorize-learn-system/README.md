@@ -3,7 +3,7 @@
 Last updated: 2026-04-19
 
 This docs package is the implementation source of truth for the markdown-based
-memory graph and isolated memorize system in Student Claw.
+memory graph and isolated memorize system in Orbyt.
 
 It is intentionally separate from
 [docs/features/04-memory-system.md](../../features/04-memory-system.md), which
@@ -62,11 +62,11 @@ as part of creating this rollout package.
 
 ## Filesystem Contract For This Rollout
 
-- `~/.student-claw/memory/MEMORY.md`
-- `~/.student-claw/memory/memorize-state.json`
-- `~/.student-claw/memory/daily/YYYY-MM-DD.md`
-- `~/.student-claw/memory/weekly/YYYY-Www.md`
-- `~/.student-claw/memory/graph/**`
+- `~/.orbyt/memory/MEMORY.md`
+- `~/.orbyt/memory/memorize-state.json`
+- `~/.orbyt/memory/daily/YYYY-MM-DD.md`
+- `~/.orbyt/memory/weekly/YYYY-Www.md`
+- `~/.orbyt/memory/graph/**`
 
 ## Deliverables Across The Full Rollout
 

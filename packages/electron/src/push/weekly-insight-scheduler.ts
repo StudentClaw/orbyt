@@ -1,4 +1,4 @@
-import type { PhonePushSettings, WeeklyInsight } from "@student-claw/contracts"
+import type { PhonePushSettings, WeeklyInsight } from "@orbyt/contracts"
 import type { PushDeliveryService } from "./push-delivery-service.js"
 import type { PushStore } from "./push-store.js"
 

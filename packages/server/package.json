@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/server",
+  "name": "@orbyt/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,9 @@
     "@effect/platform": "^0.96.0",
     "@effect/schema": "^0.75.5",
     "@openai/codex": "^0.119.0",
-    "@student-claw/contracts": "workspace:*",
-    "@student-claw/shared-runtime": "workspace:*",
+    "@orbyt/contracts": "workspace:*",
+    "@orbyt/shared": "workspace:*",
+    "@orbyt/shared-runtime": "workspace:*",
     "effect": "^3.21.0",
     "gray-matter": "^4.0.3",
     "ws": "^8.20.0"

@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test"
 import { Schema } from "@effect/schema"
 import {
   IpcChannel as ContractsIpcChannel,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   ClientMessage,
   ChatSendMessage,

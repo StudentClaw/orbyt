@@ -24,12 +24,12 @@ is not ready to start implementation.
 - [ ] `manifest.json` will be checked in
 - [ ] Build output will land in `dist/`
 - [ ] Root build, typecheck, and test scripts will include the package
-- [ ] Student Claw ownership and support expectations are explicit
+- [ ] Orbyt ownership and support expectations are explicit
 - [ ] If vendored, `README.md` will include `Vendored From` with upstream URL, pinned commit, license, and attribution
 
 ## Manifest Normalization
 
-- [ ] `id` and `name` are normalized to Student Claw conventions
+- [ ] `id` and `name` are normalized to Orbyt conventions
 - [ ] `transport.type === "local_stdio"`
 - [ ] `transport.entry` points at checked-in build output
 - [ ] `transport.env` is omitted from the manifest and injected only at runtime
@@ -41,7 +41,7 @@ is not ready to start implementation.
   - vendored keeps upstream names
   - first-party-authored uses `snake_case`
 - [ ] `permissions` use the locked glossary vocabulary
-- [ ] `author` and `homepage` match Student Claw ownership expectations
+- [ ] `author` and `homepage` match Orbyt ownership expectations
 
 ## Auth And Readiness
 

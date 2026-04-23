@@ -86,7 +86,7 @@ When a phase changes state, append a new entry to the relevant phase section bel
 
 ### Extension
 
-The installable Student Claw unit described by the shared extension manifest. In this rollout, Canvas remains a `local_stdio` MCP extension running inside the existing Student Claw plugin system.
+The installable Orbyt unit described by the shared extension manifest. In this rollout, Canvas remains a `local_stdio` MCP extension running inside the existing Orbyt plugin system.
 
 ### Plugin Runtime
 
@@ -94,7 +94,7 @@ The Electron Main subsystem that discovers, validates, spawns, stops, and monito
 
 ### Gateway
 
-The built-in, Main-owned Student Claw MCP surface that Codex connects to. It exposes extension tools through one stable Codex-facing entrypoint and hides the internal server-to-Main-to-plugin routing path.
+The built-in, Main-owned Orbyt MCP surface that Codex connects to. It exposes extension tools through one stable Codex-facing entrypoint and hides the internal server-to-Main-to-plugin routing path.
 
 ### Vault
 
@@ -204,7 +204,7 @@ A local file write that stays inside the active Codex cwd or another allowed wri
   - Build the actual self-tool handlers and normalization path on top of the new client methods.
   - Decide when the live runtime can safely swap from the legacy tool surface to the replacement self-tool family.
 - Risks or blockers:
-  - The `canvas-mcp` package depends on the built `@student-claw/contracts` workspace artifact during tests, so contracts must be rebuilt after protocol or raw-schema changes.
+  - The `canvas-mcp` package depends on the built `@orbyt/contracts` workspace artifact during tests, so contracts must be rebuilt after protocol or raw-schema changes.
   - The live server surface is still legacy, so the new self-tool building blocks are not yet user-visible.
 - Commands run:
   - `bun --cwd packages/contracts test`

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import type { Course } from "@student-claw/contracts"
+import type { Course } from "@orbyt/contracts"
 import type { PrioritizedItem } from "../components/dashboard/priority-model"
 import {
   classifyAssignmentScope,

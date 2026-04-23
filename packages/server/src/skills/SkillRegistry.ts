@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
-import type { SkillId } from "@student-claw/contracts"
+import type { SkillId } from "@orbyt/contracts"
 import { parseSkillFile, type ResolvedSkill } from "./SkillParser.js"
 
 export type SkillRegistry = ReadonlyMap<string, ResolvedSkill>
@@ -33,4 +33,16 @@ export function buildSkillRegistry(skillsRoot: string): SkillRegistry {
   }
 
   return registry
+}
+
+export function buildMergedSkillRegistry(rootsInPriorityOrder: readonly string[]): SkillRegistry {
+  const merged = new Map<string, ResolvedSkill>()
+  for (const root of rootsInPriorityOrder) {
+    for (const [slug, skill] of buildSkillRegistry(root)) {
+      if (!merged.has(slug)) {
+        merged.set(slug, skill)
+      }
+    }
+  }
+  return merged
 }

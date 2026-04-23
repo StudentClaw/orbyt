@@ -2,7 +2,7 @@ import type {
   ExtensionRegistryEntry,
   GatewayToolInventoryEntry,
   GatewayToolInventorySnapshot,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 
 const ELIGIBLE_RUNNING_STATUSES = new Set<ExtensionRegistryEntry["status"]>(["ready", "active"])
 

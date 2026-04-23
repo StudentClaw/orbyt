@@ -6,7 +6,7 @@ import {
   ExtensionLifecycleStatus as ContractsExtensionLifecycleStatus,
   ExtensionRegistryAvailableEntry as ContractsExtensionRegistryAvailableEntry,
   ExtensionRegistryInvalidEntry as ContractsExtensionRegistryInvalidEntry,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   CourseId, CourseWorkItemId, SkillId, TaskId, SessionId, ActivityEntryId,
   Course, CourseWorkItem, Grade, PlannedSession, ActivityFeedEntry,
@@ -217,8 +217,8 @@ describe("Extension schema", () => {
         tools: [
           { name: "list_courses", description: "List courses" },
         ],
-        author: "student-claw",
-        homepage: "https://github.com/StudentClaw/student-claw",
+        author: "orbyt",
+        homepage: "https://github.com/Orbyt/orbyt",
       },
       installSource: "bundled",
       enabled: true,
@@ -260,8 +260,8 @@ describe("Extension schema", () => {
           type: "none",
         },
         tools: [],
-        author: "student-claw",
-        homepage: "https://github.com/StudentClaw/student-claw",
+        author: "orbyt",
+        homepage: "https://github.com/Orbyt/orbyt",
       },
       installSource: "bundled",
       enabled: true,

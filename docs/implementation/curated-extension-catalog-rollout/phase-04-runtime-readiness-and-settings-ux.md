@@ -83,9 +83,9 @@ mapping for Apple Calendar is:
 | Readiness | enabled | UI label | Body copy gist | Recovery action |
 | --- | --- | --- | --- | --- |
 | n/a | false | `Disabled` | Apple Calendar is off. Enable it to use Calendar tools. | `Enable` |
-| `bridge_starting` | true | `Starting` | Student Claw is starting the Calendar bridge. | none (progress) |
+| `bridge_starting` | true | `Starting` | Orbyt is starting the Calendar bridge. | none (progress) |
 | `bridge_unavailable` | true | `Bridge unavailable` | The Calendar bridge didn't start. You can retry. | `Retry bridge` |
-| `permission_required` | true | `Permission required` | Grant Calendar access in macOS System Settings so Student Claw can use Apple Calendar. | `Grant Calendar access` |
+| `permission_required` | true | `Permission required` | Grant Calendar access in macOS System Settings so Orbyt can use Apple Calendar. | `Grant Calendar access` |
 | `bridge_crash_loop` | true | `Bridge keeps crashing` | The Calendar bridge has repeatedly failed to start. Retry is rate-limited. | `Retry bridge` (backoff) |
 | `ready` | true | `Ready` | Apple Calendar tools are available. | `Disable` |
 | `error` | true | `Error` | Typed error message plus `Retry`. | `Retry` |
@@ -94,7 +94,7 @@ mapping for Apple Calendar is:
 Copy themes across all labels:
 
 - Apple Calendar is a local macOS integration
-- Student Claw manages the bridge automatically
+- Orbyt manages the bridge automatically
 - the user may need to grant Calendar access in macOS
 
 The verb for making a bundled extension usable is `Enable`. The word `Install`

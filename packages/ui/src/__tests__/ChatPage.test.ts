@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import type { OrchestrationSnapshot, ProviderRuntimeEvent } from "@student-claw/contracts"
+import type { OrchestrationSnapshot, ProviderRuntimeEvent } from "@orbyt/contracts"
 import {
   formatProviderEventLabel,
   resolveCurrentThread,

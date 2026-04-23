@@ -30,7 +30,7 @@ export function DashboardFilterTabs({ value, onChange }: DashboardFilterTabsProp
             onClick={() => onChange(tab.id)}
             className={`-mb-px border-b-2 pb-3 text-sm transition-colors ${
               active
-                ? "border-foreground font-semibold text-foreground"
+                ? "border-primary font-semibold text-foreground"
                 : "border-transparent font-medium text-muted-foreground hover:text-foreground"
             }`}
           >

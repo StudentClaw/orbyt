@@ -8,7 +8,7 @@ import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
 import { ThreadRuntimeManager, ThreadRuntimeManagerLive } from "./orchestration/ThreadRuntimeManager.js"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
-import { SkillResolverLive } from "./skills/index.js"
+import { SkillResolverLive, SkillManagementLive } from "./skills/index.js"
 import { PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
@@ -21,6 +21,7 @@ const CoreLive = Layer.mergeAll(
   PushBusLive,
   RuntimeReceiptBusLive,
   SkillResolverLive,
+  SkillManagementLive.pipe(Layer.provide(ConfigServiceLive)),
 )
 
 const RuntimeStoreLive = ProviderRuntimeStoreLive.pipe(Layer.provideMerge(CoreLive))
@@ -94,7 +95,7 @@ const program = Effect.gen(function* () {
 
   readiness.markReady()
 
-  writeStdout(`Student Claw server started on :${config.port}`)
+  writeStdout(`Orbyt server started on :${config.port}`)
   writeStdout(`Database: ${config.dbPath}`)
 
   // Pre-warm one Codex runtime so the first user send does not pay the subprocess

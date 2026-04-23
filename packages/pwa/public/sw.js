@@ -1,10 +1,10 @@
 self.addEventListener("push", (event) => {
   const payload = event.data ? event.data.json() : {}
   event.waitUntil(
-    self.registration.showNotification(payload.title ?? "Student Claw", {
+    self.registration.showNotification(payload.title ?? "Orbyt", {
       body: payload.body ?? "",
       data: payload.deepLink ?? "/",
-      tag: payload.tag ?? "student-claw-push",
+      tag: payload.tag ?? "orbyt-push",
     }),
   )
 })

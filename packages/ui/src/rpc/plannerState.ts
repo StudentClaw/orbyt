@@ -1,4 +1,4 @@
-import type { PlannedSession } from "@student-claw/contracts"
+import type { PlannedSession } from "@orbyt/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 

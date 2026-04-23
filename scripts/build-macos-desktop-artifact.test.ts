@@ -15,7 +15,7 @@ import {
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-mac-artifact-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-mac-artifact-"))
   tempDirs.push(dir)
   return dir
 }
@@ -32,41 +32,45 @@ afterEach(() => {
 describe("build-macos-desktop-artifact", () => {
   test("generates mac packaging config with Calendar usage strings and entitlements", () => {
     const config = createMacPackagingConfig({
-      productName: "Student Claw",
-      appId: "com.studentclaw.app",
-      stageAppDir: "/tmp/student-claw-stage",
-      outputDir: "/tmp/student-claw-release",
+      productName: "Orbyt",
+      appId: "com.orbyt.app",
+      stageAppDir: "/tmp/orbyt-stage",
+      outputDir: "/tmp/orbyt-release",
       signed: true,
     })
 
     expect(config).toMatchObject({
-      appId: "com.studentclaw.app",
-      productName: "Student Claw",
+      appId: "com.orbyt.app",
+      productName: "Orbyt",
       electronVersion: "41.1.1",
       directories: {
-        output: "/tmp/student-claw-release",
-        buildResources: "/tmp/student-claw-stage/build-resources",
+        output: "/tmp/orbyt-release",
+        buildResources: "/tmp/orbyt-stage/build-resources",
       },
       extraResources: [
         {
-          from: "/tmp/student-claw-stage/extra-resources/extensions",
+          from: "/tmp/orbyt-stage/extra-resources/extensions",
           to: "extensions",
+        },
+        {
+          from: "/tmp/orbyt-stage/extra-resources/skills",
+          to: "skills",
         },
       ],
       mac: {
         target: ["dmg", "zip"],
         hardenedRuntime: true,
-        entitlements: "/tmp/student-claw-stage/build-resources/entitlements.mac.plist",
-        entitlementsInherit: "/tmp/student-claw-stage/build-resources/entitlements.mac.inherit.plist",
-        binaries: ["/tmp/student-claw-stage/extra-resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge"],
+        entitlements: "/tmp/orbyt-stage/build-resources/entitlements.mac.plist",
+        entitlementsInherit: "/tmp/orbyt-stage/build-resources/entitlements.mac.inherit.plist",
+        binaries: ["/tmp/orbyt-stage/extra-resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge"],
         extendInfo: {
           NSCalendarsUsageDescription:
-            "Student Claw needs calendar access to read class schedules and help plan study sessions, deadlines, and events.",
+            "Orbyt needs calendar access to read class schedules and help plan study sessions, deadlines, and events.",
           NSCalendarsFullAccessUsageDescription:
-            "Student Claw needs full calendar access to create and update study sessions, deadlines, and other events you ask it to manage.",
+            "Orbyt needs full calendar access to create and update study sessions, deadlines, and other events you ask it to manage.",
         },
       },
-      afterSign: "/tmp/student-claw-stage/build-resources/notarize.mjs",
+      afterSign: "/tmp/orbyt-stage/build-resources/notarize.mjs",
     })
   })
 
@@ -103,19 +107,19 @@ describe("build-macos-desktop-artifact", () => {
   test("resolves the packaged app path from the arch-specific release directory", () => {
     expect(resolvePackagedAppPath({
       releaseDir: "/repo/release",
-      productName: "Student Claw",
+      productName: "Orbyt",
       arch: "arm64",
-      exists: (candidate) => candidate === "/repo/release/mac-arm64/Student Claw.app",
-    })).toBe("/repo/release/mac-arm64/Student Claw.app")
+      exists: (candidate) => candidate === "/repo/release/mac-arm64/Orbyt.app",
+    })).toBe("/repo/release/mac-arm64/Orbyt.app")
   })
 
   test("stages the desktop app with the bundled server runtime dependency", () => {
-    const packageJson = createStagePackageJson("/tmp/student-claw-stage", true) as {
+    const packageJson = createStagePackageJson("/tmp/orbyt-stage", true) as {
       dependencies: Record<string, string>
     }
 
-    expect(packageJson.dependencies["@student-claw/server"]).toBe("file:vendor/server")
-    expect(packageJson.dependencies["@student-claw/contracts"]).toBe("file:vendor/contracts")
+    expect(packageJson.dependencies["@orbyt/server"]).toBe("file:vendor/server")
+    expect(packageJson.dependencies["@orbyt/contracts"]).toBe("file:vendor/contracts")
   })
 
   test("stages the matching per-arch Apple bridge into packaged extensions", () => {

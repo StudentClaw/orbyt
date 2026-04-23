@@ -1,4 +1,4 @@
-import { MORNING_RUN_HOUR, EVENING_RUN_HOUR } from "@student-claw/contracts"
+import { MORNING_RUN_HOUR, EVENING_RUN_HOUR } from "@orbyt/contracts"
 
 const RUN_HOURS = [MORNING_RUN_HOUR, EVENING_RUN_HOUR] as const
 

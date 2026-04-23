@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 
 const runtimeHooks = vi.hoisted(() => ({
   useRuntimeBootstrap: vi.fn(),
@@ -60,7 +60,7 @@ describe("GeneralSection", () => {
       quietHoursStart: "22:00",
       quietHoursEnd: "08:00",
       calendarIntegration: "none",
-      memoryGraphPath: "/Users/tester/Documents/Student Claw Memory Graph",
+      memoryGraphPath: "/Users/tester/Documents/Orbyt Memory Graph",
       memoryGraphPathMode: "default",
     })
     mockSetPreferences.mockImplementation(async ({ memoryGraphPath }) => ({
@@ -72,7 +72,7 @@ describe("GeneralSection", () => {
       quietHoursStart: "22:00",
       quietHoursEnd: "08:00",
       calendarIntegration: "none",
-      memoryGraphPath: memoryGraphPath ?? "/Users/tester/Documents/Student Claw Memory Graph",
+      memoryGraphPath: memoryGraphPath ?? "/Users/tester/Documents/Orbyt Memory Graph",
       memoryGraphPathMode: memoryGraphPath ? "custom" : "default",
     }))
     appRuntimeMocks.waitForPrimaryWsRpcClient.mockResolvedValue({
@@ -95,7 +95,7 @@ describe("GeneralSection", () => {
 
     await waitFor(() => {
       expect((screen.getByTestId("settings-memory-graph-path") as HTMLInputElement).value).toBe(
-        "/Users/tester/Documents/Student Claw Memory Graph",
+        "/Users/tester/Documents/Orbyt Memory Graph",
       )
     })
     expect(screen.getByTestId("settings-memory-graph-mode").textContent).toContain("default Documents location")

@@ -1,6 +1,6 @@
 import { Context, Layer, Effect } from "effect"
 import type { WebSocket } from "ws"
-import { RpcPushEnvelope } from "@student-claw/contracts"
+import { RpcPushEnvelope } from "@orbyt/contracts"
 import { Schema } from "@effect/schema"
 
 type SubscribedClient = {

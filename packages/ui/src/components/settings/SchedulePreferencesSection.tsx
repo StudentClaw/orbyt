@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { StudentPreference, CalendarIntegration } from "@student-claw/contracts"
+import type { StudentPreference, CalendarIntegration } from "@orbyt/contracts"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"

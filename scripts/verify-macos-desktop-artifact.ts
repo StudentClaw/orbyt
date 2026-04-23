@@ -22,7 +22,7 @@ export function verifyMacArtifactLayout(options: {
   const exists = options.exists ?? existsSync
 
   if (!exists(options.appPath)) {
-    throw new Error(`Missing packaged Student Claw app at ${options.appPath}`)
+    throw new Error(`Missing packaged Orbyt app at ${options.appPath}`)
   }
 
   if (!exists(options.helperPath)) {
@@ -90,7 +90,7 @@ if (import.meta.main) {
     : path.join(path.resolve(import.meta.dir, ".."), "release")
   const productName = process.argv.includes("--product-name")
     ? process.argv[process.argv.indexOf("--product-name") + 1]
-    : "Student Claw"
+    : "Orbyt"
   const appPathArg = process.argv.includes("--app-path")
     ? process.argv[process.argv.indexOf("--app-path") + 1]
     : undefined

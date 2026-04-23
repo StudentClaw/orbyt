@@ -87,7 +87,7 @@ On macOS 13+:
 
 1. launch the signed app
 2. enable Apple Calendar
-3. capture the Student Claw-branded Calendar permission prompt
+3. capture the Orbyt-branded Calendar permission prompt
 4. grant permission
 5. confirm readiness reaches `Ready`
 6. confirm one Apple Calendar tool call succeeds

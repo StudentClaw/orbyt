@@ -12,4 +12,4 @@ export {
   ExtensionToolSummary,
   ExtensionTransport,
   parseExtensionManifestSync,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"

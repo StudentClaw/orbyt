@@ -1,4 +1,4 @@
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 
 type DesktopNotificationOptions = {
   title: string
@@ -49,7 +49,7 @@ async function showRendererNotification(
   }
 
   if (requestPermission) {
-    throw new Error("Desktop notifications are blocked. Allow them for Student Claw and try again.")
+    throw new Error("Desktop notifications are blocked. Allow them for Orbyt and try again.")
   }
 
   return false

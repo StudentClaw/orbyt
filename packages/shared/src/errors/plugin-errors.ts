@@ -5,4 +5,4 @@ export {
   PluginStartError,
   PluginToolCallError,
   VaultDecryptError,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"

@@ -169,7 +169,7 @@ class IpcCapableStdioTransport implements Transport {
 export class PluginSandbox {
   private readonly closeListeners = new Set<CloseListener>()
   private readonly runtimeLogListeners = new Set<RuntimeLogListener>()
-  private readonly client = new Client({ name: "student-claw-plugin-manager", version: "0.1.0" })
+  private readonly client = new Client({ name: "orbyt-plugin-manager", version: "0.1.0" })
   private transport: IpcCapableStdioTransport | null = null
   private started = false
 

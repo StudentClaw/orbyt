@@ -2,13 +2,23 @@ import { useRef, useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { useChat } from "@/hooks/useChat"
 import { useChatModel } from "@/hooks/useChatModel"
-import { useChatUiActions, useSkills } from "@/hooks/useAppRuntime"
+import { useChatUiActions, useSkillsState, type SkillEntry } from "@/hooks/useAppRuntime"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
 import { MessageBubble, SendingPlaceholder } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
+import { SkillForkDialog } from "@/components/skills/SkillForkDialog"
+import { SkillPromotionDialog } from "@/components/skills/SkillPromotionDialog"
+import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
 import type { ChatSelectionInput } from "@/hooks/useChat"
+import type { SkillPickerEntry } from "./SkillPicker"
+import type { SkillId } from "@orbyt/contracts"
+
+type DialogState =
+  | { readonly kind: "none" }
+  | { readonly kind: "fork"; readonly skill: SkillPickerEntry }
+  | { readonly kind: "promotion"; readonly skillId: string }
 
 interface ChatContainerProps {
   readonly variant?: "panel" | "page"
@@ -17,7 +27,60 @@ interface ChatContainerProps {
 
 export function ChatContainer({ variant = "panel", selection }: ChatContainerProps) {
   const { selectedModel, setSelectedModel, availableModels } = useChatModel()
-  const skills = useSkills()
+  const { skills, refresh: refreshSkills } = useSkillsState()
+  const [dialog, setDialog] = useState<DialogState>({ kind: "none" })
+
+  const openFork = useCallback((skill: SkillPickerEntry) => {
+    setDialog({ kind: "fork", skill })
+  }, [])
+
+  const openPromotion = useCallback((skill: SkillPickerEntry) => {
+    setDialog({ kind: "promotion", skillId: skill.id })
+  }, [])
+
+  const closeDialog = useCallback(() => setDialog({ kind: "none" }), [])
+
+  const handleFork = useCallback(
+    async (payload: { sourceSlug: string; targetSlug: string; displayName?: string }) => {
+      const client = await waitForPrimaryWsRpcClient()
+      await client.skills.fork({
+        sourceSlug: payload.sourceSlug as SkillId,
+        targetSlug: payload.targetSlug as SkillId,
+        displayName: payload.displayName,
+      })
+      await refreshSkills()
+    },
+    [refreshSkills],
+  )
+
+  const handleGrant = useCallback(
+    async (input: { skillId: string; capabilityKey: string }) => {
+      const client = await waitForPrimaryWsRpcClient()
+      await client.skills.grantCapability({
+        skillId: input.skillId as SkillId,
+        capabilityKey: input.capabilityKey,
+      })
+      await refreshSkills()
+    },
+    [refreshSkills],
+  )
+
+  const handleRevoke = useCallback(
+    async (input: { skillId: string; capabilityKey: string }) => {
+      const client = await waitForPrimaryWsRpcClient()
+      await client.skills.revokeCapability({
+        skillId: input.skillId as SkillId,
+        capabilityKey: input.capabilityKey,
+      })
+      await refreshSkills()
+    },
+    [refreshSkills],
+  )
+
+  const activePromotionSkill =
+    dialog.kind === "promotion"
+      ? (skills.find((s) => s.id === dialog.skillId) as SkillEntry | undefined)
+      : undefined
   const {
     messages,
     status,
@@ -197,7 +260,43 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         interruptPending={interruptPending}
         interruptError={interruptError}
         skills={skills}
+        onForkSkill={openFork}
+        onManageSkillPermissions={openPromotion}
       />
+
+      {dialog.kind === "fork" ? (
+        <SkillForkDialog
+          open
+          sourceSlug={dialog.skill.id}
+          sourceName={dialog.skill.name}
+          sourceVersion={
+            (skills.find((s) => s.id === dialog.skill.id) as SkillEntry | undefined)?.version ?? "0.0.0"
+          }
+          onConfirm={handleFork}
+          onOpenChange={(open) => {
+            if (!open) closeDialog()
+          }}
+        />
+      ) : null}
+
+      {dialog.kind === "promotion" && activePromotionSkill ? (
+        <SkillPromotionDialog
+          open
+          skill={{
+            id: activePromotionSkill.id,
+            name: activePromotionSkill.name,
+            tier: activePromotionSkill.tier ?? "curated",
+            requestedCapabilities: activePromotionSkill.requestedCapabilities ?? [],
+            grantedCapabilities: activePromotionSkill.grantedCapabilities ?? [],
+          }}
+          fullAccess={currentThread?.accessMode === "full"}
+          onGrant={handleGrant}
+          onRevoke={handleRevoke}
+          onOpenChange={(open) => {
+            if (!open) closeDialog()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

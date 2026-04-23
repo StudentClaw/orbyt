@@ -10,7 +10,7 @@ export type StageBundledExtensionsOptions = {
 
 const APPLE_CALENDAR_PLUGIN_ID = "apple-calendar-mcp"
 const APPLE_BRIDGE_BINARY_NAME = "CalendarAPIBridge"
-const BUNDLED_RUNTIME_PACKAGE_NAME = "student-claw-bundled-extension-runtime"
+const BUNDLED_RUNTIME_PACKAGE_NAME = "orbyt-bundled-extension-runtime"
 
 type PackageJson = {
   name?: string
@@ -90,11 +90,11 @@ function stageBundledWorkspaceRuntimePackage(
     return
   }
 
-  if (!packageName.startsWith("@student-claw/")) {
+  if (!packageName.startsWith("@orbyt/")) {
     throw new Error(`Unsupported bundled workspace dependency: ${packageName}`)
   }
 
-  const stageDirName = packageName.replace("@student-claw/", "")
+  const stageDirName = packageName.replace("@orbyt/", "")
   const sourceDir = path.join(repoRoot, "packages", stageDirName)
   const sourcePackageJsonPath = path.join(sourceDir, "package.json")
   const sourceDistDir = path.join(sourceDir, "dist")
@@ -112,7 +112,7 @@ function stageBundledWorkspaceRuntimePackage(
   for (const [dependency, version] of Object.entries(dependencies)) {
     if (version === "workspace:*") {
       stageBundledWorkspaceRuntimePackage(repoRoot, outputRoot, dependency, stagedPackages)
-      dependencies[dependency] = `file:../${dependency.replace("@student-claw/", "")}`
+      dependencies[dependency] = `file:../${dependency.replace("@orbyt/", "")}`
     }
   }
 
@@ -153,7 +153,7 @@ export function createBundledExtensionRuntimePackageJson(options: {
 
   for (const [dependency, version] of Object.entries(dependencies)) {
     if (version === "workspace:*") {
-      dependencies[dependency] = `file:vendor/${dependency.replace("@student-claw/", "")}`
+      dependencies[dependency] = `file:vendor/${dependency.replace("@orbyt/", "")}`
     }
   }
 

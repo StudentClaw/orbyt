@@ -27,7 +27,7 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
       <Card className="w-full max-w-lg border-border/70 shadow-lg" data-testid="app-startup-screen">
         <CardHeader className="space-y-3">
           <div className="inline-flex w-fit items-center rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
-            Student Claw
+            Orbyt
           </div>
           <div className="space-y-2">
             <CardTitle className="font-heading text-2xl">{state.label}</CardTitle>
@@ -49,7 +49,7 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Student Claw is connecting to the local runtime before opening the app.
+              Orbyt is connecting to the local runtime before opening the app.
             </p>
           )}
         </CardContent>

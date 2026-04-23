@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events"
 import { mkdtempSync, rmSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import { PUSH_CHANNELS, type ActivityFeedEntry } from "@student-claw/contracts"
+import { PUSH_CHANNELS, type ActivityFeedEntry } from "@orbyt/contracts"
 import { PushStore } from "../push/push-store.js"
 import { PushDeliveryService } from "../push/push-delivery-service.js"
 import { PushActivityBridge } from "../push/push-activity-bridge.js"
@@ -11,7 +11,7 @@ import { PushActivityBridge } from "../push/push-activity-bridge.js"
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-push-core-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-push-core-"))
   tempDirs.push(dir)
   return dir
 }

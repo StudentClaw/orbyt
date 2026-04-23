@@ -7,11 +7,13 @@ import {
   MEMORY_ROOT_FILENAME,
   type ScaffoldBranch,
   WEEKLY_DIR,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 
-const STUDENT_CLAW_HOME_ENV = "STUDENT_CLAW_HOME"
-const DEFAULT_HOME_DIR = ".student-claw"
-const DEFAULT_GRAPH_DIR = "Student Claw Memory Graph"
+const ORBYT_HOME_ENV = "ORBYT_HOME"
+/** Honored when `ORBYT_HOME` is unset (migration from the previous app name). */
+const LEGACY_ORBYT_HOME_ENV = "STUDENT_CLAW_HOME"
+const DEFAULT_HOME_DIR = ".orbyt"
+const DEFAULT_GRAPH_DIR = "Orbyt Memory Graph"
 const DOCUMENTS_DIR = "Documents"
 const MEMORY_DIR = "memory"
 const COURSES_DIR = "courses"
@@ -78,12 +80,24 @@ function resolvePathLike(
   return resolve(expanded)
 }
 
+function readHomeOverride(env: NodeJS.ProcessEnv): string | undefined {
+  const primary = env[ORBYT_HOME_ENV]?.trim()
+  if (primary && primary.length > 0) {
+    return primary
+  }
+  const legacy = env[LEGACY_ORBYT_HOME_ENV]?.trim()
+  if (legacy && legacy.length > 0) {
+    return legacy
+  }
+  return undefined
+}
+
 export function resolveMemoryRoot(
   input: MemoryPathsResolverInput = {},
 ): string {
   const env = input.env ?? process.env
   const home = input.home ?? homedir
-  const raw = env[STUDENT_CLAW_HOME_ENV]?.trim()
+  const raw = readHomeOverride(env)
   const base = raw && raw.length > 0
     ? resolvePathLike(raw, home)
     : join(home(), DEFAULT_HOME_DIR)
@@ -95,7 +109,7 @@ export function resolveDefaultMemoryGraphDir(
 ): string {
   const env = input.env ?? process.env
   const home = input.home ?? homedir
-  const raw = env[STUDENT_CLAW_HOME_ENV]?.trim()
+  const raw = readHomeOverride(env)
 
   if (raw && raw.length > 0) {
     return join(resolvePathLike(raw, home), MEMORY_DIR, GRAPH_DIR)

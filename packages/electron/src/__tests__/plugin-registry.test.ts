@@ -11,7 +11,7 @@ import {
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-plugin-registry-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-plugin-registry-"))
   tempDirs.push(dir)
   return dir
 }
@@ -58,8 +58,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "getCalendars", description: "List calendars" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
     writeManifest(bundledDir, "canvas-mcp", {
       id: "canvas-mcp",
@@ -77,8 +77,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "list_courses", description: "List courses" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     const registry = new PluginRegistry({
@@ -122,8 +122,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "getCalendars", description: "List calendars" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
     writeManifest(bundledDir, "canvas-mcp", {
       id: "canvas-mcp",
@@ -141,8 +141,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "list_courses", description: "List courses" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     const registry = new PluginRegistry({
@@ -207,8 +207,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "list_courses", description: "List courses" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
     writeManifest(userDir, "notes-mcp", {
       id: "notes-mcp",
@@ -226,8 +226,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "list_notes", description: "List notes" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     const registry = new PluginRegistry({
@@ -259,8 +259,8 @@ describe("PluginRegistry", () => {
         type: "none",
       },
       tools: [],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     const registry = new PluginRegistry({
@@ -301,8 +301,8 @@ describe("PluginRegistry", () => {
       tools: [
         { name: "template_ping", description: "Ping" },
       ],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     const registry = new PluginRegistry({
@@ -321,7 +321,7 @@ describe("PluginRegistry", () => {
     const currentDir = "/repo/packages/electron/dist/main/ipc"
     expect(resolveBundledCatalogDir(currentDir, false)).toBe("/repo/packages/extensions")
     expect(resolveBundledCatalogDir(currentDir, true, "/app/resources")).toBe("/app/resources/extensions")
-    expect(resolveUserExtensionStoreDir("/Users/paul/Library/Application Support/Student Claw"))
-      .toBe("/Users/paul/Library/Application Support/Student Claw/extensions")
+    expect(resolveUserExtensionStoreDir("/Users/paul/Library/Application Support/Orbyt"))
+      .toBe("/Users/paul/Library/Application Support/Orbyt/extensions")
   })
 })

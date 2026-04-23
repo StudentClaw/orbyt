@@ -1,1 +1,1 @@
-export { IpcChannel as IPC_CHANNELS } from "@student-claw/contracts"
+export { IpcChannel as IPC_CHANNELS } from "@orbyt/contracts"

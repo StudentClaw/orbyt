@@ -2,13 +2,13 @@
 
 ## What It Is
 
-The AI Harness is the brain bridge — the subsystem that connects Student Claw to an LLM (via Codex CLI) and manages every aspect of that conversation: spawning the process, sending/receiving JSON-RPC messages, streaming tokens to the UI, managing sessions, and injecting context (skills, memory, personality).
+The AI Harness is the brain bridge — the subsystem that connects Orbyt to an LLM (via Codex CLI) and manages every aspect of that conversation: spawning the process, sending/receiving JSON-RPC messages, streaming tokens to the UI, managing sessions, and injecting context (skills, memory, personality).
 
 ---
 
 ## Why It Exists
 
-Students interact with Student Claw through natural language. Every question ("What's due this week?"), every planning request ("Plan my week"), and every tool call (fetching Canvas data, creating calendar events) flows through the AI Harness. Without it, the app is a static dashboard with no intelligence.
+Students interact with Orbyt through natural language. Every question ("What's due this week?"), every planning request ("Plan my week"), and every tool call (fetching Canvas data, creating calendar events) flows through the AI Harness. Without it, the app is a static dashboard with no intelligence.
 
 ---
 
@@ -159,7 +159,7 @@ When the AI decides it needs data (e.g., Canvas assignments), it emits a tool ca
 
 ## Soul / Personality System
 
-Inspired by [soul.md](https://soul.md/) and aligned with the structure and spirit of **[Open Claw’s SOUL.md template](https://docs.openclaw.ai/reference/templates/SOUL)** (core truths, boundaries, vibe, continuity), the AI Harness loads a personality document that defines who the assistant is — not just what it can do. This is what makes Student Claw a *companion* and not a generic chatbot.
+Inspired by [soul.md](https://soul.md/) and aligned with the structure and spirit of **[Open Claw’s SOUL.md template](https://docs.openclaw.ai/reference/templates/SOUL)** (core truths, boundaries, vibe, continuity), the AI Harness loads a personality document that defines who the assistant is — not just what it can do. This is what makes Orbyt a *companion* and not a generic chatbot.
 
 ### Soul.md Structure
 

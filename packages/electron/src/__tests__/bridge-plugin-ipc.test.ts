@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import { IpcChannel, type DesktopBootstrap } from "@student-claw/contracts"
+import { IpcChannel, type DesktopBootstrap } from "@orbyt/contracts"
 
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-bridge-plugin-ipc-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-bridge-plugin-ipc-"))
   tempDirs.push(dir)
   return dir
 }
@@ -69,8 +69,8 @@ describe("registerIpcHandlers plugin reads", () => {
         type: "none",
       },
       tools: [{ name: "template_ping", description: "Ping" }],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     process.resourcesPath = resourcesRoot
@@ -184,8 +184,8 @@ describe("registerIpcHandlers plugin reads", () => {
         ],
       },
       tools: [{ name: "list_courses", description: "List courses" }],
-      author: "student-claw",
-      homepage: "https://github.com/StudentClaw/student-claw",
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
     })
 
     process.resourcesPath = resourcesRoot
@@ -651,8 +651,8 @@ describe("registerIpcHandlers plugin reads", () => {
         permissions: ["local_os.calendar.read", "local_os.calendar.write"],
         auth: { type: "none" as const },
         tools: [{ name: "getCalendars", description: "List calendars" }],
-        author: "student-claw",
-        homepage: "https://github.com/StudentClaw/student-claw",
+        author: "orbyt",
+        homepage: "https://github.com/Orbyt/orbyt",
       },
       installSource: "bundled" as const,
       status: "error" as const,

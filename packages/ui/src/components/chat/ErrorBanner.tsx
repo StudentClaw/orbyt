@@ -17,7 +17,7 @@ export function ErrorBanner({ status, error, onRetry, onReauth }: ErrorBannerPro
   if (status === "offline") {
     return (
       <Alert>
-        <AlertTitle>Student Claw is offline</AlertTitle>
+        <AlertTitle>Orbyt is offline</AlertTitle>
         <AlertDescription>
           Connect to the local server before sending another message.
         </AlertDescription>

@@ -27,7 +27,7 @@ Define the non-self but still student-appropriate read surface that replaces the
 
 - The reference student role mixes true self tools with a broad shared read surface for courses, pages, modules, files, discussions, and conversations.
 - Some of those reads may be available in one course and denied in another, even for the same student.
-- The current Student Claw Canvas surface does not separate baseline student tools from optional shared student reads.
+- The current Orbyt Canvas surface does not separate baseline student tools from optional shared student reads.
 
 ### Out Of Scope
 

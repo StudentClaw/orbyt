@@ -122,9 +122,21 @@ export function WeeklyOutlookWidget({
           </p>
         ) : (
           <div className="space-y-6" data-testid="weekly-outlook-days">
-            {buckets.map((day) => (
+            {buckets.map((day) => {
+              const isToday = day.label === "Today"
+              return (
               <div key={day.key} data-testid={`weekly-outlook-day-${day.key}`}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p
+                  className={`mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${
+                    isToday ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {isToday ? (
+                    <span
+                      aria-hidden
+                      className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
+                    />
+                  ) : null}
                   {day.label}
                 </p>
                 <div className="space-y-2">
@@ -151,7 +163,8 @@ export function WeeklyOutlookWidget({
                   ))}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

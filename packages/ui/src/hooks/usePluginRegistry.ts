@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import {
   IpcChannel,
   type ExtensionRegistryEntry,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { formatPluginLabel } from "@/lib/rootNavbar"
 
 function getPluginNameById(entries: readonly ExtensionRegistryEntry[], pluginId: string): string | null {

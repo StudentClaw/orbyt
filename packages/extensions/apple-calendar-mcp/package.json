@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/apple-calendar-mcp",
+  "name": "@orbyt/apple-calendar-mcp",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@student-claw/contracts": "workspace:*",
+    "@orbyt/contracts": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

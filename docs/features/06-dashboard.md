@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The Dashboard is the student's home screen — the first thing they see when they open Student Claw. It aggregates data from Canvas, the Memory System, and the AI's planning output into a visual overview of their academic life: what's due, how they're doing, and what they should work on next.
+The Dashboard is the student's home screen — the first thing they see when they open Orbyt. It aggregates data from Canvas, the Memory System, and the AI's planning output into a visual overview of their academic life: what's due, how they're doing, and what they should work on next.
 
 ---
 
@@ -192,7 +192,7 @@ Canvas sync detects new grade (main process)
 
 ## Platform
 
-Student Claw is a **desktop-first application**. The Dashboard is designed for a desktop environment (target: 1280px+ screen width).
+Orbyt is a **desktop-first application**. The Dashboard is designed for a desktop environment (target: 1280px+ screen width).
 
 - **Primary platform**: Desktop app built with **Electron**
 - **Interaction model**: Mouse/keyboard — do not assume touch or hover-only interactions; avoid hover-dependent UI patterns that won't translate
@@ -264,4 +264,4 @@ packages/main/src/dashboard/
 - **Notifications**: ~~Should the Dashboard show a notification banner when a new grade is posted?~~ **Resolved**: No in-app banner. Grade chart animates the update via IPC push. Insight card fires if threshold is crossed. OS notification handles backgrounded state. Three signals is enough — no fourth banner.
 - **Multiple semesters**: ~~How does the Dashboard handle semester transitions?~~ **Resolved**: Auto-archive by semester. Semester end is detected from the last assignment/class date in the Canvas syllabus data. On transition, old courses move to a visible archive (accessible from settings or a "Past Semesters" link). Dashboard only shows active semester. Memory System behavioral data (procrastination patterns etc.) persists across semesters.
 - **Offline mode**: ~~When Canvas is unreachable, how stale can Dashboard data be before we visually indicate it's outdated?~~ **Resolved**: Always render from SQLite cache — never block on Canvas. Show a warning banner if last sync was 1–2 days ago.
-- **Mobile companion**: ~~If Student Claw ever gets a mobile companion, the Dashboard is the most important view to replicate. Design with this in mind?~~ **Resolved**: Mobile companion is out of scope for v1. Phone component may exist for push notifications only. Dashboard is desktop-first.
+- **Mobile companion**: ~~If Orbyt ever gets a mobile companion, the Dashboard is the most important view to replicate. Design with this in mind?~~ **Resolved**: Mobile companion is out of scope for v1. Phone component may exist for push notifications only. Dashboard is desktop-first.

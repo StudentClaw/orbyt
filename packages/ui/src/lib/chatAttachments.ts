@@ -1,7 +1,7 @@
 import type {
   OrchestrationTurnAttachment,
   TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { AttachmentData } from "@/components/ai/attachments"
 
 const ATTACHED_FILES_HEADER = "Attached files:"

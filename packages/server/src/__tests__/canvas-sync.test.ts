@@ -3,7 +3,7 @@ import { Database as BunDatabase } from "bun:sqlite"
 import type {
   CanvasAssignmentDetailsResult,
   GatewayToolCallResult,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { PluginGatewayService } from "../mcp/PluginGateway.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { DatabaseService } from "../db/Database.js"

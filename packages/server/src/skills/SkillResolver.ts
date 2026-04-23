@@ -2,8 +2,8 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { Context, Effect, Layer } from "effect"
-import type { SkillId } from "@student-claw/contracts"
-import { buildSkillRegistry } from "./SkillRegistry.js"
+import type { SkillId } from "@orbyt/contracts"
+import { buildMergedSkillRegistry } from "./SkillRegistry.js"
 import type { ResolvedSkill } from "./SkillParser.js"
 
 export interface SkillResolverService {
@@ -18,55 +18,48 @@ export class SkillResolver extends Context.Tag("SkillResolver")<
 
 function collectSkillRoots(): string[] {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url))
-  const roots = new Set<string>()
+  const ordered: string[] = []
+  const seen = new Set<string>()
 
   const addRoot = (candidate: string | undefined) => {
-    if (!candidate) {
-      return
-    }
-
+    if (!candidate) return
+    if (seen.has(candidate)) return
     if (existsSync(candidate)) {
-      roots.add(candidate)
+      ordered.push(candidate)
+      seen.add(candidate)
     }
   }
 
-  const searchStarts = [
-    moduleDir,
-    process.cwd(),
-  ]
+  addRoot(process.env.CODEX_HOME_PATH ? path.join(process.env.CODEX_HOME_PATH, ".agents", "skills") : undefined)
+  addRoot(process.env.HOME ? path.join(process.env.HOME, ".agents", "skills") : undefined)
 
-  for (const startDir of searchStarts) {
+  for (const startDir of [moduleDir, process.cwd()]) {
     let currentDir = startDir
     for (let depth = 0; depth < 8; depth += 1) {
       addRoot(path.join(currentDir, ".agents", "skills"))
-      addRoot(path.join(currentDir, "skills"))
-
       const parentDir = path.dirname(currentDir)
-      if (parentDir === currentDir) {
-        break
-      }
+      if (parentDir === currentDir) break
       currentDir = parentDir
     }
   }
 
-  addRoot(process.env.HOME ? path.join(process.env.HOME, ".agents", "skills") : undefined)
-  addRoot(process.env.CODEX_HOME_PATH ? path.join(process.env.CODEX_HOME_PATH, ".agents", "skills") : undefined)
+  for (const startDir of [moduleDir, process.cwd()]) {
+    let currentDir = startDir
+    for (let depth = 0; depth < 8; depth += 1) {
+      addRoot(path.join(currentDir, "skills"))
+      const parentDir = path.dirname(currentDir)
+      if (parentDir === currentDir) break
+      currentDir = parentDir
+    }
+  }
 
-  return [...roots]
+  return ordered
 }
 
 export const SkillResolverLive = Layer.effect(
   SkillResolver,
   Effect.sync(() => {
-    const registry = new Map<string, ResolvedSkill>()
-
-    for (const skillsRoot of collectSkillRoots()) {
-      for (const [skillId, skill] of buildSkillRegistry(skillsRoot)) {
-        if (!registry.has(skillId)) {
-          registry.set(skillId, skill)
-        }
-      }
-    }
+    const registry = buildMergedSkillRegistry(collectSkillRoots())
 
     return {
       resolve: (skillId: SkillId): ResolvedSkill | null => registry.get(skillId) ?? null,

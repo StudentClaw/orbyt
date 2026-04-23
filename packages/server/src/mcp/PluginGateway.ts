@@ -5,7 +5,7 @@ import {
   GatewayToolInventoryReadResult,
   GatewayToolInventorySnapshot,
   GatewayToolsChangedEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { ConfigService } from "../config/ConfigService.js"
 
 const EMPTY_SNAPSHOT: GatewayToolInventorySnapshot = {

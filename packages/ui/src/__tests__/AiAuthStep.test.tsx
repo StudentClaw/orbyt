@@ -84,7 +84,7 @@ describe("AiAuthStep", () => {
   test("shows error when electronAPI unavailable", async () => {
     codexAuthMocks.connectCodexAccount.mockResolvedValue({
       status: "failed",
-      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+      error: "Desktop bridge unavailable. Please make sure you're running Orbyt as a desktop app.",
     })
     const user = userEvent.setup()
     render(<AiAuthStep {...defaultProps} />)

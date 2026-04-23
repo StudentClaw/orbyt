@@ -5,8 +5,8 @@ import {
   type OrchestrationThread,
   type OrchestrationTurn,
   type ProviderRuntimeEvent,
-} from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+} from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import { ConfigService } from "../config/ConfigService.js"
@@ -26,6 +26,8 @@ import {
   buildThread,
   buildTurnAttachments,
   deleteTurnAttachmentsForThreadIds,
+  readDefaultAccessModePreference,
+  writeDefaultAccessModePreference,
   deriveWorkspaceName,
   getFeatureFlags,
   isDirectoryPath,
@@ -687,7 +689,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
         assertWorkspaceAcceptsChat(workspace)
 
-        const thread = buildThread(workspaceId, title)
+        const thread = buildThread(workspaceId, title, readDefaultAccessModePreference(database))
         const now = new Date().toISOString()
         const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
 
@@ -763,6 +765,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
 
         if (thread.accessMode === accessMode) {
+          writeDefaultAccessModePreference(database, accessMode)
           recordReceipt(commandId, "completed", { threadId, accessMode })
           await receiptBus.resolve(commandId, { threadId, accessMode })
           return { threadId: thread.id, accessMode }
@@ -777,6 +780,7 @@ export const OrchestrationServiceLive = Layer.scoped(
             [accessMode, now, threadId],
           )
           resetThreadProviderSession(database, threadId, now)
+          writeDefaultAccessModePreference(database, accessMode)
         })
 
         const updatedThread = readThread(threadId)

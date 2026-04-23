@@ -4,7 +4,7 @@ import type {
   CanvasStudentTodoItem,
   Course,
   CourseWorkItem,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 

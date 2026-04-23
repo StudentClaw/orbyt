@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { ExtensionRegistryEntry } from "@student-claw/contracts"
+import type { ExtensionRegistryEntry } from "@orbyt/contracts"
 import {
   createGatewayInventorySnapshot,
   formatGatewayNamespace,
@@ -23,8 +23,8 @@ const availableEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
       type: "none",
     },
     tools: [{ name: "template_ping", description: "Ping" }],
-    author: "student-claw",
-    homepage: "https://github.com/StudentClaw/student-claw",
+    author: "orbyt",
+    homepage: "https://github.com/Orbyt/orbyt",
   },
   installSource: "bundled",
   status: "active",

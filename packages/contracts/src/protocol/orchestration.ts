@@ -16,9 +16,9 @@ export const MAX_THREAD_TITLE_LENGTH = 200
 export const MAX_TURN_CONTENT_LENGTH = 16_384
 
 /**
- * Subprotocol used by authenticated Student Claw WebSocket clients.
+ * Subprotocol used by authenticated Orbyt WebSocket clients.
  */
-export const WS_PROTOCOL = "student-claw.v1"
+export const WS_PROTOCOL = "orbyt.v1"
 
 /**
  * Branded identifier for chat workspaces.
@@ -61,7 +61,7 @@ export type TurnId = Schema.Schema.Type<typeof TurnId>
 export type CommandId = Schema.Schema.Type<typeof CommandId>
 
 /**
- * RPC methods supported by the local Student Claw runtime.
+ * RPC methods supported by the local Orbyt runtime.
  */
 export const RPC_METHODS = {
   SERVER_GET_BOOTSTRAP: "server.getBootstrap",
@@ -113,13 +113,17 @@ export const RPC_METHODS = {
   ONBOARDING_GET_AI_AUTH: "onboarding.getAiAuth",
   ONBOARDING_SET_AI_AUTH: "onboarding.setAiAuth",
   SKILLS_LIST: "skills.list",
+  SKILLS_FORK: "skills.fork",
+  SKILLS_GRANT_CAPABILITY: "skills.grantCapability",
+  SKILLS_REVOKE_CAPABILITY: "skills.revokeCapability",
+  SKILLS_SAVE_CUSTOM: "skills.saveCustom",
   DEV_RESET_SOFT: "dev.resetSoft",
   DEV_RESET_HARD: "dev.resetHard",
   MEMORIZE_RUN: "memorize.run",
 } as const
 
 /**
- * Push channels exposed by the local Student Claw runtime.
+ * Push channels exposed by the local Orbyt runtime.
  */
 export const PUSH_CHANNELS = {
   SERVER_LIFECYCLE: "server.lifecycle",

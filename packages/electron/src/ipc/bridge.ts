@@ -38,7 +38,7 @@ import {
   type PluginStopParams,
   type PluginSetEnabledParams,
   type PluginUninstallParams,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { IPC_CHANNELS } from "./channels.js"
 import { buildIsolatedCodexEnv } from "../codex/runtime.js"
 import { PluginManager } from "../plugins/plugin-manager.js"

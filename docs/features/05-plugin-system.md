@@ -2,13 +2,13 @@
 
 ## What It Is
 
-The Plugin System is Student Claw's extension engine. It manages MCP (Model Context Protocol) server plugins that run in isolated processes, each providing the AI with tools to interact with external services. Canvas, Notion, Google Calendar, Apple Calendar — they're all plugins. The system follows a Hub-and-Spoke model where Electron's Main Process is the Hub (Orchestrator) and each MCP server is a Spoke.
+The Plugin System is Orbyt's extension engine. It manages MCP (Model Context Protocol) server plugins that run in isolated processes, each providing the AI with tools to interact with external services. Canvas, Notion, Google Calendar, Apple Calendar — they're all plugins. The system follows a Hub-and-Spoke model where Electron's Main Process is the Hub (Orchestrator) and each MCP server is a Spoke.
 
 ---
 
 ## Why It Exists
 
-Student Claw can't anticipate every service a student uses. By making integrations pluggable, the core app stays clean while the ecosystem grows. A CS student might install a GitHub MCP; a music student might install a Spotify MCP for focus playlists. The Plugin System makes this possible without touching the core codebase.
+Orbyt can't anticipate every service a student uses. By making integrations pluggable, the core app stays clean while the ecosystem grows. A CS student might install a GitHub MCP; a music student might install a Spotify MCP for focus playlists. The Plugin System makes this possible without touching the core codebase.
 
 It also enforces security boundaries. Student data (Canvas grades, Notion notes) is sensitive. Each plugin runs in its own sandboxed process, can only access what the student explicitly permits, and credentials are encrypted at rest.
 
@@ -73,7 +73,7 @@ React Chat UI
 
 Find installed plugins and validate their manifests.
 
-- **Extension directory**: `~/.student-claw/extensions/`
+- **Extension directory**: `~/.orbyt/extensions/`
 - Each plugin is a folder with at least `manifest.json` and an entry file
 - On app start, scan the directory and build a registry of available plugins
 - Validate manifests against the `PluginManifest` schema
@@ -101,7 +101,7 @@ Start, stop, monitor, and restart plugins as needed.
 Every plugin that connects to an external service needs credentials.
 
 - Credentials encrypted using Electron's `safeStorage` API (OS keychain-backed)
-- Stored in `~/.student-claw/vault/secrets.json`
+- Stored in `~/.orbyt/vault/secrets.json`
 - Each plugin only receives its own credentials, never another plugin's
 - Credentials are delivered via a one-time secure runtime handshake from Main to plugin after startup (not via environment variables)
 
@@ -171,8 +171,8 @@ Every plugin requires a `manifest.json`:
   "authInstructions": "Generate a Canvas access token at Settings > Approved Integrations",
   "requiredCredentials": ["CANVAS_TOKEN", "CANVAS_BASE_URL"],
   "icon": "canvas-icon.png",
-  "author": "student-claw",
-  "homepage": "https://github.com/student-claw/canvas-mcp"
+  "author": "orbyt",
+  "homepage": "https://github.com/orbyt/canvas-mcp"
 }
 ```
 
@@ -181,7 +181,7 @@ Every plugin requires a `manifest.json`:
 ## Extension Directory Structure
 
 ```
-~/.student-claw/
+~/.orbyt/
 ├── extensions/
 │   ├── canvas-mcp/
 │   │   ├── manifest.json

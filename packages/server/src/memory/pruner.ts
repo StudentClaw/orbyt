@@ -3,7 +3,7 @@ import { join } from "node:path"
 import {
   DAILY_RETENTION,
   WEEKLY_RETENTION,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { readDailyFile } from "./daily-writer.js"
 import { foldDailyIntoWeekly } from "./weekly-writer.js"
 import type { MemoryPaths } from "./paths.js"

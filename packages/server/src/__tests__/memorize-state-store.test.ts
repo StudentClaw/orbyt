@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { initialMemorizeState } from "@student-claw/contracts"
+import { initialMemorizeState } from "@orbyt/contracts"
 import { createMemoryPaths } from "../memory/paths.js"
 import { MemorizeStateStore } from "../memory/state-store.js"
 
@@ -11,7 +11,7 @@ const tempDirs: string[] = []
 function setup(): { store: MemorizeStateStore; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "sc-memorize-state-"))
   tempDirs.push(dir)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   const store = new MemorizeStateStore(paths)
   return { store, dir }
 }

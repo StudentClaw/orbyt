@@ -1,4 +1,4 @@
-import type { CanvasStudentCourseGradeSummary, CourseWorkItem } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, CourseWorkItem } from "@orbyt/contracts"
 
 export type GradeTrend = "up" | "stable" | "down"
 export type UrgencyZone = "calm" | "attention" | "urgent" | "overdue"

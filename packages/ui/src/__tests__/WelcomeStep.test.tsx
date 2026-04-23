@@ -13,7 +13,7 @@ describe("WelcomeStep", () => {
   test("renders welcome content", () => {
     render(<WelcomeStep {...defaultProps} />)
     expect(screen.getByTestId("welcome-step")).toBeDefined()
-    expect(screen.getByText(/Welcome to Student Claw/)).toBeDefined()
+    expect(screen.getByText(/Welcome to Orbyt/)).toBeDefined()
   })
 
   test("shows time estimate", () => {

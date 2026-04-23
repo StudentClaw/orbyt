@@ -1,4 +1,4 @@
-const DESKTOP_SIDEBAR_WIDTH_STORAGE_KEY = "student-claw:desktop-sidebar-width"
+const DESKTOP_SIDEBAR_WIDTH_STORAGE_KEY = "orbyt:desktop-sidebar-width"
 
 export const MIN_DESKTOP_SIDEBAR_WIDTH = 240
 export const DEFAULT_DESKTOP_SIDEBAR_WIDTH = 420

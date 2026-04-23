@@ -1,6 +1,6 @@
-# Student Claw — Feature Dependency Graph
+# Orbyt — Feature Dependency Graph
 
-This document maps every feature and architecture layer in Student Claw, showing what depends on what and the order things need to be built. Each node points to its detailed write-up.
+This document maps every feature and architecture layer in Orbyt, showing what depends on what and the order things need to be built. Each node points to its detailed write-up.
 
 ---
 

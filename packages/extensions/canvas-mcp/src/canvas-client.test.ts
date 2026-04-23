@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { CanvasAuthError, CanvasDecodeError, CanvasRateLimitError } from "@student-claw/contracts"
+import { CanvasAuthError, CanvasDecodeError, CanvasRateLimitError } from "@orbyt/contracts"
 import { CanvasClient } from "./canvas-client.js"
 
 describe("CanvasClient", () => {

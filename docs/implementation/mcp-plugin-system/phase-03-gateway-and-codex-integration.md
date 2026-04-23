@@ -4,14 +4,14 @@ Last updated: 2026-04-11
 
 ## Orientation Note
 
-- Target feature: expose installed extension tools through one Student Claw-owned MCP gateway and route one fake tool call through the full stack
+- Target feature: expose installed extension tools through one Orbyt-owned MCP gateway and route one fake tool call through the full stack
 - Key dependencies: Phase 02 local lifecycle, current Codex CLI runtime, Electron/Main <-> server boundary
 - Constraints and boundaries:
   - do not add real service credentials yet
   - do not add install UX yet
   - use fake or template tools only
 - Acceptance criteria for this increment:
-  - one built-in Student Claw MCP gateway exists
+  - one built-in Orbyt MCP gateway exists
   - tool inventory changes reach the server and gateway
   - one fake tool can be called end to end through the routing path
 
@@ -34,7 +34,7 @@ Prove that Codex-facing tool routing can work through a stable local gateway ins
 
 ### Acceptance Criteria
 
-- Main owns a Student Claw MCP gateway surface.
+- Main owns a Orbyt MCP gateway surface.
 - The server can read tool inventory from Main.
 - Tool inventory updates are pushed after plugin start and stop.
 - One fake tool call can route:
