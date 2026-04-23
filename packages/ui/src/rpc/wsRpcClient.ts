@@ -52,6 +52,13 @@ import {
   type TurnAttachmentInput,
   type UpdatePreferencesParams,
   type WeeklyInsight,
+  SkillsListResult,
+  ForkSkillResult,
+  GrantCapabilityResult,
+  type ForkSkillParams,
+  type GrantCapabilityParams,
+  type SkillSummary,
+  type SkillId,
 } from "@orbyt/contracts"
 import type {
   DeleteThreadResult,
@@ -234,7 +241,14 @@ export interface WsRpcClient {
     readonly resetHard: () => Promise<{ ok: boolean }>
   }
   readonly skills: {
-    readonly list: () => Promise<{ skills: ReadonlyArray<{ id: string; name: string; description: string }> }>
+    readonly list: () => Promise<SkillsListResult>
+    readonly fork: (params: ForkSkillParams) => Promise<{ skill: SkillSummary }>
+    readonly grantCapability: (
+      params: GrantCapabilityParams,
+    ) => Promise<{ skillId: SkillId; grantedCapabilities: readonly string[] }>
+    readonly revokeCapability: (
+      params: GrantCapabilityParams,
+    ) => Promise<{ skillId: SkillId; grantedCapabilities: readonly string[] }>
   }
   readonly reconnect: () => Promise<void>
   readonly dispose: () => Promise<void>
@@ -492,7 +506,13 @@ function createDevApi(transport: WsTransport): WsRpcClient["dev"] {
 
 function createSkillsApi(transport: WsTransport): WsRpcClient["skills"] {
   return {
-    list: () => transport.request(RPC_METHODS.SKILLS_LIST, {}),
+    list: async () => decode(SkillsListResult, await transport.request(RPC_METHODS.SKILLS_LIST, {})),
+    fork: async (params) =>
+      decode(ForkSkillResult, await transport.request(RPC_METHODS.SKILLS_FORK, params)),
+    grantCapability: async (params) =>
+      decode(GrantCapabilityResult, await transport.request(RPC_METHODS.SKILLS_GRANT_CAPABILITY, params)),
+    revokeCapability: async (params) =>
+      decode(GrantCapabilityResult, await transport.request(RPC_METHODS.SKILLS_REVOKE_CAPABILITY, params)),
   }
 }
 

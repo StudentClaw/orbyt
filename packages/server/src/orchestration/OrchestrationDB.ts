@@ -10,6 +10,7 @@ import {
   type OrchestrationTurnAttachment,
   type OrchestrationWorkspace,
   type ProviderRuntimeEvent,
+  type ThreadAccessMode,
   type TurnAttachmentInput,
   type WorkspaceId,
 } from "@orbyt/contracts"
@@ -605,13 +606,37 @@ export function buildChatModels(config: AppConfig): ReadonlyArray<ChatModel> {
 // Domain object builders
 // ============================================================================
 
-export function buildThread(workspaceId: string, title?: string): OrchestrationThread {
+export function readDefaultAccessModePreference(
+  database: DatabaseService,
+): ThreadAccessMode {
+  const row = database.get<{ default_access_mode: string | null }>(
+    "SELECT default_access_mode FROM user_preferences WHERE id = 1",
+  )
+  return row?.default_access_mode === "full" ? "full" : "default"
+}
+
+export function writeDefaultAccessModePreference(
+  database: DatabaseService,
+  accessMode: ThreadAccessMode,
+): void {
+  const now = new Date().toISOString()
+  database.execute(
+    "UPDATE user_preferences SET default_access_mode = ?, updated_at = ? WHERE id = 1",
+    [accessMode, now],
+  )
+}
+
+export function buildThread(
+  workspaceId: string,
+  title?: string,
+  accessMode: ThreadAccessMode = "default",
+): OrchestrationThread {
   const now = new Date().toISOString()
   return {
     id: createId("thread") as OrchestrationThread["id"],
     workspaceId: workspaceId as WorkspaceId,
     title: title?.trim() || `Session ${new Date().toLocaleTimeString()}`,
-    accessMode: "default",
+    accessMode,
     status: "idle",
     createdAt: now,
     currentTurnId: null,

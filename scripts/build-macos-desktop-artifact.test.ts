@@ -52,6 +52,10 @@ describe("build-macos-desktop-artifact", () => {
           from: "/tmp/orbyt-stage/extra-resources/extensions",
           to: "extensions",
         },
+        {
+          from: "/tmp/orbyt-stage/extra-resources/skills",
+          to: "skills",
+        },
       ],
       mac: {
         target: ["dmg", "zip"],

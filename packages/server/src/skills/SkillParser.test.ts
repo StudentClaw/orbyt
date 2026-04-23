@@ -1,9 +1,34 @@
 import { describe, test, expect } from "bun:test"
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { SkillId } from "@student-claw/contracts"
 import { parseSkillFile } from "./SkillParser.js"
+
+function makeTempSkill(
+  frontmatter: Record<string, string | string[] | null | undefined>,
+  body = "# body\n",
+): { skillPath: string; cleanup: () => void } {
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-skill-parser-"))
+  mkdirSync(path.join(dir, "skill"), { recursive: true })
+  const lines = ["---"]
+  for (const [key, value] of Object.entries(frontmatter)) {
+    if (value === undefined) continue
+    if (value === null) {
+      lines.push(`${key}: null`)
+    } else if (Array.isArray(value)) {
+      lines.push(`${key}:`)
+      for (const item of value) lines.push(`  - ${item}`)
+    } else {
+      lines.push(`${key}: ${value}`)
+    }
+  }
+  lines.push("---", "", body)
+  const skillPath = path.join(dir, "skill", "SKILL.md")
+  writeFileSync(skillPath, lines.join("\n"), "utf8")
+  return { skillPath, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -65,4 +90,59 @@ describe("SkillParser - curated skills Phase 01 contract", () => {
       expect(resolved.contextKey).toBe(expectedContextKey)
     })
   }
+})
+
+describe("SkillParser - Phase 03 expanded metadata", () => {
+  test("defaults tier to custom, version to 0.0.0, capabilities to [], and forkedFrom to null when fields are absent", () => {
+    const { skillPath, cleanup } = makeTempSkill({
+      name: "Sparse Skill",
+      description: "Has only the required fields",
+    })
+
+    try {
+      const resolved = parseSkillFile("sparse" as SkillId, skillPath)
+      expect(resolved.tier).toBe("custom")
+      expect(resolved.version).toBe("0.0.0")
+      expect(resolved.requestedCapabilities).toEqual([])
+      expect(resolved.forkedFrom).toBeNull()
+    } finally {
+      cleanup()
+    }
+  })
+
+  test("throws on an invalid tier value so it is skipped by the registry rather than silently mistrusted", () => {
+    const { skillPath, cleanup } = makeTempSkill({
+      name: "Bad Tier",
+      description: "Invalid tier",
+      tier: "trusted",
+    })
+
+    try {
+      expect(() => parseSkillFile("bad-tier" as SkillId, skillPath)).toThrow(/tier/)
+    } finally {
+      cleanup()
+    }
+  })
+
+  test("exposes tier, version, requestedCapabilities, and forkedFrom when present in frontmatter", () => {
+    const { skillPath, cleanup } = makeTempSkill({
+      name: "Forked Plan Mode",
+      description: "A user fork",
+      version: "2.0.0",
+      tier: "custom",
+      forkedFrom: "plan-mode@1.0.0",
+      requested_capabilities: ["canvas.self.read", "calendar.events.write"],
+    })
+
+    try {
+      const resolved = parseSkillFile("forked-plan-mode" as SkillId, skillPath)
+
+      expect(resolved.tier).toBe("custom")
+      expect(resolved.version).toBe("2.0.0")
+      expect(resolved.forkedFrom).toBe("plan-mode@1.0.0")
+      expect(resolved.requestedCapabilities).toEqual(["canvas.self.read", "calendar.events.write"])
+    } finally {
+      cleanup()
+    }
+  })
 })

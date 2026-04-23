@@ -33,6 +33,10 @@ import {
   SetOverallStatusParams,
   UpdatePreferencesParams,
   SetRoutinesParams,
+  ForkSkillParams,
+  GrantCapabilityParams,
+  SaveCustomSkillParams,
+  type SkillId,
 } from "@orbyt/contracts"
 import type { WebSocket } from "ws"
 import type { AppConfig } from "../config/defaults.js"
@@ -43,6 +47,7 @@ import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
 import type { DatabaseService } from "../db/Database.js"
 import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import type { SkillResolverService } from "../skills/SkillResolver.js"
+import type { SkillManagementService } from "../skills/SkillManagementService.js"
 import type { MemorizeServiceShape } from "../memory/service.js"
 import { resolveMemoryGraphDir } from "../memory/paths.js"
 
@@ -54,6 +59,7 @@ type RouteDependencies = {
   readonly database: DatabaseService
   readonly canvasSync: CanvasSyncServiceShape
   readonly skillResolver: SkillResolverService
+  readonly skillManagement?: SkillManagementService
   readonly memorize: MemorizeServiceShape
 }
 
@@ -67,6 +73,7 @@ type UserPreferencesRow = {
   quiet_hours_end: string
   calendar_integration: string
   memory_graph_path: string | null
+  default_access_mode: string
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -153,9 +160,14 @@ function ensureUserPreferencesRow(database: DatabaseService): void {
   database.execute(
     `INSERT OR IGNORE INTO user_preferences
        (id, study_times, course_ranking, max_session_mins, off_limit_days,
-        notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration, memory_graph_path)
-     VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none', NULL)`,
+        notification_enabled, quiet_hours_start, quiet_hours_end, calendar_integration, memory_graph_path,
+        default_access_mode)
+     VALUES (1, '[]', '[]', 90, '[]', 1, '22:00', '08:00', 'none', NULL, 'default')`,
   )
+}
+
+function normalizeDefaultAccessMode(value: string | null | undefined): "default" | "full" {
+  return value === "full" ? "full" : "default"
 }
 
 function readUserPreferencesRow(database: DatabaseService): UserPreferencesRow | null {
@@ -185,6 +197,7 @@ function toStudentPreference(row: UserPreferencesRow) {
       graphDirOverride: memoryGraphOverride,
     }),
     memoryGraphPathMode: memoryGraphOverride ? "custom" as const : "default" as const,
+    defaultAccessMode: normalizeDefaultAccessMode(row.default_access_mode),
   }
 }
 
@@ -565,10 +578,21 @@ async function handleListSkills(
   id: string,
   dependencies: RouteDependencies,
 ): Promise<string> {
+  if (dependencies.skillManagement) {
+    const skills = dependencies.skillManagement.listForUi()
+    return encodeSuccess(id, { skills })
+  }
   const skills = dependencies.skillResolver.listAll().map((s) => ({
     id: s.id,
     name: s.name,
     description: s.description,
+    tier: s.tier,
+    version: s.version,
+    requestedCapabilities: s.requestedCapabilities,
+    grantedCapabilities: [] as readonly string[],
+    missingCapabilities: s.requestedCapabilities,
+    forkedFrom: s.forkedFrom,
+    editable: false,
   }))
   return encodeSuccess(id, { skills })
 }
@@ -797,6 +821,12 @@ async function handleOnboardingMethod(
           [normalizeMemoryGraphPath(decoded.memoryGraphPath), now],
         )
       }
+      if (decoded.defaultAccessMode !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET default_access_mode = ?, updated_at = ? WHERE id = 1",
+          [decoded.defaultAccessMode, now],
+        )
+      }
       const row = readUserPreferencesRow(database)
       if (!row) return encodeError(id, "internal_error", "Could not read updated preferences")
       return encodeSuccess(id, toStudentPreference(row))
@@ -838,9 +868,108 @@ async function handleSkillsMethod(
   switch (method) {
     case RPC_METHODS.SKILLS_LIST:
       return handleListSkills(id, dependencies)
+    case RPC_METHODS.SKILLS_FORK:
+      return handleForkSkill(id, request.params, dependencies)
+    case RPC_METHODS.SKILLS_GRANT_CAPABILITY:
+      return handleGrantSkillCapability(id, request.params, dependencies)
+    case RPC_METHODS.SKILLS_REVOKE_CAPABILITY:
+      return handleRevokeSkillCapability(id, request.params, dependencies)
     default:
       return null
   }
+}
+
+async function handleForkSkill(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  if (!dependencies.skillManagement) {
+    return encodeError(id, "method_not_found", "Skill management is not configured on this server")
+  }
+  const decoded = decodeParams(ForkSkillParams, params, id, "skills.fork params are invalid")
+  if (typeof decoded === "string") return decoded
+  try {
+    const result = dependencies.skillManagement.fork({
+      sourceSlug: decoded.sourceSlug,
+      targetSlug: decoded.targetSlug,
+      displayName: decoded.displayName,
+      force: decoded.force,
+    })
+    return encodeSuccess(id, { skill: summarizeFromService(dependencies, result.skill.id) })
+  } catch (error) {
+    return encodeError(id, "skills_fork_failed", error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function handleGrantSkillCapability(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  if (!dependencies.skillManagement) {
+    return encodeError(id, "method_not_found", "Skill management is not configured on this server")
+  }
+  const decoded = decodeParams(
+    GrantCapabilityParams,
+    params,
+    id,
+    "skills.grantCapability params are invalid",
+  )
+  if (typeof decoded === "string") return decoded
+  try {
+    const grantedCapabilities = dependencies.skillManagement.grantCapability(
+      decoded.skillId,
+      decoded.capabilityKey,
+    )
+    return encodeSuccess(id, { skillId: decoded.skillId, grantedCapabilities })
+  } catch (error) {
+    return encodeError(
+      id,
+      "skills_grant_failed",
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+async function handleRevokeSkillCapability(
+  id: string,
+  params: unknown,
+  dependencies: RouteDependencies,
+): Promise<string> {
+  if (!dependencies.skillManagement) {
+    return encodeError(id, "method_not_found", "Skill management is not configured on this server")
+  }
+  const decoded = decodeParams(
+    GrantCapabilityParams,
+    params,
+    id,
+    "skills.revokeCapability params are invalid",
+  )
+  if (typeof decoded === "string") return decoded
+  try {
+    const grantedCapabilities = dependencies.skillManagement.revokeCapability(
+      decoded.skillId,
+      decoded.capabilityKey,
+    )
+    return encodeSuccess(id, { skillId: decoded.skillId, grantedCapabilities })
+  } catch (error) {
+    return encodeError(
+      id,
+      "skills_revoke_failed",
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+function summarizeFromService(
+  dependencies: RouteDependencies,
+  skillId: SkillId,
+): unknown {
+  if (!dependencies.skillManagement) return { id: skillId }
+  return dependencies.skillManagement
+    .listForUi()
+    .find((s) => s.id === skillId) ?? { id: skillId }
 }
 
 async function handleMemorizeMethod(

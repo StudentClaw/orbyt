@@ -52,6 +52,7 @@ vi.mock("../hooks/useAppRuntime", () => ({
     closePanel: chatMocks.closePanel,
   }),
   useSkills: () => [],
+  useSkillsState: () => ({ skills: [], refresh: async () => undefined }),
 }))
 
 import { ChatContainer } from "../components/chat/ChatContainer"

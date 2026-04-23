@@ -1028,17 +1028,41 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
   }
 }
 
-function buildThread(workspaceId: string, title?: string): OrchestrationThread {
+function buildThread(
+  workspaceId: string,
+  title?: string,
+  accessMode: OrchestrationThread["accessMode"] = "default",
+): OrchestrationThread {
   const now = new Date().toISOString()
   return {
     id: createId("thread") as OrchestrationThread["id"],
     workspaceId: workspaceId as WorkspaceId,
     title: title?.trim() || `Session ${new Date().toLocaleTimeString()}`,
-    accessMode: "default",
+    accessMode,
     status: "idle",
     createdAt: now,
     currentTurnId: null,
   }
+}
+
+function readDefaultAccessModePreference(
+  database: DatabaseService,
+): OrchestrationThread["accessMode"] {
+  const row = database.get<{ default_access_mode: string | null }>(
+    "SELECT default_access_mode FROM user_preferences WHERE id = 1",
+  )
+  return row?.default_access_mode === "full" ? "full" : "default"
+}
+
+function writeDefaultAccessModePreference(
+  database: DatabaseService,
+  accessMode: OrchestrationThread["accessMode"],
+): void {
+  const now = new Date().toISOString()
+  database.execute(
+    "UPDATE user_preferences SET default_access_mode = ?, updated_at = ? WHERE id = 1",
+    [accessMode, now],
+  )
 }
 
 function normalizeThreadTitle(title: string): string {
@@ -1234,7 +1258,7 @@ async function createThread(
   }
   assertWorkspaceAcceptsChat(workspace)
 
-  const thread = buildThread(workspaceId, title)
+  const thread = buildThread(workspaceId, title, readDefaultAccessModePreference(deps.database))
   const now = new Date().toISOString()
   const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
 
@@ -1319,6 +1343,7 @@ async function setThreadAccessMode(
   }
 
   if (thread.accessMode === accessMode) {
+    writeDefaultAccessModePreference(deps.database, accessMode)
     recordReceipt(deps, commandId, "completed", { threadId, accessMode })
     await deps.receiptBus.resolve(commandId, { threadId, accessMode })
     return { threadId: thread.id, accessMode }
@@ -1333,6 +1358,7 @@ async function setThreadAccessMode(
       [accessMode, now, threadId],
     )
     resetThreadProviderSession(deps.database, threadId, now)
+    writeDefaultAccessModePreference(deps.database, accessMode)
   })
 
   const updatedThread = readThread(deps.database, threadId)
@@ -2126,7 +2152,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
         assertWorkspaceAcceptsChat(workspace)
 
-        const thread = buildThread(workspaceId, title)
+        const thread = buildThread(workspaceId, title, readDefaultAccessModePreference(database))
         const now = new Date().toISOString()
         const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
 
@@ -2199,6 +2225,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         }
 
         if (thread.accessMode === accessMode) {
+          writeDefaultAccessModePreference(database, accessMode)
           recordReceipt(commandId, "completed", { threadId, accessMode })
           await receiptBus.resolve(commandId, { threadId, accessMode })
           return { threadId: thread.id, accessMode }
@@ -2213,6 +2240,7 @@ export const OrchestrationServiceLive = Layer.scoped(
             [accessMode, now, threadId],
           )
           resetThreadProviderSession(database, threadId, now)
+          writeDefaultAccessModePreference(database, accessMode)
         })
         await threadRuntimeManager.disposeThread(threadId)
 

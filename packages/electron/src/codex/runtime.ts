@@ -1,5 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { reconcileBundledSkills } from "./skill-reconciler.js"
+
+export type PrepareIsolatedCodexRuntimeOptions = {
+  readonly bundleSkillsRoot?: string
+}
 
 export type PluginGatewayLaunchConfig = {
   readonly bridgeUrl: string
@@ -34,9 +39,24 @@ function buildIsolatedConfigToml(gateway?: PluginGatewayLaunchConfig): string {
   ].join("\n")
 }
 
+function resolveBundledSkillsRoot(explicit?: string): string | null {
+  if (explicit) {
+    return existsSync(explicit) ? explicit : null
+  }
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  if (resourcesPath) {
+    const packagedPath = path.join(resourcesPath, "skills")
+    if (existsSync(packagedPath)) {
+      return packagedPath
+    }
+  }
+  return null
+}
+
 export function prepareIsolatedCodexRuntime(
   userDataPath: string,
   gateway?: PluginGatewayLaunchConfig,
+  options?: PrepareIsolatedCodexRuntimeOptions,
 ): {
   readonly codexHomePath: string
   readonly codexProcessHomePath: string
@@ -46,7 +66,17 @@ export function prepareIsolatedCodexRuntime(
 
   mkdirSync(codexHomePath, { recursive: true })
   mkdirSync(codexProcessHomePath, { recursive: true })
-  mkdirSync(path.join(codexProcessHomePath, ".agents", "skills"), { recursive: true })
+  const userSkillsDir = path.join(codexProcessHomePath, ".agents", "skills")
+  mkdirSync(userSkillsDir, { recursive: true })
+
+  const bundleRoot = resolveBundledSkillsRoot(options?.bundleSkillsRoot)
+  if (bundleRoot) {
+    reconcileBundledSkills({
+      bundleRoot,
+      userSkillsDir,
+      statePath: path.join(codexProcessHomePath, ".agents", "skills.state.json"),
+    })
+  }
 
   const globalCodexHome = path.join(process.env.HOME ?? "", ".codex")
   copyIfMissing(path.join(globalCodexHome, "auth.json"), path.join(codexHomePath, "auth.json"))
@@ -66,8 +96,9 @@ export function prepareIsolatedCodexRuntime(
 export function buildIsolatedCodexEnv(
   userDataPath: string,
   gateway?: PluginGatewayLaunchConfig,
+  options?: PrepareIsolatedCodexRuntimeOptions,
 ): NodeJS.ProcessEnv {
-  const isolatedCodexRuntime = prepareIsolatedCodexRuntime(userDataPath, gateway)
+  const isolatedCodexRuntime = prepareIsolatedCodexRuntime(userDataPath, gateway, options)
 
   return {
     ...process.env,

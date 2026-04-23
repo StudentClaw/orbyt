@@ -73,6 +73,10 @@ export function createMacPackagingConfig(options: {
         from: path.join(options.stageAppDir, "extra-resources", "extensions"),
         to: "extensions",
       },
+      {
+        from: path.join(options.stageAppDir, "extra-resources", "skills"),
+        to: "skills",
+      },
     ],
     afterSign: options.afterSignPath ?? path.join(options.stageAppDir, "build-resources", "notarize.mjs"),
     mac: {
@@ -193,6 +197,10 @@ function resolveElectronDistSource(repoRoot: string): string {
 
 function resolveStagedExtensionsSource(repoRoot: string): string {
   return path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+}
+
+function resolveStagedSkillsSource(repoRoot: string): string {
+  return path.join(repoRoot, "packages", "electron", "dist", "resources", "skills")
 }
 
 export function resolvePackagedAppPath(options: {
@@ -437,12 +445,16 @@ function stageDesktopApp(options: {
   const electronResourcesSource = resolveElectronResourcesSource(options.repoRoot)
   const buildResourcesSource = resolveBuildResourcesSource(options.repoRoot)
   const stagedExtensionsSource = resolveStagedExtensionsSource(options.repoRoot)
+  const stagedSkillsSource = resolveStagedSkillsSource(options.repoRoot)
 
   if (!existsSync(electronDistSource)) {
     throw new Error(`Missing Electron dist output at ${electronDistSource}. Run bun run build first.`)
   }
   if (!existsSync(stagedExtensionsSource)) {
     throw new Error(`Missing staged bundled extensions at ${stagedExtensionsSource}. Run bun run stage:bundled-extensions first.`)
+  }
+  if (!existsSync(stagedSkillsSource)) {
+    throw new Error(`Missing staged bundled skills at ${stagedSkillsSource}. Run bun run stage:bundled-skills first.`)
   }
 
   const stageBuildResourcesDir = path.join(options.stageAppDir, "build-resources")
@@ -459,6 +471,7 @@ function stageDesktopApp(options: {
   cpSync(path.join(electronResourcesSource, "icon.png"), path.join(stageBuildResourcesDir, "icon.png"))
   cpSync(buildResourcesSource, stageBuildResourcesDir, { recursive: true })
   cpSync(stagedExtensionsSource, path.join(stageExtraResourcesDir, "extensions"), { recursive: true })
+  cpSync(stagedSkillsSource, path.join(stageExtraResourcesDir, "skills"), { recursive: true })
   createMacIcon(stageBuildResourcesDir, path.join(stageBuildResourcesDir, "icon.png"), options.verbose, options.logger)
 
   options.logger.phase("Staging Apple Calendar bridge assets")
@@ -526,6 +539,12 @@ function buildDesktopArtifact(options: {
     })
     logger.phase("Staging bundled extensions")
     runCommand("bun", ["run", "stage:bundled-extensions"], {
+      cwd: options.repoRoot,
+      verbose,
+      logger,
+    })
+    logger.phase("Staging bundled skills")
+    runCommand("bun", ["run", "stage:bundled-skills"], {
       cwd: options.repoRoot,
       verbose,
       logger,

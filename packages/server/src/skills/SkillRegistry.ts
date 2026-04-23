@@ -34,3 +34,15 @@ export function buildSkillRegistry(skillsRoot: string): SkillRegistry {
 
   return registry
 }
+
+export function buildMergedSkillRegistry(rootsInPriorityOrder: readonly string[]): SkillRegistry {
+  const merged = new Map<string, ResolvedSkill>()
+  for (const root of rootsInPriorityOrder) {
+    for (const [slug, skill] of buildSkillRegistry(root)) {
+      if (!merged.has(slug)) {
+        merged.set(slug, skill)
+      }
+    }
+  }
+  return merged
+}
