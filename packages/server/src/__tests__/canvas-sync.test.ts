@@ -8,6 +8,7 @@ import type { PluginGatewayService } from "../mcp/PluginGateway.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { DatabaseService } from "../db/Database.js"
 import { createSyncService } from "../canvas/CanvasSyncService.js"
+import { COURSE_COLOR_PALETTE } from "../canvas/courseColors.js"
 import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 function createDatabaseService(db: BunDatabase): DatabaseService {
@@ -213,6 +214,9 @@ describe("CanvasSyncService", () => {
       "canvas.get_my_peer_reviews_todo",
     ])
     expect(service.listCourses()).toHaveLength(1)
+    expect((COURSE_COLOR_PALETTE as readonly string[]).includes(service.listCourses()[0]?.color ?? "")).toBe(
+      true,
+    )
     expect(service.getMyUpcomingAssignments()).toEqual([
       expect.objectContaining({
         id: "canvas-coursework:assignment:1:101",
