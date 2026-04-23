@@ -225,18 +225,19 @@ describe("workspace operations", () => {
     renameSync(tmpFolder, relinkedFolder)
 
     db.run(
-      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, cwd = ? WHERE thread_id = ?",
-      ["provider-thread-1", tmpFolder, threadId],
+      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, runtime_payload = ?, cwd = ? WHERE thread_id = ?",
+      ["provider-thread-1", JSON.stringify({ resumeCursor: { threadId: "provider-thread-1" } }), tmpFolder, threadId],
     )
 
     await service.relinkWorkspace("cmd-10", workspaceId, relinkedFolder)
 
-    const row = database.get<{ provider_thread_id: string | null; cwd: string | null }>(
-      "SELECT provider_thread_id, cwd FROM provider_runtime_sessions WHERE thread_id = ?",
+    const row = database.get<{ provider_thread_id: string | null; runtime_payload: string | null; cwd: string | null }>(
+      "SELECT provider_thread_id, runtime_payload, cwd FROM provider_runtime_sessions WHERE thread_id = ?",
       [threadId],
     )
 
     expect(row?.provider_thread_id).toBeNull()
+    expect(row?.runtime_payload).toBeNull()
     expect(row?.cwd).toBe(relinkedFolder)
     tmpFolder = relinkedFolder
   })
@@ -262,8 +263,8 @@ describe("workspace operations", () => {
     const { threadId } = await service.createThread("cmd-13b", workspaceId, "Scoped chat")
 
     db.run(
-      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, last_error = ? WHERE thread_id = ?",
-      ["provider-thread-1", "stale", threadId],
+      "UPDATE provider_runtime_sessions SET provider_thread_id = ?, runtime_payload = ?, last_error = ? WHERE thread_id = ?",
+      ["provider-thread-1", JSON.stringify({ resumeCursor: { threadId: "provider-thread-1" } }), "stale", threadId],
     )
 
     const result = await service.setThreadAccessMode("cmd-13c", threadId, "full")
@@ -272,14 +273,15 @@ describe("workspace operations", () => {
       "SELECT access_mode FROM orchestration_threads WHERE id = ?",
       [threadId],
     )
-    const sessionRow = database.get<{ provider_thread_id: string | null; last_error: string | null }>(
-      "SELECT provider_thread_id, last_error FROM provider_runtime_sessions WHERE thread_id = ?",
+    const sessionRow = database.get<{ provider_thread_id: string | null; runtime_payload: string | null; last_error: string | null }>(
+      "SELECT provider_thread_id, runtime_payload, last_error FROM provider_runtime_sessions WHERE thread_id = ?",
       [threadId],
     )
 
     expect(result).toEqual({ threadId, accessMode: "full" })
     expect(threadRow?.access_mode).toBe("full")
     expect(sessionRow?.provider_thread_id).toBeNull()
+    expect(sessionRow?.runtime_payload).toBeNull()
     expect(sessionRow?.last_error).toBeNull()
   })
 
@@ -379,21 +381,21 @@ describe("workspace operations", () => {
     )
     database.execute(
       `UPDATE provider_runtime_sessions
-       SET status = ?, updated_at = ?
+       SET status = ?, provider_thread_id = ?, runtime_payload = ?, updated_at = ?
        WHERE thread_id = ?`,
-      ["queued", now, queuedThreadId],
+      ["queued", "provider-thread-queued", JSON.stringify({ resumeCursor: { threadId: "provider-thread-queued" } }), now, queuedThreadId],
     )
     database.execute(
       `UPDATE provider_runtime_sessions
-       SET status = ?, updated_at = ?
+       SET status = ?, provider_thread_id = ?, runtime_payload = ?, updated_at = ?
        WHERE thread_id = ?`,
-      ["streaming", now, streamingThreadId],
+      ["streaming", "provider-thread-streaming", JSON.stringify({ resumeCursor: { threadId: "provider-thread-streaming" } }), now, streamingThreadId],
     )
     database.execute(
       `UPDATE provider_runtime_sessions
-       SET status = ?, updated_at = ?
+       SET status = ?, provider_thread_id = ?, runtime_payload = ?, updated_at = ?
        WHERE thread_id = ?`,
-      ["offline", now, pendingThreadId],
+      ["offline", "provider-thread-pending", JSON.stringify({ resumeCursor: { threadId: "provider-thread-pending" } }), now, pendingThreadId],
     )
     database.execute(
       `INSERT INTO queued_provider_turns (turn_id, thread_id, content, created_at, updated_at)
@@ -412,8 +414,8 @@ describe("workspace operations", () => {
     const queuedCount = database.get<{ count: number }>(
       `SELECT COUNT(*) as count FROM queued_provider_turns`,
     )
-    const pendingSession = database.get<{ status: string; provider_thread_id: string | null }>(
-      `SELECT status, provider_thread_id
+    const pendingSession = database.get<{ status: string; provider_thread_id: string | null; runtime_payload: string | null }>(
+      `SELECT status, provider_thread_id, runtime_payload
        FROM provider_runtime_sessions
        WHERE thread_id = ?`,
       [pendingThreadId],
@@ -430,6 +432,8 @@ describe("workspace operations", () => {
     expect(pendingTurn?.status).toBe("interrupted")
     expect(queuedCount?.count).toBe(0)
     expect(pendingSession?.status).toBe("interrupted")
+    expect(pendingSession?.provider_thread_id).toBeNull()
+    expect(pendingSession?.runtime_payload).toBeNull()
   })
 
   test("deleteThread removes the thread, its turns, and its runtime session", async () => {

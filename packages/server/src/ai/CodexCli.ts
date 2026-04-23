@@ -65,6 +65,10 @@ type ThreadStartResponse = {
   }
 }
 
+type CodexResumeCursor = {
+  readonly threadId: string
+}
+
 type TurnStartResponse = {
   readonly turn?: {
     readonly id?: string
@@ -81,6 +85,78 @@ type AccountReadResponse = {
 type JsonRpcMessage =
   | { id?: string | number; result?: unknown; error?: { code?: number; message?: string } }
   | { id?: string | number; method?: string; params?: unknown }
+
+const RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS = [
+  "thread not found",
+  "no thread found",
+  "cannot resume",
+  "can't resume",
+  "not resumable",
+  "missing thread",
+] as const
+
+function asTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null
+  }
+
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
+function readResumeCursorThreadId(resumeCursor: unknown): string | null {
+  if (!isRecord(resumeCursor)) {
+    return null
+  }
+
+  return asTrimmedString(resumeCursor.threadId)
+}
+
+function buildResumeCursor(providerThreadId: string): CodexResumeCursor {
+  return {
+    threadId: providerThreadId,
+  }
+}
+
+function readPersistedResumeCursor(input: {
+  readonly providerThreadId: string | null
+  readonly runtimePayload: unknown
+}): CodexResumeCursor | null {
+  const payload = isRecord(input.runtimePayload) ? input.runtimePayload : null
+  const resumeThreadId = readResumeCursorThreadId(payload?.resumeCursor)
+
+  if (resumeThreadId) {
+    return buildResumeCursor(resumeThreadId)
+  }
+
+  if (input.providerThreadId) {
+    return buildResumeCursor(input.providerThreadId)
+  }
+
+  return null
+}
+
+function isRecoverableThreadResumeError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+  return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet))
+}
+
+function readProviderThreadId(
+  response: ThreadStartResponse,
+  failureCode: string,
+  action: "start" | "resume",
+): string {
+  const providerThreadId = asTrimmedString(response.thread?.id)
+  if (!providerThreadId) {
+    throw new ProviderRuntimeFailure(
+      failureCode,
+      `Codex did not return a provider thread id for thread/${action}.`,
+      true,
+    )
+  }
+
+  return providerThreadId
+}
 
 // ============================================================================
 // Service interface and tag
@@ -697,26 +773,25 @@ export function createCodexRuntimeInstance(
     localThreadId: string,
     requestedCwd?: string | null,
     accessMode: ThreadAccessMode = "default",
+    requestedModel?: string | null,
   ): Promise<string> => {
     const normalizedRequestedCwd = normalizeSessionCwd(requestedCwd)
     const persistedSession = await runtimeStore.getThreadSession(localThreadId)
     const persistedProviderThreadId = persistedSession?.providerThreadId ?? null
     const persistedCwd = normalizeSessionCwd(persistedSession?.cwd)
     const cachedProviderThreadId = providerThreadIds.get(localThreadId) ?? null
-    const existing =
+    const cachedMatchesPersisted =
       cachedProviderThreadId !== null && cachedProviderThreadId === persistedProviderThreadId
-        ? cachedProviderThreadId
-        : persistedProviderThreadId
-
-    if (existing && persistedCwd === normalizedRequestedCwd) {
-      providerThreadIds.set(localThreadId, existing)
-      return existing
+    if (cachedMatchesPersisted && persistedCwd === normalizedRequestedCwd) {
+      providerThreadIds.set(localThreadId, cachedProviderThreadId)
+      return cachedProviderThreadId
     }
 
     providerThreadIds.delete(localThreadId)
-    if (existing || persistedCwd !== normalizedRequestedCwd) {
+    if (persistedCwd !== normalizedRequestedCwd) {
       await runtimeStore.upsertThreadSession(localThreadId, {
         providerThreadId: null,
+        runtimePayload: null,
         cwd: normalizedRequestedCwd,
         status: "idle",
         lastError: null,
@@ -724,27 +799,80 @@ export function createCodexRuntimeInstance(
     }
 
     const threadStartPolicy = getThreadStartPolicy(accessMode)
-    const response = await sendRequest<ThreadStartResponse>("thread/start", {
+    const sessionOpenParams = {
       cwd: normalizedRequestedCwd ?? process.cwd(),
-      model: config.codexModel,
+      model: requestedModel ?? config.codexModel,
       approvalPolicy: threadStartPolicy.approvalPolicy,
       sandbox: threadStartPolicy.sandbox,
-    })
-    const providerThreadId = response.thread?.id
-    if (!providerThreadId) {
-      throw new ProviderRuntimeFailure(
-        "codex_thread_start_failed",
-        "Codex did not return a provider thread id.",
-        true,
-      )
     }
+    const resumeCursor = persistedCwd === normalizedRequestedCwd
+      ? readPersistedResumeCursor({
+          providerThreadId: persistedProviderThreadId,
+          runtimePayload: persistedSession?.runtimePayload ?? null,
+        })
+      : null
+
+    if (resumeCursor) {
+      try {
+        const response = await sendRequest<ThreadStartResponse>("thread/resume", {
+          ...sessionOpenParams,
+          threadId: resumeCursor.threadId,
+        })
+        const providerThreadId = readProviderThreadId(
+          response,
+          "codex_thread_resume_failed",
+          "resume",
+        )
+
+        providerThreadIds.set(localThreadId, providerThreadId)
+        await runtimeStore.upsertThreadSession(localThreadId, {
+          providerThreadId,
+          runtimePayload: {
+            resumeCursor: buildResumeCursor(providerThreadId),
+          },
+          status: "idle",
+          authState: "authenticated",
+          cwd: normalizedRequestedCwd,
+          lastError: null,
+        })
+        return providerThreadId
+      } catch (error) {
+        if (!isRecoverableThreadResumeError(error)) {
+          throw error
+        }
+
+        console.warn("Codex thread/resume failed; falling back to thread/start.", {
+          localThreadId,
+          requestedResumeThreadId: resumeCursor.threadId,
+          cause: error instanceof Error ? error.message : String(error),
+        })
+        await runtimeStore.upsertThreadSession(localThreadId, {
+          providerThreadId: null,
+          runtimePayload: null,
+          cwd: normalizedRequestedCwd,
+          status: "idle",
+          lastError: null,
+        })
+      }
+    }
+
+    const response = await sendRequest<ThreadStartResponse>("thread/start", sessionOpenParams)
+    const providerThreadId = readProviderThreadId(
+      response,
+      "codex_thread_start_failed",
+      "start",
+    )
 
     providerThreadIds.set(localThreadId, providerThreadId)
     await runtimeStore.upsertThreadSession(localThreadId, {
       providerThreadId,
+      runtimePayload: {
+        resumeCursor: buildResumeCursor(providerThreadId),
+      },
       status: "idle",
       authState: "authenticated",
       cwd: normalizedRequestedCwd,
+      lastError: null,
     })
     return providerThreadId
   }
@@ -788,6 +916,7 @@ export function createCodexRuntimeInstance(
         input.localThreadId,
         input.cwd,
         input.accessMode ?? "default",
+        input.model,
       )
       await runtimeStore.updateState({
         status: "streaming",
