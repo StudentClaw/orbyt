@@ -4,7 +4,7 @@ import {
   type ProviderApprovalDecision,
   type ProviderPendingApproval,
   type ThreadAccessMode,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   createCodexRuntimeInstance,
   type CodexCliService,

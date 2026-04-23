@@ -2,7 +2,7 @@ import {
   ExtensionManifest,
   parseExtensionManifestSync,
   type ExtensionManifest as CanvasManifest,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { canvasStudentReplacementToolInventory } from "./student-tool-contract.js"
 
 export const CanvasManifestSchema = ExtensionManifest
@@ -41,6 +41,6 @@ export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
     ],
   },
   tools: canvasStudentReplacementToolInventory.map(({ name, description }) => ({ name, description })),
-  author: "student-claw",
-  homepage: "https://github.com/StudentClaw/student-claw",
+  author: "orbyt",
+  homepage: "https://github.com/Orbyt/orbyt",
 })

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { GradeInsightsWidget } from "../components/dashboard/GradeInsightsWidget"
-import type { CanvasStudentCourseGradeSummary, Course } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course } from "@orbyt/contracts"
 
 function makeCourse(id: string, code: string, name: string): Course {
   return { id: id as Course["id"], name, code }

@@ -7,7 +7,7 @@ import { PluginVault } from "../plugins/plugin-vault.js"
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-plugin-vault-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-plugin-vault-"))
   tempDirs.push(dir)
   return dir
 }

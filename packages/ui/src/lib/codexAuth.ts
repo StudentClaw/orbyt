@@ -6,7 +6,7 @@ import {
 } from "@/rpc/onboardingState"
 
 const DESKTOP_BRIDGE_UNAVAILABLE_MESSAGE =
-  "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app."
+  "Desktop bridge unavailable. Please make sure you're running Orbyt as a desktop app."
 
 export type CodexConnectResult =
   | { readonly status: "connected" }

@@ -239,14 +239,13 @@ export function DashboardPage() {
     [courses, pagedSubmittedItems, priorityItems, filter, now],
   )
 
-  const subtitle = useMemo(() => {
+  const { dateLabel, dueThisWeek } = useMemo(() => {
     const datePart = now.toLocaleDateString([], {
       weekday: "long",
       month: "short",
       day: "numeric",
     })
-    const n = countDueThisWeek(priorityItems, now)
-    return `${datePart} — ${n} due this week`
+    return { dateLabel: datePart, dueThisWeek: countDueThisWeek(priorityItems, now) }
   }, [now, priorityItems])
 
   useEffect(() => {
@@ -309,7 +308,8 @@ export function DashboardPage() {
         <div className="min-w-0">
           <DashboardHeader
             title="Dashboard"
-            subtitle={subtitle}
+            dateLabel={dateLabel}
+            dueThisWeek={dueThisWeek}
             onPlanWeek={handlePlanWeek}
             planDisabled={!workspace || !planWeekAction}
           />

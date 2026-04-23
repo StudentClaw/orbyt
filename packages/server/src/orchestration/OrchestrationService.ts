@@ -27,14 +27,14 @@ import {
   type ThreadAccessMode,
   type TurnAttachmentInput,
   type WorkspaceId,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type {
   DeleteThreadResult,
   RenameThreadResult,
   RespondToProviderApprovalResult,
   SetThreadAccessModeResult,
-} from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+} from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 import { recordWorkflowCompletionActivity } from "../activity/feed.js"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
@@ -2251,7 +2251,7 @@ export const OrchestrationServiceLive = Layer.scoped(
       sendTurn: async (commandId, threadId, content, attachments, model) => {
         const runtimeState = await runtimeStore.getState()
         if (!threadRuntimeManager.getSnapshot().acceptingTurns) {
-          throw new Error("Codex is still starting. Wait for Student Claw to finish preparing Codex and try again.")
+          throw new Error("Codex is still starting. Wait for Orbyt to finish preparing Codex and try again.")
         }
 
         const thread = readThread(threadId)

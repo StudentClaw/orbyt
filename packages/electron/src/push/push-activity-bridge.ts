@@ -4,7 +4,7 @@ import {
   PUSH_CHANNELS,
   type ActivityFeedEntry,
   type RpcPushEnvelope,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { PushDeliveryService } from "./push-delivery-service.js"
 import type { PushStore } from "./push-store.js"
 
@@ -64,7 +64,7 @@ export class PushActivityBridge {
       ?? ((url: string, protocols: string[]) => new WebSocket(url, protocols) as unknown as WebSocketLike)
 
     const socket = createSocket(this.options.wsUrl, [
-      "student-claw.v1",
+      "orbyt.v1",
       `auth.${this.options.wsAuthToken}`,
     ])
     socket.on("open", () => {

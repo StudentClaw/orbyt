@@ -10,7 +10,7 @@
       },
     },
     "packages/contracts": {
-      "name": "@student-claw/contracts",
+      "name": "@orbyt/contracts",
       "version": "0.1.0",
       "dependencies": {
         "@effect/schema": "^0.75.5",
@@ -21,13 +21,13 @@
       },
     },
     "packages/electron": {
-      "name": "@student-claw/electron",
+      "name": "@orbyt/electron",
       "version": "0.1.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@openai/codex": "^0.120.0",
-        "@student-claw/contracts": "workspace:*",
-        "@student-claw/shared-runtime": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
+        "@orbyt/shared-runtime": "workspace:*",
         "electron": "^41.1.1",
         "web-push": "^3.6.7",
         "ws": "^8.20.0",
@@ -44,11 +44,11 @@
       },
     },
     "packages/extensions/apple-calendar-mcp": {
-      "name": "@student-claw/apple-calendar-mcp",
+      "name": "@orbyt/apple-calendar-mcp",
       "version": "1.0.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
         "zod": "^4.1.12",
       },
       "devDependencies": {
@@ -58,12 +58,12 @@
       },
     },
     "packages/extensions/canvas-mcp": {
-      "name": "@student-claw/canvas-mcp",
+      "name": "@orbyt/canvas-mcp",
       "version": "0.1.0",
       "dependencies": {
         "@effect/schema": "^0.75.5",
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
         "zod": "^4.1.12",
       },
       "devDependencies": {
@@ -73,11 +73,11 @@
       },
     },
     "packages/extensions/template-mcp": {
-      "name": "@student-claw/template-mcp",
+      "name": "@orbyt/template-mcp",
       "version": "0.1.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^24.12.0",
@@ -86,10 +86,10 @@
       },
     },
     "packages/push-relay": {
-      "name": "@student-claw/push-relay",
+      "name": "@orbyt/push-relay",
       "version": "0.1.0",
       "dependencies": {
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^24.12.0",
@@ -98,10 +98,10 @@
       },
     },
     "packages/pwa": {
-      "name": "@student-claw/pwa",
+      "name": "@orbyt/pwa",
       "version": "0.1.0",
       "dependencies": {
-        "@student-claw/contracts": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^24.12.0",
@@ -112,14 +112,15 @@
       },
     },
     "packages/server": {
-      "name": "@student-claw/server",
+      "name": "@orbyt/server",
       "version": "0.1.0",
       "dependencies": {
         "@effect/platform": "^0.96.0",
         "@effect/schema": "^0.75.5",
         "@openai/codex": "^0.119.0",
-        "@student-claw/contracts": "workspace:*",
-        "@student-claw/shared-runtime": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
+        "@orbyt/shared": "workspace:*",
+        "@orbyt/shared-runtime": "workspace:*",
         "effect": "^3.21.0",
         "gray-matter": "^4.0.3",
         "ws": "^8.20.0",
@@ -132,25 +133,25 @@
       },
     },
     "packages/shared": {
-      "name": "@student-claw/shared",
+      "name": "@orbyt/shared",
       "version": "0.1.0",
       "dependencies": {
-        "@student-claw/contracts": "workspace:*",
-        "@student-claw/shared-runtime": "workspace:*",
+        "@orbyt/contracts": "workspace:*",
+        "@orbyt/shared-runtime": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.9.3",
       },
     },
     "packages/shared-runtime": {
-      "name": "@student-claw/shared-runtime",
+      "name": "@orbyt/shared-runtime",
       "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.9.3",
       },
     },
     "packages/ui": {
-      "name": "@student-claw/ui",
+      "name": "@orbyt/ui",
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "^1.3.0",
@@ -159,9 +160,9 @@
         "@fontsource-variable/museomoderno": "^5.2.9",
         "@hugeicons/core-free-icons": "^4.1.1",
         "@hugeicons/react": "^1.1.6",
+        "@orbyt/contracts": "workspace:*",
+        "@orbyt/shared-runtime": "workspace:*",
         "@rive-app/react-webgl2": "^4.28.0",
-        "@student-claw/contracts": "workspace:*",
-        "@student-claw/shared-runtime": "workspace:*",
         "@tanstack/react-router": "^1.168.10",
         "ai": "^6.0.162",
         "class-variance-authority": "^0.7.1",
@@ -532,6 +533,28 @@
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "", {}, "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="],
 
+    "@orbyt/apple-calendar-mcp": ["@orbyt/apple-calendar-mcp@workspace:packages/extensions/apple-calendar-mcp"],
+
+    "@orbyt/canvas-mcp": ["@orbyt/canvas-mcp@workspace:packages/extensions/canvas-mcp"],
+
+    "@orbyt/contracts": ["@orbyt/contracts@workspace:packages/contracts"],
+
+    "@orbyt/electron": ["@orbyt/electron@workspace:packages/electron"],
+
+    "@orbyt/push-relay": ["@orbyt/push-relay@workspace:packages/push-relay"],
+
+    "@orbyt/pwa": ["@orbyt/pwa@workspace:packages/pwa"],
+
+    "@orbyt/server": ["@orbyt/server@workspace:packages/server"],
+
+    "@orbyt/shared": ["@orbyt/shared@workspace:packages/shared"],
+
+    "@orbyt/shared-runtime": ["@orbyt/shared-runtime@workspace:packages/shared-runtime"],
+
+    "@orbyt/template-mcp": ["@orbyt/template-mcp@workspace:packages/extensions/template-mcp"],
+
+    "@orbyt/ui": ["@orbyt/ui@workspace:packages/ui"],
+
     "@oxc-project/types": ["@oxc-project/types@0.124.0", "", {}, "sha512-VBFWMTBvHxS11Z5Lvlr3IWgrwhMTXV+Md+EQF0Xf60+wAdsGFTBx7X7K/hP4pi8N7dcm1RvcHwDxZ16Qx8keUg=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
@@ -703,28 +726,6 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
-
-    "@student-claw/apple-calendar-mcp": ["@student-claw/apple-calendar-mcp@workspace:packages/extensions/apple-calendar-mcp"],
-
-    "@student-claw/canvas-mcp": ["@student-claw/canvas-mcp@workspace:packages/extensions/canvas-mcp"],
-
-    "@student-claw/contracts": ["@student-claw/contracts@workspace:packages/contracts"],
-
-    "@student-claw/electron": ["@student-claw/electron@workspace:packages/electron"],
-
-    "@student-claw/push-relay": ["@student-claw/push-relay@workspace:packages/push-relay"],
-
-    "@student-claw/pwa": ["@student-claw/pwa@workspace:packages/pwa"],
-
-    "@student-claw/server": ["@student-claw/server@workspace:packages/server"],
-
-    "@student-claw/shared": ["@student-claw/shared@workspace:packages/shared"],
-
-    "@student-claw/shared-runtime": ["@student-claw/shared-runtime@workspace:packages/shared-runtime"],
-
-    "@student-claw/template-mcp": ["@student-claw/template-mcp@workspace:packages/extensions/template-mcp"],
-
-    "@student-claw/ui": ["@student-claw/ui@workspace:packages/ui"],
 
     "@szmarczak/http-timer": ["@szmarczak/http-timer@4.0.6", "", { "dependencies": { "defer-to-connect": "^2.0.0" } }, "sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w=="],
 
@@ -2434,6 +2435,10 @@
 
     "@npmcli/agent/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
 
+    "@orbyt/electron/@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
+
+    "@orbyt/server/@openai/codex": ["@openai/codex@0.119.0", "", { "optionalDependencies": { "@openai/codex-darwin-arm64": "npm:@openai/codex@0.119.0-darwin-arm64", "@openai/codex-darwin-x64": "npm:@openai/codex@0.119.0-darwin-x64", "@openai/codex-linux-arm64": "npm:@openai/codex@0.119.0-linux-arm64", "@openai/codex-linux-x64": "npm:@openai/codex@0.119.0-linux-x64", "@openai/codex-win32-arm64": "npm:@openai/codex@0.119.0-win32-arm64", "@openai/codex-win32-x64": "npm:@openai/codex@0.119.0-win32-x64" }, "bin": { "codex": "bin/codex.js" } }, "sha512-xXbYeZ4Kvb+FoCgXBh2HHSAzoSIQu6mKtAolgrYKwufUudYcV3utekvBqZomIV7HOM3huxJ69cLlgjqL8uDWAA=="],
+
     "@radix-ui/react-accordion/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.3", "", { "dependencies": { "@radix-ui/react-slot": "1.2.3" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-m9gTwRkhy2lvCPe6QJp4d3G1TYEUHn/FzJUtq9MjH46an1wJU+GdoGC5VLof8RX8Ft/DlpshApkhswDLZzHIcQ=="],
 
     "@radix-ui/react-alert-dialog/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.3", "", { "dependencies": { "@radix-ui/react-slot": "1.2.3" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-m9gTwRkhy2lvCPe6QJp4d3G1TYEUHn/FzJUtq9MjH46an1wJU+GdoGC5VLof8RX8Ft/DlpshApkhswDLZzHIcQ=="],
@@ -2515,10 +2520,6 @@
     "@radix-ui/react-visually-hidden/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.3", "", { "dependencies": { "@radix-ui/react-slot": "1.2.3" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-m9gTwRkhy2lvCPe6QJp4d3G1TYEUHn/FzJUtq9MjH46an1wJU+GdoGC5VLof8RX8Ft/DlpshApkhswDLZzHIcQ=="],
 
     "@reduxjs/toolkit/immer": ["immer@11.1.4", "", {}, "sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw=="],
-
-    "@student-claw/electron/@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
-
-    "@student-claw/server/@openai/codex": ["@openai/codex@0.119.0", "", { "optionalDependencies": { "@openai/codex-darwin-arm64": "npm:@openai/codex@0.119.0-darwin-arm64", "@openai/codex-darwin-x64": "npm:@openai/codex@0.119.0-darwin-x64", "@openai/codex-linux-arm64": "npm:@openai/codex@0.119.0-linux-arm64", "@openai/codex-linux-x64": "npm:@openai/codex@0.119.0-linux-x64", "@openai/codex-win32-arm64": "npm:@openai/codex@0.119.0-win32-arm64", "@openai/codex-win32-x64": "npm:@openai/codex@0.119.0-win32-x64" }, "bin": { "codex": "bin/codex.js" } }, "sha512-xXbYeZ4Kvb+FoCgXBh2HHSAzoSIQu6mKtAolgrYKwufUudYcV3utekvBqZomIV7HOM3huxJ69cLlgjqL8uDWAA=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.9.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.1", "tslib": "^2.4.0" }, "bundled": true }, "sha512-UC+ZhH3XtczQYfOlu3lNEkdW/p4dsJ1r/bP7H8+rhao3TTTMO1ATq/4DdIi23XuGoFY+Cz0JmCbdVl0hz9jZcA=="],
 
@@ -2734,19 +2735,19 @@
 
     "@isaacs/cliui/wrap-ansi/ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
 
-    "@student-claw/electron/@types/node/undici-types": ["undici-types@7.19.2", "", {}, "sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg=="],
+    "@orbyt/electron/@types/node/undici-types": ["undici-types@7.19.2", "", {}, "sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-darwin-arm64": ["@openai/codex@0.119.0-darwin-arm64", "", { "os": "darwin", "cpu": "arm64" }, "sha512-zcIybrncDtz3s0Z/A+M/55nCmNy7b0pQ0xxxkJ2991y47vP180nYFdcqH3E5PjL+9oN44HaFgtMzOvrB9Sj15w=="],
+    "@orbyt/server/@openai/codex/@openai/codex-darwin-arm64": ["@openai/codex@0.119.0-darwin-arm64", "", { "os": "darwin", "cpu": "arm64" }, "sha512-zcIybrncDtz3s0Z/A+M/55nCmNy7b0pQ0xxxkJ2991y47vP180nYFdcqH3E5PjL+9oN44HaFgtMzOvrB9Sj15w=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-darwin-x64": ["@openai/codex@0.119.0-darwin-x64", "", { "os": "darwin", "cpu": "x64" }, "sha512-JaKzaNyXEBZmW0q9sABhs+rvjTUZUzCKTmbVXd0LlOCGu97dX/z5nHnhO4HPn8f181m8DXQHQi+XHYTvB1jFxw=="],
+    "@orbyt/server/@openai/codex/@openai/codex-darwin-x64": ["@openai/codex@0.119.0-darwin-x64", "", { "os": "darwin", "cpu": "x64" }, "sha512-JaKzaNyXEBZmW0q9sABhs+rvjTUZUzCKTmbVXd0LlOCGu97dX/z5nHnhO4HPn8f181m8DXQHQi+XHYTvB1jFxw=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-linux-arm64": ["@openai/codex@0.119.0-linux-arm64", "", { "os": "linux", "cpu": "arm64" }, "sha512-effAwJeyktOO94VSO39SsxyKRlT/FerfdFD23Mxqf0l357aYAdPmHYz3B5HQg/BIPijrxDGu361A42QZuTqYQg=="],
+    "@orbyt/server/@openai/codex/@openai/codex-linux-arm64": ["@openai/codex@0.119.0-linux-arm64", "", { "os": "linux", "cpu": "arm64" }, "sha512-effAwJeyktOO94VSO39SsxyKRlT/FerfdFD23Mxqf0l357aYAdPmHYz3B5HQg/BIPijrxDGu361A42QZuTqYQg=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-linux-x64": ["@openai/codex@0.119.0-linux-x64", "", { "os": "linux", "cpu": "x64" }, "sha512-h6u2u/Ga6BJfV4Fm4WIxlackg9LwlvcMgG5yy3P4gEVlXGr55qRY258lgFVPAICnUvpYY1TOQSkhLsWCythl8g=="],
+    "@orbyt/server/@openai/codex/@openai/codex-linux-x64": ["@openai/codex@0.119.0-linux-x64", "", { "os": "linux", "cpu": "x64" }, "sha512-h6u2u/Ga6BJfV4Fm4WIxlackg9LwlvcMgG5yy3P4gEVlXGr55qRY258lgFVPAICnUvpYY1TOQSkhLsWCythl8g=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-win32-arm64": ["@openai/codex@0.119.0-win32-arm64", "", { "os": "win32", "cpu": "arm64" }, "sha512-EwdQgXD6wgJ7p8GQq3lHX0UyMWUyfu/2acvGsIqjQ/aUZfCkg7rak2FrKkvh+z9x+/oY1FjvY7mmnHiovSjYTw=="],
+    "@orbyt/server/@openai/codex/@openai/codex-win32-arm64": ["@openai/codex@0.119.0-win32-arm64", "", { "os": "win32", "cpu": "arm64" }, "sha512-EwdQgXD6wgJ7p8GQq3lHX0UyMWUyfu/2acvGsIqjQ/aUZfCkg7rak2FrKkvh+z9x+/oY1FjvY7mmnHiovSjYTw=="],
 
-    "@student-claw/server/@openai/codex/@openai/codex-win32-x64": ["@openai/codex@0.119.0-win32-x64", "", { "os": "win32", "cpu": "x64" }, "sha512-C/3F73q9D4xYvwadOJg3ALkoXgpvWJvmTrndFL4x32qOwUJs+GaLkT5skpNNJVFveeHTjkg9Zy5kx4Dtf+jzLA=="],
+    "@orbyt/server/@openai/codex/@openai/codex-win32-x64": ["@openai/codex@0.119.0-win32-x64", "", { "os": "win32", "cpu": "x64" }, "sha512-C/3F73q9D4xYvwadOJg3ALkoXgpvWJvmTrndFL4x32qOwUJs+GaLkT5skpNNJVFveeHTjkg9Zy5kx4Dtf+jzLA=="],
 
     "@ts-morph/common/minimatch/brace-expansion": ["brace-expansion@5.0.5", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-VZznLgtwhn+Mact9tfiwx64fA9erHH/MCXEUfB/0bX/6Fz6ny5EGTXYltMocqg4xFAQZtnO3DHWWXi8RiuN7cQ=="],
 

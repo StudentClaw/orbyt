@@ -12,9 +12,32 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
   if (!insight || dismissed) return null
 
   return (
-    <div className="pagelet p-5" data-testid="ai-insight-card">
+    <div
+      className="pagelet relative overflow-hidden p-5"
+      data-testid="ai-insight-card"
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-0.5"
+        style={{
+          background:
+            "linear-gradient(90deg, var(--skill) 0%, var(--primary) 100%)",
+        }}
+      />
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-tight">AI Insight</h2>
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: "var(--skill)" }}
+          />
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: "var(--skill)" }}
+          >
+            AI Insight
+          </p>
+        </div>
         <button
           type="button"
           className="text-xs text-muted-foreground hover:text-foreground"
@@ -25,7 +48,7 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
           ✕
         </button>
       </div>
-      <p className="mt-2 text-sm font-medium" data-testid={`ai-insight-title-${insight.id}`}>
+      <p className="mt-2 text-sm font-semibold leading-snug" data-testid={`ai-insight-title-${insight.id}`}>
         {insight.title}
       </p>
       {insight.body ? (
@@ -36,11 +59,12 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
       {insight.action ? (
         <button
           type="button"
-          className="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
           data-testid="ai-insight-action"
           onClick={() => onAction?.(insight.action!)}
         >
           {insight.action.label}
+          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
         </button>
       ) : null}
     </div>

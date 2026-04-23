@@ -8,7 +8,7 @@ import type {
   ProviderRuntimeState,
   ThreadAccessMode,
   TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { ToolCallInfo } from "@/hooks/chat-model"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"

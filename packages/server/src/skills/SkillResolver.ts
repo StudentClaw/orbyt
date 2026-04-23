@@ -2,7 +2,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { Context, Effect, Layer } from "effect"
-import type { SkillId } from "@student-claw/contracts"
+import type { SkillId } from "@orbyt/contracts"
 import { buildSkillRegistry } from "./SkillRegistry.js"
 import type { ResolvedSkill } from "./SkillParser.js"
 

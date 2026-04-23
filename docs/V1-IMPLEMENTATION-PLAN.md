@@ -1,15 +1,15 @@
-# Student Claw V1 Implementation Plan
+# Orbyt V1 Implementation Plan
 
 ## Current State
 
 The app is no longer a bare scaffold. Phase 0 foundation work is substantially implemented:
 
 - **Monorepo:** Bun workspaces with `contracts`, `shared-runtime`, `shared` shim, `server`, `ui`, `electron`, and `extensions/template-mcp`
-- **Contracts (`@student-claw/contracts`):** typed desktop bootstrap, RPC envelopes, lifecycle/config streams, orchestration RPC methods, push channels, snapshots, and domain/runtime event contracts
-- **Shared runtime (`@student-claw/shared-runtime`):** small cross-package runtime helpers, with `@student-claw/shared` acting as a compatibility shim
-- **Server (`@student-claw/server`):** typed RPC WebSocket transport, SQLite migrations, readiness gate, push bus, orchestration runtime, append-only event log, projection tables, durable receipts, a Codex-backed provider runtime path, and degraded/auth state persistence
-- **UI (`@student-claw/ui`):** React app shell, route structure, T3code-style shared runtime cache, replayable transport state, and a `/chat` proof slice wired to the orchestration runtime with provider state visibility
-- **Electron (`@student-claw/electron`):** BrowserWindow, preload bootstrap bridge, server lifecycle management, tray wiring, and startup logic that can attach to an already-running local server
+- **Contracts (`@orbyt/contracts`):** typed desktop bootstrap, RPC envelopes, lifecycle/config streams, orchestration RPC methods, push channels, snapshots, and domain/runtime event contracts
+- **Shared runtime (`@orbyt/shared-runtime`):** small cross-package runtime helpers, with `@orbyt/shared` acting as a compatibility shim
+- **Server (`@orbyt/server`):** typed RPC WebSocket transport, SQLite migrations, readiness gate, push bus, orchestration runtime, append-only event log, projection tables, durable receipts, a Codex-backed provider runtime path, and degraded/auth state persistence
+- **UI (`@orbyt/ui`):** React app shell, route structure, T3code-style shared runtime cache, replayable transport state, and a `/chat` proof slice wired to the orchestration runtime with provider state visibility
+- **Electron (`@orbyt/electron`):** BrowserWindow, preload bootstrap bridge, server lifecycle management, tray wiring, and startup logic that can attach to an already-running local server
 
 Automated verification currently passes with `bun install`, `bun run typecheck`, `bun run test`, and `bun run build`. A small set of manual Electron/UI smoke checks still remain.
 
@@ -49,7 +49,7 @@ Automated verification currently passes with `bun install`, `bun run typecheck`,
 - Daily distillation job (end-of-day memory extraction)
 - Auto-update (Electron autoUpdater)
 - Calendar MCP sync (Apple/Google Calendar)
-- Deep link protocol (`studentclaw://`)
+- Deep link protocol (`orbyt://`)
 
 ---
 
@@ -379,7 +379,7 @@ Everything else can be parallelized around this spine.
 | `packages/shared-runtime` | small runtime helpers only |
 | `packages/shared` | compatibility shim over `contracts` + `shared-runtime` |
 | `packages/server` | `effect`, `@effect/schema`, `@effect/platform`, `ws`, `@openai/codex`, `mem0ai`, `openai` |
-| `packages/electron` | `electron`, `@electron-forge/cli` (+ makers/plugins), `@student-claw/contracts` |
+| `packages/electron` | `electron`, `@electron-forge/cli` (+ makers/plugins), `@orbyt/contracts` |
 | `packages/ui` | `react-router` (or `@tanstack/react-router`) plus the shared runtime modules in-repo |
 | `packages/extensions/canvas-mcp` | `@modelcontextprotocol/sdk` |
 

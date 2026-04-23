@@ -1,5 +1,14 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
-import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Outlet,
+  useCanGoBack,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons"
+import { Button } from "@/components/ui/button"
 import {
   useIsOnboardingComplete,
   useRuntimeBootstrap,
@@ -195,12 +204,13 @@ function RootNavbar({ sidebarLabel }: { sidebarLabel: string }) {
       }
       data-testid="root-navbar"
     >
-      <div className="window-no-drag flex w-10 shrink-0 items-center justify-center">
+      <div className="window-no-drag flex shrink-0 items-center gap-1">
         <SidebarTrigger
           aria-label={sidebarLabel}
           data-testid="shell-sidebar-trigger"
           className="h-8 w-8 shrink-0"
         />
+        <HistoryNavButtons />
       </div>
       <div className="ml-2 min-w-0 flex-1">
         <NavbarContextView context={navbarContext} />
@@ -210,6 +220,95 @@ function RootNavbar({ sidebarLabel }: { sidebarLabel: string }) {
       ) : null}
     </header>
   )
+}
+
+function HistoryNavButtons() {
+  const router = useRouter()
+  const canGoBack = useCanGoBack()
+  const canGoForward = useCanGoForward()
+
+  const handleBack = useCallback(() => {
+    if (!canGoBack) return
+    router.history.back()
+  }, [canGoBack, router])
+
+  const handleForward = useCallback(() => {
+    if (!canGoForward) return
+    router.history.forward()
+  }, [canGoForward, router])
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Go back"
+        title="Go back"
+        data-testid="shell-nav-back"
+        disabled={!canGoBack}
+        onClick={handleBack}
+        className="h-8 w-8 shrink-0"
+      >
+        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+        <span className="sr-only">Go back</span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Go forward"
+        title="Go forward"
+        data-testid="shell-nav-forward"
+        disabled={!canGoForward}
+        onClick={handleForward}
+        className="h-8 w-8 shrink-0"
+      >
+        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+        <span className="sr-only">Go forward</span>
+      </Button>
+    </>
+  )
+}
+
+function useCanGoForward() {
+  const router = useRouter()
+  const maxIndexRef = useRef<number>(
+    getHistoryIndex(router.history.location.state),
+  )
+  const [canGoForward, setCanGoForward] = useState(false)
+
+  useEffect(() => {
+    maxIndexRef.current = getHistoryIndex(router.history.location.state)
+    setCanGoForward(false)
+
+    const unsubscribe = router.history.subscribe(
+      ({ action }: { action?: { type?: string } }) => {
+        const index = getHistoryIndex(router.history.location.state)
+        if (action?.type === "PUSH") {
+          maxIndexRef.current = index
+          setCanGoForward(false)
+          return
+        }
+        if (index > maxIndexRef.current) {
+          maxIndexRef.current = index
+        }
+        setCanGoForward(index < maxIndexRef.current)
+      },
+    )
+
+    return unsubscribe
+  }, [router])
+
+  return canGoForward
+}
+
+function getHistoryIndex(state: unknown): number {
+  if (state && typeof state === "object" && "__TSR_index" in state) {
+    const value = (state as { __TSR_index?: unknown }).__TSR_index
+    if (typeof value === "number") return value
+  }
+  return 0
 }
 
 function ShellMain() {

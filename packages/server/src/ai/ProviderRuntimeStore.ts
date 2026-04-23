@@ -4,7 +4,7 @@ import {
   type ProviderAuthState,
   type ProviderRuntimeState,
   type ProviderRuntimeStatus,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { Database } from "../db/Database.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 

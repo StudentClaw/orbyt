@@ -65,7 +65,7 @@ describe("ChatProviderDisconnected", () => {
   test("shows error when electronAPI is unavailable", async () => {
     codexAuthMocks.connectCodexAccount.mockResolvedValue({
       status: "failed",
-      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+      error: "Desktop bridge unavailable. Please make sure you're running Orbyt as a desktop app.",
     })
     const user = userEvent.setup()
     render(<ChatProviderDisconnected />)
@@ -77,7 +77,7 @@ describe("ChatProviderDisconnected", () => {
   test("shows try again button after error", async () => {
     codexAuthMocks.connectCodexAccount.mockResolvedValue({
       status: "failed",
-      error: "Desktop bridge unavailable. Please make sure you're running Student Claw as a desktop app.",
+      error: "Desktop bridge unavailable. Please make sure you're running Orbyt as a desktop app.",
     })
     Reflect.deleteProperty(window, "electronAPI")
     const user = userEvent.setup()

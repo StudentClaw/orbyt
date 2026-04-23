@@ -1,4 +1,4 @@
-import type { DesktopBootstrap } from "@student-claw/contracts"
+import type { DesktopBootstrap } from "@orbyt/contracts"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 
 export type WsConnectionPhase = "connecting" | "connected" | "disconnected" | "reconnecting"

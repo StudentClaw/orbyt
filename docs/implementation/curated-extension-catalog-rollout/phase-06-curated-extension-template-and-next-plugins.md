@@ -7,7 +7,7 @@ Last updated: 2026-04-21
 - Target feature: turn the Apple Calendar canary into the canonical intake template for future curated bundled extensions
 - Key dependencies: all prior phases in this rollout, especially the Phase 03b packaging rules and the Phase 05 packaged-runtime hardening bar
 - Constraints and boundaries:
-  - keep the template grounded in the existing Student Claw plugin runtime and current curated packages
+  - keep the template grounded in the existing Orbyt plugin runtime and current curated packages
   - do not expand into a remote marketplace or arbitrary third-party install flow in this phase
   - treat Apple Calendar as the proving example, not a permanent one-off
 - Acceptance criteria for this increment:
@@ -29,7 +29,7 @@ packaging, readiness, and support rules from scratch.
 
 - Apple Calendar is the canary bundled-curated extension beyond Canvas.
 - The repo already has two useful package-shape references: `template-mcp` for a simple bundled server and Apple Calendar for a bridge-backed local-runtime integration.
-- Student Claw wants more curated integrations over time, including Notion, Google Docs/Sheets, Gmail, and Discord.
+- Orbyt wants more curated integrations over time, including Notion, Google Docs/Sheets, Gmail, and Discord.
 - Without a shared intake checklist, each future extension will re-open packaging, auth, readiness, and support questions.
 
 ### Out Of Scope
@@ -69,7 +69,7 @@ as the fill-in artifact for any future curated extension review.
 Every future curated bundled extension should have:
 
 - a monorepo-native package under `packages/extensions/<plugin-id>/`
-- a checked-in `manifest.json` aligned with Student Claw contracts
+- a checked-in `manifest.json` aligned with Orbyt contracts
 - if vendored, a `Vendored From` section in the package `README.md` recording upstream Git URL, commit SHA, license, and attribution
 - explicit build output under `dist/`
 - root workspace build, typecheck, and test participation
@@ -112,15 +112,15 @@ credential-only or fully remote extensions.
 Base future curated manifests on the shape already proven by `template-mcp` and
 Apple Calendar:
 
-- Student Claw `id`
-- Student Claw-facing `name`
+- Orbyt `id`
+- Orbyt-facing `name`
 - `transport.type === "local_stdio"` with checked-in `transport.entry`
 - `transport.env` omitted from the manifest and populated only at spawn time by the runtime owner
 - `auth.type === "none"` unless the extension genuinely needs user-supplied credentials
 - explicit tool inventory
 - vendored tool names preserved as upstream authored them; first-party-authored tools use `snake_case`
 - `permissions` drawn from the locked glossary vocabulary
-- `author` and `homepage` normalized to Student Claw ownership expectations
+- `author` and `homepage` normalized to Orbyt ownership expectations
 - upstream attribution recorded in `README.md`, not in manifest-specific free-form fields
 
 ### Verification Checklist
@@ -151,7 +151,7 @@ Phase 05 observability also carries forward:
 
 Bundle the extension in the app when:
 
-- Student Claw is willing to own the support surface
+- Orbyt is willing to own the support surface
 - the runtime shape is stable enough to package reliably
 - the integration has broad enough product value
 - auth, permissions, and failure recovery can be explained clearly
@@ -191,7 +191,7 @@ existing managed-auth path.
 - Bridge manager: no
 - Packaging shape: standard bundled `local_stdio` MCP server
 - Support burden: medium
-- Why it fits: repo docs already identify an official Notion MCP and Student Claw’s plugin system already treats Notion as a first-class plugin category
+- Why it fits: repo docs already identify an official Notion MCP and Orbyt’s plugin system already treats Notion as a first-class plugin category
 - Main dependency before implementation: shared curated-auth packaging expectations should be applied consistently, not redefined inside a Notion-specific phase
 
 #### Google Docs/Sheets
@@ -250,7 +250,7 @@ Recommendation: `defer to a later wave`.
 
 ### Done When
 
-- Student Claw has a reusable bundled-curated extension template grounded in the Apple Calendar canary
+- Orbyt has a reusable bundled-curated extension template grounded in the Apple Calendar canary
 - future extension planning can start from a checklist instead of rediscovering ownership, packaging, and readiness rules
 - the checklist reflects the final packaged-runtime evidence from Phase 03b and Phase 05 before this phase is marked complete
 

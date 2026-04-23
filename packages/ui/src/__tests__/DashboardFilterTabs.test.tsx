@@ -25,6 +25,6 @@ describe("DashboardFilterTabs", () => {
     render(<Harness />)
     await user.click(screen.getByTestId("filter-tab-overdue"))
     const overdue = screen.getByTestId("filter-tab-overdue")
-    expect(overdue.className).toContain("border-foreground")
+    expect(overdue.className).toContain("border-primary")
   })
 })

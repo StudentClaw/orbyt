@@ -94,7 +94,7 @@ const program = Effect.gen(function* () {
 
   readiness.markReady()
 
-  writeStdout(`Student Claw server started on :${config.port}`)
+  writeStdout(`Orbyt server started on :${config.port}`)
   writeStdout(`Database: ${config.dbPath}`)
 
   // Pre-warm one Codex runtime so the first user send does not pay the subprocess

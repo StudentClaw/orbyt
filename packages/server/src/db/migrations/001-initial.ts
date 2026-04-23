@@ -21,8 +21,7 @@ export const up = `
     professor TEXT,
     canvas_id TEXT,
     term TEXT,
-    last_sync_at TEXT,
-    color TEXT
+    last_sync_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS coursework_items (

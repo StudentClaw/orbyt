@@ -54,7 +54,7 @@ export function CanvasCredentialStep({ onNext: _onNext }: OnboardingStepProps) {
             <li>Go to Account &gt; Settings</li>
             <li>Scroll to "Approved Integrations"</li>
             <li>Click "+ New Access Token"</li>
-            <li>Enter "Student Claw" as the purpose</li>
+            <li>Enter "Orbyt" as the purpose</li>
             <li>Copy the generated token</li>
           </ol>
         </CardContent>

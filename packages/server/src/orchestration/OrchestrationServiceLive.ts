@@ -5,8 +5,8 @@ import {
   type OrchestrationThread,
   type OrchestrationTurn,
   type ProviderRuntimeEvent,
-} from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+} from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import { ConfigService } from "../config/ConfigService.js"

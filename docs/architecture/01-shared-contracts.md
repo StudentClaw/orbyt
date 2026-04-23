@@ -49,7 +49,7 @@ Core data types shared across the entire application.
 
 ### 2. Transport Contracts (WebSocket + IPC)
 
-All cross-boundary messages are typed. Student Claw uses:
+All cross-boundary messages are typed. Orbyt uses:
 
 - **WebSocket contracts** for real-time domain streams and chat
 - **IPC contracts** for Electron shell/native capabilities and preload-bridged desktop flows

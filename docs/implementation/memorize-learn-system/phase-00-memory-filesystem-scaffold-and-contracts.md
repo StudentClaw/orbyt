@@ -45,7 +45,7 @@ organized.
 - The existing memory feature doc still centers mem0 and a generated
   `MEMORY.md`.
 - The approved rollout direction replaces that approach with a markdown-first
-  graph rooted in `~/.student-claw/memory/`.
+  graph rooted in `~/.orbyt/memory/`.
 - Existing implementation rollouts in this repo use docs packages to make
   cross-system work decision-complete before coding.
 
@@ -59,11 +59,11 @@ organized.
 ### Acceptance Criteria
 
 - The memory root is fixed to:
-  - `~/.student-claw/memory/MEMORY.md`
-  - `~/.student-claw/memory/memorize-state.json`
-  - `~/.student-claw/memory/daily/YYYY-MM-DD.md`
-  - `~/.student-claw/memory/weekly/YYYY-Www.md`
-  - `~/.student-claw/memory/graph/**`
+  - `~/.orbyt/memory/MEMORY.md`
+  - `~/.orbyt/memory/memorize-state.json`
+  - `~/.orbyt/memory/daily/YYYY-MM-DD.md`
+  - `~/.orbyt/memory/weekly/YYYY-Www.md`
+  - `~/.orbyt/memory/graph/**`
 - `MEMORY.md` links to the fixed top-level scaffold only.
 - Each top-level branch has a stable landing page that can link to child nodes.
 - Course memory and assignment playbooks are explicitly modeled under

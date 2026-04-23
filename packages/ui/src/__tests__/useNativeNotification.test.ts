@@ -1,6 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
-import type { ActivityFeedEntry } from "@student-claw/contracts"
+import type { ActivityFeedEntry } from "@orbyt/contracts"
 
 let mockEntries: ReadonlyArray<ActivityFeedEntry> = []
 const notificationMocks = {

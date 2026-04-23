@@ -7,7 +7,6 @@ import { MemorizeStateStore } from "../memory/state-store.js"
 import { LiveMemorizeTurnRunner } from "../memory/live-runner.js"
 import type { MemorizeDistiller } from "../memory/distiller.js"
 import type { DatabaseService } from "../db/Database.js"
-import type { SqliteQueryBindings } from "../db/runtime-sqlite.js"
 
 const tempDirs: string[] = []
 type QueryParams = Parameters<DatabaseService["query"]>[1]
@@ -15,7 +14,7 @@ type QueryParams = Parameters<DatabaseService["query"]>[1]
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-recovery-"))
   tempDirs.push(dir)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   mkdirSync(paths.root, { recursive: true })
   const store = new MemorizeStateStore(paths)
   return { paths, store, dir }

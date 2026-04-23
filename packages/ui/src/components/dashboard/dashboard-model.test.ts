@@ -6,7 +6,7 @@ import {
   formatCountdown,
   groupDeadlinesByDay,
 } from "./dashboard-model"
-import type { CanvasStudentCourseGradeSummary, Course, CourseWorkItem } from "@student-claw/contracts"
+import type { CanvasStudentCourseGradeSummary, Course, CourseWorkItem } from "@orbyt/contracts"
 
 function makeCourse(id: string, code = "CS 101"): Course {
   return {

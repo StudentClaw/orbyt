@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 
 async function navigateTo(section: "general" | "connections" | "notifications" | "schedule") {
   await userEvent.click(screen.getByTestId(`settings-nav-${section}`))
@@ -110,8 +110,8 @@ describe("SettingsPage", () => {
           ],
         },
         tools: [{ name: "list_courses", description: "List courses" }],
-        author: "student-claw",
-        homepage: "https://github.com/StudentClaw/student-claw",
+        author: "orbyt",
+        homepage: "https://github.com/Orbyt/orbyt",
       },
       installSource: "bundled",
       status: "discovered",
@@ -133,8 +133,8 @@ describe("SettingsPage", () => {
           type: "none",
         },
         tools: [{ name: "getCalendars", description: "List calendars" }],
-        author: "student-claw",
-        homepage: "https://github.com/StudentClaw/student-claw",
+        author: "orbyt",
+        homepage: "https://github.com/Orbyt/orbyt",
       },
       installSource: "bundled",
       status: "discovered",
@@ -168,7 +168,7 @@ describe("SettingsPage", () => {
           quietHoursStart: "22:00",
           quietHoursEnd: "08:00",
           calendarIntegration: "none",
-          memoryGraphPath: "/Users/tester/Documents/Student Claw Memory Graph",
+          memoryGraphPath: "/Users/tester/Documents/Orbyt Memory Graph",
           memoryGraphPathMode: "default",
         }),
         setPreferences: vi.fn().mockResolvedValue({
@@ -180,7 +180,7 @@ describe("SettingsPage", () => {
           quietHoursStart: "22:00",
           quietHoursEnd: "08:00",
           calendarIntegration: "none",
-          memoryGraphPath: "/Users/tester/Documents/Student Claw Memory Graph",
+          memoryGraphPath: "/Users/tester/Documents/Orbyt Memory Graph",
           memoryGraphPathMode: "default",
         }),
       },
@@ -465,7 +465,7 @@ describe("SettingsPage", () => {
     await user.click(screen.getByTestId("settings-desktop-send-test"))
 
     expect(notificationMocks.requestPermission).toHaveBeenCalledOnce()
-    expect(notificationMocks.create).toHaveBeenCalledWith("Student Claw test notification", {
+    expect(notificationMocks.create).toHaveBeenCalledWith("Orbyt test notification", {
       body: "Desktop notifications are enabled for this app.",
     })
     expect(window.electronAPI?.invoke).not.toHaveBeenCalledWith(IpcChannel.NOTIFICATION_SHOW, expect.anything())

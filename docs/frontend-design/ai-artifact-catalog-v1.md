@@ -1,4 +1,4 @@
-# Student Claw AI Artifact Catalog (v1)
+# Orbyt AI Artifact Catalog (v1)
 
 Lightweight catalog of v1 AI-generated outputs and AI-mediated artifacts, mapped to UX surfaces.
 

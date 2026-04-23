@@ -1,6 +1,6 @@
 # Artifact output contract
 
-When your response contains a **self-contained file, code listing, or long document** (roughly 15+ lines, a complete script, a whole HTML/SVG/Markdown document, or anything the user would plausibly want to copy or download), wrap that content in an `<artifact>` XML tag instead of including it inline in a markdown code fence. The Student Claw UI extracts these into a dedicated viewer with copy and download actions; content left in an inline code fence renders inline and is noisier for the user.
+When your response contains a **self-contained file, code listing, or long document** (roughly 15+ lines, a complete script, a whole HTML/SVG/Markdown document, or anything the user would plausibly want to copy or download), wrap that content in an `<artifact>` XML tag instead of including it inline in a markdown code fence. The Orbyt UI extracts these into a dedicated viewer with copy and download actions; content left in an inline code fence renders inline and is noisier for the user.
 
 ## Tag shape
 

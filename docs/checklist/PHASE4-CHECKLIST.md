@@ -29,7 +29,7 @@
 - [ ] `setCanvasTokenValidated` and `setAiAuthStatus` update validation flags
 - [ ] `completeOnboarding` sets `overallStatus` to `"completed"`
 - [ ] `isOnboardingComplete` returns `true` only when `overallStatus === "completed"`
-- [ ] `persistOnboardingState` serializes to `localStorage` key `student-claw:onboarding`
+- [ ] `persistOnboardingState` serializes to `localStorage` key `orbyt:onboarding`
 - [ ] `hydrateOnboardingState` restores from `localStorage`, handles missing/corrupted data gracefully
 - [ ] `resetOnboardingStateForTests` clears wizard atom to initial state
 - [ ] `bun --cwd packages/ui vitest run` passes onboardingState tests

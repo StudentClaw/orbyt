@@ -1,4 +1,4 @@
-import { createId } from "@student-claw/shared-runtime"
+import { createId } from "@orbyt/shared-runtime"
 import type { CodexCliService } from "../ai/CodexCli.js"
 
 export interface MemorizeDistiller {

@@ -2,13 +2,13 @@
 
 ## What It Is
 
-Canvas Integration is the bridge between Student Claw and the student's Canvas LMS instance. It is implemented as a **Student Claw-owned TypeScript MCP plugin** plus server-side sync orchestration. The MCP owns Canvas-specific API access and normalization; the local server owns scheduling, caching, diffing, memory feedback, and downstream reactions. It discovers courses, normalizes coursework into a shared `CourseWorkItem` model, retrieves grades, pulls announcements, and learns how each course actually uses Canvas over time.
+Canvas Integration is the bridge between Orbyt and the student's Canvas LMS instance. It is implemented as a **Orbyt-owned TypeScript MCP plugin** plus server-side sync orchestration. The MCP owns Canvas-specific API access and normalization; the local server owns scheduling, caching, diffing, memory feedback, and downstream reactions. It discovers courses, normalizes coursework into a shared `CourseWorkItem` model, retrieves grades, pulls announcements, and learns how each course actually uses Canvas over time.
 
 ---
 
 ## Why It Exists
 
-Canvas is where students live. Every assignment, grade, announcement, and due date flows through it. But Canvas's own UI is notoriously hard to navigate — things are buried in Modules, Files, or Announcements depending on the professor. Student Claw makes all of that accessible through conversation and a unified dashboard.
+Canvas is where students live. Every assignment, grade, announcement, and due date flows through it. But Canvas's own UI is notoriously hard to navigate — things are buried in Modules, Files, or Announcements depending on the professor. Orbyt makes all of that accessible through conversation and a unified dashboard.
 
 ---
 
@@ -47,7 +47,7 @@ On first sync (and periodically after), discover all active courses the student 
 - Call Canvas REST API: `GET /api/v1/users/self/courses?enrollment_state=active&include[]=teachers&include[]=term`
 - Map to `Course` schema: name, code, professor, term, Canvas ID
 - Detect new courses, dropped courses, term changes
-- v1 supports **one Canvas instance per Student Claw profile**, but the local schema remains forward-compatible with a future `canvas_accounts` table for multi-instance support
+- v1 supports **one Canvas instance per Orbyt profile**, but the local schema remains forward-compatible with a future `canvas_accounts` table for multi-instance support
 
 ### 2. Coursework Normalization
 
@@ -141,7 +141,7 @@ These events are the primary integration point between Canvas and the [Notificat
 
 ### 6. Professor Pattern Learning
 
-This is where Student Claw gets smart. Different professors use Canvas differently.
+This is where Orbyt gets smart. Different professors use Canvas differently.
 
 - **Detection**: During sync, notice when a course posts work in Modules instead of Assignments, uses Pages heavily, or buries deadlines in Announcements
 - **Storage**: Start with **course-level memory first**, for example `{ course: "BIO 201", pattern: "posts_in_modules", confidence: 0.8 }`
@@ -155,7 +155,7 @@ This is where Student Claw gets smart. Different professors use Canvas different
 
 ### 7. Clarification Loop
 
-If Student Claw cannot confidently determine where a course's real work is posted:
+If Orbyt cannot confidently determine where a course's real work is posted:
 
 - do **not** interrupt background sync with a blocking modal
 - create a non-blocking prompt in chat / feed, e.g. "I’m not seeing new work in BIO 201 under Assignments. Does this professor usually post in Modules, Pages, Announcements, or somewhere else?"
@@ -211,7 +211,7 @@ The Canvas MCP server communicates with the Orchestrator via stdio (stdin/stdout
 - **Initialize**: Handshake with capabilities declaration
 - **tools/list**: Return available tools
 - **tools/call**: Execute a tool and return results
-- Implemented in TypeScript and packaged with the Student Claw app
+- Implemented in TypeScript and packaged with the Orbyt app
 
 ---
 
@@ -327,5 +327,5 @@ packages/server/src/canvas/
 ## Open Questions
 
 - **Offline resilience**: When Canvas is unreachable, how stale can cached coursework become before the UI should warn the student that they are looking at an offline snapshot?
-- ~~**Multi-institution**~~: v1 supports one Canvas instance per Student Claw profile, but the schema stays forward-compatible with `canvas_accounts`. ✅
-- ~~**Canvas notifications vs. our notifications**~~: Student Claw owns freshness checks and its own activity feed / notifications; Canvas notifications are not used as a source of truth for coursework freshness. ✅
+- ~~**Multi-institution**~~: v1 supports one Canvas instance per Orbyt profile, but the schema stays forward-compatible with `canvas_accounts`. ✅
+- ~~**Canvas notifications vs. our notifications**~~: Orbyt owns freshness checks and its own activity feed / notifications; Canvas notifications are not used as a source of truth for coursework freshness. ✅

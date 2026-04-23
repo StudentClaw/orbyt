@@ -4,8 +4,8 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { createMemoryPaths } from "../memory/paths.js"
 import { runPromotion } from "../memory/promoter.js"
-import { initialMemorizeState } from "@student-claw/contracts"
-import type { MemorizeState } from "@student-claw/contracts"
+import { initialMemorizeState } from "@orbyt/contracts"
+import type { MemorizeState } from "@orbyt/contracts"
 import { candidateFingerprint } from "../memory/candidate-parser.js"
 
 const tempDirs: string[] = []
@@ -13,7 +13,7 @@ const tempDirs: string[] = []
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sc-promoter-"))
   tempDirs.push(dir)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   mkdirSync(paths.root, { recursive: true })
   return { paths }
 }

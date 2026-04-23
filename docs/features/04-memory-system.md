@@ -2,13 +2,13 @@
 
 ## What It Is
 
-The Memory System gives Student Claw the ability to remember — across sessions, across semesters, across the student's entire academic life. It stores what the AI learns about the student, their professors, their study habits, and their preferences. It uses **mem0** as the adaptive memory engine with **entity partitioning** to scope memories by category, and keeps a minimal set of markdown files for transparency.
+The Memory System gives Orbyt the ability to remember — across sessions, across semesters, across the student's entire academic life. It stores what the AI learns about the student, their professors, their study habits, and their preferences. It uses **mem0** as the adaptive memory engine with **entity partitioning** to scope memories by category, and keeps a minimal set of markdown files for transparency.
 
 ---
 
 ## Why It Exists
 
-Without memory, every conversation starts from zero. The student has to re-explain their schedule, their professors' quirks, their study preferences, and their academic history every time. Memory is what transforms Student Claw from a stateless chatbot into a personal academic advisor that gets better over time.
+Without memory, every conversation starts from zero. The student has to re-explain their schedule, their professors' quirks, their study preferences, and their academic history every time. Memory is what transforms Orbyt from a stateless chatbot into a personal academic advisor that gets better over time.
 
 ---
 
@@ -81,7 +81,7 @@ Only two markdown files are maintained. Everything else lives in mem0.
 
 The Soul document is a design artifact, not a memory. It defines the assistant's personality and is loaded by the [AI Harness](01-ai-harness.md) on every conversation. See the [Soul / Personality System](01-ai-harness.md#soul--personality-system) section for details on its two-part structure (immutable core + adaptive layer).
 
-### `~/.student-claw/MEMORY.md` — Human-Readable Projection
+### `~/.orbyt/MEMORY.md` — Human-Readable Projection
 
 A read-only, auto-generated summary of what mem0 knows about the student. Provides transparency without requiring the student to understand mem0's internals.
 
@@ -118,7 +118,7 @@ Extraction runs **after each conversation** automatically — not as a batch job
 - No end-of-day distillation job to schedule or maintain
 - The student's profile improves incrementally with every interaction
 
-### mem0 Configuration for Student Claw
+### mem0 Configuration for Orbyt
 
 ```typescript
 // Conceptual config (adapted for TypeScript/Effect)
@@ -126,7 +126,7 @@ const mem0Config = {
   vector_store: {
     provider: "sqlite",
     config: {
-      path: "~/.student-claw/memory/vectors.db"
+      path: "~/.orbyt/memory/vectors.db"
     }
   },
   llm: {
@@ -139,7 +139,7 @@ const mem0Config = {
   history_store: {
     provider: "sqlite",
     config: {
-      path: "~/.student-claw/memory/history.db"
+      path: "~/.orbyt/memory/history.db"
     }
   }
 };
@@ -267,7 +267,7 @@ packages/server/src/memory/
   MemoryProjection.ts       # Generate MEMORY.md from mem0 contents
   MemoryScopes.ts           # Entity mapping constants (agent_id values, scope definitions)
 
-~/.student-claw/
+~/.orbyt/
   memory/
     vectors.db              # mem0 vector store (SQLite)
     history.db              # mem0 history/audit trail

@@ -3,7 +3,7 @@ import type {
   ServerConfig,
   ServerConfigStreamEvent,
   ServerLifecycleEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   getServerConfig,
   onServerConfig,

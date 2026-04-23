@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import matter from "gray-matter"
-import type { SkillId } from "@student-claw/contracts"
+import type { SkillId } from "@orbyt/contracts"
 
 export type ResolvedSkill = {
   readonly id: SkillId

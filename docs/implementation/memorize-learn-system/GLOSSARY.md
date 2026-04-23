@@ -94,20 +94,20 @@ artifacts without sharing runtime state with the active chat thread.
 
 ### Daily Memory
 
-A short-horizon markdown summary in `~/.student-claw/memory/daily/` that
+A short-horizon markdown summary in `~/.orbyt/memory/daily/` that
 captures notable recent events, assignment observations, learning signals, and
 promotion candidates for one calendar day.
 
 ### Weekly Memory
 
-A distilled markdown summary in `~/.student-claw/memory/weekly/` that compresses
+A distilled markdown summary in `~/.orbyt/memory/weekly/` that compresses
 recent daily files into recurring struggles, recurring wins, emerging
 strategies, and candidate long-term lessons. Weekly memory is a rolling layer,
 not a durable graph node.
 
 ### Graph Node
 
-A durable markdown page under `~/.student-claw/memory/graph/` that stores
+A durable markdown page under `~/.orbyt/memory/graph/` that stores
 stable guidance, patterns, preferences, or operating knowledge. Graph nodes are
 linked from `MEMORY.md` directly or through other graph nodes.
 
@@ -163,7 +163,7 @@ updates for a long period.
 - Owner: rereynrd
 - Status change: not_started -> complete
 - Completed:
-  - froze filesystem contract at `~/.student-claw/memory/` with `STUDENT_CLAW_HOME` env override
+  - froze filesystem contract at `~/.orbyt/memory/` with `ORBYT_HOME` env override
   - wrote authoritative spec at [phase-00-spec.md](phase-00-spec.md)
   - locked mandatory H2 heading order for base graph nodes and course nodes
   - locked course identity model: kebab-case slug directory + `canvasId` frontmatter
@@ -177,8 +177,8 @@ updates for a long period.
 - Risks or blockers:
   - `memory-heartbeat-rollout/` folder still exists alongside `memorize/`; if both get referenced, readers may land on stale heartbeat-named docs
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' typecheck` -> pass
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' typecheck` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test packages/server/src/__tests__/memory-paths.test.ts` -> 12 pass / 0 fail
 - Evidence captured:
   - spec doc at `docs/implementation/memorize/phase-00-spec.md`
@@ -208,7 +208,7 @@ updates for a long period.
 - Risks or blockers:
   - `NoOpMemorizeTurnRunner` must be swapped in Phase 02 before Memorize produces any real output
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test packages/electron/src/__tests__/memorize-scheduler.test.ts` -> 15 pass / 0 fail
   - `bun test packages/server/src/__tests__/memorize-state-store.test.ts` -> 7 pass / 0 fail
 - Evidence captured:
@@ -239,7 +239,7 @@ updates for a long period.
 - Risks or blockers:
   - `_global` cursor is a v1 simplification; per-thread cursors are more correct if threads diverge significantly in activity
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test packages/server/src/__tests__/memorize-*.test.ts` -> 25 pass / 0 fail
 - Evidence captured:
   - spec doc at `docs/implementation/memorize/phase-02-spec.md`
@@ -275,7 +275,7 @@ updates for a long period.
 - Risks or blockers:
   - section routing is keyword-based; overlapping keywords (e.g. "rubric" hits Professor Patterns before Pitfalls) mean prompt wording affects which section a fact lands in
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test src/__tests__/memorize-*.test.ts` -> 71 pass / 0 fail
 - Evidence captured:
   - spec doc at `docs/implementation/memorize/phase-03-spec.md`
@@ -305,7 +305,7 @@ updates for a long period.
   - Memorize and active chat turns share the same `CodexCli` instance; under heavy use this may add latency. Phase 05 should isolate
   - `getLastRunAt` always returns null from Electron — the server's `memorizeRunNeeded` is the authoritative guard
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test src/__tests__/memorize-*.test.ts` -> 84 pass / 0 fail
 - Evidence captured:
   - spec doc at `docs/implementation/memorize/phase-04-spec.md`
@@ -337,7 +337,7 @@ updates for a long period.
 - Risks or blockers:
   - slug normalization uses simple string transforms; course graph nodes created with different slug conventions may not match and avoid stale-marking
 - Commands run:
-  - `bun run --filter '@student-claw/contracts' build` -> pass
+  - `bun run --filter '@orbyt/contracts' build` -> pass
   - `bun test src/__tests__/memorize-*.test.ts` -> 104 pass / 0 fail
 - Evidence captured:
   - spec doc at `docs/implementation/memorize/phase-05-spec.md`

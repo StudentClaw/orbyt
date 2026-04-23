@@ -4,7 +4,7 @@ import type {
   Grade,
   PlannedSession,
   ActivityFeedEntry,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { PrioritizedItem } from "@/components/dashboard/priority-model"
 import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
 import type { InsightAction, InsightWithAction } from "@/components/dashboard/insight-types"
@@ -679,7 +679,7 @@ export const MOCK_CANVAS_ACTIVITY_FEED: ReadonlyArray<ActivityFeedEntryWithMeta>
     category: "workflow",
     type: "plan_generated",
     title: "Weekly plan generated — 12 sessions scheduled",
-    body: "StudentClaw scheduled study blocks across CS 101, CHEM 202, and MATH 240 for the week.",
+    body: "Orbyt scheduled study blocks across CS 101, CHEM 202, and MATH 240 for the week.",
     priority: 1,
     receivedAt: hoursAgo(34),
   },

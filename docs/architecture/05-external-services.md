@@ -2,7 +2,7 @@
 
 ## What It Is
 
-Tier 3 encompasses everything outside of Student Claw that the app communicates with: the Codex CLI subprocess (which connects to OpenAI), the Canvas LMS REST API, and any MCP server plugins that reach external services (Google Calendar, Apple Calendar, Notion, etc.). The Local Server orchestrates external workflows while Electron Main owns plugin process hosting/security boundaries; nothing reaches the React UI directly.
+Tier 3 encompasses everything outside of Orbyt that the app communicates with: the Codex CLI subprocess (which connects to OpenAI), the Canvas LMS REST API, and any MCP server plugins that reach external services (Google Calendar, Apple Calendar, Notion, etc.). The Local Server orchestrates external workflows while Electron Main owns plugin process hosting/security boundaries; nothing reaches the React UI directly.
 
 ---
 
@@ -109,7 +109,7 @@ Smart: Only fetches what changed (If-Modified-Since, updated_at filters)
 
 ## Resilience Strategy
 
-Every external call in Student Claw goes through the same resilience pipeline (Effect-TS):
+Every external call in Orbyt goes through the same resilience pipeline (Effect-TS):
 
 ```
 External Call

@@ -75,7 +75,7 @@ export function Persona({
   return (
     <div
       data-testid="chat-persona"
-      aria-label={`Student Claw is ${copy.title.toLowerCase()}`}
+      aria-label={`Orbyt is ${copy.title.toLowerCase()}`}
       className={cn(
         "flex items-center gap-3 rounded-2xl border bg-muted/30 px-3 py-2",
         className,

@@ -21,7 +21,7 @@ import {
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Database as BunDatabase } from "bun:sqlite"
-import { initialMemorizeState, type ProviderRuntimeState } from "@student-claw/contracts"
+import { initialMemorizeState, type ProviderRuntimeState } from "@orbyt/contracts"
 import { buildDailyRunBlock } from "../src/memory/daily-writer.js"
 import {
   CodexMemorizeDistiller,
@@ -793,7 +793,7 @@ function createRecordingDistiller(args: {
 async function main(): Promise<void> {
   const root = repoRoot()
   const simulationDir = join(root, "simulation", "memorize-live")
-  const appHome = join(simulationDir, ".student-claw-home")
+  const appHome = join(simulationDir, ".orbyt-home")
   const dbPath = join(simulationDir, "diagnostics", "sim.db")
   const runStartedAt = new Date()
   const runStartedIso = runStartedAt.toISOString()
@@ -804,7 +804,7 @@ async function main(): Promise<void> {
   ensureDir(join(simulationDir, "diagnostics"))
 
   const db = makeDb(dbPath)
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: appHome } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: appHome } })
   const store = new MemorizeStateStore(paths)
   seedCourseContext(db)
   ensureMemorizeSystemThread(db, runStartedIso)

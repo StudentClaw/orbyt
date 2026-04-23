@@ -26,7 +26,7 @@ describe("ConfigService", () => {
     expect(config.port).toBe(8787)
     expect(config.wsHost).toBe("127.0.0.1")
     expect(config.wsAuthToken).toBe(authToken)
-    expect(config.dbPath).toBe("~/.student-claw/data.db")
+    expect(config.dbPath).toBe("~/.orbyt/data.db")
     expect(config.isDev).toBe(true)
   })
 

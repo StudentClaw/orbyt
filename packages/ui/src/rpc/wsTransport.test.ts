@@ -61,7 +61,7 @@ describe("WsTransport", () => {
     const connectPromise = transport.connect()
     const socket = MockWebSocket.instances[0]!
     expect(socket.protocols).toEqual([
-      "student-claw.v1",
+      "orbyt.v1",
       `auth.${"a".repeat(64)}`,
     ])
     socket.open()

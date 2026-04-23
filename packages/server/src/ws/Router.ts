@@ -33,7 +33,7 @@ import {
   SetOverallStatusParams,
   UpdatePreferencesParams,
   SetRoutinesParams,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { WebSocket } from "ws"
 import type { AppConfig } from "../config/defaults.js"
 import { generateWeeklyInsight } from "../activity/feed.js"

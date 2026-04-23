@@ -1,7 +1,7 @@
 # TEST
 
 ## Testing Standard
-Student Claw uses test-driven development (TDD) for feature work and bug fixes:
+Orbyt uses test-driven development (TDD) for feature work and bug fixes:
 
 1. RED: write one behavior-focused test that fails.
 2. GREEN: write the minimum code to pass that test.

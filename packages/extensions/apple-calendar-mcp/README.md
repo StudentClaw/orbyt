@@ -1,6 +1,6 @@
 # Apple Calendar MCP
 
-Bundled Student Claw extension for reading and editing local macOS calendars
+Bundled Orbyt extension for reading and editing local macOS calendars
 through the existing Electron-managed MCP plugin runtime.
 
 ## Phase 01 Scope

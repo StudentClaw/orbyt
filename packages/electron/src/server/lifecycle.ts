@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { WebSocket } from "ws"
-import { RPC_METHODS, WS_PROTOCOL, type DesktopBootstrap } from "@student-claw/contracts"
+import { RPC_METHODS, WS_PROTOCOL, type DesktopBootstrap } from "@orbyt/contracts"
 import { buildIsolatedCodexEnv, type PluginGatewayLaunchConfig } from "../codex/runtime.js"
 
 /**
@@ -162,7 +162,7 @@ export async function spawnServer(
   launchContext: ServerLaunchContext = {},
 ): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
-  const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.student-claw/data.db`
+  const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.orbyt/data.db`
   const auth = createHandshakeAuth()
 
   const existingBootstrap = await healthCheck(port, auth)
@@ -218,14 +218,14 @@ export function resolveServerLaunchSpec(options: ServerLaunchContext = {}): Serv
       resourcesRoot,
       "app.asar",
       "node_modules",
-      "@student-claw",
+      "@orbyt",
       "server",
       "dist",
       "index.js",
     )
 
     if (!existsSync(serverPath)) {
-      throw new Error(`Packaged Student Claw server runtime not found at ${serverPath}`)
+      throw new Error(`Packaged Orbyt server runtime not found at ${serverPath}`)
     }
 
     return {
@@ -348,10 +348,10 @@ function raceWithChildError<T>(work: Promise<T>, childError: Promise<never>): Pr
 function normalizeServerLaunchError(error: unknown, launchSpec: ServerLaunchSpec): Error {
   if (error instanceof Error && "code" in error && error.code === "ENOENT") {
     if (launchSpec.packaged) {
-      return new Error(`Packaged Student Claw server runtime could not be launched: ${launchSpec.serverPath}`)
+      return new Error(`Packaged Orbyt server runtime could not be launched: ${launchSpec.serverPath}`)
     }
 
-    return new Error(`Student Claw server runtime command was not found: ${launchSpec.command}`)
+    return new Error(`Orbyt server runtime command was not found: ${launchSpec.command}`)
   }
 
   return error instanceof Error ? error : new Error(String(error))

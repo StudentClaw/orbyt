@@ -103,7 +103,7 @@ These checks confirm the full pipeline on a real device after deployment:
 
 - [ ] App starts; server logs no Memorize errors at boot.
 - [ ] Wait for or simulate 07:00 slot; `memorize-state.json` `lastRunAt` updates within 60s.
-- [ ] `~/.student-claw/memory/daily/YYYY-MM-DD.md` exists and contains at least one bullet from recent turns.
+- [ ] `~/.orbyt/memory/daily/YYYY-MM-DD.md` exists and contains at least one bullet from recent turns.
 - [ ] `memorize-state.json` `lastProcessedThreadCursor._global` is non-null and newer than before the run.
 - [ ] Trigger a second run manually via `ws://127.0.0.1:{port}` `memorize.run` RPC while the first file exists; confirm file is unchanged and distiller is NOT called (recovery path).
 - [ ] Add a course in Canvas settings; trigger a run; confirm `## Active Courses` section in the next daily file contains the course code.

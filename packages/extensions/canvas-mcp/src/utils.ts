@@ -8,7 +8,7 @@ import {
   type Course,
   type CourseWorkItem,
   type Grade,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { Schema } from "@effect/schema"
 
 export function stripHtml(value: string | null | undefined): string | undefined {

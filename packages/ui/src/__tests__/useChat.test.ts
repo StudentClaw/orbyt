@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { act, renderHook } from "@testing-library/react"
-import type { OrchestrationSnapshot } from "@student-claw/contracts"
+import type { OrchestrationSnapshot } from "@orbyt/contracts"
 import type { WsConnectionStatus } from "../rpc/wsConnectionState"
 
 const hookMocks = vi.hoisted(() => ({

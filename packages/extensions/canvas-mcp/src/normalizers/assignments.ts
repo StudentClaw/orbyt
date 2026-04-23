@@ -6,7 +6,7 @@ import {
   type CanvasCourse,
   type CanvasEnrollment,
   type CanvasSubmission,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { encodeCourseId, encodeCourseWorkItemId } from "../ids.js"
 import { stripHtml, validateContract } from "../utils.js"
 

@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/pwa",
+  "name": "@orbyt/pwa",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@student-claw/contracts": "workspace:*"
+    "@orbyt/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.0",

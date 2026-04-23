@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { createId } from "@student-claw/shared-runtime"
+import { createId } from "@orbyt/shared-runtime"
 
 export interface ParsedCandidate {
   readonly id: string

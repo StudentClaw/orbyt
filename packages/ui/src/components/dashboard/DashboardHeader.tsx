@@ -2,22 +2,41 @@ import { Button } from "@/components/ui/button"
 
 interface DashboardHeaderProps {
   readonly title: string
-  readonly subtitle: string
+  readonly dateLabel: string
+  readonly dueThisWeek: number
   readonly onPlanWeek: () => void
   readonly planDisabled?: boolean
 }
 
 export function DashboardHeader({
   title,
-  subtitle,
+  dateLabel,
+  dueThisWeek,
   onPlanWeek,
   planDisabled = false,
 }: DashboardHeaderProps) {
   return (
     <header className="mb-8 flex items-start justify-between gap-4" data-testid="dashboard-header">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+        <p
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"
+          data-testid="dashboard-subtitle"
+        >
+          <span>{dateLabel}</span>
+          <span aria-hidden className="text-border">
+            •
+          </span>
+          <span className="inline-flex items-baseline gap-1.5">
+            <span
+              className="tabular-nums text-base font-semibold text-primary"
+              data-testid="dashboard-due-count"
+            >
+              {dueThisWeek}
+            </span>
+            <span>due this week</span>
+          </span>
+        </p>
       </div>
       <Button
         type="button"

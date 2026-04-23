@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/template-mcp",
+  "name": "@orbyt/template-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@student-claw/contracts": "workspace:*"
+    "@orbyt/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.0",

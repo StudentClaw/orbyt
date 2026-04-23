@@ -1,4 +1,4 @@
-import { CanvasApiError, type CanvasCourseworkDetail, type CanvasCourse } from "@student-claw/contracts"
+import { CanvasApiError, type CanvasCourseworkDetail, type CanvasCourse } from "@orbyt/contracts"
 import { CanvasClient } from "../canvas-client.js"
 import { decodeCourseId, decodeCourseWorkItemId } from "../ids.js"
 import { normalizeAnnouncementCoursework } from "../normalizers/announcements.js"

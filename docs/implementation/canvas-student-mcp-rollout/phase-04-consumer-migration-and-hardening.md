@@ -4,7 +4,7 @@ Last updated: 2026-04-17
 
 ## Orientation Note
 
-- Target feature: migrate Student Claw consumers off the legacy Canvas surface, harden the new student contract, and finish rollout verification
+- Target feature: migrate Orbyt consumers off the legacy Canvas surface, harden the new student contract, and finish rollout verification
 - Key dependencies: Phases 00 through 03, current gateway inventory behavior, current Canvas consumers in server and UI code, [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md)
 - Constraints and boundaries:
   - remove the legacy 6-tool surface instead of preserving compatibility wrappers
@@ -26,7 +26,7 @@ Replace all remaining assumptions about the old Canvas student surface, then har
 ### Current State
 
 - Earlier phases define the replacement contract, client strategy, shared reads, and action/download behavior.
-- Existing Student Claw consumers may still assume the old six-tool Canvas inventory and the older coursework-centric mental model.
+- Existing Orbyt consumers may still assume the old six-tool Canvas inventory and the older coursework-centric mental model.
 - The current feature spec still documents the old surface and should only be updated when the implementation starts landing.
 
 ### Out Of Scope
@@ -98,7 +98,7 @@ Replace all remaining assumptions about the old Canvas student surface, then har
 
 ### Done When
 
-- Student Claw no longer depends on the old Canvas student MCP surface
+- Orbyt no longer depends on the old Canvas student MCP surface
 - the new student-role contract is verified, documented, and ready for follow-on implementation work
 
 ### Handoff To Next Phase

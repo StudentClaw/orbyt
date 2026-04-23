@@ -3,7 +3,7 @@ import {
   type ServerConfigStreamEvent,
   type ServerLifecycleEvent,
   type ServerLifecycleWelcomePayload,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue, type Atom } from "./atomRegistry"
 import { setDesktopBootstrap } from "./wsConnectionState"

@@ -28,7 +28,7 @@ OS access without asking users to install or run a separate bridge manually.
 ### Current State
 
 - The external Apple Calendar package expects a Swift bridge on localhost.
-- Student Claw’s plugin runtime currently owns MCP extension lifecycles, but not separate helper runtimes.
+- Orbyt’s plugin runtime currently owns MCP extension lifecycles, but not separate helper runtimes.
 - The existing Settings UI understands lifecycle and auth states, but not bridge-readiness states.
 
 ### Out Of Scope
@@ -165,7 +165,7 @@ Crash-loop handling:
 
 ### Permission Bootstrap
 
-Student Claw should own the first-run Calendar permission flow. The bridge
+Orbyt should own the first-run Calendar permission flow. The bridge
 manager is responsible for invoking a permission bootstrap path before treating
 the bridge as ready.
 
@@ -212,7 +212,7 @@ simple start or stop status.
   - plugin spawn succeeds when the bridge is healthy and the env contract is populated
   - plugin spawn is withheld when readiness is not `ready`
 - Manual smoke:
-  - first-run permission prompt on macOS is triggered from the Student Claw-owned flow
+  - first-run permission prompt on macOS is triggered from the Orbyt-owned flow
   - denying permission produces `permission_required` in Settings, not a generic plugin error
 - Failure path:
   - denied permission or bridge crash results in a typed degraded readiness state instead of a hang
@@ -239,7 +239,7 @@ catalog.
 
 ### Risks To Carry Forward
 
-- if the plugin is allowed to own bridge process management, Student Claw will lose central lifecycle and observability control
+- if the plugin is allowed to own bridge process management, Orbyt will lose central lifecycle and observability control
 - if readiness is not modeled separately from lifecycle, Apple Calendar failures will look like random plugin crashes
 
 ### First Recommended Next Step

@@ -3,7 +3,7 @@ import type {
   ProviderPendingApproval,
   ProviderRuntimeEvent,
   ThreadAccessMode,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 
 // ============================================================================
 // Shared error class
@@ -76,7 +76,7 @@ export type PendingApprovalEntry = {
 // Constants
 // ============================================================================
 
-export const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
+export const ORBYT_GATEWAY_TOKEN_ENV = "ORBYT_GATEWAY_BEARER_TOKEN"
 
 // ============================================================================
 // Type guards and readers
@@ -455,7 +455,7 @@ export function mapCodexMcpToolCallProgressEvent(
     return null
   }
 
-  const serverName = snapshot?.serverName ?? readString(params, "serverName") ?? "student-claw"
+  const serverName = snapshot?.serverName ?? readString(params, "serverName") ?? "orbyt"
   const toolName = snapshot?.toolName ?? readString(params, "toolName") ?? "unknown"
   const args =
     snapshot?.args ?? (isRecord(params) && "arguments" in params ? params.arguments : {})
@@ -574,7 +574,7 @@ export function buildCodexAppServerArgs(config: {
     "-c",
     `mcp_servers.${quotedServerName}.url="${config.pluginGatewayMcpUrl}"`,
     "-c",
-    `mcp_servers.${quotedServerName}.bearer_token_env_var="${STUDENT_CLAW_GATEWAY_TOKEN_ENV}"`,
+    `mcp_servers.${quotedServerName}.bearer_token_env_var="${ORBYT_GATEWAY_TOKEN_ENV}"`,
   )
 
   return args
@@ -583,8 +583,8 @@ export function buildCodexAppServerArgs(config: {
 export function buildInitializeParams() {
   return {
     clientInfo: {
-      name: "student-claw",
-      title: "Student Claw",
+      name: "orbyt",
+      title: "Orbyt",
       version: "0.1.0",
     },
     capabilities: {

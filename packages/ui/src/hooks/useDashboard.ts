@@ -5,7 +5,7 @@ import type {
   Course,
   CourseWorkItem,
   PlannedSession,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   useCanvasCourseGrades,
   useCanvasCourses,

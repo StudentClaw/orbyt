@@ -7,7 +7,7 @@ import {
   PUSH_CHANNELS,
   type ActivityFeedEntry,
   type WeeklyInsight,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { AppConfig } from "../config/defaults.js"
 import type { DatabaseService } from "../db/Database.js"
 import { readThread } from "../orchestration/OrchestrationDB.js"
@@ -128,7 +128,7 @@ function tryGenerateAiWeeklyInsight(
     return null
   }
 
-  const tempDir = mkdtempSync(path.join(tmpdir(), "student-claw-weekly-insight-"))
+  const tempDir = mkdtempSync(path.join(tmpdir(), "orbyt-weekly-insight-"))
   const outputPath = path.join(tempDir, "weekly-insight.json")
 
   try {

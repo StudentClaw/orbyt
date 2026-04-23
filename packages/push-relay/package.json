@@ -1,5 +1,5 @@
 {
-  "name": "@student-claw/push-relay",
+  "name": "@orbyt/push-relay",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "test": "bun test src"
   },
   "dependencies": {
-    "@student-claw/contracts": "workspace:*"
+    "@orbyt/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.0",

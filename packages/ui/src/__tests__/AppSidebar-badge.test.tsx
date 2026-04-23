@@ -98,7 +98,7 @@ describe("AppSidebar activity badge", () => {
     render(<AppSidebar />)
     expect(screen.getByText("Orybt")).toBeDefined()
     expect(screen.getByTestId("sidebar-brand-icon")).toBeDefined()
-    expect(screen.queryByText("Student Claw")).toBeNull()
+    expect(screen.queryByText("Orbyt")).toBeNull()
   })
 
   test("keeps the logo visible when the desktop sidebar is collapsed", () => {

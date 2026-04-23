@@ -1,6 +1,6 @@
 import { Schema } from "@effect/schema"
 import { type CallToolResult } from "@modelcontextprotocol/sdk/types.js"
-import { CanvasApiError, CanvasPermissionError, type CanvasCourse, type SourceType } from "@student-claw/contracts"
+import { CanvasApiError, CanvasPermissionError, type CanvasCourse, type SourceType } from "@orbyt/contracts"
 import { decodeCourseId } from "../ids.js"
 import { CanvasClient } from "../canvas-client.js"
 import type { CanvasPluginCredentials } from "../runtime.js"

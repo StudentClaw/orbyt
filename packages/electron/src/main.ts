@@ -3,7 +3,7 @@ import { existsSync } from "node:fs"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 import { registerIpcHandlers } from "./ipc/bridge.js"
 import { createPluginGatewayService, type PluginGatewayService } from "./plugins/plugin-gateway-service.js"
 import { PluginManager } from "./plugins/plugin-manager.js"
@@ -13,7 +13,7 @@ import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
 import { createWindow } from "./window/window-manager.js"
 
-app.setName("Student Claw")
+app.setName("Orbyt")
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -150,8 +150,8 @@ function showStartupFailure(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`Failed to start Electron app: ${message}\n`)
   dialog.showErrorBox(
-    "Student Claw failed to start",
-    `Student Claw could not finish startup.\n\n${message}`,
+    "Orbyt failed to start",
+    `Orbyt could not finish startup.\n\n${message}`,
   )
 }
 

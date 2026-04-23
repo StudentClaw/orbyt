@@ -10,7 +10,7 @@ import {
   setPlannedSessions,
   setPlannerStreaming,
 } from "./plannerState"
-import type { PlannedSession } from "@student-claw/contracts"
+import type { PlannedSession } from "@orbyt/contracts"
 
 function makeSession(id: string, overrides: Partial<PlannedSession> = {}): PlannedSession {
   return {

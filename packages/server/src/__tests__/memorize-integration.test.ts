@@ -22,7 +22,7 @@ function setup() {
   runBunMigrations(bunDb)
   const db = createBunDatabaseService(bunDb)
 
-  const paths = createMemoryPaths({ env: { STUDENT_CLAW_HOME: dir } })
+  const paths = createMemoryPaths({ env: { ORBYT_HOME: dir } })
   mkdirSync(paths.root, { recursive: true })
   const store = new MemorizeStateStore(paths)
 

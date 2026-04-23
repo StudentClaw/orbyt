@@ -10,7 +10,7 @@ export type PluginGatewayLaunchConfig = {
   readonly mcpServerName: string
 }
 
-const STUDENT_CLAW_GATEWAY_TOKEN_ENV = "STUDENT_CLAW_GATEWAY_BEARER_TOKEN"
+const ORBYT_GATEWAY_TOKEN_ENV = "ORBYT_GATEWAY_BEARER_TOKEN"
 
 function copyIfMissing(sourcePath: string, destinationPath: string): void {
   if (!existsSync(sourcePath) || existsSync(destinationPath)) {
@@ -28,7 +28,7 @@ function buildIsolatedConfigToml(gateway?: PluginGatewayLaunchConfig): string {
   return [
     `[mcp_servers.${JSON.stringify(gateway.mcpServerName)}]`,
     `url = ${JSON.stringify(gateway.mcpUrl)}`,
-    `bearer_token_env_var = ${JSON.stringify(STUDENT_CLAW_GATEWAY_TOKEN_ENV)}`,
+    `bearer_token_env_var = ${JSON.stringify(ORBYT_GATEWAY_TOKEN_ENV)}`,
     `enabled = true`,
     "",
   ].join("\n")
@@ -74,7 +74,7 @@ export function buildIsolatedCodexEnv(
     CODEX_HOME: isolatedCodexRuntime.codexHomePath,
     HOME: isolatedCodexRuntime.codexProcessHomePath,
     ...(gateway?.mcpBearerToken
-      ? { [STUDENT_CLAW_GATEWAY_TOKEN_ENV]: gateway.mcpBearerToken }
+      ? { [ORBYT_GATEWAY_TOKEN_ENV]: gateway.mcpBearerToken }
       : {}),
   }
 }

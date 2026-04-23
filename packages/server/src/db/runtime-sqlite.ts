@@ -38,7 +38,7 @@ export function supportsNodeSqliteRuntimeVersion(version = process.versions.node
 
 export function createNodeSqliteVersionError(version = process.versions.node): Error {
   return new Error(
-    `Packaged Student Claw requires Node.js with node:sqlite support (>=22.16, >=23.11, or >=24). Current runtime: ${version}`,
+    `Packaged Orbyt requires Node.js with node:sqlite support (>=22.16, >=23.11, or >=24). Current runtime: ${version}`,
   )
 }
 

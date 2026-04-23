@@ -1,24 +1,42 @@
 import { describe, test, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { OrchestrationSnapshot } from "@student-claw/contracts"
+import type { OrchestrationSnapshot } from "@orbyt/contracts"
 import type { WsConnectionStatus } from "../rpc/wsConnectionState"
 
-const shellMocks = vi.hoisted(() => ({
-  pathname: "/",
-  navigateFn: vi.fn(),
-  onboardingComplete: true,
-  isMobile: false,
-  pluginName: "Canvas Assistant",
-  assignmentTitle: null as string | null,
-  snapshot: null as OrchestrationSnapshot | null,
-  connectionStatus: {
-    phase: "connected",
-    wsUrl: "ws://127.0.0.1:8787",
-    lastSequence: 0,
-    lastError: null,
-  } as WsConnectionStatus,
-}))
+const { shellMocks, mockRouter } = vi.hoisted(() => {
+  const shellMocks = {
+    pathname: "/",
+    navigateFn: vi.fn(),
+    onboardingComplete: true,
+    isMobile: false,
+    pluginName: "Canvas Assistant",
+    assignmentTitle: null as string | null,
+    snapshot: null as OrchestrationSnapshot | null,
+    connectionStatus: {
+      phase: "connected",
+      wsUrl: "ws://127.0.0.1:8787",
+      lastSequence: 0,
+      lastError: null,
+    } as WsConnectionStatus,
+    canGoBack: false,
+    historyBack: vi.fn(),
+    historyForward: vi.fn(),
+    historySubscribe: vi.fn(() => () => {}),
+    historyIndex: 0,
+  }
+  const mockRouter = {
+    history: {
+      back: (...args: unknown[]) => shellMocks.historyBack(...args),
+      forward: (...args: unknown[]) => shellMocks.historyForward(...args),
+      subscribe: (cb: unknown) => shellMocks.historySubscribe(cb),
+      get location() {
+        return { state: { __TSR_index: shellMocks.historyIndex } }
+      },
+    },
+  }
+  return { shellMocks, mockRouter }
+})
 
 vi.mock("@tanstack/react-router", () => ({
   Outlet: () => <div>Outlet</div>,
@@ -31,6 +49,8 @@ vi.mock("@tanstack/react-router", () => ({
     return select ? select(state) : state
   },
   useNavigate: () => shellMocks.navigateFn,
+  useCanGoBack: () => shellMocks.canGoBack,
+  useRouter: () => mockRouter,
 }))
 
 vi.mock("../hooks/useAppRuntime", () => ({
@@ -91,6 +111,12 @@ describe("AppShell", () => {
       lastSequence: 0,
       lastError: null,
     }
+    shellMocks.canGoBack = false
+    shellMocks.historyBack.mockReset()
+    shellMocks.historyForward.mockReset()
+    shellMocks.historySubscribe.mockReset()
+    shellMocks.historySubscribe.mockImplementation(() => () => {})
+    shellMocks.historyIndex = 0
     window.localStorage.clear()
   })
 
@@ -257,6 +283,48 @@ describe("AppShell", () => {
     expect(screen.getByLabelText("breadcrumb")).toBeDefined()
     expect(screen.getByText("Assignments")).toBeDefined()
     expect(screen.getByText("Final Paper")).toBeDefined()
+  })
+
+  test("renders disabled back and forward buttons by default", () => {
+    render(<AppShell />)
+
+    const back = screen.getByTestId("shell-nav-back") as HTMLButtonElement
+    const forward = screen.getByTestId("shell-nav-forward") as HTMLButtonElement
+    expect(back.disabled).toBe(true)
+    expect(forward.disabled).toBe(true)
+  })
+
+  test("back button invokes router history when enabled", async () => {
+    const user = userEvent.setup()
+    shellMocks.canGoBack = true
+
+    render(<AppShell />)
+
+    await user.click(screen.getByTestId("shell-nav-back"))
+    expect(shellMocks.historyBack).toHaveBeenCalledTimes(1)
+  })
+
+  test("forward button becomes enabled after going back and invokes history", async () => {
+    const user = userEvent.setup()
+    let notify: ((event: { action?: { type?: string } }) => void) | null = null
+    shellMocks.historySubscribe.mockImplementation((cb: unknown) => {
+      notify = cb as typeof notify
+      return () => {}
+    })
+    shellMocks.historyIndex = 2
+
+    render(<AppShell />)
+
+    expect((screen.getByTestId("shell-nav-forward") as HTMLButtonElement).disabled).toBe(true)
+
+    shellMocks.historyIndex = 1
+    notify?.({ action: { type: "GO" } })
+
+    const forward = await screen.findByTestId("shell-nav-forward")
+    expect((forward as HTMLButtonElement).disabled).toBe(false)
+
+    await user.click(forward)
+    expect(shellMocks.historyForward).toHaveBeenCalledTimes(1)
   })
 
   test("hides the root navbar on onboarding", () => {

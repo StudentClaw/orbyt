@@ -27,7 +27,7 @@ Memorize runs twice per local calendar day:
 Local time is resolved from the system timezone via JavaScript's `Date` API.
 Timezone preference settings are deferred to a later phase.
 
-Run constants live in `@student-claw/contracts`:
+Run constants live in `@orbyt/contracts`:
 - `MORNING_RUN_HOUR = 7`
 - `EVENING_RUN_HOUR = 20`
 
@@ -78,7 +78,7 @@ The most-recently-passed slot:
 
 ## 6. Checkpoint Contract
 
-File: `~/.student-claw/memory/memorize-state.json` (see phase-00-spec.md §6)
+File: `~/.orbyt/memory/memorize-state.json` (see phase-00-spec.md §6)
 
 ### When the checkpoint IS written
 

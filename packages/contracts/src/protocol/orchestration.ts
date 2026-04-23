@@ -16,9 +16,9 @@ export const MAX_THREAD_TITLE_LENGTH = 200
 export const MAX_TURN_CONTENT_LENGTH = 16_384
 
 /**
- * Subprotocol used by authenticated Student Claw WebSocket clients.
+ * Subprotocol used by authenticated Orbyt WebSocket clients.
  */
-export const WS_PROTOCOL = "student-claw.v1"
+export const WS_PROTOCOL = "orbyt.v1"
 
 /**
  * Branded identifier for chat workspaces.
@@ -61,7 +61,7 @@ export type TurnId = Schema.Schema.Type<typeof TurnId>
 export type CommandId = Schema.Schema.Type<typeof CommandId>
 
 /**
- * RPC methods supported by the local Student Claw runtime.
+ * RPC methods supported by the local Orbyt runtime.
  */
 export const RPC_METHODS = {
   SERVER_GET_BOOTSTRAP: "server.getBootstrap",
@@ -119,7 +119,7 @@ export const RPC_METHODS = {
 } as const
 
 /**
- * Push channels exposed by the local Student Claw runtime.
+ * Push channels exposed by the local Orbyt runtime.
  */
 export const PUSH_CHANNELS = {
   SERVER_LIFECYCLE: "server.lifecycle",

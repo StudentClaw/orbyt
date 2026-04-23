@@ -1,7 +1,7 @@
 import type {
   PushPairingCompletion,
   PushPairingSession,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 
 type FetchLike = typeof fetch
 

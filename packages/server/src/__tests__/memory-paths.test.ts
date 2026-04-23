@@ -10,37 +10,53 @@ import {
 const fakeHome = () => "/home/tester"
 
 describe("resolveMemoryRoot", () => {
-  test("defaults to ~/.student-claw/memory when env not set", () => {
+  test("defaults to ~/.orbyt/memory when env not set", () => {
     const root = resolveMemoryRoot({ env: {}, home: fakeHome })
-    expect(root).toBe("/home/tester/.student-claw/memory")
+    expect(root).toBe("/home/tester/.orbyt/memory")
   })
 
-  test("honors STUDENT_CLAW_HOME override", () => {
+  test("honors ORBYT_HOME override", () => {
     const root = resolveMemoryRoot({
-      env: { STUDENT_CLAW_HOME: "/tmp/sc-test" },
+      env: { ORBYT_HOME: "/tmp/sc-test" },
       home: fakeHome,
     })
     expect(root).toBe("/tmp/sc-test/memory")
   })
 
-  test("ignores empty STUDENT_CLAW_HOME", () => {
+  test("honors STUDENT_CLAW_HOME when ORBYT_HOME is unset", () => {
     const root = resolveMemoryRoot({
-      env: { STUDENT_CLAW_HOME: "   " },
+      env: { STUDENT_CLAW_HOME: "/tmp/legacy-home" },
       home: fakeHome,
     })
-    expect(root).toBe("/home/tester/.student-claw/memory")
+    expect(root).toBe("/tmp/legacy-home/memory")
+  })
+
+  test("prefers ORBYT_HOME over STUDENT_CLAW_HOME", () => {
+    const root = resolveMemoryRoot({
+      env: { ORBYT_HOME: "/tmp/new", STUDENT_CLAW_HOME: "/tmp/old" },
+      home: fakeHome,
+    })
+    expect(root).toBe("/tmp/new/memory")
+  })
+
+  test("ignores empty ORBYT_HOME", () => {
+    const root = resolveMemoryRoot({
+      env: { ORBYT_HOME: "   " },
+      home: fakeHome,
+    })
+    expect(root).toBe("/home/tester/.orbyt/memory")
   })
 })
 
 describe("resolveMemoryGraphDir", () => {
   test("defaults to a visible Documents folder when no override is set", () => {
     const graphDir = resolveDefaultMemoryGraphDir({ env: {}, home: fakeHome })
-    expect(graphDir).toBe("/home/tester/Documents/Student Claw Memory Graph")
+    expect(graphDir).toBe("/home/tester/Documents/Orbyt Memory Graph")
   })
 
-  test("uses STUDENT_CLAW_HOME for the default graph path when provided", () => {
+  test("uses ORBYT_HOME for the default graph path when provided", () => {
     const graphDir = resolveDefaultMemoryGraphDir({
-      env: { STUDENT_CLAW_HOME: "/tmp/sc-test" },
+      env: { ORBYT_HOME: "/tmp/sc-test" },
       home: fakeHome,
     })
     expect(graphDir).toBe("/tmp/sc-test/memory/graph")
@@ -58,7 +74,7 @@ describe("resolveMemoryGraphDir", () => {
 
 describe("createMemoryPaths", () => {
   const paths = createMemoryPaths({
-    env: { STUDENT_CLAW_HOME: "/tmp/sc" },
+    env: { ORBYT_HOME: "/tmp/sc" },
     home: fakeHome,
   })
 
@@ -77,7 +93,7 @@ describe("createMemoryPaths", () => {
       graphDirOverride: "/tmp/student-graph",
       home: fakeHome,
     })
-    expect(customPaths.root).toBe("/home/tester/.student-claw/memory")
+    expect(customPaths.root).toBe("/home/tester/.orbyt/memory")
     expect(customPaths.graphDir).toBe("/tmp/student-graph")
     expect(customPaths.branchIndex("routine")).toBe("/tmp/student-graph/routine/index.md")
   })

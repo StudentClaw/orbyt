@@ -25,11 +25,10 @@ import {
   type Course,
   type CourseWorkItem,
   type GatewayToolCallFailure,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PluginGateway, type PluginGatewayService } from "../mcp/PluginGateway.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
-import { pickRandomCourseColor } from "./courseColors.js"
 
 const TOOL_LIST_COURSES = "canvas.list_courses"
 const TOOL_GET_MY_UPCOMING_ASSIGNMENTS = "canvas.get_my_upcoming_assignments"
@@ -53,7 +52,6 @@ type CourseRow = {
   canvas_id: string | null
   term: string | null
   last_sync_at: string | null
-  color: string | null
 }
 
 type CourseworkRow = {
@@ -371,16 +369,10 @@ function replacePeerReviewTodo(
 
 function upsertCourses(database: DatabaseService, courses: readonly Course[]): void {
   const syncedAt = new Date().toISOString()
-  const existingColors = new Map(
-    database
-      .query<{ id: string; color: string | null }>("SELECT id, color FROM courses")
-      .map((row) => [row.id, row.color])
-  )
   for (const course of courses) {
-    const color = existingColors.get(course.id) ?? course.color ?? pickRandomCourseColor()
     database.execute(
-      `INSERT OR REPLACE INTO courses (id, name, code, professor, canvas_id, term, last_sync_at, color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO courses (id, name, code, professor, canvas_id, term, last_sync_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         course.id,
         course.name,
@@ -389,7 +381,6 @@ function upsertCourses(database: DatabaseService, courses: readonly Course[]): v
         course.canvasId ?? null,
         course.term ?? null,
         course.lastSyncAt ?? syncedAt,
-        color,
       ],
     )
   }
@@ -417,7 +408,7 @@ async function callDecodedTool<A>(
 
 function readCourses(database: DatabaseService): Course[] {
   const rows = database.query<CourseRow>(
-    `SELECT id, name, code, professor, canvas_id, term, last_sync_at, color FROM courses ORDER BY name ASC`,
+    `SELECT id, name, code, professor, canvas_id, term, last_sync_at FROM courses ORDER BY name ASC`,
   )
   return rows.map<Course>((row) => ({
     id: row.id as Course["id"],
@@ -427,7 +418,6 @@ function readCourses(database: DatabaseService): Course[] {
     canvasId: row.canvas_id ?? undefined,
     term: row.term ?? undefined,
     lastSyncAt: row.last_sync_at ?? undefined,
-    color: row.color ?? undefined,
   }))
 }
 

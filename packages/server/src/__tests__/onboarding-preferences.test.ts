@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { RPC_METHODS } from "@student-claw/contracts"
+import { RPC_METHODS } from "@orbyt/contracts"
 import { routeMessage } from "../ws/Router.js"
 import { defaultConfig } from "../config/defaults.js"
 import { createBunDatabaseService, createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
@@ -135,7 +135,7 @@ describe("onboarding.getPreferences", () => {
     expect(res.result.quietHoursStart).toBe("22:00")
     expect(res.result.quietHoursEnd).toBe("08:00")
     expect(res.result.calendarIntegration).toBe("none")
-    expect(res.result.memoryGraphPath).toContain("/Documents/Student Claw Memory Graph")
+    expect(res.result.memoryGraphPath).toContain("/Documents/Orbyt Memory Graph")
     expect(res.result.memoryGraphPathMode).toBe("default")
   })
 
@@ -257,7 +257,7 @@ describe("onboarding.setPreferences", () => {
     }), mockWs, deps)
     const resetRes = JSON.parse(resetRaw.response)
     expect(resetRes.ok).toBe(true)
-    expect(resetRes.result.memoryGraphPath).toContain("/Documents/Student Claw Memory Graph")
+    expect(resetRes.result.memoryGraphPath).toContain("/Documents/Orbyt Memory Graph")
     expect(resetRes.result.memoryGraphPathMode).toBe("default")
   })
 

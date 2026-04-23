@@ -41,6 +41,19 @@ function toTitleCase(value: string): string {
     .join(" ")
 }
 
+function submissionPillClasses(label: string | null): string {
+  switch (label) {
+    case "Graded":
+      return "border-success/30 bg-success/10 text-success"
+    case "Submitted":
+      return "border-info/30 bg-info/10 text-info"
+    case "Not submitted":
+      return "border-warning/40 bg-warning/10 text-warning"
+    default:
+      return "border-border bg-muted/30 text-muted-foreground"
+  }
+}
+
 function normalizeSubmissionStatus(submissionStatus?: string): string | null {
   if (!submissionStatus) return null
 
@@ -84,7 +97,9 @@ export function TaskCard({ item, now, onClick }: TaskCardProps) {
               </span>
             ) : null}
             {submissionLabel ? (
-              <span className="rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${submissionPillClasses(submissionLabel)}`}
+              >
                 {submissionLabel}
               </span>
             ) : null}

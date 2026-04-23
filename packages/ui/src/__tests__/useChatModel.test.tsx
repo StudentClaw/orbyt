@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { renderHook, waitFor, act } from "@testing-library/react"
-import type { ServerConfig } from "@student-claw/contracts"
+import type { ServerConfig } from "@orbyt/contracts"
 
 const serverStateMocks = vi.hoisted(() => ({
   config: null as ServerConfig | null,
@@ -54,7 +54,7 @@ describe("useChatModel", () => {
   })
 
   test("falls back to the runtime default model when stored model is invalid", async () => {
-    localStorage.setItem("student-claw:selected-model", "unknown-model")
+    localStorage.setItem("orbyt:selected-model", "unknown-model")
 
     const { result } = renderHook(() => useChatModel())
 
@@ -64,7 +64,7 @@ describe("useChatModel", () => {
   })
 
   test("restores a valid stored model when it exists in the runtime catalog", async () => {
-    localStorage.setItem("student-claw:selected-model", "gpt-5.3-codex")
+    localStorage.setItem("orbyt:selected-model", "gpt-5.3-codex")
 
     const { result } = renderHook(() => useChatModel())
 
@@ -81,6 +81,6 @@ describe("useChatModel", () => {
     })
 
     expect(result.current.selectedModel).toBe("gpt-5.3-codex")
-    expect(localStorage.getItem("student-claw:selected-model")).toBe("gpt-5.3-codex")
+    expect(localStorage.getItem("orbyt:selected-model")).toBe("gpt-5.3-codex")
   })
 })

@@ -1,4 +1,4 @@
-import type { MemorizeRunError, MemorizeRunResult, MemorizeState } from "@student-claw/contracts"
+import type { MemorizeRunError, MemorizeRunResult, MemorizeState } from "@orbyt/contracts"
 import type { MemorizeStateStore } from "./state-store.js"
 
 export interface MemorizeTurnInput {

@@ -26,7 +26,7 @@ Create the main app window, load the React UI (from Vite dev server in developme
 - Window size, position, and state persistence
 - Title bar customization (frameless or custom)
 - Dark mode support (follow OS preference)
-- Deep link handling (`studentclaw://` protocol)
+- Deep link handling (`orbyt://` protocol)
 
 ### 2. Preload Script
 
@@ -133,7 +133,7 @@ packages/electron/
       auto-update.ts            # Squirrel auto-update logic
     window/
       window-manager.ts         # Window creation, state persistence
-      deep-links.ts             # Protocol handler (studentclaw://)
+      deep-links.ts             # Protocol handler (orbyt://)
     plugins/
       PluginManager.ts          # utilityProcess lifecycle (see Plugin System)
       PluginSandbox.ts

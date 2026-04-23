@@ -45,7 +45,7 @@ export function createTray(mainWindow: BrowserWindow): void {
   const icon = resolveTrayIcon()
 
   tray = new Tray(icon)
-  tray.setToolTip("Student Claw")
+  tray.setToolTip("Orbyt")
 
   const contextMenu = Menu.buildFromTemplate([
     {

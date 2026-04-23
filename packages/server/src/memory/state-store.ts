@@ -4,7 +4,7 @@ import { Schema } from "@effect/schema"
 import {
   MemorizeState,
   initialMemorizeState,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type { MemoryPaths } from "./paths.js"
 
 const decode = Schema.decodeUnknownSync(MemorizeState)

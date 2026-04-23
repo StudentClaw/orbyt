@@ -5,7 +5,7 @@ import type {
   PluginAuthStatus,
   PluginSaveAuthParams,
   PluginSaveAuthResult,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PluginVault } from "./plugin-vault.js"
 
 const MIN_SECRET_LENGTH = 20

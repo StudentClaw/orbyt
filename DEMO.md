@@ -1,6 +1,6 @@
-# Student Claw — Demo Guide
+# Orbyt — Demo Guide
 
-Student Claw is a local-first AI-powered desktop app that helps students manage study time, track assignments, and execute academic tasks through a chat-first experience.
+Orbyt is a local-first AI-powered desktop app that helps students manage study time, track assignments, and execute academic tasks through a chat-first experience.
 
 ## Prerequisites
 
@@ -72,7 +72,7 @@ bun run dev:ui
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8787` | Server port |
-| `DB_PATH` | `~/.student-claw/data.db` | SQLite database path |
+| `DB_PATH` | `~/.orbyt/data.db` | SQLite database path |
 | `NODE_ENV` | `development` | Environment mode |
 
 Example:

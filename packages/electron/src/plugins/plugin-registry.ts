@@ -6,7 +6,7 @@ import {
   type ExtensionRegistryAvailableEntry,
   type ExtensionInstallSource,
   type ExtensionRegistryEntry,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { isCuratedExtensionVisibleOnHost, type PluginAvailabilityContext } from "./curated-extension-availability.js"
 
 export type PluginRegistryPaths = {

@@ -1,4 +1,4 @@
-import type { ActivityCategory, ActivityFeedEntry } from "@student-claw/contracts"
+import type { ActivityCategory, ActivityFeedEntry } from "@orbyt/contracts"
 import type { WsRpcClient } from "./wsRpcClient"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 

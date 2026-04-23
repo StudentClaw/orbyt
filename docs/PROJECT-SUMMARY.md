@@ -102,7 +102,7 @@ Plugins are stored in a dedicated directory under the student's local app data.
 #### Directory Hierarchy
 
 ```text
-~/.student-claw/
+~/.orbyt/
 ├── extensions/
 │   ├── canvas-mcp/
 │   │   ├── manifest.json

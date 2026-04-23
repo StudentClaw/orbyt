@@ -1,7 +1,7 @@
 # PLAN
 
 ## Purpose
-This file defines the required implementation workflow for every Student Claw feature.
+This file defines the required implementation workflow for every Orbyt feature.
 
 ## Mandatory Delivery Flow
 1. Create a feature branch.

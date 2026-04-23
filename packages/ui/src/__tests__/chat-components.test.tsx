@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, afterEach } from "vitest"
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -471,7 +471,7 @@ describe("ErrorBanner", () => {
 
   test("shows offline message", () => {
     render(<ErrorBanner status="offline" error={null} />)
-    expect(screen.getByText("Student Claw is offline")).toBeDefined()
+    expect(screen.getByText("Orbyt is offline")).toBeDefined()
   })
 
   test("shows rate-limited message", () => {

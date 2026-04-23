@@ -1,4 +1,4 @@
-import { CanvasAuthError } from "@student-claw/contracts"
+import { CanvasAuthError } from "@orbyt/contracts"
 
 export type CanvasPluginCredentials = {
   baseUrl: string

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { OrchestrationSnapshot } from "@student-claw/contracts"
+import type { OrchestrationSnapshot } from "@orbyt/contracts"
 import { SidebarProvider } from "../components/ui/sidebar"
 
 const historyMocks = vi.hoisted(() => ({

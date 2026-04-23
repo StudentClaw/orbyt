@@ -1,4 +1,4 @@
-import type { Course } from "@student-claw/contracts"
+import type { Course } from "@orbyt/contracts"
 import { sortByPriority, type PrioritizedItem } from "./priority-model"
 
 export type FilterScope = "today" | "thisWeek" | "upcoming" | "overdue" | "submitted"

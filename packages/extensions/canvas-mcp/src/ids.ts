@@ -1,4 +1,4 @@
-import type { SourceType } from "@student-claw/contracts"
+import type { SourceType } from "@orbyt/contracts"
 
 const COURSE_PREFIX = "canvas-course:"
 const COURSEWORK_PREFIX = "canvas-coursework:"

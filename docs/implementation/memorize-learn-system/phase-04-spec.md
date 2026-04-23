@@ -39,7 +39,7 @@ The method is idempotent — calling it twice within the same scheduled slot ret
 
 `MemorizeService` (Effect Context Tag) is a new server-side service that owns:
 
-- `MemoryPaths` resolved from `STUDENT_CLAW_HOME` env
+- `MemoryPaths` resolved from `ORBYT_HOME` env
 - `MemorizeStateStore` (atomic state read/write)
 - `CodexMemorizeDistiller` wrapping the shared `CodexCli` instance
 - `LiveMemorizeTurnRunner` with all dependencies wired

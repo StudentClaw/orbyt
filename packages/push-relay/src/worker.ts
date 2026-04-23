@@ -1,4 +1,4 @@
-import type { PushPairingCompletion } from "@student-claw/contracts"
+import type { PushPairingCompletion } from "@orbyt/contracts"
 
 type PairingSessionRecord = {
   readonly sessionId: string

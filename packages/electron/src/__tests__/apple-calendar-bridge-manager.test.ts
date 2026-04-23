@@ -13,7 +13,7 @@ import {
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-apple-bridge-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-apple-bridge-"))
   tempDirs.push(dir)
   return dir
 }

@@ -1,6 +1,6 @@
 import { Children, Fragment, isValidElement } from "react"
 import type { ReactNode } from "react"
-import { IpcChannel } from "@student-claw/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"

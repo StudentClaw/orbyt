@@ -3,7 +3,7 @@ import {
   CourseWorkItem,
   type CanvasAnnouncement,
   type CanvasCourse,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { encodeAnnouncementId, encodeCourseId, encodeCourseWorkItemId } from "../ids.js"
 import { stripHtml, validateContract } from "../utils.js"
 

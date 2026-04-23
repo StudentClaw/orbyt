@@ -5,7 +5,7 @@ import type {
   OrchestrationTurn,
   OrchestrationWorkspace,
   ProviderRuntimeEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { extractDisplayContent } from "@/lib/chatAttachments"
 import { parseArtifacts } from "@/lib/artifacts/parseArtifacts"
 import type { ChatArtifact, PendingArtifact } from "@/lib/artifacts/types"

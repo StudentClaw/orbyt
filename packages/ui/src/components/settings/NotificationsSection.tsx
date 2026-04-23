@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import * as QRCode from "qrcode"
-import { IpcChannel, type PhonePushSettings } from "@student-claw/contracts"
+import { IpcChannel, type PhonePushSettings } from "@orbyt/contracts"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ const WEEKDAY_OPTIONS = [
 ] as const
 
 const DESKTOP_TEST_NOTIFICATION = {
-  title: "Student Claw test notification",
+  title: "Orbyt test notification",
   body: "Desktop notifications are enabled for this app.",
 } as const
 

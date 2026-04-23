@@ -7,7 +7,7 @@ import {
   type ProviderPendingApproval,
   type ThreadAccessMode,
   type TurnAttachmentInput,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { PlusIcon, SquareIcon } from "lucide-react"
 import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
 import { SkillPicker, type SkillPickerEntry } from "@/components/chat/SkillPicker"
@@ -666,7 +666,7 @@ export function PromptInput({
               disabled={!isConnected || disabled}
               placeholder={
                 connectionState === "connecting"
-                  ? "Connecting to Student Claw..."
+                  ? "Connecting to Orbyt..."
                   : !isConnected
                     ? "Reconnecting..."
                   : disabled && disabledReason

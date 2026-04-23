@@ -29,7 +29,7 @@ import {
   WeeklyInsight,
 } from "./index.js"
 
-describe("@student-claw/contracts", () => {
+describe("@orbyt/contracts", () => {
   test("decodes the RPC request envelope", () => {
     const decoded = Schema.decodeUnknownSync(RpcRequestEnvelope)({
       kind: "request",
@@ -197,7 +197,7 @@ describe("@student-claw/contracts", () => {
       threadId: "thread_1",
       turnId: "turn_1",
       itemId: "item_1",
-      serverName: "student-claw",
+      serverName: "orbyt",
       toolName: "template.template_ping",
       args: {},
       status: "pending",

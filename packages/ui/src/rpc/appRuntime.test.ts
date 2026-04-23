@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import type { DesktopBootstrap } from "@student-claw/contracts"
+import type { DesktopBootstrap } from "@orbyt/contracts"
 
 const transportMocks = vi.hoisted(() => {
   class MockWsTransport {

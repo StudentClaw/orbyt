@@ -6,8 +6,8 @@ import type { RuntimeStartupState } from "../rpc/runtimeStartupState"
 const appMocks = vi.hoisted(() => ({
   startupState: {
     phase: "bootstrapping",
-    label: "Starting Student Claw",
-    detail: "Connecting to Student Claw",
+    label: "Starting Orbyt",
+    detail: "Connecting to Orbyt",
     error: null,
   } as RuntimeStartupState,
   startAppRuntime: vi.fn().mockResolvedValue(undefined),
@@ -46,8 +46,8 @@ describe("App", () => {
     appMocks.startAppRuntime.mockClear()
     appMocks.startupState = {
       phase: "bootstrapping",
-      label: "Starting Student Claw",
-      detail: "Connecting to Student Claw",
+      label: "Starting Orbyt",
+      detail: "Connecting to Orbyt",
       error: null,
     }
   })
@@ -63,7 +63,7 @@ describe("App", () => {
   test("renders the router once startup is ready", () => {
     appMocks.startupState = {
       phase: "ready",
-      label: "Student Claw ready",
+      label: "Orbyt ready",
       detail: "",
       error: null,
     }
@@ -77,7 +77,7 @@ describe("App", () => {
   test("retries startup from the error screen", () => {
     appMocks.startupState = {
       phase: "error",
-      label: "Student Claw couldn't start",
+      label: "Orbyt couldn't start",
       detail: "Retry the local runtime startup.",
       error: "boom",
     }

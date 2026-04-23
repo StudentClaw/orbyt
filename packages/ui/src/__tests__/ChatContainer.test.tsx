@@ -167,7 +167,7 @@ describe("ChatContainer", () => {
     chatMocks.state.status = "offline"
     chatMocks.state.connectionState = "disconnected"
     render(<ChatContainer />)
-    expect(screen.getByText("Student Claw is offline")).toBeDefined()
+    expect(screen.getByText("Orbyt is offline")).toBeDefined()
   })
 
   test("shows panel close button for panel variant", () => {

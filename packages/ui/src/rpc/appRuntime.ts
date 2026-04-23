@@ -1,4 +1,4 @@
-import type { DesktopBootstrap } from "@student-claw/contracts"
+import type { DesktopBootstrap } from "@orbyt/contracts"
 import { createWsRpcClient, type WsRpcClient } from "./wsRpcClient"
 import { startActivityStateSync } from "./activityState"
 import { startCanvasStateSync, loadCanvasData } from "./canvasState"
@@ -108,8 +108,8 @@ export function startAppRuntime(): Promise<void> {
 
   setRuntimeStartupState({
     phase: "bootstrapping",
-    label: "Starting Student Claw",
-    detail: "Connecting to Student Claw",
+    label: "Starting Orbyt",
+    detail: "Connecting to Orbyt",
     error: null,
   })
 
@@ -125,8 +125,8 @@ export function startAppRuntime(): Promise<void> {
       cacheBootstrap(rendererBootstrap)
       setRuntimeStartupState({
         phase: "connecting",
-        label: "Starting Student Claw",
-        detail: "Connecting to Student Claw",
+        label: "Starting Orbyt",
+        detail: "Connecting to Orbyt",
         error: null,
       })
 
@@ -139,7 +139,7 @@ export function startAppRuntime(): Promise<void> {
       setRuntimeStartupState({
         phase: "hydrating",
         label: "Loading your workspace",
-        detail: "Loading Student Claw settings",
+        detail: "Loading Orbyt settings",
         error: null,
       })
 
@@ -180,7 +180,7 @@ export function startAppRuntime(): Promise<void> {
 
       setRuntimeStartupState({
         phase: "ready",
-        label: "Student Claw ready",
+        label: "Orbyt ready",
         detail: "",
         error: null,
       })
@@ -189,11 +189,11 @@ export function startAppRuntime(): Promise<void> {
         cleanup()
       }
 
-      const message = error instanceof Error ? error.message : "Failed to start Student Claw."
+      const message = error instanceof Error ? error.message : "Failed to start Orbyt."
 
       setRuntimeStartupState({
         phase: "error",
-        label: "Student Claw couldn't start",
+        label: "Orbyt couldn't start",
         detail: "Retry the local runtime startup.",
         error: message,
       })

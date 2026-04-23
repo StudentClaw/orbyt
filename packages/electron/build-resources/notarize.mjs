@@ -12,7 +12,7 @@ export default async function notarizeMacApp(context) {
   } = process.env
 
   if (!APPLE_API_KEY || !APPLE_API_KEY_ID || !APPLE_API_ISSUER) {
-    console.log("[student-claw notarize] Skipping notarization because Apple API credentials are missing.")
+    console.log("[orbyt notarize] Skipping notarization because Apple API credentials are missing.")
     return
   }
 

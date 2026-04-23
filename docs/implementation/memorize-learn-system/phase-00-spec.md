@@ -7,7 +7,7 @@ on. It is the source of truth for Phase 00.
 
 ## 1. Scope
 
-- Lock the on-disk layout under `~/.student-claw/memory/`.
+- Lock the on-disk layout under `~/.orbyt/memory/`.
 - Lock filename conventions for daily, weekly, and graph files.
 - Lock the mandatory section shape for graph nodes (base + course nodes).
 - Lock the `memorize-state.json` payload contract.
@@ -19,11 +19,11 @@ Out of scope: scheduler, summarization, promotion logic, UI readers.
 
 The memory root resolves as follows:
 
-1. If `STUDENT_CLAW_HOME` is set, root is `${STUDENT_CLAW_HOME}/memory`.
-2. Otherwise, root is `~/.student-claw/memory`.
+1. If `ORBYT_HOME` is set, root is `${ORBYT_HOME}/memory`.
+2. Otherwise, root is `~/.orbyt/memory`.
 
 The env override exists for tests and dev isolation only. In production, the
-hard-coded `~/.student-claw` home is expected.
+hard-coded `~/.orbyt` home is expected.
 
 ## 3. Filesystem Layout
 

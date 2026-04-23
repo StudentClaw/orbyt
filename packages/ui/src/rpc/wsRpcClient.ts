@@ -52,11 +52,11 @@ import {
   type TurnAttachmentInput,
   type UpdatePreferencesParams,
   type WeeklyInsight,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import type {
   DeleteThreadResult,
   RenameThreadResult,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { WsTransport } from "./wsTransport"
 
 type StreamSubscriptionOptions = {

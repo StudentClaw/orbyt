@@ -11,7 +11,7 @@
 - [x] RPC request envelopes decode correctly
 - [x] Desktop bootstrap, server config, lifecycle welcome, and orchestration snapshot payloads decode correctly
 - [x] All error types have unique `_tag`
-- [x] `@student-claw/shared` re-exports from the new packages without breaking existing tests
+- [x] `@orbyt/shared` re-exports from the new packages without breaking existing tests
 - [x] Root `bun run typecheck` and `bun run test` rebuild shared package output before downstream verification
 
 ## Server
@@ -59,6 +59,6 @@
 - [x] `bun run typecheck` passes all packages
 - [x] No TypeScript errors
 - [x] `bun install` at root succeeds cleanly
-- [x] `bun run dev:electron` no longer fails on workspace package resolution for `@student-claw/contracts`
+- [x] `bun run dev:electron` no longer fails on workspace package resolution for `@orbyt/contracts`
 - [x] Standalone mode works: `bun run dev:server` + `bun run dev:ui` in separate terminals
 - [x] `bun run test` — all tests pass across all packages

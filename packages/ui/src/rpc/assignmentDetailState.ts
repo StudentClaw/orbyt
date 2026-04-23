@@ -4,7 +4,7 @@ import type {
   Course,
   CourseWorkItem,
   Grade,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { waitForPrimaryWsRpcClient } from "./appRuntime"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 import { getCourses, getSubmissionStatus, getUpcomingAssignments } from "./canvasState"

@@ -1,5 +1,5 @@
 import webPush from "web-push"
-import type { WebPushSubscriptionRecord } from "@student-claw/contracts"
+import type { WebPushSubscriptionRecord } from "@orbyt/contracts"
 import type { PushStore } from "./push-store.js"
 
 type WebPushLike = {
@@ -36,7 +36,7 @@ export class PushDeliveryService {
 
     const vapidKeys = this.store.getVapidKeys()
     this.webPushClient.setVapidDetails(
-      "mailto:support@student-claw.local",
+      "mailto:support@orbyt.local",
       vapidKeys.publicKey,
       vapidKeys.privateKey,
     )
@@ -61,8 +61,8 @@ export class PushDeliveryService {
   async sendTestPush(): Promise<{ ok: boolean }> {
     const result = await this.send({
       title: "Phone notifications linked",
-      body: "Student Claw can now send push notifications to this phone.",
-      tag: "student-claw-test",
+      body: "Orbyt can now send push notifications to this phone.",
+      tag: "orbyt-test",
     })
 
     return { ok: result.ok }

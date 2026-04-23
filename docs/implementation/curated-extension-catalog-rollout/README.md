@@ -3,7 +3,7 @@
 Last updated: 2026-04-18
 
 This docs package is the implementation source of truth for adding first-party
-curated extensions beyond Canvas to Student Claw.
+curated extensions beyond Canvas to Orbyt.
 
 Apple Calendar is the canary extension for this rollout. It is the first
 non-Canvas extension that should prove the full bundled-curated path:
@@ -14,7 +14,7 @@ non-Canvas extension that should prove the full bundled-curated path:
 - surfaced in Settings with readiness-aware UX
 
 This rollout does not introduce a new plugin architecture. The runtime remains
-the existing Student Claw Electron Main plugin system documented in
+the existing Orbyt Electron Main plugin system documented in
 [docs/implementation/mcp-plugin-system/](../mcp-plugin-system/README.md).
 
 ## How To Use These Plans
@@ -39,8 +39,8 @@ the existing Student Claw Electron Main plugin system documented in
 
 - Apple Calendar is the canary, not a one-off exception.
 - Curated extensions remain local-first bundled plugins in v1. The MCP transport is always `local_stdio`; a curated extension may additionally own a non-MCP helper runtime (the "bridge") that speaks whatever protocol it needs to local OS APIs. MCP transport and bridge transport are distinct.
-- Student Claw owns any required local helper runtime when a curated extension depends on one. The MCP child never spawns or supervises the bridge.
-- Vendored extensions must be normalized to Student Claw conventions instead of executed from ad hoc external tarballs.
+- Orbyt owns any required local helper runtime when a curated extension depends on one. The MCP child never spawns or supervises the bridge.
+- Vendored extensions must be normalized to Orbyt conventions instead of executed from ad hoc external tarballs.
 - Remote downloadable catalogs, marketplace-style distribution, and end-user-installed third-party MCP servers remain out of scope for this rollout (see "What This Rollout Does Not Cover" below).
 
 ## Contract Changes Landed By This Rollout
@@ -76,7 +76,7 @@ The generic user-installable MCP flow lives in the predecessor rollout at [docs/
 ## Deliverables Across The Full Rollout
 
 - A monorepo-native vendoring path for Apple Calendar under `packages/extensions/apple-calendar-mcp/`
-- A Student Claw-owned Swift bridge lifecycle for Apple Calendar, including ephemeral port allocation, per-session shared-secret auth, and readiness-aware startup ordering
+- A Orbyt-owned Swift bridge lifecycle for Apple Calendar, including ephemeral port allocation, per-session shared-secret auth, and readiness-aware startup ordering
 - Bundled-catalog and packaging rules for curated extensions that ship with the app
 - macOS packaging, codesigning, notarization, and entitlement rules for curated extensions that ship a native helper binary
 - Runtime-readiness and Settings UX guidance for extensions that depend on local OS permissions, including an auth-form suppression contract for no-credential extensions

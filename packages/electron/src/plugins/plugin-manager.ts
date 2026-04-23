@@ -10,7 +10,7 @@ import {
   type ExtensionRuntimeReadiness,
   type PluginLifecycleActionResult,
   type PluginLifecycleEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import {
   type AvailablePluginRegistryRecord,
 } from "./plugin-registry.js"

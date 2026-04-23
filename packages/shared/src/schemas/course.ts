@@ -9,6 +9,5 @@ export const Course = Schema.Struct({
   canvasId: Schema.optional(Schema.String),
   term: Schema.optional(Schema.String),
   lastSyncAt: Schema.optional(Schema.String),
-  color: Schema.optional(Schema.String),
 })
 export type Course = Schema.Schema.Type<typeof Course>

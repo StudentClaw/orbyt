@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
-import type { SkillId } from "@student-claw/contracts"
+import type { SkillId } from "@orbyt/contracts"
 import { parseSkillFile, type ResolvedSkill } from "./SkillParser.js"
 
 export type SkillRegistry = ReadonlyMap<string, ResolvedSkill>

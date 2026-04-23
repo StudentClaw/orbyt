@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect"
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import type { ProviderRuntimeState } from "@student-claw/contracts"
+import type { ProviderRuntimeState } from "@orbyt/contracts"
 import {
   buildCodexAppServerArgs,
   CodexCli,
@@ -26,7 +26,7 @@ import { PluginGateway } from "../mcp/PluginGateway.js"
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-codex-cli-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-codex-cli-"))
   tempDirs.push(dir)
   return dir
 }
@@ -120,7 +120,7 @@ async function loadCodexCli(options: {
     codexRequestTimeoutMs: options.codexRequestTimeoutMs ?? 5_000,
     pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
     pluginGatewayMcpBearerToken: "gateway-secret",
-    pluginGatewayMcpServerName: "student-claw",
+    pluginGatewayMcpServerName: "orbyt",
   })
 
   const codexLayer = CodexCliLive.pipe(
@@ -170,7 +170,7 @@ if (args[0] === "app-server") {
   log({
     type: "start",
     args,
-    gatewayToken: process.env.STUDENT_CLAW_GATEWAY_BEARER_TOKEN ?? null,
+    gatewayToken: process.env.ORBYT_GATEWAY_BEARER_TOKEN ?? null,
   })
   const approvalCommand = ${JSON.stringify(options?.approvalCommand ?? null)}
   const emitNotificationsBeforeTurnStartResponse = ${JSON.stringify(
@@ -293,14 +293,14 @@ describe("CodexCli gateway wiring", () => {
 
   test("applies the fixed MCP gateway override at startup", () => {
     expect(buildCodexAppServerArgs({
-      pluginGatewayMcpServerName: "student-claw",
+      pluginGatewayMcpServerName: "orbyt",
       pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
     })).toEqual([
       "app-server",
       "-c",
-      'mcp_servers."student-claw".url="http://127.0.0.1:8788/mcp"',
+      'mcp_servers."orbyt".url="http://127.0.0.1:8788/mcp"',
       "-c",
-      'mcp_servers."student-claw".bearer_token_env_var="STUDENT_CLAW_GATEWAY_BEARER_TOKEN"',
+      'mcp_servers."orbyt".bearer_token_env_var="ORBYT_GATEWAY_BEARER_TOKEN"',
     ])
   })
 
@@ -311,7 +311,7 @@ describe("CodexCli gateway wiring", () => {
     }
     const snapshot = {
       itemId: "item_1",
-      serverName: "student-claw",
+      serverName: "orbyt",
       toolName: "template.template_ping",
       args: {},
     }
@@ -320,7 +320,7 @@ describe("CodexCli gateway wiring", () => {
       item: {
         type: "mcpToolCall",
         id: "item_1",
-        server: "student-claw",
+        server: "orbyt",
         tool: "template.template_ping",
         arguments: {},
         status: "inProgress",
@@ -334,7 +334,7 @@ describe("CodexCli gateway wiring", () => {
       item: {
         type: "mcpToolCall",
         id: "item_1",
-        server: "student-claw",
+        server: "orbyt",
         tool: "template.template_ping",
         arguments: {},
         status: "completed",
@@ -344,7 +344,7 @@ describe("CodexCli gateway wiring", () => {
       item: {
         type: "mcpToolCall",
         id: "item_1",
-        server: "student-claw",
+        server: "orbyt",
         tool: "template.template_ping",
         arguments: {},
         status: "failed",
@@ -357,7 +357,7 @@ describe("CodexCli gateway wiring", () => {
     expect(started).toMatchObject({
       type: "provider.mcpToolCall",
       itemId: "item_1",
-      serverName: "student-claw",
+      serverName: "orbyt",
       toolName: "template.template_ping",
       args: {},
       status: "pending",
@@ -367,7 +367,7 @@ describe("CodexCli gateway wiring", () => {
     expect(progress).toMatchObject({
       type: "provider.mcpToolCall",
       itemId: "item_1",
-      serverName: "student-claw",
+      serverName: "orbyt",
       toolName: "template.template_ping",
       args: {},
       status: "pending",
@@ -379,7 +379,7 @@ describe("CodexCli gateway wiring", () => {
     expect(failed).toMatchObject({
       type: "provider.mcpToolCall",
       itemId: "item_1",
-      serverName: "student-claw",
+      serverName: "orbyt",
       toolName: "template.template_ping",
       args: {},
       status: "error",
@@ -411,9 +411,9 @@ describe("CodexCli gateway wiring", () => {
       expect(startEntry?.args).toEqual([
         "app-server",
         "-c",
-        'mcp_servers."student-claw".url="http://127.0.0.1:8788/mcp"',
+        'mcp_servers."orbyt".url="http://127.0.0.1:8788/mcp"',
         "-c",
-        'mcp_servers."student-claw".bearer_token_env_var="STUDENT_CLAW_GATEWAY_BEARER_TOKEN"',
+        'mcp_servers."orbyt".bearer_token_env_var="ORBYT_GATEWAY_BEARER_TOKEN"',
       ])
       expect(startEntry?.gatewayToken).toBe("gateway-secret")
 
@@ -535,7 +535,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore: createProviderRuntimeStore(),
@@ -548,7 +548,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore: createProviderRuntimeStore(),

@@ -12,8 +12,8 @@ import {
   type ProviderRuntimeEvent,
   type TurnAttachmentInput,
   type WorkspaceId,
-} from "@student-claw/contracts"
-import { createId } from "@student-claw/shared-runtime"
+} from "@orbyt/contracts"
+import { createId } from "@orbyt/shared-runtime"
 import type { AppConfig } from "../config/defaults.js"
 import type { DatabaseService } from "../db/Database.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"

@@ -1,7 +1,7 @@
 import { beforeEach, describe, test, expect, vi } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { IpcChannel, type ChatModel, type TurnAttachmentInput } from "@student-claw/contracts"
+import { IpcChannel, type ChatModel, type TurnAttachmentInput } from "@orbyt/contracts"
 import { PromptInput } from "../components/chat/PromptInput"
 
 type ElectronAPI = NonNullable<Window["electronAPI"]>
@@ -87,7 +87,7 @@ describe("PromptInput", () => {
 
   test("shows connecting placeholder when connecting", () => {
     render(<PromptInput {...defaultProps} connectionState="connecting" />)
-    expect(screen.getByText("Connecting to Student Claw...")).toBeDefined()
+    expect(screen.getByText("Connecting to Orbyt...")).toBeDefined()
   })
 
   test("shows reconnecting placeholder when disconnected", () => {

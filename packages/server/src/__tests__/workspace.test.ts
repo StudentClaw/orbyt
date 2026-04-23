@@ -101,7 +101,7 @@ describe("workspace operations", () => {
     runBunMigrations(db)
     database = makeDatabaseService(db)
 
-    tmpFolder = join(tmpdir(), `student-claw-test-${Date.now()}`)
+    tmpFolder = join(tmpdir(), `orbyt-test-${Date.now()}`)
     mkdirSync(tmpFolder, { recursive: true })
   })
 

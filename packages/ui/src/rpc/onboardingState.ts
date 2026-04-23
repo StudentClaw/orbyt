@@ -1,4 +1,4 @@
-import type { OnboardingStepName, OnboardingStepStatus } from "@student-claw/contracts"
+import type { OnboardingStepName, OnboardingStepStatus } from "@orbyt/contracts"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
 import type { WsRpcClient } from "./wsRpcClient"
 
@@ -31,7 +31,7 @@ export interface OnboardingWizardState {
   readonly aiAuthStatus: AiAuthStatus
 }
 
-const STORAGE_KEY = "student-claw:onboarding"
+const STORAGE_KEY = "orbyt:onboarding"
 
 function createInitialSteps(): ReadonlyArray<OnboardingStepState> {
   return ONBOARDING_STEPS.map(() => ({

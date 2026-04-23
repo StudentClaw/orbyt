@@ -10,7 +10,7 @@ import type {
   GatewayToolInventoryReadResult,
   GatewayToolInventorySnapshot,
   GatewayToolsChangedEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { createGatewayInventorySnapshot, formatGatewayToolName } from "./plugin-gateway-inventory.js"
 
 type PluginGatewayRuntime = {
@@ -306,7 +306,7 @@ export function createPluginGatewayService(options: {
   readonly host?: string
 }): Promise<PluginGatewayService> {
   const host = options.host ?? "127.0.0.1"
-  const serverName = options.serverName ?? "student-claw"
+  const serverName = options.serverName ?? "orbyt"
   const bridgeToken = createAuthToken()
   const mcpBearerToken = createAuthToken()
   const sseClients = new Set<SseClient>()

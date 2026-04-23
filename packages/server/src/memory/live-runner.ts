@@ -1,5 +1,5 @@
 import { mkdirSync, existsSync, readFileSync } from "node:fs"
-import type { MemorizeRunError, MemorizeRunResult } from "@student-claw/contracts"
+import type { MemorizeRunError, MemorizeRunResult } from "@orbyt/contracts"
 import type { DatabaseService } from "../db/Database.js"
 import type { MemorizeTurnInput, MemorizeTurnRunner } from "./runner.js"
 import type { MemoryPaths } from "./paths.js"

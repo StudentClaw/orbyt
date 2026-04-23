@@ -51,6 +51,31 @@ const pageMocks = vi.hoisted(() => ({
     workspaces: [
       {
         id: "workspace-1",
+        name: "calendar",
+      },
+      {
+        id: "workspace-2",
+        name: "algorithms",
+      },
+    ],
+    threads: [
+      {
+        id: "thread-1",
+        workspaceId: "workspace-1",
+        title: "Calendar planning",
+        accessMode: "default",
+        status: "idle",
+        createdAt: "2026-04-22T20:00:00.000Z",
+        currentTurnId: null,
+      },
+      {
+        id: "thread-2",
+        workspaceId: "workspace-2",
+        title: "Binary trees lab",
+        accessMode: "default",
+        status: "idle",
+        createdAt: "2026-04-22T18:00:00.000Z",
+        currentTurnId: null,
       },
     ],
   },
@@ -79,7 +104,6 @@ describe("AssignmentDetailPage", () => {
     pageMocks.createThread.mockReset()
     pageMocks.sendTurn.mockReset()
     pageMocks.loadAssignmentDetail.mockReset()
-    pageMocks.createThread.mockResolvedValue("thread-1")
     pageMocks.sendTurn.mockResolvedValue(undefined)
     pageMocks.navigate.mockResolvedValue(undefined)
     pageMocks.entry = {
@@ -122,7 +146,30 @@ describe("AssignmentDetailPage", () => {
       error: null,
     }
     pageMocks.snapshot = {
-      workspaces: [{ id: "workspace-1" }],
+      workspaces: [
+        { id: "workspace-1", name: "calendar" },
+        { id: "workspace-2", name: "algorithms" },
+      ],
+      threads: [
+        {
+          id: "thread-1",
+          workspaceId: "workspace-1",
+          title: "Calendar planning",
+          accessMode: "default",
+          status: "idle",
+          createdAt: "2026-04-22T20:00:00.000Z",
+          currentTurnId: null,
+        },
+        {
+          id: "thread-2",
+          workspaceId: "workspace-2",
+          title: "Binary trees lab",
+          accessMode: "default",
+          status: "idle",
+          createdAt: "2026-04-22T18:00:00.000Z",
+          currentTurnId: null,
+        },
+      ],
     }
   })
 
@@ -135,21 +182,89 @@ describe("AssignmentDetailPage", () => {
     expect(screen.getByText("Open in Canvas")).toBeDefined()
   })
 
-  test("launches a seeded chat thread from a quick action", async () => {
+  test("forwards a seeded assignment prompt into the selected chat thread", async () => {
     const user = userEvent.setup()
     render(<AssignmentDetailPage assignmentId="item-1" />)
 
     await user.click(screen.getByRole("button", { name: "Draft Assignment" }))
+    await user.type(screen.getByPlaceholderText("Search chats or folders..."), "binary")
+    await user.click(screen.getByText("Binary trees lab"))
 
-    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-1", "Draft Assignment: Final Paper")
+    expect(pageMocks.createThread).not.toHaveBeenCalled()
     expect(pageMocks.sendTurn).toHaveBeenCalledTimes(1)
+    expect(pageMocks.sendTurn).toHaveBeenCalledWith(
+      "thread-2",
+      expect.stringContaining("Final Paper"),
+      [],
+      null,
+      null,
+    )
     expect(String(pageMocks.sendTurn.mock.calls[0]?.[1])).toContain("Final Paper")
     expect(String(pageMocks.sendTurn.mock.calls[0]?.[1])).toContain("Write a close reading of one myth.")
     expect(pageMocks.navigate).toHaveBeenCalledWith({
       to: "/chat/$workspaceId/$threadId",
       params: {
+        workspaceId: "workspace-2",
+        threadId: "thread-2",
+      },
+    })
+  })
+
+  test("spawns a new chat in the selected workspace when 'New chat' is chosen", async () => {
+    pageMocks.createThread.mockResolvedValue("thread-new")
+    const user = userEvent.setup()
+    render(<AssignmentDetailPage assignmentId="item-1" />)
+
+    await user.click(screen.getByRole("button", { name: "Plan Assignment" }))
+    await user.click(screen.getByTestId("assignment-new-thread-workspace-2"))
+
+    expect(pageMocks.createThread).toHaveBeenCalledTimes(1)
+    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-2", "Plan Assignment")
+    expect(pageMocks.sendTurn).toHaveBeenCalledTimes(1)
+    expect(pageMocks.sendTurn).toHaveBeenCalledWith(
+      "thread-new",
+      expect.stringContaining("Final Paper"),
+      [],
+      null,
+      null,
+    )
+    expect(pageMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId/$threadId",
+      params: {
+        workspaceId: "workspace-2",
+        threadId: "thread-new",
+      },
+    })
+  })
+
+  test("still offers a 'New chat' option for workspaces that have no chats yet", async () => {
+    pageMocks.snapshot = {
+      workspaces: [{ id: "workspace-1", name: "calendar" }],
+      threads: [],
+    }
+    pageMocks.createThread.mockResolvedValue("thread-new")
+    const user = userEvent.setup()
+    render(<AssignmentDetailPage assignmentId="item-1" />)
+
+    const quickAction = screen.getByRole("button", { name: "Explain Requirements" })
+    expect(quickAction.hasAttribute("disabled")).toBe(false)
+
+    await user.click(quickAction)
+    await user.click(screen.getByTestId("assignment-new-thread-workspace-1"))
+
+    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-1", "Explain Requirements")
+    expect(pageMocks.sendTurn).toHaveBeenCalledWith(
+      "thread-new",
+      expect.stringContaining("Final Paper"),
+      [],
+      null,
+      null,
+    )
+    expect(pageMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId/$threadId",
+      params: {
         workspaceId: "workspace-1",
-        threadId: "thread-1",
+        threadId: "thread-new",
       },
     })
   })

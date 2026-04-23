@@ -1,2 +1,2 @@
-export * from "@student-claw/contracts"
-export * from "@student-claw/shared-runtime"
+export * from "@orbyt/contracts"
+export * from "@orbyt/shared-runtime"

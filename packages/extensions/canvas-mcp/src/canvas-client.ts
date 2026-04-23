@@ -23,7 +23,7 @@ import {
   CanvasTodoItem,
   CanvasUnreadCount,
   CanvasUpcomingEvent,
-} from "@student-claw/contracts"
+} from "@orbyt/contracts"
 import { Schema } from "@effect/schema"
 import type { CanvasPluginCredentials } from "./runtime.js"
 

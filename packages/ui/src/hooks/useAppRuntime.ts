@@ -49,7 +49,7 @@ import {
 import { useRuntimeStartupState as useStartupState } from "@/rpc/runtimeStartupState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
-import type { TurnAttachmentInput } from "@student-claw/contracts"
+import type { TurnAttachmentInput } from "@orbyt/contracts"
 
 export function useRuntimeConnectionStatus() {
   return useWsConnectionStatus()

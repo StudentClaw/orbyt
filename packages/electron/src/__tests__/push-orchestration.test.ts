@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import type { PhonePushSettings, PushPairingCompletion } from "@student-claw/contracts"
+import type { PhonePushSettings, PushPairingCompletion } from "@orbyt/contracts"
 import { PushStore } from "../push/push-store.js"
 import {
   computeWeeklyInsightRunAt,
@@ -13,7 +13,7 @@ import { PushPairingClient } from "../push/push-pairing-client.js"
 const tempDirs: string[] = []
 
 function createTempDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "student-claw-push-orchestration-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "orbyt-push-orchestration-"))
   tempDirs.push(dir)
   return dir
 }

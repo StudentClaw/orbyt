@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useServerConfig } from "@/rpc/serverState"
 
-const STORAGE_KEY = "student-claw:selected-model"
+const STORAGE_KEY = "orbyt:selected-model"
 const DEFAULT_MODEL = "gpt-5.4-mini"
 
 function readStoredModel(): string | null {
