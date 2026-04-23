@@ -148,7 +148,7 @@ export function useChat(selection?: ChatSelectionInput) {
     })
   }, [chatState, currentWorkspace])
 
-  const sendMessage = useCallback(async ({ content, attachments, skillId }: ChatSendInput) => {
+  const sendMessage = useCallback(async ({ content, attachments, references, skillId }: ChatSendInput) => {
     const trimmed = content.trim()
     if (
       (trimmed.length === 0 && attachments.length === 0)
@@ -160,7 +160,8 @@ export function useChat(selection?: ChatSelectionInput) {
       return
     }
 
-    const promptContent = buildPromptContent(trimmed, attachments)
+    const refs = references ?? []
+    const promptContent = buildPromptContent(trimmed, attachments, refs)
     setIsSending(true)
     try {
       let threadId = currentThread?.id ?? selectedThreadId
@@ -174,11 +175,11 @@ export function useChat(selection?: ChatSelectionInput) {
       }
 
       if (skillId === undefined) {
-        await actions.sendTurn(threadId, promptContent, attachments, selection?.model)
+        await actions.sendTurn(threadId, promptContent, attachments, selection?.model, undefined, refs)
         return
       }
 
-      await actions.sendTurn(threadId, promptContent, attachments, selection?.model, skillId)
+      await actions.sendTurn(threadId, promptContent, attachments, selection?.model, skillId, refs)
     } finally {
       setIsSending(false)
     }
