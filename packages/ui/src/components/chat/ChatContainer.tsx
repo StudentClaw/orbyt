@@ -6,6 +6,7 @@ import { useChatUiActions, useSkillsState, type SkillEntry } from "@/hooks/useAp
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
+import { MemoryUpdatedPill } from "./MemoryUpdatedPill"
 import { MessageBubble, SendingPlaceholder } from "./MessageBubble"
 import { PromptInput } from "./PromptInput"
 import { SkillForkDialog } from "@/components/skills/SkillForkDialog"
@@ -218,6 +219,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
               {isSending && messages[messages.length - 1]?.role === "user" ? (
                 <SendingPlaceholder />
               ) : null}
+              <MemoryUpdatedPill />
             </>
           )}
         </div>

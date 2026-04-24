@@ -75,7 +75,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
     seedTurn(db, "2026-04-19T06:00:00.000Z")
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: mockDistiller() })
-    const result = await runner.run({ sinceCursor: {}, now: NOW })
+    const result = await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -93,7 +93,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
       store,
       distiller: mockDistiller("### Notable Events\n\n- integration works\n"),
     })
-    await runner.run({ sinceCursor: {}, now: NOW })
+    await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     const content = readFileSync(paths.dailyFile("2026-04-19"), "utf-8")
     expect(content).toContain("integration works")
@@ -105,7 +105,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
     seedTurn(db, "2026-04-19T06:30:00.000Z", { id: "turn_2", threadId: "thread_test" })
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: mockDistiller() })
-    await runner.run({ sinceCursor: {}, now: NOW })
+    await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     const state = store.read()
     expect(state.lastProcessedThreadCursor["_global"]).toBe("2026-04-19T06:30:00.000Z")
@@ -116,7 +116,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
     const { db, paths, store } = setup()
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: mockDistiller() })
-    const result = await runner.run({ sinceCursor: {}, now: NOW })
+    const result = await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -138,7 +138,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
     }
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: capturingDistiller })
-    await runner.run({ sinceCursor: {}, now: NOW })
+    await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(capturedPrompt).toContain("CS 301")
     expect(capturedPrompt).toContain("Data Structures")
@@ -150,7 +150,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
     seedTurn(db, "2026-04-19T06:00:00.000Z")
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: mockDistiller() })
-    await runner.run({ sinceCursor: {}, now: NOW })
+    await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     // Second run: cursor is advanced — no new turns
     let distillCalled = false
@@ -167,7 +167,7 @@ describe("LiveMemorizeTurnRunner — integration with real SQLite DB", () => {
       distiller: trackingDistiller,
     })
     const state = store.read()
-    await runner2.run({ sinceCursor: state.lastProcessedThreadCursor, now: new Date(2026, 3, 19, 20, 0) })
+    await runner2.run({ sinceCursor: state.lastProcessedThreadCursor, now: new Date(2026, 3, 19, 20, 0), trigger: "manual" })
 
     expect(distillCalled).toBe(false)
   })

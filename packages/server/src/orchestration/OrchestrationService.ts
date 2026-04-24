@@ -44,6 +44,7 @@ import { Database, type DatabaseService } from "../db/Database.js"
 import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerReadiness.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
+import { TurnEventBus } from "./TurnEventBus.js"
 import { tokenizeStubResponse } from "./StubProvider.js"
 import {
   ThreadRuntimeBusyError,
@@ -1574,6 +1575,7 @@ export const OrchestrationServiceLive = Layer.scoped(
     const runtimeStore = yield* ProviderRuntimeStore
     const codexCli = yield* CodexCli
     const threadRuntimeManager = yield* ThreadRuntimeManager
+    const turnEventBus = yield* TurnEventBus
     const activeTurns = new Map<string, { interrupted: boolean }>()
     const workQueue: WorkItem[] = []
     let drainingQueue = false
@@ -1710,6 +1712,13 @@ export const OrchestrationServiceLive = Layer.scoped(
           process.stderr.write(`Failed to record workflow activity: ${String(error)}\n`)
         }
         await publishDomainEvent({ type: "turn.completed", turn })
+        turnEventBus.publishTurnCompleted({
+          turnId: turn.id,
+          threadId: turn.threadId,
+          input: turn.input,
+          output: turn.output,
+          completedAt: turn.completedAt ?? completedAt,
+        })
       }
 
       await receiptBus.resolve(commandId, { turnId, threadId, status: turnStatus })

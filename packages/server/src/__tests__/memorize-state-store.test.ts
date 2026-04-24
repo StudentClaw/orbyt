@@ -53,6 +53,27 @@ describe("MemorizeStateStore.read", () => {
     writeFileSync(join(memDir, "memorize-state.json"), JSON.stringify({ version: 999 }), "utf-8")
     expect(() => store.read()).toThrow()
   })
+
+  test("migrates v1 state to v2 with seeded lastRolloverDate from lastRunAt", () => {
+    const { store, dir } = setup()
+    const memDir = join(dir, "memory")
+    mkdirSync(memDir, { recursive: true })
+    const v1 = {
+      version: 1,
+      lastRunAt: "2026-04-18T20:00:00.000Z",
+      lastRunOutcome: "success",
+      lastProcessedThreadCursor: {},
+      lastDailyFile: "2026-04-18",
+      lastWeeklyFile: null,
+      pendingPromotionCandidates: [],
+    }
+    writeFileSync(join(memDir, "memorize-state.json"), JSON.stringify(v1), "utf-8")
+    const state = store.read()
+    expect(state.version).toBe(2)
+    expect(state.lastRolloverDate).toBe("2026-04-18")
+    expect(state.lastAutoRunAt).toBeNull()
+    expect(state.lastDailyFile).toBe("2026-04-18")
+  })
 })
 
 describe("MemorizeStateStore.write", () => {
@@ -85,11 +106,15 @@ describe("MemorizeStateStore.commitSuccess", () => {
       lastProcessedThreadCursor: { thread1: "2026-04-19T06:59:00.000Z" },
       lastDailyFile: "2026-04-19",
       lastWeeklyFile: "2026-W16",
+      lastRolloverDate: "2026-04-19",
+      lastAutoRunAt: "2026-04-19T07:00:00.000Z",
       pendingPromotionCandidates: [],
     })
     const state = store.read()
     expect(state.lastRunOutcome).toBe("success")
     expect(state.lastDailyFile).toBe("2026-04-19")
+    expect(state.lastRolloverDate).toBe("2026-04-19")
+    expect(state.lastAutoRunAt).toBe("2026-04-19T07:00:00.000Z")
     expect(state.lastProcessedThreadCursor).toEqual({
       thread1: "2026-04-19T06:59:00.000Z",
     })
@@ -104,6 +129,8 @@ describe("MemorizeStateStore.recordFailure", () => {
       lastProcessedThreadCursor: {},
       lastDailyFile: "2026-04-19",
       lastWeeklyFile: "2026-W16",
+      lastRolloverDate: "2026-04-19",
+      lastAutoRunAt: null,
       pendingPromotionCandidates: [],
     })
     store.recordFailure()

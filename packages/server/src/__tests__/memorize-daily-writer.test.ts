@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, readFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { createMemoryPaths } from "../memory/paths.js"
-import { writeDailyFile, readDailyFile } from "../memory/daily-writer.js"
+import {
+  writeDailyFile,
+  readDailyFile,
+  appendRecapBlock,
+} from "../memory/daily-writer.js"
 
 const tempDirs: string[] = []
 
@@ -50,6 +54,40 @@ describe("writeDailyFile", () => {
     const { paths } = setup()
     const key = writeDailyFile(paths, "output", new Date(2026, 3, 19, 7, 0))
     expect(key).toBe("2026-04-19")
+  })
+})
+
+describe("appendRecapBlock", () => {
+  test("appends a recap block to an existing daily file", () => {
+    const { paths } = setup()
+    writeDailyFile(paths, "- morning note\n", new Date(2026, 3, 19, 7, 0))
+    appendRecapBlock(paths, "2026-04-19", "### Highlights\n\n- shipped feature\n")
+    const content = readFileSync(paths.dailyFile("2026-04-19"), "utf-8")
+    expect(content).toContain("## End-of-Day Recap")
+    expect(content).toContain("- morning note")
+    expect(content).toContain("- shipped feature")
+    expect(content.indexOf("morning")).toBeLessThan(content.indexOf("shipped"))
+  })
+
+  test("creates a new file if the daily file does not exist yet", () => {
+    const { paths } = setup()
+    appendRecapBlock(paths, "2026-04-19", "### Highlights\n\n- quiet day\n")
+    const content = readFileSync(paths.dailyFile("2026-04-19"), "utf-8")
+    expect(content).toContain("# Daily - 2026-04-19")
+    expect(content).toContain("## End-of-Day Recap")
+    expect(content).toContain("- quiet day")
+  })
+
+  test("replaces a prior recap block rather than duplicating it", () => {
+    const { paths } = setup()
+    writeDailyFile(paths, "- morning note\n", new Date(2026, 3, 19, 7, 0))
+    appendRecapBlock(paths, "2026-04-19", "first recap")
+    appendRecapBlock(paths, "2026-04-19", "second recap")
+    const content = readFileSync(paths.dailyFile("2026-04-19"), "utf-8")
+    const occurrences = content.split("## End-of-Day Recap").length - 1
+    expect(occurrences).toBe(1)
+    expect(content).toContain("second recap")
+    expect(content).not.toContain("first recap")
   })
 })
 

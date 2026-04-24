@@ -47,9 +47,8 @@ export const WEEKLY_RETENTION = 4
 export const EVIDENCE_COUNT_THRESHOLD = 2
 export const IMMEDIATE_PROMOTION_CONFIDENCE = 0.9
 
-export const MEMORIZE_STATE_VERSION = 1
-export const MORNING_RUN_HOUR = 7
-export const EVENING_RUN_HOUR = 20
+export const MEMORIZE_STATE_VERSION = 2
+export const FALLBACK_RUN_HOUR = 3
 
 export const RunOutcome = Schema.Literal("success", "failed", "partial")
 export type RunOutcome = Schema.Schema.Type<typeof RunOutcome>
@@ -76,6 +75,8 @@ export const MemorizeState = Schema.Struct({
   }),
   lastDailyFile: Schema.NullOr(Schema.String),
   lastWeeklyFile: Schema.NullOr(Schema.String),
+  lastRolloverDate: Schema.NullOr(Schema.String),
+  lastAutoRunAt: Schema.NullOr(Schema.String),
   pendingPromotionCandidates: Schema.Array(PromotionCandidate),
   promotedCandidateFingerprints: Schema.optional(Schema.Array(Schema.String)),
 })
@@ -88,16 +89,31 @@ export const initialMemorizeState = (): MemorizeState => ({
   lastProcessedThreadCursor: {},
   lastDailyFile: null,
   lastWeeklyFile: null,
+  lastRolloverDate: null,
+  lastAutoRunAt: null,
   pendingPromotionCandidates: [],
   promotedCandidateFingerprints: [],
 })
 
+export const MemorizeRunTrigger = Schema.Literal("auto", "recap", "manual")
+export type MemorizeRunTrigger = Schema.Schema.Type<typeof MemorizeRunTrigger>
+
 export const MemorizeRunResult = Schema.Struct({
   dailyFileWritten: Schema.NullOr(Schema.String),
   weeklyFileWritten: Schema.NullOr(Schema.String),
+  recapFileWritten: Schema.NullOr(Schema.String),
   graphNodesUpdated: Schema.Array(Schema.String),
 })
 export type MemorizeRunResult = Schema.Schema.Type<typeof MemorizeRunResult>
+
+export const MemoryUpdatedEvent = Schema.Struct({
+  trigger: MemorizeRunTrigger,
+  dailyFileWritten: Schema.NullOr(Schema.String),
+  weeklyFileWritten: Schema.NullOr(Schema.String),
+  recapFileWritten: Schema.NullOr(Schema.String),
+  at: Schema.String,
+})
+export type MemoryUpdatedEvent = Schema.Schema.Type<typeof MemoryUpdatedEvent>
 
 export const MemorizeRunErrorType = Schema.Literal(
   "runner_failed",
