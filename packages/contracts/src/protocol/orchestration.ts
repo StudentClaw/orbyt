@@ -120,6 +120,7 @@ export const RPC_METHODS = {
   DEV_RESET_SOFT: "dev.resetSoft",
   DEV_RESET_HARD: "dev.resetHard",
   MEMORIZE_RUN: "memorize.run",
+  MEMORY_SUBSCRIBE_UPDATES: "memory.subscribeUpdates",
 } as const
 
 /**
@@ -134,6 +135,7 @@ export const PUSH_CHANNELS = {
   DASHBOARD_UPDATE: "dashboard.update",
   PLANNER_SESSION_CHECK_IN: "planner.sessionCheckIn",
   ACTIVITY_FEED: "activity.feed",
+  MEMORY_UPDATED: "memory.updated",
 } as const
 
 /**

@@ -5,15 +5,44 @@ import type { MemorizeTurnInput, MemorizeTurnRunner } from "./runner.js"
 import type { MemoryPaths } from "./paths.js"
 import type { MemorizeStateStore } from "./state-store.js"
 import type { MemorizeDistiller } from "./distiller.js"
-import { readTurnsSince, buildCursor, formatTurnsForPrompt } from "./turn-reader.js"
-import { writeDailyFile, readDailyFile } from "./daily-writer.js"
+import {
+  readTurnsSince,
+  readTurnsForDay,
+  buildCursor,
+  formatTurnsForPrompt,
+} from "./turn-reader.js"
+import {
+  writeDailyFile,
+  readDailyFile,
+  appendRecapBlock,
+} from "./daily-writer.js"
 import { enforceRetention } from "./pruner.js"
 import { weekKeyForDailyDate } from "./weekly-writer.js"
 import { isoWeekKey, isoDateKey } from "./week.js"
-import { fillTemplate, DAILY_DISTILLATION_PROMPT } from "./prompts/index.js"
+import {
+  fillTemplate,
+  DAILY_DISTILLATION_PROMPT,
+  END_OF_DAY_RECAP_PROMPT,
+} from "./prompts/index.js"
 import { runPromotion } from "./promoter.js"
 import { readCourseContext } from "./course-reader.js"
 import { appendMemorizeError } from "./error-log.js"
+
+function previousDayStartEndIso(now: Date): {
+  readonly dateKey: string
+  readonly startIso: string
+  readonly endIso: string
+} {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  start.setDate(start.getDate() - 1)
+  return {
+    dateKey: isoDateKey(start),
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  }
+}
 
 export interface LiveMemorizeTurnRunnerDeps {
   readonly db: DatabaseService
@@ -30,7 +59,7 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
     | { readonly ok: false; readonly error: MemorizeRunError }
   > {
     const { db, paths, store, distiller } = this.deps
-    const { sinceCursor, now } = input
+    const { sinceCursor, now, trigger } = input
     const state = store.read()
 
     try {
@@ -67,7 +96,29 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
         dailyFileWritten = writeDailyFile(paths, dailyContent, now)
       }
 
-      const { prunedDaily } = await enforceRetention(paths, distiller)
+      // End-of-day recap pass — only on explicit recap triggers.
+      // Reads the full previous local day and appends (or replaces) a single
+      // "## End-of-Day Recap" block in that day's daily file.
+      let recapFileWritten: string | null = null
+      if (trigger === "recap") {
+        const { dateKey: recapDate, startIso, endIso } =
+          previousDayStartEndIso(now)
+        const dayTurns = readTurnsForDay(db, startIso, endIso)
+        if (dayTurns.length > 0) {
+          const recapPrompt = fillTemplate(END_OF_DAY_RECAP_PROMPT, {
+            date: recapDate,
+            thread_turns: formatTurnsForPrompt(dayTurns),
+          })
+          const recapOutput = await distiller.distill(recapPrompt)
+          recapFileWritten = appendRecapBlock(paths, recapDate, recapOutput)
+        }
+      }
+
+      // Rollover gate: only fold daily -> weekly once per calendar day.
+      const shouldRollover = state.lastRolloverDate !== dateKey
+      const { prunedDaily } = shouldRollover
+        ? await enforceRetention(paths, distiller)
+        : { prunedDaily: [] as string[] }
 
       const updatedWeeklyPaths = new Set(
         prunedDaily.map((key) => paths.weeklyFile(weekKeyForDailyDate(key))),
@@ -83,12 +134,15 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
       const promotion = await runPromotion(paths, state, promotionDailyContent, weeklyContent, now)
 
       const weeklyFileWritten = prunedDaily.length > 0 ? isoWeekKey(now) : null
+      const nowIso = now.toISOString()
 
       store.commitSuccess({
-        lastRunAt: now.toISOString(),
+        lastRunAt: nowIso,
         lastProcessedThreadCursor: newCursor,
         lastDailyFile: dailyFileWritten ?? state.lastDailyFile,
         lastWeeklyFile: weeklyFileWritten ?? state.lastWeeklyFile,
+        lastRolloverDate: shouldRollover ? dateKey : state.lastRolloverDate,
+        lastAutoRunAt: trigger === "auto" ? nowIso : state.lastAutoRunAt,
         pendingPromotionCandidates: promotion.updatedPending,
         promotedCandidateFingerprints: promotion.updatedFingerprints,
       })
@@ -98,6 +152,7 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
         result: {
           dailyFileWritten,
           weeklyFileWritten,
+          recapFileWritten,
           graphNodesUpdated: promotion.promoted,
         },
       }

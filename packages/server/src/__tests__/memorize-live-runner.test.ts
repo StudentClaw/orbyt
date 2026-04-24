@@ -53,6 +53,7 @@ describe("LiveMemorizeTurnRunner", () => {
     const result = await runner.run({
       sinceCursor: {},
       now: new Date(2026, 3, 19, 7, 0),
+      trigger: "manual",
     })
 
     expect(result.ok).toBe(true)
@@ -81,6 +82,7 @@ describe("LiveMemorizeTurnRunner", () => {
     const result = await runner.run({
       sinceCursor: {},
       now: new Date(2026, 3, 19, 7, 0),
+      trigger: "manual",
     })
 
     expect(result.ok).toBe(true)
@@ -106,7 +108,7 @@ describe("LiveMemorizeTurnRunner", () => {
       distiller: mockDistiller(),
     })
 
-    await runner.run({ sinceCursor: {}, now: new Date(2026, 3, 19, 7, 0) })
+    await runner.run({ sinceCursor: {}, now: new Date(2026, 3, 19, 7, 0), trigger: "manual" })
 
     const state = store.read()
     expect(state.lastRunOutcome).toBe("success")
@@ -120,6 +122,8 @@ describe("LiveMemorizeTurnRunner", () => {
       lastProcessedThreadCursor: { "_global": "2026-04-18T06:00:00.000Z" },
       lastDailyFile: "2026-04-18",
       lastWeeklyFile: "2026-W16",
+      lastRolloverDate: "2026-04-18",
+      lastAutoRunAt: null,
       pendingPromotionCandidates: [],
       promotedCandidateFingerprints: [],
     })
@@ -136,6 +140,7 @@ describe("LiveMemorizeTurnRunner", () => {
     const result = await runner.run({
       sinceCursor: { "_global": "2026-04-18T06:00:00.000Z" },
       now: new Date(2026, 3, 19, 7, 0),
+      trigger: "manual",
     })
 
     expect(result.ok).toBe(false)

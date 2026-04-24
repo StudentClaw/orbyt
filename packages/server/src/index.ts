@@ -7,9 +7,15 @@ import { PluginGatewayLive } from "./mcp/PluginGateway.js"
 import { OrchestrationService, OrchestrationServiceLive } from "./orchestration/OrchestrationService.js"
 import { RuntimeReceiptBusLive } from "./orchestration/RuntimeReceiptBus.js"
 import { ThreadRuntimeManager, ThreadRuntimeManagerLive } from "./orchestration/ThreadRuntimeManager.js"
+import { TurnEventBusLive } from "./orchestration/TurnEventBus.js"
+import {
+  MemorizeTriggerService,
+  MemorizeTriggerServiceLive,
+} from "./memory/trigger-service.js"
+import { PUSH_CHANNELS } from "@orbyt/contracts"
 import { ServerReadiness, ServerReadinessLive } from "./runtime/ServerReadiness.js"
 import { SkillResolverLive, SkillManagementLive } from "./skills/index.js"
-import { PushBusLive } from "./ws/PushBus.js"
+import { PushBus, PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
 import { MemorizeService, MemorizeServiceLive } from "./memory/service.js"
@@ -20,6 +26,7 @@ const CoreLive = Layer.mergeAll(
   ServerReadinessLive,
   PushBusLive,
   RuntimeReceiptBusLive,
+  TurnEventBusLive,
   SkillResolverLive,
   SkillManagementLive.pipe(Layer.provide(ConfigServiceLive)),
 )
@@ -57,6 +64,12 @@ const MemorizeLive = MemorizeServiceLive.pipe(
   Layer.provideMerge(CoreLive),
 )
 
+const MemorizeTriggerLive = MemorizeTriggerServiceLive.pipe(
+  Layer.provideMerge(MemorizeLive),
+  Layer.provideMerge(ProviderLive),
+  Layer.provideMerge(CoreLive),
+)
+
 const WebSocketLive = WebSocketServerLive.pipe(
   Layer.provideMerge(OrchestrationLive),
   Layer.provideMerge(CanvasSyncLive),
@@ -69,6 +82,7 @@ const MainLive = Layer.mergeAll(
   OrchestrationLive,
   CanvasSyncLive,
   MemorizeLive,
+  MemorizeTriggerLive,
   WebSocketLive,
 )
 
@@ -92,6 +106,8 @@ const program = Effect.gen(function* () {
   const ws = yield* WebSocketServerService
   const canvasSync = yield* CanvasSyncService
   const memorize = yield* MemorizeService
+  const memorizeTrigger = yield* MemorizeTriggerService
+  const pushBus = yield* PushBus
 
   readiness.markReady()
 
@@ -115,6 +131,21 @@ const program = Effect.gen(function* () {
     writeStderr(`Memorize startup catch-up failed: ${String(error)}`)
   })
 
+  // Event-driven memorization: subscribe to completed turns and classify.
+  // Noteworthy turns trigger an auto distillation; we publish a MEMORY_UPDATED
+  // push so the chat UI can show a "Memory updated" pill.
+  const stopMemorizeTrigger = memorizeTrigger.start({
+    onRan: async (result) => {
+      await pushBus.publish(PUSH_CHANNELS.MEMORY_UPDATED, {
+        trigger: "auto",
+        dailyFileWritten: result.dailyFileWritten,
+        weeklyFileWritten: result.weeklyFileWritten,
+        recapFileWritten: result.recapFileWritten,
+        at: new Date().toISOString(),
+      })
+    },
+  })
+
   const hourlyTimer = setInterval(() => {
     void canvasSync.sync().catch((error) => {
       writeStderr(`Hourly canvas sync failed: ${String(error)}`)
@@ -125,6 +156,7 @@ const program = Effect.gen(function* () {
     writeStdout("")
     writeStdout("Shutting down...")
     clearInterval(hourlyTimer)
+    stopMemorizeTrigger()
     orchestration.shutdown()
       .catch(() => undefined)
       .finally(() => {

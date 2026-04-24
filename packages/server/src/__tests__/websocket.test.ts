@@ -132,7 +132,7 @@ function makeDependencies() {
       listAll: () => [],
     },
     memorize: {
-      runIfNeeded: async () => ({ ran: false, result: null }),
+      runIfNeeded: async () => ({ ran: false, trigger: "manual" as const, result: null }),
     },
   }
 }

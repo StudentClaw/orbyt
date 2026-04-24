@@ -29,3 +29,36 @@ export function readDailyFile(paths: MemoryPaths, dateKey: string): string | nul
   const filePath = paths.dailyFile(dateKey)
   return existsSync(filePath) ? readFileSync(filePath, "utf-8") : null
 }
+
+const RECAP_MARKER = "## End-of-Day Recap"
+
+function buildRecapBlock(aiOutput: string): string {
+  return `${RECAP_MARKER}\n\n${aiOutput.trimEnd()}\n`
+}
+
+export function appendRecapBlock(
+  paths: MemoryPaths,
+  dateKey: string,
+  aiOutput: string,
+): string | null {
+  const filePath = paths.dailyFile(dateKey)
+  const block = buildRecapBlock(aiOutput)
+
+  if (existsSync(filePath)) {
+    const existing = readFileSync(filePath, "utf-8")
+    if (existing.includes(RECAP_MARKER)) {
+      // Replace prior recap block rather than duplicating it.
+      const replaced = existing.replace(
+        /## End-of-Day Recap[\s\S]*$/,
+        block,
+      )
+      writeFileSync(filePath, replaced.trimEnd() + "\n", "utf-8")
+    } else {
+      writeFileSync(filePath, `${existing.trimEnd()}\n\n---\n\n${block}`, "utf-8")
+    }
+  } else {
+    writeFileSync(filePath, `# Daily - ${dateKey}\n\n${block}`, "utf-8")
+  }
+
+  return dateKey
+}
