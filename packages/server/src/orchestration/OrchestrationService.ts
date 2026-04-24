@@ -588,6 +588,7 @@ function resetWorkspaceThreadProviderSessions(
   database.execute(
     `UPDATE provider_runtime_sessions
      SET provider_thread_id = NULL,
+         runtime_payload = NULL,
          last_error = NULL,
          cwd = ?,
          updated_at = ?
@@ -608,6 +609,7 @@ function resetThreadProviderSession(
   database.execute(
     `UPDATE provider_runtime_sessions
      SET provider_thread_id = NULL,
+         runtime_payload = NULL,
          last_error = NULL,
          updated_at = ?
      WHERE thread_id = ?`,
@@ -636,6 +638,7 @@ function reconcileStaleStreamingState(database: DatabaseService): void {
       `UPDATE provider_runtime_sessions
        SET status = 'interrupted',
            provider_thread_id = NULL,
+           runtime_payload = NULL,
            auth_state = COALESCE(auth_state, 'unknown'),
            updated_at = ?
        WHERE status IN ('queued', 'streaming')

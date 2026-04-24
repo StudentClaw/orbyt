@@ -112,6 +112,10 @@ function parseJson(value: string | null): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
 function toRuntimeState(row: ProviderRuntimeRow | null): ProviderRuntimeState {
   if (!row) {
     return DEFAULT_STATE
@@ -137,6 +141,21 @@ function toRuntimeState(row: ProviderRuntimeRow | null): ProviderRuntimeState {
 }
 
 function toThreadSession(row: ProviderRuntimeSessionRow): ThreadProviderSession {
+  const runtimePayload = parseJson(row.runtime_payload)
+  const hydratedRuntimePayload =
+    row.provider_thread_id && (
+      runtimePayload === null
+      || !isRecord(runtimePayload)
+      || !isRecord(runtimePayload.resumeCursor)
+    )
+      ? {
+          ...(isRecord(runtimePayload) ? runtimePayload : {}),
+          resumeCursor: {
+            threadId: row.provider_thread_id,
+          },
+        }
+      : runtimePayload
+
   return {
     threadId: row.thread_id,
     provider: "codex",
@@ -145,7 +164,7 @@ function toThreadSession(row: ProviderRuntimeSessionRow): ThreadProviderSession 
     updatedAt: row.updated_at,
     providerThreadId: row.provider_thread_id,
     authState: row.auth_state,
-    runtimePayload: parseJson(row.runtime_payload),
+    runtimePayload: hydratedRuntimePayload,
     cwd: row.cwd,
   }
 }
