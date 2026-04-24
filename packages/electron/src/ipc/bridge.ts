@@ -16,6 +16,7 @@ import path from "node:path"
 import {
   type AttachmentMetadataLookupParams,
   type TurnAttachmentInput,
+  type WorkspaceFileSearchParams,
   IpcChannel,
   type CodexAuthResult,
   type DesktopBootstrap,
@@ -47,6 +48,7 @@ import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 import { PluginRuntimeLogBuffer } from "../plugins/plugin-runtime-log-buffer.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "../push/push-manager.js"
+import { createWorkspaceFileSearch } from "./workspace-file-search.js"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 let defaultPushManager: PushManager | null = null
@@ -146,6 +148,8 @@ export function registerIpcHandlers(
   bootstrap: DesktopBootstrap,
   runtime?: { pluginManager: PluginManager; pluginAuthService: PluginAuthService; pluginEnabledStore?: PluginEnabledStore; pluginRuntimeLogs?: PluginRuntimeLogBuffer; pushManager?: PushManager },
 ): { pluginManager: PluginManager; pluginAuthService: PluginAuthService } {
+  const workspaceFileSearch = createWorkspaceFileSearch()
+
   registerHandler(IPC_CHANNELS.APP_GET_PATH, (_event, name: string) => {
     return app.getPath(name as Parameters<typeof app.getPath>[0])
   })
@@ -213,9 +217,20 @@ export function registerIpcHandlers(
   registerHandler(
     IPC_CHANNELS.FILE_GET_ATTACHMENT_METADATA,
     (_event, params: AttachmentMetadataLookupParams): TurnAttachmentInput[] => {
-      return params.paths
+      const results = params.paths
         .map((filePath) => buildAttachmentMetadata(filePath))
         .filter((entry): entry is TurnAttachmentInput => entry !== null)
+      for (const entry of results) {
+        workspaceFileSearch.recordRecent(entry.path)
+      }
+      return results
+    },
+  )
+
+  registerHandler(
+    IPC_CHANNELS.FILE_SEARCH_WORKSPACE,
+    (_event, params: WorkspaceFileSearchParams): Promise<TurnAttachmentInput[]> => {
+      return workspaceFileSearch(params)
     },
   )
 

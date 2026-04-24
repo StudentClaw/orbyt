@@ -195,7 +195,6 @@ describe("useChat", () => {
     expect(args[0]).toBe("thread-1")
     expect(typeof args[1]).toBe("string")
     const promptContent = args[1] as string
-    console.log("promptContent =", JSON.stringify(promptContent))
     expect(promptContent.startsWith("Referenced Canvas assignments:")).toBe(true)
     expect(promptContent).toContain("canvas-course:42:assignment:12345")
     expect(promptContent).toContain("Review this")

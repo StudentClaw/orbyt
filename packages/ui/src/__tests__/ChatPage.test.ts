@@ -50,6 +50,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       completedAt: null,
       skill: null,
       attachments: [],
+      references: [],
     },
   ],
   pendingApprovals: [],

@@ -254,6 +254,39 @@ export const OrchestrationTurnAttachment = Schema.Struct({
 })
 
 /**
+ * Kinds of non-filesystem references a turn can carry. Future kinds (for
+ * example `canvas-page`, `thread`, `memory`) are additive without a schema
+ * migration of existing stored references.
+ */
+export const TurnReferenceKind = Schema.Literal("canvas-assignment")
+
+/**
+ * A late-bound reference attached to a turn. References do not resolve
+ * content up front; they carry only a stable pointer that Codex's MCP tools
+ * resolve at tool-call time. This keeps turn payloads small and avoids
+ * mixing filesystem invariants into `TurnAttachmentInput`.
+ */
+export const TurnReferenceInput = Schema.Struct({
+  kind: TurnReferenceKind,
+  id: Schema.String.pipe(Schema.maxLength(512)),
+  label: Schema.String.pipe(Schema.maxLength(255)),
+  url: Schema.NullOr(Schema.String.pipe(Schema.maxLength(2048))),
+})
+
+/**
+ * A turn reference as persisted and returned in orchestration snapshots.
+ * `id` is the generated row id; `referenceId` is the caller-provided stable
+ * pointer (for example `canvas-course:42:assignment:12345`).
+ */
+export const OrchestrationTurnReference = Schema.Struct({
+  id: Schema.String,
+  kind: TurnReferenceKind,
+  referenceId: Schema.String,
+  label: Schema.String,
+  url: Schema.NullOr(Schema.String),
+})
+
+/**
  * Snapshot of a persisted orchestration turn.
  */
 export const OrchestrationTurn = Schema.Struct({
@@ -267,6 +300,7 @@ export const OrchestrationTurn = Schema.Struct({
   completedAt: Schema.NullOr(Schema.String),
   skill: Schema.NullOr(Schema.Struct({ id: SkillId, name: Schema.String })),
   attachments: Schema.Array(OrchestrationTurnAttachment),
+  references: Schema.Array(OrchestrationTurnReference),
 })
 
 export const ProviderRuntimeStatus = Schema.Literal(
@@ -437,6 +471,7 @@ export const SendTurnParams = Schema.Struct({
   threadId: ThreadId,
   content: Schema.String.pipe(Schema.maxLength(MAX_TURN_CONTENT_LENGTH)),
   attachments: Schema.Array(TurnAttachmentInput),
+  references: Schema.optional(Schema.Array(TurnReferenceInput)),
   skillId: Schema.optional(SkillId),
   model: Schema.optional(ChatModelId),
 })
@@ -661,6 +696,9 @@ export type OrchestrationThread = Schema.Schema.Type<typeof OrchestrationThread>
 export type TurnAttachmentKind = Schema.Schema.Type<typeof TurnAttachmentKind>
 export type TurnAttachmentInput = Schema.Schema.Type<typeof TurnAttachmentInput>
 export type OrchestrationTurnAttachment = Schema.Schema.Type<typeof OrchestrationTurnAttachment>
+export type TurnReferenceKind = Schema.Schema.Type<typeof TurnReferenceKind>
+export type TurnReferenceInput = Schema.Schema.Type<typeof TurnReferenceInput>
+export type OrchestrationTurnReference = Schema.Schema.Type<typeof OrchestrationTurnReference>
 
 /**
  * Runtime type for turn snapshots.

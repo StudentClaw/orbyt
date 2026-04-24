@@ -116,6 +116,7 @@ describe("chat UI state", () => {
           completedAt: "2026-04-11T00:02:01.000Z",
           skill: null,
           attachments: [],
+          references: [],
         },
       ],
       pendingApprovals: [],
@@ -271,6 +272,7 @@ describe("chat UI state", () => {
         completedAt: null,
         skill: null,
         attachments: [],
+        references: [],
       },
     }, 2)
 
@@ -290,6 +292,7 @@ describe("chat UI state", () => {
         completedAt: null,
         skill: null,
         attachments: [],
+        references: [],
       },
     }, 3)
 

@@ -21,6 +21,7 @@ export const IpcChannel = {
   FILE_OPEN_DIALOG: "file:open-dialog",
   FILE_SELECT_ATTACHMENTS: "file:select-attachments",
   FILE_GET_ATTACHMENT_METADATA: "file:get-attachment-metadata",
+  FILE_SEARCH_WORKSPACE: "file:search-workspace",
   FILE_SAVE_DIALOG: "file:save-dialog",
   FILE_REVEAL_IN_FOLDER: "file:reveal-in-folder",
   CODEX_AUTH_START: "codex:auth-start",
@@ -119,6 +120,13 @@ export type SelectAttachmentsParams = {
 
 export type AttachmentMetadataLookupParams = {
   readonly paths: readonly string[]
+}
+
+export type WorkspaceFileSearchParams = {
+  readonly workspaceRoot: string
+  readonly query: string
+  readonly limit?: number
+  readonly maxDepth?: number
 }
 
 export type RevealFileInFolderParams = {
@@ -249,6 +257,7 @@ export type IpcInvokeArgsMap = {
   }]
   [IpcChannel.FILE_SELECT_ATTACHMENTS]: [params?: SelectAttachmentsParams]
   [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: [params: AttachmentMetadataLookupParams]
+  [IpcChannel.FILE_SEARCH_WORKSPACE]: [params: WorkspaceFileSearchParams]
   [IpcChannel.FILE_SAVE_DIALOG]: [options?: { defaultPath?: string }]
   [IpcChannel.FILE_REVEAL_IN_FOLDER]: [params: RevealFileInFolderParams]
   [IpcChannel.CODEX_AUTH_START]: []
@@ -282,6 +291,7 @@ export type IpcInvokeResultMap = {
   [IpcChannel.FILE_OPEN_DIALOG]: string | null
   [IpcChannel.FILE_SELECT_ATTACHMENTS]: string[] | null
   [IpcChannel.FILE_GET_ATTACHMENT_METADATA]: TurnAttachmentInput[]
+  [IpcChannel.FILE_SEARCH_WORKSPACE]: TurnAttachmentInput[]
   [IpcChannel.FILE_SAVE_DIALOG]: string | null
   [IpcChannel.FILE_REVEAL_IN_FOLDER]: boolean
   [IpcChannel.CODEX_AUTH_START]: CodexAuthResult

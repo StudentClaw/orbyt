@@ -7,10 +7,17 @@ import {
   type ProviderPendingApproval,
   type ThreadAccessMode,
   type TurnAttachmentInput,
+  type TurnReferenceInput,
 } from "@orbyt/contracts"
 import { PlusIcon, SquareIcon } from "lucide-react"
 import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
 import { SkillPicker, filterSkills, type SkillPickerEntry } from "@/components/chat/SkillPicker"
+import {
+  MentionPicker,
+  type AssignmentPickerEntry,
+  type FilePickerEntry,
+  type MentionPickerHandle,
+} from "@/components/chat/MentionPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
 import {
   type PromptInputMessage,
@@ -44,9 +51,14 @@ interface PromptInputProps {
   readonly onSend: (input: {
     content: string
     attachments: readonly TurnAttachmentInput[]
+    references: readonly TurnReferenceInput[]
     skillId?: string | null
   }) => void | Promise<void>
   readonly skills?: readonly SkillPickerEntry[]
+  readonly assignments?: readonly AssignmentPickerEntry[]
+  readonly canReadCanvas?: boolean
+  readonly workspaceRoot?: string | null
+  readonly onRequestCanvasAccess?: () => void
   readonly onForkSkill?: (skill: SkillPickerEntry) => void
   readonly onManageSkillPermissions?: (skill: SkillPickerEntry) => void
   readonly onInterrupt: () => void
@@ -327,6 +339,10 @@ export function PromptInput({
   interruptPending = false,
   interruptError = null,
   skills = [],
+  assignments = [],
+  canReadCanvas = true,
+  workspaceRoot = null,
+  onRequestCanvasAccess,
   onForkSkill,
   onManageSkillPermissions,
 }: PromptInputProps) {
@@ -338,9 +354,14 @@ export function PromptInput({
   const [showSkillPicker, setShowSkillPicker] = useState(false)
   const [skillFilter, setSkillFilter] = useState("")
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0)
+  const [showMentionPicker, setShowMentionPicker] = useState(false)
+  const [mentionFilter, setMentionFilter] = useState("")
+  const [mentionFiles, setMentionFiles] = useState<readonly FilePickerEntry[]>([])
+  const [mentionRecents, setMentionRecents] = useState<readonly FilePickerEntry[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounterRef = useRef(0)
   const composerRef = useRef<RichComposerHandle>(null)
+  const mentionPickerRef = useRef<MentionPickerHandle>(null)
 
   const isConnected = connectionState === "connected"
   const stopPending = status === "interrupting" || interruptPending
@@ -475,10 +496,103 @@ export function PromptInput({
     }
   }, [])
 
+  const runMentionFileSearch = useCallback(
+    async (query: string) => {
+      if (!window.electronAPI?.invoke || !workspaceRoot) return
+      try {
+        const results = await window.electronAPI.invoke(
+          IpcChannel.FILE_SEARCH_WORKSPACE,
+          { workspaceRoot, query },
+        )
+        const entries: FilePickerEntry[] = results.map((result) => ({
+          path: result.path,
+          label: result.name,
+          mimeType: result.mimeType ?? null,
+          sizeBytes: result.sizeBytes ?? null,
+          kind: "file",
+        }))
+        setMentionFiles(entries)
+        if (query.trim() === "") {
+          setMentionRecents(entries.slice(0, 6))
+        }
+      } catch {
+        /* swallow; empty results are acceptable */
+      }
+    },
+    [workspaceRoot],
+  )
+
+  const handleMentionTrigger = useCallback(
+    (filter: string, show: boolean) => {
+      setShowMentionPicker(show)
+      setMentionFilter(show ? filter : "")
+      if (show) {
+        void runMentionFileSearch(filter)
+      }
+    },
+    [runMentionFileSearch],
+  )
+
+  const handleMentionDismiss = useCallback(() => {
+    setShowMentionPicker(false)
+    setMentionFilter("")
+    composerRef.current?.focus()
+  }, [])
+
+  const handleSelectAssignment = useCallback(
+    (entry: AssignmentPickerEntry) => {
+      composerRef.current?.insertAssignment({
+        id: entry.id,
+        label: entry.label,
+        url: entry.url,
+      })
+      setShowMentionPicker(false)
+      setMentionFilter("")
+    },
+    [],
+  )
+
+  const handleSelectFile = useCallback(
+    async (entry: FilePickerEntry) => {
+      composerRef.current?.insertFile({
+        label: entry.label,
+        path: entry.path,
+        mimeType: entry.mimeType ?? null,
+        sizeBytes: entry.sizeBytes ?? null,
+        kind: entry.kind === "directory" ? "file" : (entry.kind ?? "file"),
+      })
+      setShowMentionPicker(false)
+      setMentionFilter("")
+
+      const metadata = await resolveAttachmentMetadata([entry.path])
+      if (metadata.length === 0) {
+        setAttachmentError("Selected file could not be attached.")
+        return
+      }
+      setAttachments((current) =>
+        mergeComposerAttachments(current, metadata.map(toComposerAttachment)),
+      )
+      setAttachmentError(null)
+    },
+    [resolveAttachmentMetadata],
+  )
+
+  const handleBrowseFiles = useCallback(async () => {
+    setShowMentionPicker(false)
+    setMentionFilter("")
+    await handleAddAttachments()
+  }, [handleAddAttachments])
+
   const handleActualSubmit = useCallback(async () => {
     const text = composerRef.current?.getText() ?? ""
     const skillId = composerRef.current?.getSkillId() ?? null
-    if ((!text && attachments.length === 0 && !skillId) || waitingForTurn || !isConnected || disabled) {
+    const references = composerRef.current?.getReferences() ?? []
+    if (
+      (!text && attachments.length === 0 && !skillId && references.length === 0)
+      || waitingForTurn
+      || !isConnected
+      || disabled
+    ) {
       return
     }
 
@@ -490,6 +604,7 @@ export function PromptInput({
     await onSend({
       content: text,
       attachments: validatedAttachments,
+      references,
       ...(skillId ? { skillId } : {}),
     })
 
@@ -512,6 +627,31 @@ export function PromptInput({
 
   const handleComposerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (showMentionPicker) {
+        if (event.key === "Escape") {
+          event.preventDefault()
+          handleMentionDismiss()
+          return
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault()
+          mentionPickerRef.current?.moveHighlight(1)
+          return
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault()
+          mentionPickerRef.current?.moveHighlight(-1)
+          return
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          if (mentionPickerRef.current?.hasHighlight()) {
+            event.preventDefault()
+            mentionPickerRef.current.selectHighlighted()
+            return
+          }
+        }
+      }
+
       if (!showSkillPicker) return
 
       if (visibleSkills.length > 0) {
@@ -548,7 +688,7 @@ export function PromptInput({
         handleSkillDismiss()
       }
     },
-    [showSkillPicker, visibleSkills, highlightedSkillIndex, handleSkillDismiss],
+    [showSkillPicker, showMentionPicker, visibleSkills, highlightedSkillIndex, handleSkillDismiss, handleMentionDismiss],
   )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
@@ -728,6 +868,59 @@ export function PromptInput({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <DropdownMenu
+            open={showMentionPicker}
+            onOpenChange={(open) => {
+              if (!open) {
+                handleMentionDismiss()
+              }
+            }}
+            modal={false}
+          >
+            <DropdownMenuTrigger asChild>
+              <span
+                aria-hidden="true"
+                tabIndex={-1}
+                className="pointer-events-none absolute left-3 right-3 top-0 block h-0"
+                data-testid="mention-picker-anchor"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onInteractOutside={(e) => {
+                const target = e.target as Element | null
+                if (!target) return
+                if (target.closest('[data-testid="composer-area"]')) {
+                  e.preventDefault()
+                  return
+                }
+                if (target.closest('[data-slot="dropdown-menu-content"]')) {
+                  e.preventDefault()
+                }
+              }}
+              className="w-auto max-w-[calc(100vw-2rem)] p-1"
+              data-testid="mention-picker-content"
+            >
+              <MentionPicker
+                ref={mentionPickerRef}
+                filter={mentionFilter}
+                assignments={assignments}
+                files={mentionFiles}
+                recents={mentionRecents}
+                canReadCanvas={canReadCanvas}
+                onSelectAssignment={handleSelectAssignment}
+                onSelectFile={(entry) => void handleSelectFile(entry)}
+                onBrowseFiles={() => void handleBrowseFiles()}
+                onRequestCanvasAccess={onRequestCanvasAccess}
+                workspaceRoot={workspaceRoot}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <RegistryPromptInput
             onSubmit={handleSubmit}
             inputGroupClassName={cn(
@@ -760,6 +953,7 @@ export function PromptInput({
               className={cn("px-4 pb-2.5", attachments.length > 0 ? "pt-2.5" : "pt-3.5")}
               onContentChange={setIsComposerEmpty}
               onSkillTrigger={handleSkillTrigger}
+              onMentionTrigger={handleMentionTrigger}
               onSubmit={handleComposerSubmit}
               onKeyDown={handleComposerKeyDown}
             />

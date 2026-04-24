@@ -43,6 +43,7 @@ describe("Database migrations", () => {
     expect(tables).toContain("queued_provider_turns")
     expect(tables).toContain("chat_workspaces")
     expect(tables).toContain("orchestration_turn_attachments")
+    expect(tables).toContain("orchestration_turn_references")
 
     db.close()
   })
@@ -55,7 +56,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(16)
+    expect(version?.version).toBe(17)
 
     db.close()
   })
@@ -67,9 +68,42 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(16)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+    expect(rows.length).toBe(17)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
+
+    db.close()
+  })
+
+  test("migration 017 creates orchestration_turn_references with expected columns", () => {
+    const db = createBunTestDatabase(":memory:")
+    runBunMigrations(db)
+
+    const columns = db
+      .query<{ name: string }, []>(
+        "PRAGMA table_info(orchestration_turn_references)",
+      )
+      .all()
+      .map((column) => column.name)
+
+    expect(columns).toEqual([
+      "id",
+      "turn_id",
+      "kind",
+      "reference_id",
+      "label",
+      "url",
+      "position",
+    ])
+
+    const indexes = db
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'orchestration_turn_references'",
+      )
+      .all()
+      .map((row) => row.name)
+
+    expect(indexes).toContain("orchestration_turn_references_turn_id_idx")
 
     db.close()
   })
@@ -112,7 +146,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(16)
+    expect(version?.version).toBe(17)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -332,7 +366,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(16)
+    expect(version?.version).toBe(17)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -441,7 +475,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(16)
+    expect(version?.version).toBe(17)
     expect(userPreferenceColumns).toContain("max_session_mins")
     expect(userPreferenceColumns).toContain("quiet_hours_start")
     expect(userPreferenceColumns).toContain("memory_graph_path")

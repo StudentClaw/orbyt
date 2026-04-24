@@ -50,6 +50,7 @@ import {
   type SetStepStatusParams,
   type StudentPreference,
   type TurnAttachmentInput,
+  type TurnReferenceInput,
   type UpdatePreferencesParams,
   type WeeklyInsight,
   SkillsListResult,
@@ -160,6 +161,7 @@ export interface WsRpcClient {
       attachments: readonly TurnAttachmentInput[],
       model?: string | null,
       skillId?: string | null,
+      references?: readonly TurnReferenceInput[],
     ) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
@@ -309,13 +311,14 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
       }),
     deleteThread: async (threadId) =>
       transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
-    sendTurn: async (threadId, content, attachments, model, skillId) =>
+    sendTurn: async (threadId, content, attachments, model, skillId, references) =>
       transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, {
         threadId,
         content,
         attachments,
         ...(model ? { model } : {}),
         ...(skillId ? { skillId } : {}),
+        ...(references && references.length > 0 ? { references } : {}),
       }),
     interruptTurn: async (threadId) =>
       transport.request<InterruptTurnResult>(RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN, { threadId }),

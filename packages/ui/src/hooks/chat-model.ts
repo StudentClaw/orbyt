@@ -206,7 +206,7 @@ export function buildChatMessages(
       {
         id: `${turn.id}:user`,
         role: "user",
-        content: extractDisplayContent(turn.input, turn.attachments),
+        content: extractDisplayContent(turn.input, turn.attachments, turn.references),
         timestamp,
         attachments: turn.attachments,
       },

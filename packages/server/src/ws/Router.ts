@@ -570,6 +570,7 @@ async function handleSendTurn(
       effectiveContent,
       decoded.attachments,
       decoded.model ?? null,
+      decoded.references ?? [],
     ),
   )
 }

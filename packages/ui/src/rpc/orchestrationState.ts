@@ -8,6 +8,7 @@ import type {
   ProviderRuntimeState,
   ThreadAccessMode,
   TurnAttachmentInput,
+  TurnReferenceInput,
 } from "@orbyt/contracts"
 import type { ToolCallInfo } from "@/hooks/chat-model"
 import type { WsRpcClient } from "./wsRpcClient"
@@ -659,8 +660,16 @@ export async function sendOrchestrationTurn(
   attachments: readonly TurnAttachmentInput[],
   model?: string | null,
   skillId?: string | null,
+  references?: readonly TurnReferenceInput[],
 ): Promise<string> {
-  const result = await client.orchestration.sendTurn(threadId, content, attachments, model, skillId)
+  const result = await client.orchestration.sendTurn(
+    threadId,
+    content,
+    attachments,
+    model,
+    skillId,
+    references,
+  )
   return result.turnId
 }
 

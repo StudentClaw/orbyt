@@ -3,6 +3,7 @@ import type {
   ProviderApprovalDecision,
   ThreadAccessMode,
   TurnAttachmentInput,
+  TurnReferenceInput,
 } from "@orbyt/contracts"
 import {
   useChatUiActions,
@@ -40,6 +41,7 @@ export interface ChatSelectionInput {
 export interface ChatSendInput {
   readonly content: string
   readonly attachments: readonly TurnAttachmentInput[]
+  readonly references?: readonly TurnReferenceInput[]
   readonly skillId?: string | null
 }
 

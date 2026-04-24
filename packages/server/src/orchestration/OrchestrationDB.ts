@@ -8,10 +8,13 @@ import {
   type OrchestrationThread,
   type OrchestrationTurn,
   type OrchestrationTurnAttachment,
+  type OrchestrationTurnReference,
   type OrchestrationWorkspace,
   type ProviderRuntimeEvent,
   type ThreadAccessMode,
   type TurnAttachmentInput,
+  type TurnReferenceInput,
+  type TurnReferenceKind,
   type WorkspaceId,
 } from "@orbyt/contracts"
 import { createId } from "@orbyt/shared-runtime"
@@ -64,6 +67,16 @@ export type TurnAttachmentRow = {
   mime_type: string | null
   size_bytes: number | null
   kind: OrchestrationTurnAttachment["kind"]
+  position: number
+}
+
+export type TurnReferenceRow = {
+  id: string
+  turn_id: string
+  kind: TurnReferenceKind
+  reference_id: string
+  label: string
+  url: string | null
   position: number
 }
 
@@ -157,9 +170,20 @@ export function mapTurnAttachmentRow(row: TurnAttachmentRow): OrchestrationTurnA
   }
 }
 
+export function mapTurnReferenceRow(row: TurnReferenceRow): OrchestrationTurnReference {
+  return {
+    id: row.id,
+    kind: row.kind,
+    referenceId: row.reference_id,
+    label: row.label,
+    url: row.url,
+  }
+}
+
 export function mapTurnRow(
   row: TurnRow,
   attachments: readonly OrchestrationTurnAttachment[] = [],
+  references: readonly OrchestrationTurnReference[] = [],
 ): OrchestrationTurn {
   return {
     id: row.id as OrchestrationTurn["id"],
@@ -172,6 +196,7 @@ export function mapTurnRow(
     completedAt: row.completed_at,
     skill: null,
     attachments: [...attachments],
+    references: [...references],
   }
 }
 
@@ -266,6 +291,95 @@ export function deleteTurnAttachmentsForThreadIds(
 }
 
 // ============================================================================
+// Reference DB helpers
+// ============================================================================
+
+export function readTurnReferences(
+  database: DatabaseService,
+  turnId: string,
+): readonly OrchestrationTurnReference[] {
+  return database
+    .query<TurnReferenceRow>(
+      `SELECT id, turn_id, kind, reference_id, label, url, position
+       FROM orchestration_turn_references
+       WHERE turn_id = ?
+       ORDER BY position ASC`,
+      [turnId],
+    )
+    .map(mapTurnReferenceRow)
+}
+
+export function readTurnReferencesByTurnIds(
+  database: DatabaseService,
+  turnIds: readonly string[],
+): ReadonlyMap<string, readonly OrchestrationTurnReference[]> {
+  if (turnIds.length === 0) {
+    return new Map()
+  }
+
+  const placeholders = turnIds.map(() => "?").join(", ")
+  const rows = database.query<TurnReferenceRow>(
+    `SELECT id, turn_id, kind, reference_id, label, url, position
+     FROM orchestration_turn_references
+     WHERE turn_id IN (${placeholders})
+     ORDER BY turn_id ASC, position ASC`,
+    [...turnIds],
+  )
+
+  const grouped = new Map<string, OrchestrationTurnReference[]>()
+  for (const row of rows) {
+    const entries = grouped.get(row.turn_id) ?? []
+    entries.push(mapTurnReferenceRow(row))
+    grouped.set(row.turn_id, entries)
+  }
+
+  return grouped
+}
+
+export function persistTurnReferences(
+  database: DatabaseService,
+  turnId: string,
+  references: readonly OrchestrationTurnReference[],
+): void {
+  references.forEach((reference, index) => {
+    database.execute(
+      `INSERT INTO orchestration_turn_references (
+         id, turn_id, kind, reference_id, label, url, position
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        reference.id,
+        turnId,
+        reference.kind,
+        reference.referenceId,
+        reference.label,
+        reference.url,
+        index,
+      ],
+    )
+  })
+}
+
+export function deleteTurnReferencesForThreadIds(
+  database: DatabaseService,
+  threadIds: readonly string[],
+): void {
+  if (threadIds.length === 0) {
+    return
+  }
+
+  const placeholders = threadIds.map(() => "?").join(", ")
+  database.execute(
+    `DELETE FROM orchestration_turn_references
+     WHERE turn_id IN (
+       SELECT id
+       FROM orchestration_turns
+       WHERE thread_id IN (${placeholders})
+     )`,
+    [...threadIds],
+  )
+}
+
+// ============================================================================
 // DB read helpers
 // ============================================================================
 
@@ -322,7 +436,13 @@ export function readTurn(database: DatabaseService, turnId: string): Orchestrati
      WHERE id = ?`,
     [turnId],
   )
-  return row ? mapTurnRow(row, readTurnAttachments(database, turnId)) : null
+  return row
+    ? mapTurnRow(
+        row,
+        readTurnAttachments(database, turnId),
+        readTurnReferences(database, turnId),
+      )
+    : null
 }
 
 export function readWorkspaceThreadRows(
@@ -677,5 +797,17 @@ export function buildTurnAttachments(
     mimeType: attachment.mimeType,
     sizeBytes: attachment.sizeBytes,
     kind: attachment.kind,
+  }))
+}
+
+export function buildTurnReferences(
+  references: readonly TurnReferenceInput[],
+): readonly OrchestrationTurnReference[] {
+  return references.map((reference) => ({
+    id: createId("reference"),
+    kind: reference.kind,
+    referenceId: reference.id,
+    label: reference.label,
+    url: reference.url,
   }))
 }

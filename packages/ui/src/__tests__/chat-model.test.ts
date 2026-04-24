@@ -39,6 +39,7 @@ function makeTurn(overrides: Partial<OrchestrationTurn> = {}): OrchestrationTurn
     completedAt: null,
     skill: null,
     attachments: [],
+    references: [],
     ...overrides,
   } as OrchestrationTurn
 }
