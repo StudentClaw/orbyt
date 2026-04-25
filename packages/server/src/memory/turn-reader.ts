@@ -66,6 +66,31 @@ export function readTurnsSince(
   }))
 }
 
+export function readTurnsForDay(
+  db: DatabaseService,
+  dayStartIso: string,
+  dayEndIso: string,
+): CompletedTurn[] {
+  const rows = db.query<TurnRow>(
+    `SELECT id, thread_id, input_text, output_text, completed_at
+     FROM orchestration_turns
+     WHERE status = 'completed'
+       AND completed_at IS NOT NULL
+       AND completed_at >= ?
+       AND completed_at < ?
+     ORDER BY completed_at ASC`,
+    [dayStartIso, dayEndIso],
+  )
+
+  return rows.map((r) => ({
+    id: r.id,
+    threadId: r.thread_id,
+    input: r.input_text,
+    output: r.output_text,
+    completedAt: r.completed_at,
+  }))
+}
+
 export function formatTurnsForPrompt(turns: readonly CompletedTurn[]): string {
   if (turns.length === 0) return "_No conversation turns in this window._"
   return turns

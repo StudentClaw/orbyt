@@ -246,6 +246,9 @@ async function handleStreamMethod(
     case RPC_METHODS.PLANNER_SUBSCRIBE_CHECK_INS:
       dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.PLANNER_SESSION_CHECK_IN)
       return encodeSuccess(request.id, { subscribed: true })
+    case RPC_METHODS.MEMORY_SUBSCRIBE_UPDATES:
+      dependencies.pushBus.subscribe(ws, PUSH_CHANNELS.MEMORY_UPDATED)
+      return encodeSuccess(request.id, { subscribed: true })
     default:
       return null
   }
@@ -977,13 +980,47 @@ async function handleMemorizeMethod(
   request: RpcRequest,
   dependencies: RouteDependencies,
 ): Promise<string | null> {
-  const { id, method } = request
+  const { id, method, params } = request
   switch (method) {
-    case RPC_METHODS.MEMORIZE_RUN:
-      return encodeSuccess(id, await dependencies.memorize.runIfNeeded(new Date()))
+    case RPC_METHODS.MEMORIZE_RUN: {
+      const trigger = parseMemorizeRunTrigger(params)
+      const outcome = await dependencies.memorize.runIfNeeded(new Date(), {
+        trigger,
+      })
+      if (outcome.ran && outcome.result) {
+        void dependencies.pushBus
+          .publish(PUSH_CHANNELS.MEMORY_UPDATED, {
+            trigger: outcome.trigger,
+            dailyFileWritten: outcome.result.dailyFileWritten,
+            weeklyFileWritten: outcome.result.weeklyFileWritten,
+            recapFileWritten: outcome.result.recapFileWritten,
+            at: new Date().toISOString(),
+          })
+          .catch((err) => {
+            process.stderr.write(
+              `Failed to publish memory.updated: ${String(err)}\n`,
+            )
+          })
+      }
+      return encodeSuccess(id, outcome)
+    }
     default:
       return null
   }
+}
+
+function parseMemorizeRunTrigger(
+  params: unknown,
+): "auto" | "recap" | "manual" {
+  if (
+    typeof params === "object" &&
+    params !== null &&
+    "trigger" in params
+  ) {
+    const t = (params as Record<string, unknown>)["trigger"]
+    if (t === "auto" || t === "recap" || t === "manual") return t
+  }
+  return "manual"
 }
 
 export async function routeMessage(

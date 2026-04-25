@@ -52,6 +52,7 @@ import {
   type TurnAttachmentInput,
   type TurnReferenceInput,
   type UpdatePreferencesParams,
+  type MemoryUpdatedEvent,
   type WeeklyInsight,
   SkillsListResult,
   ForkSkillResult,
@@ -241,6 +242,12 @@ export interface WsRpcClient {
   readonly dev: {
     readonly resetSoft: () => Promise<{ ok: boolean }>
     readonly resetHard: () => Promise<{ ok: boolean }>
+  }
+  readonly memory: {
+    readonly onMemoryUpdated: (
+      listener: (event: MemoryUpdatedEvent) => void,
+      options?: StreamSubscriptionOptions,
+    ) => () => void
   }
   readonly skills: {
     readonly list: () => Promise<SkillsListResult>
@@ -471,6 +478,20 @@ function createPlannerApi(transport: WsTransport): WsRpcClient["planner"] {
   }
 }
 
+function createMemoryApi(transport: WsTransport): WsRpcClient["memory"] {
+  return {
+    onMemoryUpdated: (listener, options) =>
+      transport.subscribe(
+        PUSH_CHANNELS.MEMORY_UPDATED,
+        RPC_METHODS.MEMORY_SUBSCRIBE_UPDATES,
+        (push) => {
+          listener(push.data as MemoryUpdatedEvent)
+        },
+        options,
+      ),
+  }
+}
+
 function createActivityApi(transport: WsTransport): WsRpcClient["activity"] {
   return {
     generateWeeklyInsight: () => transport.request(RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT, {}),
@@ -535,6 +556,7 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
     onboarding: createOnboardingApi(transport),
     dev: createDevApi(transport),
     skills: createSkillsApi(transport),
+    memory: createMemoryApi(transport),
     reconnect: () => transport.reconnect(),
     dispose: () => transport.dispose(),
   }

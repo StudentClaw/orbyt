@@ -6,7 +6,11 @@ import { MemorizeScheduler } from "./memorize-scheduler.js"
 const AUTH_PROTOCOL_PREFIX = "auth."
 const TRIGGER_TIMEOUT_MS = 60_000
 
-async function triggerMemorizeRun(port: number, authToken: string): Promise<void> {
+async function triggerMemorizeRun(
+  port: number,
+  authToken: string,
+  trigger: "auto" | "recap" | "manual" = "recap",
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, [
       WS_PROTOCOL,
@@ -34,7 +38,7 @@ async function triggerMemorizeRun(port: number, authToken: string): Promise<void
         kind: "request",
         method: RPC_METHODS.MEMORIZE_RUN,
         id: requestId,
-        params: {},
+        params: { trigger },
       }))
     })
 
@@ -83,7 +87,7 @@ export class MemorizeManager {
       getLastRunAt: this.deps.getLastRunAt,
       onRun: async () => {
         try {
-          await triggerMemorizeRun(this.deps.port, this.deps.authToken)
+          await triggerMemorizeRun(this.deps.port, this.deps.authToken, "recap")
         } catch (err) {
           this.deps.onError?.(err instanceof Error ? err : new Error(String(err)))
         }

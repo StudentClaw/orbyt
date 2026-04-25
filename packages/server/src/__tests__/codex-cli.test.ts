@@ -16,7 +16,11 @@ import {
   normalizeAgentMessagePhase,
   shouldTreatAgentMessageAsReasoning,
 } from "../ai/CodexCli.js"
-import type { ProviderRuntimeStoreService } from "../ai/ProviderRuntimeStore.js"
+import type {
+  ProviderRuntimeStoreService,
+  QueuedProviderTurn,
+  ThreadProviderSession,
+} from "../ai/ProviderRuntimeStore.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import { ConfigService } from "../config/ConfigService.js"
 import { defaultConfig } from "../config/defaults.js"
@@ -35,6 +39,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
 function createProviderRuntimeStore(): ProviderRuntimeStoreService {
   let state: ProviderRuntimeState = {
     adapter: "codex" as const,
@@ -43,6 +51,17 @@ function createProviderRuntimeStore(): ProviderRuntimeStoreService {
     lastError: null,
     queuedTurnCount: 0,
     lastUpdatedAt: new Date(0).toISOString(),
+  }
+  const threadSessions = new Map<string, ThreadProviderSession>()
+  const queuedTurns = new Map<string, QueuedProviderTurn>()
+
+  const refreshQueuedCount = async () => {
+    state = {
+      ...state,
+      queuedTurnCount: queuedTurns.size,
+      lastUpdatedAt: new Date().toISOString(),
+    }
+    return queuedTurns.size
   }
 
   return {
@@ -55,12 +74,68 @@ function createProviderRuntimeStore(): ProviderRuntimeStoreService {
       }
       return state
     },
-    getThreadSession: async () => null,
-    upsertThreadSession: async () => undefined,
-    enqueueTurn: async () => undefined,
-    dequeueTurn: async () => undefined,
-    listQueuedTurns: async () => [],
-    refreshQueuedCount: async () => 0,
+    getThreadSession: async (threadId) => {
+      const session = threadSessions.get(threadId) ?? null
+      if (!session?.providerThreadId) {
+        return session
+      }
+
+      const runtimePayload = session.runtimePayload
+      if (isRecord(runtimePayload) && isRecord(runtimePayload.resumeCursor)) {
+        return session
+      }
+
+      return {
+        ...session,
+        runtimePayload: {
+          ...(isRecord(runtimePayload) ? runtimePayload : {}),
+          resumeCursor: {
+            threadId: session.providerThreadId,
+          },
+        },
+      }
+    },
+    upsertThreadSession: async (threadId, patch) => {
+      const current = threadSessions.get(threadId)
+      const updatedAt = new Date().toISOString()
+      threadSessions.set(threadId, {
+        threadId,
+        provider: "codex",
+        status: patch.status ?? current?.status ?? state.status,
+        lastError: patch.lastError === undefined ? current?.lastError ?? null : patch.lastError,
+        updatedAt,
+        providerThreadId:
+          patch.providerThreadId === undefined
+            ? current?.providerThreadId ?? null
+            : patch.providerThreadId,
+        authState: patch.authState ?? current?.authState ?? state.authState,
+        runtimePayload:
+          patch.runtimePayload === undefined
+            ? current?.runtimePayload ?? null
+            : patch.runtimePayload,
+        cwd: patch.cwd === undefined ? current?.cwd ?? null : patch.cwd,
+      })
+    },
+    enqueueTurn: async (turnId, threadId, content) => {
+      const now = new Date().toISOString()
+      queuedTurns.set(turnId, {
+        turnId,
+        threadId,
+        content,
+        createdAt: queuedTurns.get(turnId)?.createdAt ?? now,
+        updatedAt: now,
+      })
+      await refreshQueuedCount()
+    },
+    dequeueTurn: async (turnId) => {
+      queuedTurns.delete(turnId)
+      await refreshQueuedCount()
+    },
+    listQueuedTurns: async () =>
+      Array.from(queuedTurns.values()).sort((left, right) =>
+        left.createdAt.localeCompare(right.createdAt) || left.turnId.localeCompare(right.turnId),
+      ),
+    refreshQueuedCount,
     drain: async () => undefined,
   }
 }
@@ -112,6 +187,7 @@ async function loadCodexCli(options: {
   readonly logPath: string
   readonly pluginGatewayHarness: ReturnType<typeof createPluginGatewayHarness>
   readonly codexRequestTimeoutMs?: number
+  readonly runtimeStore?: ProviderRuntimeStoreService
 }) {
   const configLayer = Layer.succeed(ConfigService, {
     ...defaultConfig,
@@ -126,7 +202,9 @@ async function loadCodexCli(options: {
   const codexLayer = CodexCliLive.pipe(
     Layer.provideMerge(configLayer),
     Layer.provideMerge(Layer.succeed(PluginGateway, options.pluginGatewayHarness.service)),
-    Layer.provideMerge(Layer.succeed(ProviderRuntimeStore, createProviderRuntimeStore())),
+    Layer.provideMerge(
+      Layer.succeed(ProviderRuntimeStore, options.runtimeStore ?? createProviderRuntimeStore()),
+    ),
   )
 
   const codex = await Effect.runPromise(
@@ -150,6 +228,15 @@ function createFakeCodexBinary(
   options?: {
     readonly approvalCommand?: string
     readonly emitNotificationsBeforeTurnStartResponse?: boolean
+    readonly threadResume?:
+      | {
+          readonly mode: "success"
+          readonly threadId?: string
+        }
+      | {
+          readonly mode: "recoverable-error" | "nonrecoverable-error"
+          readonly message?: string
+        }
   },
 ): string {
   const dir = createTempDir()
@@ -176,8 +263,9 @@ if (args[0] === "app-server") {
   const emitNotificationsBeforeTurnStartResponse = ${JSON.stringify(
     options?.emitNotificationsBeforeTurnStartResponse ?? false,
   )}
-  const providerThreadId = "provider_thread_1"
-  const providerTurnId = "provider_turn_1"
+  const threadResume = ${JSON.stringify(options?.threadResume ?? { mode: "success" })}
+  let nextStartedThreadIndex = 1
+  let nextTurnIndex = 1
 
   const rl = readline.createInterface({ input: process.stdin })
   rl.on("line", (line) => {
@@ -186,25 +274,68 @@ if (args[0] === "app-server") {
     }
 
     const message = JSON.parse(line)
+    const params =
+      message.params && typeof message.params === "object" && !Array.isArray(message.params)
+        ? message.params
+        : {}
     if (!message.method) {
       log({ type: "response", id: message.id, result: message.result ?? null })
       return
     }
 
-    log({ type: "request", method: message.method })
+    log({ type: "request", method: message.method, params })
 
     if (message.method === "initialized") {
       return
     }
 
-    const result =
-      message.method === "account/read"
-        ? { account: { type: "chatgpt" } }
-        : message.method === "thread/start"
-          ? { thread: { id: providerThreadId } }
-          : message.method === "turn/start"
-            ? { turn: { id: providerTurnId } }
-            : {}
+    if (message.method === "account/read") {
+      process.stdout.write(JSON.stringify({ id: message.id, result: { account: { type: "chatgpt" } } }) + "\\n")
+      return
+    }
+
+    if (message.method === "thread/start") {
+      const providerThreadId = "provider_thread_" + String(nextStartedThreadIndex++)
+      process.stdout.write(JSON.stringify({ id: message.id, result: { thread: { id: providerThreadId } } }) + "\\n")
+      return
+    }
+
+    if (message.method === "thread/resume") {
+      if (threadResume.mode === "recoverable-error" || threadResume.mode === "nonrecoverable-error") {
+        process.stdout.write(JSON.stringify({
+          id: message.id,
+          error: {
+            code: -32000,
+            message:
+              threadResume.message ??
+              (threadResume.mode === "recoverable-error"
+                ? "thread not found"
+                : "thread/resume permission denied"),
+          },
+        }) + "\\n")
+        return
+      }
+
+      const resumedThreadId =
+        threadResume.threadId ??
+        (typeof params.threadId === "string" && params.threadId.trim().length > 0
+          ? params.threadId
+          : "provider_thread_resumed")
+      process.stdout.write(JSON.stringify({ id: message.id, result: { thread: { id: resumedThreadId } } }) + "\\n")
+      return
+    }
+
+    if (message.method !== "turn/start") {
+      process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + "\\n")
+      return
+    }
+
+    const providerThreadId =
+      typeof params.threadId === "string" && params.threadId.trim().length > 0
+        ? params.threadId
+        : "provider_thread_unknown"
+    const providerTurnId = "provider_turn_" + String(nextTurnIndex++)
+    const result = { turn: { id: providerTurnId } }
 
     if (message.method === "turn/start" && emitNotificationsBeforeTurnStartResponse) {
       // Reproduce the race: flush the full notification stream for the turn
@@ -429,6 +560,473 @@ describe("CodexCli gateway wiring", () => {
       expect(requestMethods).toContain("config/mcpServer/reload")
     } finally {
       await codex.shutdown()
+    }
+  })
+
+  test("starts a new provider thread once and reuses it for later turns in the same runtime", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath)
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const { codex, readLogs } = await loadCodexCli({
+      codexBinaryPath: fakeCodexBinary,
+      logPath,
+      pluginGatewayHarness,
+      runtimeStore,
+    })
+
+    try {
+      await codex.streamTurn({
+        localThreadId: "thread_1",
+        localTurnId: "turn_1",
+        content: "First prompt",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await codex.streamTurn({
+        localThreadId: "thread_1",
+        localTurnId: "turn_2",
+        content: "Second prompt",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(80)
+
+      const requestMethods = readLogs()
+        .filter((entry) => entry.type === "request")
+        .map((entry) => entry.method)
+        .filter((method) =>
+          method === "thread/start" || method === "thread/resume" || method === "turn/start",
+        )
+
+      expect(requestMethods).toEqual([
+        "thread/start",
+        "turn/start",
+        "turn/start",
+      ])
+
+      const session = await runtimeStore.getThreadSession("thread_1")
+      expect(session?.providerThreadId).toBe("provider_thread_1")
+      expect(session?.runtimePayload).toMatchObject({
+        resumeCursor: {
+          threadId: "provider_thread_1",
+        },
+      })
+    } finally {
+      await codex.shutdown()
+    }
+  })
+
+  test("resumes a persisted provider thread when a cold runtime sends the next turn", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      threadResume: {
+        mode: "success",
+        threadId: "provider_thread_resumed",
+      },
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+
+    const runtimeA = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+    const runtimeB = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+
+    try {
+      await runtimeA.streamTurn({
+        localThreadId: "thread_resume",
+        localTurnId: "turn_1",
+        content: "Seed context",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(50)
+      await runtimeA.shutdown()
+
+      await runtimeB.streamTurn({
+        localThreadId: "thread_resume",
+        localTurnId: "turn_2",
+        content: "Continue from earlier context",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(80)
+
+      const requestEntries = readFileSync(logPath, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((entry) => entry.type === "request")
+      const requestMethods = requestEntries
+        .map((entry) => entry.method)
+        .filter((method) =>
+          method === "thread/start" || method === "thread/resume" || method === "turn/start",
+        )
+
+      expect(requestMethods).toEqual([
+        "thread/start",
+        "turn/start",
+        "thread/resume",
+        "turn/start",
+      ])
+      expect(requestEntries.find((entry) => entry.method === "thread/resume")?.params).toEqual(
+        expect.objectContaining({
+          threadId: "provider_thread_1",
+          cwd: "/repo",
+          model: defaultConfig.codexModel,
+          approvalPolicy: expect.anything(),
+          sandbox: expect.anything(),
+        }),
+      )
+
+      const session = await runtimeStore.getThreadSession("thread_resume")
+      expect(session?.providerThreadId).toBe("provider_thread_resumed")
+      expect(session?.runtimePayload).toMatchObject({
+        resumeCursor: {
+          threadId: "provider_thread_resumed",
+        },
+      })
+    } finally {
+      await runtimeA.shutdown()
+      await runtimeB.shutdown()
+    }
+  })
+
+  test("derives a resume cursor from legacy provider-thread rows before resuming", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      threadResume: {
+        mode: "success",
+        threadId: "provider_thread_normalized",
+      },
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+
+    await runtimeStore.upsertThreadSession("thread_legacy", {
+      providerThreadId: "provider_thread_legacy",
+      runtimePayload: null,
+      status: "idle",
+      authState: "authenticated",
+      cwd: "/repo",
+      lastError: null,
+    })
+
+    const runtime = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+
+    try {
+      await runtime.streamTurn({
+        localThreadId: "thread_legacy",
+        localTurnId: "turn_1",
+        content: "Continue old thread",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(80)
+
+      const requestEntries = readFileSync(logPath, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((entry) => entry.type === "request")
+
+      const requestMethods = requestEntries
+        .map((entry) => entry.method)
+        .filter((method) =>
+          method === "thread/start" || method === "thread/resume" || method === "turn/start",
+        )
+
+      expect(requestMethods).toEqual([
+        "thread/resume",
+        "turn/start",
+      ])
+      expect(requestEntries.find((entry) => entry.method === "thread/resume")?.params).toEqual(
+        expect.objectContaining({
+          threadId: "provider_thread_legacy",
+        }),
+      )
+
+      const session = await runtimeStore.getThreadSession("thread_legacy")
+      expect(session?.providerThreadId).toBe("provider_thread_normalized")
+      expect(session?.runtimePayload).toMatchObject({
+        resumeCursor: {
+          threadId: "provider_thread_normalized",
+        },
+      })
+    } finally {
+      await runtime.shutdown()
+    }
+  })
+
+  test("falls back to a fresh provider thread after a recoverable thread/resume failure", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      threadResume: {
+        mode: "recoverable-error",
+        message: "thread not found",
+      },
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+
+    const runtimeA = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+    const runtimeB = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+
+    try {
+      await runtimeA.streamTurn({
+        localThreadId: "thread_fallback",
+        localTurnId: "turn_1",
+        content: "Seed context",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(50)
+      await runtimeA.shutdown()
+
+      await runtimeB.streamTurn({
+        localThreadId: "thread_fallback",
+        localTurnId: "turn_2",
+        content: "Continue after fallback",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(80)
+
+      const requestMethods = readFileSync(logPath, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((entry) => entry.type === "request")
+        .map((entry) => entry.method)
+        .filter((method) =>
+          method === "thread/start" || method === "thread/resume" || method === "turn/start",
+        )
+
+      expect(requestMethods).toEqual([
+        "thread/start",
+        "turn/start",
+        "thread/resume",
+        "thread/start",
+        "turn/start",
+      ])
+
+      const session = await runtimeStore.getThreadSession("thread_fallback")
+      expect(session?.providerThreadId).toBe("provider_thread_1")
+      expect(session?.runtimePayload).toMatchObject({
+        resumeCursor: {
+          threadId: "provider_thread_1",
+        },
+      })
+    } finally {
+      await runtimeA.shutdown()
+      await runtimeB.shutdown()
+    }
+  })
+
+  test("surfaces non-recoverable thread/resume failures without starting a fresh thread", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath, {
+      threadResume: {
+        mode: "nonrecoverable-error",
+        message: "thread/resume permission denied",
+      },
+    })
+    const pluginGatewayHarness = createPluginGatewayHarness()
+
+    const runtimeA = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+    const runtimeB = createCodexRuntimeInstance({
+      config: {
+        ...defaultConfig,
+        wsAuthToken: "a".repeat(64),
+        codexBinaryPath: fakeCodexBinary,
+        codexRequestTimeoutMs: 5_000,
+        pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
+        pluginGatewayMcpBearerToken: "gateway-secret",
+        pluginGatewayMcpServerName: "student-claw",
+      },
+      pluginGateway: pluginGatewayHarness.service,
+      runtimeStore,
+    })
+
+    try {
+      await runtimeA.streamTurn({
+        localThreadId: "thread_fail",
+        localTurnId: "turn_1",
+        content: "Seed context",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(50)
+      await runtimeA.shutdown()
+
+      await expect(
+        runtimeB.streamTurn({
+          localThreadId: "thread_fail",
+          localTurnId: "turn_2",
+          content: "Continue after forbidden resume",
+          cwd: "/repo",
+          onToken: async () => undefined,
+          onReasoning: async () => undefined,
+          onCompleted: async () => undefined,
+          onInterrupted: async () => undefined,
+          onError: async () => undefined,
+          onMcpToolCall: async () => undefined,
+          onApprovalRequest: async () => undefined,
+        }),
+      ).rejects.toThrow(/thread\/resume permission denied/i)
+      await sleep(50)
+
+      const requestMethods = readFileSync(logPath, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((entry) => entry.type === "request")
+        .map((entry) => entry.method)
+        .filter((method) =>
+          method === "thread/start" || method === "thread/resume" || method === "turn/start",
+        )
+
+      expect(requestMethods).toEqual([
+        "thread/start",
+        "turn/start",
+        "thread/resume",
+      ])
+
+      const session = await runtimeStore.getThreadSession("thread_fail")
+      expect(session?.providerThreadId).toBe("provider_thread_1")
+      expect(session?.runtimePayload).toMatchObject({
+        resumeCursor: {
+          threadId: "provider_thread_1",
+        },
+      })
+    } finally {
+      await runtimeA.shutdown()
+      await runtimeB.shutdown()
     }
   })
 

@@ -70,7 +70,7 @@ describe("LiveMemorizeTurnRunner — recovery path", () => {
       distiller,
     })
 
-    const result = await runner.run({ sinceCursor: {}, now: NOW })
+    const result = await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(result.ok).toBe(true)
     expect(distiller.callCount).toBe(0)
@@ -93,7 +93,7 @@ describe("LiveMemorizeTurnRunner — recovery path", () => {
       distiller: trackingDistiller(),
     })
 
-    const result = await runner.run({ sinceCursor: {}, now: NOW })
+    const result = await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.result.dailyFileWritten).toBe(DATE_KEY)
@@ -113,7 +113,7 @@ describe("LiveMemorizeTurnRunner — recovery path", () => {
       distiller: trackingDistiller(),
     })
 
-    await runner.run({ sinceCursor: {}, now: NOW })
+    await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(store.read().lastRunOutcome).toBe("success")
     expect(readFileSync(paths.dailyFile(DATE_KEY), "utf-8")).toBe(originalContent)
@@ -140,7 +140,7 @@ describe("LiveMemorizeTurnRunner — recovery path", () => {
     }
 
     const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller: failingDistiller })
-    const result = await runner.run({ sinceCursor: {}, now: NOW })
+    const result = await runner.run({ sinceCursor: {}, now: NOW, trigger: "manual" })
 
     expect(result.ok).toBe(false)
     expect(existsSync(paths.errorLog)).toBe(true)

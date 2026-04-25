@@ -111,6 +111,68 @@ Where \`<branch>\` is one of:
 If nothing qualifies, write \`_none_\` under this section.
 `
 
+export const SALIENCE_CLASSIFIER_PROMPT = `# Turn Salience Classifier
+
+You are a lightweight classifier deciding whether a single student/assistant
+chat turn is noteworthy enough to update the student's long-term memory.
+
+## Turn
+
+{{turn}}
+
+## Rules
+
+Noteworthy = grade or feedback mentioned, deadline or due date, assignment
+strategy, recurring struggle, breakthrough, decision, commitment, or durable
+preference about how the student works.
+
+Not noteworthy = small talk, pure factual lookup, code echo, tool output,
+clarifying follow-ups with no new information, greetings.
+
+## Output
+
+Respond with ONLY a JSON object on a single line. No prose, no code fences.
+
+{"noteworthy": true|false, "reason": "<<=12 words>"}
+`
+
+export const END_OF_DAY_RECAP_PROMPT = `# End-of-Day Recap Prompt
+
+You are producing a consolidated end-of-day recap for a student's personal
+memory system. This runs once per day after the student is done studying.
+
+## Date
+
+{{date}}
+
+## All Turns Today
+
+{{thread_turns}}
+
+## Task
+
+Produce a concise recap using exactly the four sections below. No preamble,
+no closing remarks — only the sections. Keep each section tight: prefer 2–5
+bullets. Emphasize grades, feedback, commitments, and progress over trivia.
+
+### Highlights
+
+The 2–4 most important moments of the day.
+
+### Work Completed
+
+Assignments, readings, problem sets, or topics the student worked on today.
+
+### Open Threads
+
+Things that were started but not finished, unanswered questions, or topics
+the student said they'd come back to.
+
+### Tomorrow's Focus
+
+Explicit commitments or implied priorities for the next day. Skip if none.
+`
+
 export function fillTemplate(
   template: string,
   values: Record<string, string>,
