@@ -40,6 +40,9 @@ type ActivityFeedRow = {
   readonly body: string | null
   readonly priority: number | null
   readonly deep_link: string | null
+  readonly notify: number | null
+  readonly acted_on: number | null
+  readonly acted_at: number | null
   readonly created_at: string
 }
 
@@ -52,6 +55,9 @@ function toActivityFeedEntry(row: ActivityFeedRow): ActivityFeedEntry {
     ...(row.body ? { body: row.body } : {}),
     ...(row.priority === null ? {} : { priority: row.priority }),
     ...(row.deep_link ? { deepLink: row.deep_link } : {}),
+    ...(row.notify === 1 ? { notify: true } : {}),
+    ...(row.acted_on === null ? {} : { actedOn: row.acted_on === 1 }),
+    ...(row.acted_at === null ? {} : { actedAt: row.acted_at }),
   }
 }
 
@@ -184,7 +190,8 @@ function loadRecentActivityEntries(database: DatabaseService, now: Date): Readon
   since.setDate(since.getDate() - 7)
 
   return database.query<ActivityFeedRow>(
-    `SELECT id, category, type, title, body, priority, deep_link, created_at
+    `SELECT id, category, type, title, body, priority, deep_link,
+            notify, acted_on, acted_at, created_at
      FROM activity_feed
      WHERE created_at >= ?
      ORDER BY created_at DESC`,
@@ -234,8 +241,8 @@ export async function recordActivityEntry({
 
   database.execute(
     `INSERT INTO activity_feed (
-       id, category, type, title, body, priority, deep_link, created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       id, category, type, title, body, priority, deep_link, notify, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       nextEntry.id,
       nextEntry.category,
@@ -244,6 +251,7 @@ export async function recordActivityEntry({
       nextEntry.body ?? null,
       nextEntry.priority ?? null,
       nextEntry.deepLink ?? null,
+      nextEntry.notify ? 1 : 0,
       createdAt,
     ],
   )
@@ -275,6 +283,69 @@ export async function recordWorkflowCompletionActivity({
       deepLink,
     },
   })
+}
+
+export interface InsightHistoryRecord {
+  readonly id: string
+  readonly title: string
+  readonly body: string
+  readonly createdAt: string
+  readonly actedOn: boolean | null
+}
+
+/**
+ * Returns recent activity-feed rows in the `insight` category along with their
+ * dismissed/acted state. Used by the daily-insight prompt so the agent can
+ * avoid re-surfacing dismissed advice and follow up on acted advice.
+ */
+export function recentInsightsWithStatus(
+  database: DatabaseService,
+  windowDays = 7,
+  now: Date = new Date(),
+): ReadonlyArray<InsightHistoryRecord> {
+  const since = new Date(now)
+  since.setDate(since.getDate() - windowDays)
+  const rows = database.query<{
+    id: string
+    title: string
+    body: string | null
+    created_at: string
+    acted_on: number | null
+  }>(
+    `SELECT id, title, body, created_at, acted_on
+       FROM activity_feed
+      WHERE category IN ('insight', 'cron')
+        AND created_at >= ?
+      ORDER BY created_at DESC
+      LIMIT 32`,
+    [since.toISOString()],
+  )
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    body: row.body ?? "",
+    createdAt: row.created_at,
+    actedOn: row.acted_on === null ? null : row.acted_on === 1,
+  }))
+}
+
+export interface ActivityActedInput {
+  readonly id: string
+  readonly acted: boolean
+  readonly at?: number
+}
+
+/** Records the user's action on an activity entry (dismiss / mark acted). */
+export function setActivityActedOn(
+  database: DatabaseService,
+  input: ActivityActedInput,
+): void {
+  database.execute(
+    `UPDATE activity_feed
+        SET acted_on = ?, acted_at = ?
+      WHERE id = ?`,
+    [input.acted ? 1 : 0, input.at ?? Date.now(), input.id],
+  )
 }
 
 export async function generateWeeklyInsight({
