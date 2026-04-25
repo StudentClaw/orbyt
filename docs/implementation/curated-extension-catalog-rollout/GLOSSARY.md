@@ -511,7 +511,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun run stage:bundled-extensions`
   - `bun run dist:electron:mac --skip-build --output-dir /tmp/orbyt-release-smoke --verbose`
 - Evidence captured:
-  - Unsigned packaging smoke completed and produced `/tmp/orbyt-release-smoke/Student-Claw-0.1.0-arm64.dmg`.
+  - Unsigned packaging smoke completed and produced `/tmp/orbyt-release-smoke/Orbyt-0.1.0-arm64.dmg`.
   - Built app contains `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` and `version.json` outside `app.asar`.
   - Unit tests cover packaging config, signing-mode gating, per-arch helper staging, and bridge version verification.
 - First recommended next step:
@@ -574,12 +574,12 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
   - `bun run dist:electron:mac:signed --arch arm64`
   - `xcrun notarytool history --key /Users/paul/Documents/AuthKey_LDBXSSJ7F3.p8 --key-id LDBXSSJ7F3 --issuer d8928cd2-5f2d-4ea4-a0ef-a5eda5caf7f1`
   - `xcrun notarytool wait bedaa1eb-fcff-4448-9b4e-4743dcb5671e --key /Users/paul/Documents/AuthKey_LDBXSSJ7F3.p8 --key-id LDBXSSJ7F3 --issuer d8928cd2-5f2d-4ea4-a0ef-a5eda5caf7f1`
-  - `xcrun stapler staple "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app"`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose`
+  - `xcrun stapler staple "/Users/paul/Documents/orbyt/release/mac-arm64/Orbyt.app"`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/orbyt/release/mac-arm64/Orbyt.app" --verbose`
 - Evidence captured:
   - `arm64` notarization submission `bedaa1eb-fcff-4448-9b4e-4743dcb5671e` completed with `status: Accepted`.
   - `xcrun stapler staple` reported `The staple and validate action worked!`.
-  - Final artifact verification succeeded for `/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app`.
+  - Final artifact verification succeeded for `/Users/paul/Documents/orbyt/release/mac-arm64/Orbyt.app`.
   - The packaged Apple Calendar bridge at `Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge` is signed and confirmed outside `app.asar`.
 - First recommended next step:
   - Run the notarized `arm64` Apple Calendar manual smoke, then perform the `x64` signed/notarized pass before marking Phase 03b complete.
@@ -604,7 +604,7 @@ strings unchanged; future curated extensions must normalize to this vocabulary.
 - Commands run:
   - `bun run check:electron:mac:signed`
   - `bun run dist:electron:mac:signed --arch arm64`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose`
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/orbyt/release/mac-arm64/Orbyt.app" --verbose`
 - Evidence captured:
   - Successful signed `arm64` packaging run with live phase logging and transcript under `build-logs/`.
   - Notarized `arm64` app plus packaged Apple Calendar helper verified successfully.

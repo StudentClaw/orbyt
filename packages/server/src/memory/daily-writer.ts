@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs"
 import { isoDateKey, runLabel } from "./week.js"
 import type { MemoryPaths } from "./paths.js"
+import { logMemoryWrite } from "./write-log.js"
 
 export function buildDailyRunBlock(aiOutput: string, now: Date): string {
   return `## Run ${runLabel(now)}\n\n${aiOutput.trimEnd()}\n`
@@ -15,12 +16,11 @@ export function writeDailyFile(
   const filePath = paths.dailyFile(dateKey)
   const block = buildDailyRunBlock(aiOutput, now)
 
-  if (existsSync(filePath)) {
-    const existing = readFileSync(filePath, "utf-8")
-    writeFileSync(filePath, `${existing.trimEnd()}\n\n---\n\n${block}`, "utf-8")
-  } else {
-    writeFileSync(filePath, `# Daily - ${dateKey}\n\n${block}`, "utf-8")
-  }
+  const content = existsSync(filePath)
+    ? `${readFileSync(filePath, "utf-8").trimEnd()}\n\n---\n\n${block}`
+    : `# Daily - ${dateKey}\n\n${block}`
+  writeFileSync(filePath, content, "utf-8")
+  logMemoryWrite("daily memory", filePath, content)
 
   return dateKey
 }
@@ -44,6 +44,7 @@ export function appendRecapBlock(
   const filePath = paths.dailyFile(dateKey)
   const block = buildRecapBlock(aiOutput)
 
+  let content: string
   if (existsSync(filePath)) {
     const existing = readFileSync(filePath, "utf-8")
     if (existing.includes(RECAP_MARKER)) {
@@ -52,13 +53,15 @@ export function appendRecapBlock(
         /## End-of-Day Recap[\s\S]*$/,
         block,
       )
-      writeFileSync(filePath, replaced.trimEnd() + "\n", "utf-8")
+      content = replaced.trimEnd() + "\n"
     } else {
-      writeFileSync(filePath, `${existing.trimEnd()}\n\n---\n\n${block}`, "utf-8")
+      content = `${existing.trimEnd()}\n\n---\n\n${block}`
     }
   } else {
-    writeFileSync(filePath, `# Daily - ${dateKey}\n\n${block}`, "utf-8")
+    content = `# Daily - ${dateKey}\n\n${block}`
   }
+  writeFileSync(filePath, content, "utf-8")
+  logMemoryWrite("daily recap memory", filePath, content)
 
   return dateKey
 }

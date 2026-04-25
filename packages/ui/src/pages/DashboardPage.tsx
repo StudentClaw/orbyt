@@ -3,7 +3,8 @@ import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
 import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
-import { computeStaleness } from "@/rpc/canvasState"
+import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { computeStaleness, removeArchivedAssignmentFromCanvasState } from "@/rpc/canvasState"
 import type { InsightAction } from "@/components/dashboard/insight-types"
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader"
@@ -18,13 +19,15 @@ import {
   groupAssignmentsByCourse,
   type FilterScope,
 } from "@/components/dashboard/subject-grouping"
-import { seedAssignmentPreview } from "@/rpc/assignmentDetailState"
+import { removeAssignmentDetailEntry, seedAssignmentPreview } from "@/rpc/assignmentDetailState"
 import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
 const TOAST_ID_PLANNER = "dashboard-planner-stream"
 const SUBMITTED_PAGE_SIZE = 12
+const SCHEDULING_SESSION_SKILL_MENTION =
+  "[$scheduling-session](/Users/paul/.codex/skills/scheduling-session/SKILL.md)"
 
 function derivePriorityItems(
   courses: ReadonlyArray<{ id: string; code: string; name: string; color?: string }>,
@@ -141,12 +144,33 @@ function deriveSubmittedItems(
     .toSorted((a, b) => new Date(b.effectiveDueAt).getTime() - new Date(a.effectiveDueAt).getTime())
 }
 
+function getCurrentWeekBounds(now: Date): { start: Date; end: Date } {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const day = start.getDay()
+  const daysSinceMonday = day === 0 ? 6 : day - 1
+  start.setDate(start.getDate() - daysSinceMonday)
+
+  const end = new Date(start)
+  end.setDate(end.getDate() + 7)
+
+  return { start, end }
+}
+
+function isDueInCurrentWeek(item: PrioritizedItem, now: Date): boolean {
+  const due = new Date(item.effectiveDueAt)
+  if (Number.isNaN(due.getTime())) return false
+  const { start, end } = getCurrentWeekBounds(now)
+  return due >= start && due < end
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const snapshot = useRuntimeOrchestrationSnapshot()
   const actions = useOrchestrationActions()
   const [filter, setFilter] = useState<FilterScope>("thisWeek")
   const [submittedPage, setSubmittedPage] = useState(0)
+  const [archivingAssignmentIds, setArchivingAssignmentIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const handleInsightAction = useCallback(
     async (action: InsightAction) => {
@@ -161,12 +185,6 @@ export function DashboardPage() {
     },
     [actions, navigate, snapshot],
   )
-
-  const planWeekAction = MOCK_INSIGHTS[0]?.action
-
-  const handlePlanWeek = useCallback(() => {
-    if (planWeekAction) void handleInsightAction(planWeekAction)
-  }, [handleInsightAction, planWeekAction])
 
   const handleAssignmentSelect = useCallback(
     async (item: PrioritizedItem) => {
@@ -193,6 +211,27 @@ export function DashboardPage() {
     [navigate],
   )
 
+  const handleAssignmentArchive = useCallback(async (item: PrioritizedItem) => {
+    if (archivingAssignmentIds.has(item.id)) return
+
+    setArchivingAssignmentIds((current) => new Set(current).add(item.id))
+    try {
+      const client = await waitForPrimaryWsRpcClient()
+      await client.canvas.archiveAssignment(item.id)
+      removeArchivedAssignmentFromCanvasState(item.id)
+      removeAssignmentDetailEntry(item.id)
+      toast.success(`Archived "${item.title}"`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to archive assignment.")
+    } finally {
+      setArchivingAssignmentIds((current) => {
+        const next = new Set(current)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }, [archivingAssignmentIds])
+
   const {
     courses,
     courseGrades,
@@ -208,6 +247,39 @@ export function DashboardPage() {
   const now = new Date()
   const isSyncing = syncProgress?.status === "syncing"
   const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
+  const planWeekAction = useMemo<InsightAction>(() => {
+    const currentWeekItems = priorityItems
+      .filter((item) => isDueInCurrentWeek(item, now))
+      .toSorted((a, b) => new Date(a.effectiveDueAt).getTime() - new Date(b.effectiveDueAt).getTime())
+    const upcomingLines = currentWeekItems.map((item) => {
+      const due = item.effectiveDueAt
+        ? new Date(item.effectiveDueAt).toLocaleString([], {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "no due date"
+      const points = item.pointsPossible != null ? `, ${item.pointsPossible}pts` : ""
+      return `- ${item.courseCode}: ${item.title} (due ${due}${points})`
+    })
+
+    return {
+      label: "Plan my week",
+      prompt: [
+        "Plan my week using my current calendar availability and the coursework due this week.",
+        upcomingLines.length > 0
+          ? `Assignments due this week (Monday-Sunday):\n${upcomingLines.join("\n")}`
+          : "No dashboard assignments are due this week (Monday-Sunday).",
+        "Read my calendars first, then propose a realistic weekly schedule. Ask only decision-critical questions.",
+        SCHEDULING_SESSION_SKILL_MENTION,
+      ].join("\n\n"),
+    }
+  }, [now, priorityItems])
+  const handlePlanWeek = useCallback(() => {
+    void handleInsightAction(planWeekAction)
+  }, [handleInsightAction, planWeekAction])
   const submittedItems = useMemo(
     () => deriveSubmittedItems(courses, submissionStatus.submitted),
     [courses, submissionStatus],
@@ -311,7 +383,7 @@ export function DashboardPage() {
             dateLabel={dateLabel}
             dueThisWeek={dueThisWeek}
             onPlanWeek={handlePlanWeek}
-            planDisabled={!workspace || !planWeekAction}
+            planDisabled={!workspace}
           />
           <DashboardFilterTabs value={filter} onChange={setFilter} />
           <div className="mt-10" data-testid="dashboard-assignments">
@@ -328,6 +400,7 @@ export function DashboardPage() {
                     items={items}
                     now={now}
                     onAssignmentSelect={handleAssignmentSelect}
+                    onAssignmentArchive={handleAssignmentArchive}
                   />
                 ))}
                 {filter === "submitted" && submittedItems.length > SUBMITTED_PAGE_SIZE ? (

@@ -58,7 +58,7 @@ export function createMacPackagingConfig(options: {
     appId: options.appId,
     productName: options.productName,
     electronVersion: String(electronPackageJson.dependencies.electron).replace(/^[^\d]*/, ""),
-    artifactName: "Student-Claw-${version}-${arch}.${ext}",
+    artifactName: "Orbyt-${version}-${arch}.${ext}",
     directories: {
       output: options.outputDir,
       buildResources: path.join(options.stageAppDir, "build-resources"),

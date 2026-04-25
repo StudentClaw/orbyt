@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-22
 
-This docs package is the implementation source of truth for shipping **first-party curated skills** with Student Claw: markdown-first `SKILL.md` files that Codex CLI discovers under the isolated user home, that the local server indexes for chat activation, and that are **bundled** into the desktop artifact with safe upgrade and fork semantics.
+This docs package is the implementation source of truth for shipping **first-party curated skills** with Orbyt: markdown-first `SKILL.md` files that Codex CLI discovers under the isolated user home, that the local server indexes for chat activation, and that are **bundled** into the desktop artifact with safe upgrade and fork semantics.
 
 It is intentionally separate from [docs/features/03-skill-system.md](../../features/03-skill-system.md), which remains the product spec for the two-tier skill model, policy gate, and editor UX. This rollout does not rewrite that spec; it sequences engineering work against it.
 

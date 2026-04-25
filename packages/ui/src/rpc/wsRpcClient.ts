@@ -1,6 +1,7 @@
 import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsResult,
+  CanvasArchiveAssignmentResult,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureResult,
   CanvasDownloadCourseFileResult,
@@ -197,6 +198,7 @@ export interface WsRpcClient {
     readonly getMyPeerReviewsTodo: (courseId?: string) => Promise<ReadonlyArray<CanvasStudentPeerReviewTodo>>
     readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<Schema.Schema.Type<typeof CanvasAssignmentDetailsResult>>
     readonly listAssignments: (params: { courseId?: string; includeCompleted?: boolean }) => Promise<Schema.Schema.Type<typeof CanvasListAssignmentsResult>>
+    readonly archiveAssignment: (assignmentId: string) => Promise<Schema.Schema.Type<typeof CanvasArchiveAssignmentResult>>
     readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<Schema.Schema.Type<typeof CanvasCourseContentOverviewResult>>
     readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
     readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
@@ -410,6 +412,11 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
       decode(
         CanvasListAssignmentsResult,
         await transport.request(RPC_METHODS.CANVAS_LIST_ASSIGNMENTS, params),
+      ),
+    archiveAssignment: async (assignmentId) =>
+      decode(
+        CanvasArchiveAssignmentResult,
+        await transport.request(RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT, { assignmentId }),
       ),
     getCourseContentOverview: async (params) =>
       decode(

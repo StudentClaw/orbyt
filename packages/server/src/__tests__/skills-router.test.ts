@@ -114,6 +114,7 @@ function makeDeps() {
         getMyPeerReviewsTodo: () => [],
         getAssignmentDetails: async () => { throw new Error("n/a") },
         listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
+        archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
         getCourseContentOverview: async () => ({ course: undefined, pageCount: 0, moduleCount: 0, moduleItemCount: 0, frontPage: undefined, courses: undefined }),
         getCourseStructure: async () => ({ course: undefined, modules: [], courses: undefined }),
         downloadCourseFile: async () => ({ success: true, courseId: "course_1" as any, fileId: "file_1", filename: "file.txt", savedPath: "/tmp/file.txt", overwritten: false, message: "downloaded" }),

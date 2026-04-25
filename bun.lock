@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "student-claw",
+      "name": "orbyt",
       "devDependencies": {
         "@electron/notarize": "^3.1.0",
         "electron-builder": "^26.0.12",

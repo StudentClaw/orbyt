@@ -91,6 +91,7 @@ export const RPC_METHODS = {
   CANVAS_GET_MY_PEER_REVIEWS_TODO: "canvas.getMyPeerReviewsTodo",
   CANVAS_GET_ASSIGNMENT_DETAILS: "canvas.getAssignmentDetails",
   CANVAS_LIST_ASSIGNMENTS: "canvas.listAssignments",
+  CANVAS_ARCHIVE_ASSIGNMENT: "canvas.archiveAssignment",
   CANVAS_GET_COURSE_CONTENT_OVERVIEW: "canvas.getCourseContentOverview",
   CANVAS_GET_COURSE_STRUCTURE: "canvas.getCourseStructure",
   CANVAS_DOWNLOAD_COURSE_FILE: "canvas.downloadCourseFile",

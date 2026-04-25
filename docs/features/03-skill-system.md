@@ -143,6 +143,7 @@ Orbyt ships with curated skills for common academic tasks:
 | **exam-prep** | Curated workflow | Builds study plans and prep structure from course materials and upcoming exams |
 | **citation-helper** | Curated helper | Formats citations in APA, MLA, or Chicago |
 | **explain-like** | Curated helper | Adjusts explanation complexity ("explain like I'm 5" / "explain technically") |
+| **scheduling-session** | Curated workflow | Fits schoolwork, errands, meals, groceries, and personal commitments into Apple Calendar with realistic buffers. |
 
 ---
 
@@ -276,6 +277,7 @@ skills/
     exam-prep.md
     citation-helper.md
     explain-like.md
+    scheduling-session.md
   custom/
     README.md               # Guide for authoring custom skills
 ```

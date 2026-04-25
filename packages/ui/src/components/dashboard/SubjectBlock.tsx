@@ -8,9 +8,10 @@ interface SubjectBlockProps {
   readonly items: ReadonlyArray<PrioritizedItem>
   readonly now: Date
   readonly onAssignmentSelect?: (item: PrioritizedItem) => void
+  readonly onAssignmentArchive?: (item: PrioritizedItem) => void
 }
 
-export function SubjectBlock({ course, items, now, onAssignmentSelect }: SubjectBlockProps) {
+export function SubjectBlock({ course, items, now, onAssignmentSelect, onAssignmentArchive }: SubjectBlockProps) {
   const accent = courseAccentColor(course.id, course.color)
   return (
     <section className="mb-10 last:mb-0" data-testid={`subject-block-${course.id}`}>
@@ -45,6 +46,7 @@ export function SubjectBlock({ course, items, now, onAssignmentSelect }: Subject
             item={item}
             now={now}
             onClick={onAssignmentSelect ? () => onAssignmentSelect(item) : undefined}
+            onArchive={onAssignmentArchive ? () => onAssignmentArchive(item) : undefined}
           />
         ))}
       </div>

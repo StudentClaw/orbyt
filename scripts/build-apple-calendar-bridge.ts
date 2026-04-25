@@ -147,7 +147,6 @@ if (import.meta.main) {
   const arch = (archArg === "arm64" || archArg === "x64" ? archArg : resolveHostArch()) as AppleBridgeArch
   const appVersion = appVersionArg
     ?? process.env.ORBYT_APP_VERSION
-    ?? process.env.STUDENT_CLAW_APP_VERSION
     ?? "0.1.0"
   const verbose = process.argv.includes("--verbose")
   const paths = buildAppleCalendarBridge({

@@ -1,4 +1,5 @@
-import { Button } from "@/components/ui/button"
+import { CalendarClock } from "lucide-react"
+import { GlassButton } from "@/components/ui/glass-button"
 
 interface DashboardHeaderProps {
   readonly title: string
@@ -38,17 +39,18 @@ export function DashboardHeader({
           </span>
         </p>
       </div>
-      <Button
+      <GlassButton
         type="button"
-        variant="default"
-        size="default"
+        size="sm"
         className="shrink-0"
+        contentClassName="flex items-center gap-2"
         disabled={planDisabled}
         data-testid="plan-my-week"
         onClick={onPlanWeek}
       >
-        Plan my week
-      </Button>
+        <span>Plan my week</span>
+        <CalendarClock className="h-4 w-4" aria-hidden />
+      </GlassButton>
     </header>
   )
 }

@@ -5,9 +5,11 @@ import {
   mkdirSync,
 } from "node:fs"
 import { dirname } from "node:path"
+import { createHash } from "node:crypto"
 import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@orbyt/contracts"
 import type { MemoryPaths } from "./paths.js"
 import type { ParsedCandidate } from "./candidate-parser.js"
+import { logMemoryWrite } from "./write-log.js"
 
 const VALID_SCAFFOLD_BRANCHES = new Set<string>(SCAFFOLD_BRANCHES)
 const SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -32,6 +34,7 @@ const CANVAS_RE = /canvas|module|assignment tab|pages tab|announcement|navigatio
 const PROFESSOR_RE = /professor|prof |instructor|dr\.|grader|rubric|submission format|late polic/i
 const PITFALL_RE = /pitfall|mistake|avoid|don't|beware|warning/i
 const ASSIGNMENT_RE = /assignment|homework|problem set|lab|essay|project|quiz|exam strateg/i
+const CANVAS_URL_RE = /https:\/\/[^\s)"']*\/courses\/(\d+)\/(?:wiki|pages\/[^\s)"']+)/i
 
 function selectCourseSection(text: string): string {
   if (CANVAS_RE.test(text)) return "## Canvas Layout"
@@ -80,6 +83,34 @@ function appendBulletToSection(
   return [...before.slice(0, sectionStart), ...updatedSection, ...after]
     .join("\n")
     .trimEnd() + "\n"
+}
+
+function appendRuleToSection(content: string, rule: Record<string, unknown>): string {
+  const block = [
+    "```json",
+    JSON.stringify(rule, null, 2),
+    "```",
+  ].join("\n")
+  return appendBulletToSection(content, "## Assignment Source Rules", block)
+}
+
+function sourceRuleId(url: string): string {
+  return `assignment-source:${createHash("sha1").update(url).digest("hex").slice(0, 12)}`
+}
+
+function extractAssignmentSourceRule(text: string): Record<string, unknown> | null {
+  const match = text.match(CANVAS_URL_RE)
+  if (!match?.[0] || !match[1]) return null
+  if (!/(read|reading|homework|assignment|quiz|schedule)/i.test(text)) return null
+  return {
+    id: sourceRuleId(match[0]),
+    kind: "canvas_page",
+    canvasCourseId: match[1],
+    url: match[0],
+    purpose: "reading_homework_schedule",
+    parser: "dated_reading_schedule",
+    enabled: true,
+  }
 }
 
 function resolvePath(paths: MemoryPaths, branch: string): string {
@@ -161,6 +192,10 @@ function seedCourseNode(slug: string): string {
     "",
     NONE_PLACEHOLDER,
     "",
+    "## Assignment Source Rules",
+    "",
+    NONE_PLACEHOLDER,
+    "",
     "## Recurring Pitfalls",
     "",
     NONE_PLACEHOLDER,
@@ -191,7 +226,9 @@ export function ensureGraphScaffold(paths: MemoryPaths): string[] {
     const filePath = paths.branchIndex(branch)
     if (existsSync(filePath)) continue
     mkdirSync(dirname(filePath), { recursive: true })
-    writeFileSync(filePath, seedBaseNode(branch), "utf-8")
+    const content = seedBaseNode(branch)
+    writeFileSync(filePath, content, "utf-8")
+    logMemoryWrite("graph scaffold memory", filePath, content)
     created.push(filePath)
   }
 
@@ -216,8 +253,11 @@ export function writeGraphCandidate(
   const section = isCourse ? selectCourseSection(candidate.text) : "## Durable Facts"
   const bullet = `- ${candidate.text} _(promoted ${now.toISOString().slice(0, 10)})_`
 
-  const updated = appendBulletToSection(content, section, bullet)
+  const withBullet = appendBulletToSection(content, section, bullet)
+  const sourceRule = isCourse ? extractAssignmentSourceRule(candidate.text) : null
+  const updated = sourceRule ? appendRuleToSection(withBullet, sourceRule) : withBullet
   writeFileSync(filePath, updated, "utf-8")
+  logMemoryWrite("long-term graph memory", filePath, updated)
 
   return filePath
 }

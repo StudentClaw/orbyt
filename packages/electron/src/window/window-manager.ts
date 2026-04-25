@@ -8,7 +8,7 @@ const DEFAULT_WINDOW_WIDTH = 1280
 const DEFAULT_WINDOW_HEIGHT = 800
 
 function debugWindow(message: string, win: BrowserWindow): void {
-  if (process.env.ORBYT_DEBUG_WINDOW !== "1" && process.env.STUDENT_CLAW_DEBUG_WINDOW !== "1") {
+  if (process.env.ORBYT_DEBUG_WINDOW !== "1") {
     return
   }
 
@@ -63,7 +63,7 @@ export function createWindow(): BrowserWindow {
       return
     }
 
-    const [width, height] = win.getSize()
+    const [width = DEFAULT_WINDOW_WIDTH, height = DEFAULT_WINDOW_HEIGHT] = win.getSize()
     if (width < 600 || height < 400) {
       win.setSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
       win.center()

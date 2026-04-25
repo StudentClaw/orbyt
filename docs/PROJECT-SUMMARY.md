@@ -46,7 +46,7 @@ Implemented as a Orbyt-owned TypeScript MCP plugin plus server-side sync orchest
 
 ### 3. Skill System
 
-Two-tier skill system: curated first-party skills and student-authored custom skills. Markdown-based skill files (Cursor-style) with YAML frontmatter, plus a server-side policy gate that enforces capabilities. Six pre-installed skills (plan-mode, study-helper, essay-reviewer, exam-prep, citation-helper, explain-like). In-app Skill Editor UI with fork-and-promote flow. Context budget management for competing skills. Custom skills start in read-suggest mode with planner-scope access and can be promoted capability-by-capability.
+Two-tier skill system: curated first-party skills and student-authored custom skills. Markdown-based skill files (Cursor-style) with YAML frontmatter, plus a server-side policy gate that enforces capabilities. Seven pre-installed skills (plan-mode, study-helper, essay-reviewer, exam-prep, citation-helper, explain-like, scheduling-session). In-app Skill Editor UI with fork-and-promote flow. Context budget management for competing skills. Custom skills start in read-suggest mode with planner-scope access and can be promoted capability-by-capability.
 
 ### 4. Memory System
 

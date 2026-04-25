@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { SkillId } from "@student-claw/contracts"
+import type { SkillId } from "@orbyt/contracts"
 import { parseSkillFile } from "./SkillParser.js"
 
 function makeTempSkill(
@@ -63,10 +63,11 @@ const curatedSkills: readonly CuratedSkillExpectation[] = [
   { slug: "exam-prep", expectedName: "Exam Prep", expectedContextKey: null },
   { slug: "citation-helper", expectedName: "Citation Helper", expectedContextKey: null },
   { slug: "explain-like", expectedName: "Explain Like", expectedContextKey: null },
+  { slug: "scheduling-session", expectedName: "Scheduling Session", expectedContextKey: "canvas" },
 ]
 
 describe("SkillParser - curated skills Phase 01 contract", () => {
-  test("all six curated skills exist on disk", () => {
+  test("all curated skills exist on disk", () => {
     for (const { slug } of curatedSkills) {
       const skillPath = path.join(skillsRoot, slug, "SKILL.md")
       expect(existsSync(skillPath)).toBe(true)

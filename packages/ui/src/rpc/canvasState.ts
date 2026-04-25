@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import type {
   CanvasStudentCourseGradeSummary,
   CanvasStudentPeerReviewTodo,
@@ -72,6 +73,27 @@ export function getSubmissionStatus(): CanvasSubmissionStatusBuckets {
 
 export function setSubmissionStatus(status: CanvasSubmissionStatusBuckets): void {
   appAtomRegistry.set(canvasSubmissionStatusAtom, status)
+}
+
+function removeItemById(
+  items: ReadonlyArray<CourseWorkItem>,
+  assignmentId: string,
+): ReadonlyArray<CourseWorkItem> {
+  return items.filter((item) => item.id !== assignmentId)
+}
+
+export function removeArchivedAssignmentFromCanvasState(assignmentId: string): void {
+  appAtomRegistry.set(
+    canvasUpcomingAssignmentsAtom,
+    removeItemById(appAtomRegistry.get(canvasUpcomingAssignmentsAtom), assignmentId),
+  )
+
+  const current = appAtomRegistry.get(canvasSubmissionStatusAtom)
+  appAtomRegistry.set(canvasSubmissionStatusAtom, {
+    submitted: removeItemById(current.submitted, assignmentId),
+    pending: removeItemById(current.pending, assignmentId),
+    overdue: removeItemById(current.overdue, assignmentId),
+  })
 }
 
 export function getCourseGrades(): ReadonlyArray<CanvasStudentCourseGradeSummary> {
@@ -242,6 +264,27 @@ export function useCanvasSyncProgress(): CanvasSyncProgress | null {
 
 export function useCanvasLastSync(): string | null {
   return useAtomValue(canvasLastSyncAtom)
+}
+
+/**
+ * Title for a coursework item that appears in synced Canvas lists (upcoming + submission buckets).
+ * Subscribes to canvas atoms so navbar labels update when sync completes.
+ */
+export function useKnownCourseworkItemTitle(assignmentId: string | null): string | null {
+  const upcoming = useAtomValue(canvasUpcomingAssignmentsAtom)
+  const submission = useAtomValue(canvasSubmissionStatusAtom)
+  return useMemo(() => {
+    if (!assignmentId) {
+      return null
+    }
+    const buckets = [
+      ...upcoming,
+      ...submission.submitted,
+      ...submission.pending,
+      ...submission.overdue,
+    ]
+    return buckets.find((item) => item.id === assignmentId)?.title ?? null
+  }, [assignmentId, upcoming, submission])
 }
 
 export function resetCanvasStateForTests(): void {

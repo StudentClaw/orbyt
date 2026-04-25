@@ -140,6 +140,23 @@ describe("writeGraphCandidate — course branches", () => {
     expect(factIdx).toBeGreaterThan(assignIdx)
   })
 
+  test("adds structured assignment source rule for durable Canvas homework pages", () => {
+    const { paths } = setup()
+    writeGraphCandidate(
+      paths,
+      candidate(
+        "Professor posts reading homework at https://ivc-new.instructure.com/courses/19737/wiki",
+        "school/courses/mythology",
+      ),
+      NOW,
+    )
+    const content = readFileSync(paths.courseIndex("mythology"), "utf-8")
+    expect(content).toContain("## Assignment Source Rules")
+    expect(content).toContain('"kind": "canvas_page"')
+    expect(content).toContain('"canvasCourseId": "19737"')
+    expect(content).toContain('"parser": "dated_reading_schedule"')
+  })
+
   test("unmatched text routes to Durable Facts", () => {
     const { paths } = setup()
     writeGraphCandidate(paths, candidate("The course has 3 units", "school/courses/cs-301"), NOW)

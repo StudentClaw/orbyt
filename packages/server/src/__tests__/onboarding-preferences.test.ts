@@ -90,6 +90,7 @@ function makeDependencies() {
         throw new Error("not implemented in onboarding test")
       },
       listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
+      archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
       getCourseContentOverview: async () => ({
         course: undefined,
         pageCount: 0,

@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-04-21T22:28:05.620Z",
   "model": "gpt-5.4-mini",
-  "codexBinaryPath": "/Users/rereynrd/School/student-claw/packages/server/node_modules/.bin/codex",
+  "codexBinaryPath": "/Users/rereynrd/School/orbyt/packages/server/node_modules/.bin/codex",
   "scenario": {
     "days": 14,
     "startDate": "2026-04-07",
@@ -136,8 +136,8 @@
       "dailyFileWritten": "2026-04-07",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
       ],
       "pendingCandidateCount": 0
     },
@@ -148,8 +148,8 @@
       "dailyFileWritten": "2026-04-08",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
       ],
       "pendingCandidateCount": 0
     },
@@ -160,7 +160,7 @@
       "dailyFileWritten": "2026-04-09",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
       ],
       "pendingCandidateCount": 1
     },
@@ -171,7 +171,7 @@
       "dailyFileWritten": "2026-04-10",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
       ],
       "pendingCandidateCount": 1
     },
@@ -182,8 +182,8 @@
       "dailyFileWritten": "2026-04-11",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
       ],
       "pendingCandidateCount": 1
     },
@@ -194,7 +194,7 @@
       "dailyFileWritten": "2026-04-12",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
       ],
       "pendingCandidateCount": 2
     },
@@ -205,8 +205,8 @@
       "dailyFileWritten": "2026-04-13",
       "weeklyFileWritten": null,
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
       ],
       "pendingCandidateCount": 3
     },
@@ -217,8 +217,8 @@
       "dailyFileWritten": "2026-04-14",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
       ],
       "pendingCandidateCount": 3
     },
@@ -229,9 +229,9 @@
       "dailyFileWritten": "2026-04-15",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/worked-example-first.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/worked-example-first.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
       ],
       "pendingCandidateCount": 3
     },
@@ -242,8 +242,8 @@
       "dailyFileWritten": "2026-04-16",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
       ],
       "pendingCandidateCount": 4
     },
@@ -254,8 +254,8 @@
       "dailyFileWritten": "2026-04-17",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-workflow.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-workflow.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
       ],
       "pendingCandidateCount": 5
     },
@@ -266,8 +266,8 @@
       "dailyFileWritten": "2026-04-18",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/canvas-announcement-first.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/canvas-announcement-first.md"
       ],
       "pendingCandidateCount": 6
     },
@@ -278,9 +278,9 @@
       "dailyFileWritten": "2026-04-19",
       "weeklyFileWritten": "2026-W16",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
       ],
       "pendingCandidateCount": 6
     },
@@ -291,8 +291,8 @@
       "dailyFileWritten": "2026-04-20",
       "weeklyFileWritten": "2026-W17",
       "graphNodesUpdated": [
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
-        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
+        "/Users/rereynrd/School/orbyt/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
       ],
       "pendingCandidateCount": 9
     }

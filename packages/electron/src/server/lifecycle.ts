@@ -163,6 +163,7 @@ export async function spawnServer(
 ): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
   const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.orbyt/data.db`
+  const orbytHome = process.env.ORBYT_HOME ?? path.dirname(dbPath)
   const auth = createHandshakeAuth()
 
   const existingBootstrap = await healthCheck(port, auth)
@@ -177,7 +178,7 @@ export async function spawnServer(
   }
 
   const launchSpec = resolveServerLaunchSpec(launchContext)
-  const child = spawnServerChild(launchSpec, port, dbPath, auth, gateway, codexIsolation)
+  const child = spawnServerChild(launchSpec, port, dbPath, orbytHome, auth, gateway, codexIsolation)
   pipeChildOutput(child)
   const childError = createChildErrorTracker(child)
 
@@ -269,6 +270,7 @@ function spawnServerChild(
   launchSpec: ServerLaunchSpec,
   port: number,
   dbPath: string,
+  orbytHome: string,
   auth: WsHandshakeAuth,
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
@@ -278,6 +280,7 @@ function spawnServerChild(
       ...(codexIsolation ? buildIsolatedCodexEnv(codexIsolation.userDataPath, gateway) : process.env),
       PORT: String(port),
       DB_PATH: dbPath,
+      ORBYT_HOME: orbytHome,
       WS_AUTH_TOKEN: auth.authToken,
       ...(launchSpec.packaged ? {
         ELECTRON_RUN_AS_NODE: "1",

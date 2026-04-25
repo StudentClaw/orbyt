@@ -80,4 +80,18 @@ describe("TaskCard", () => {
 
     expect(onClick).toHaveBeenCalledTimes(1)
   })
+
+  test("invokes archive without activating the card", async () => {
+    const user = userEvent.setup()
+    const onClick = vi.fn()
+    const onArchive = vi.fn()
+
+    render(<TaskCard item={makeItem()} now={NOW} onClick={onClick} onArchive={onArchive} />)
+
+    await user.hover(screen.getByTestId("task-card-item-1"))
+    await user.click(screen.getByTestId("task-card-archive-item-1"))
+
+    expect(onArchive).toHaveBeenCalledTimes(1)
+    expect(onClick).not.toHaveBeenCalled()
+  })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { AssignmentDetailPage } from "../pages/AssignmentDetailPage"
 
@@ -8,6 +8,16 @@ const pageMocks = vi.hoisted(() => ({
   createThread: vi.fn(),
   sendTurn: vi.fn(),
   loadAssignmentDetail: vi.fn(),
+  removeAssignmentDetailEntry: vi.fn(),
+  archiveAssignment: vi.fn(),
+  removeArchivedAssignmentFromCanvasState: vi.fn(),
+  skills: [
+    { id: "tdd", name: "tdd", description: "Test-first" },
+    { id: "brainstorming", name: "brainstorming", description: "Design exploration" },
+    { id: "clarify", name: "clarify", description: "Copy help" },
+    { id: "audit", name: "audit", description: "UI audit" },
+    { id: "extra", name: "zebra", description: "Unused in default four" },
+  ] as const,
   entry: {
     preview: {
       assignmentId: "item-1",
@@ -91,21 +101,40 @@ vi.mock("../hooks/useAppRuntime", () => ({
     createThread: pageMocks.createThread,
     sendTurn: pageMocks.sendTurn,
   }),
+  useSkills: () => [...pageMocks.skills],
 }))
 
 vi.mock("../rpc/assignmentDetailState", () => ({
   loadAssignmentDetail: pageMocks.loadAssignmentDetail,
+  removeAssignmentDetailEntry: pageMocks.removeAssignmentDetailEntry,
   useAssignmentDetailEntry: () => pageMocks.entry,
+}))
+
+vi.mock("@/rpc/appRuntime", () => ({
+  waitForPrimaryWsRpcClient: () => Promise.resolve({
+    canvas: {
+      archiveAssignment: pageMocks.archiveAssignment,
+    },
+  }),
+}))
+
+vi.mock("@/rpc/canvasState", () => ({
+  removeArchivedAssignmentFromCanvasState: pageMocks.removeArchivedAssignmentFromCanvasState,
 }))
 
 describe("AssignmentDetailPage", () => {
   beforeEach(() => {
+    localStorage.removeItem("orbyt:assignment-visible-skill-ids")
     pageMocks.navigate.mockReset()
     pageMocks.createThread.mockReset()
     pageMocks.sendTurn.mockReset()
     pageMocks.loadAssignmentDetail.mockReset()
+    pageMocks.removeAssignmentDetailEntry.mockReset()
+    pageMocks.archiveAssignment.mockReset()
+    pageMocks.removeArchivedAssignmentFromCanvasState.mockReset()
     pageMocks.sendTurn.mockResolvedValue(undefined)
     pageMocks.navigate.mockResolvedValue(undefined)
+    pageMocks.archiveAssignment.mockResolvedValue({ archived: true, assignmentId: "item-1" })
     pageMocks.entry = {
       preview: {
         assignmentId: "item-1",
@@ -180,13 +209,14 @@ describe("AssignmentDetailPage", () => {
     expect(screen.getByTestId("assignment-detail-title").textContent).toBe("Final Paper")
     expect(screen.getByText("Write a close reading of one myth.")).toBeDefined()
     expect(screen.getByText("Open in Canvas")).toBeDefined()
+    expect(screen.getByTestId("assignment-skill-brainstorming").textContent).toBe("brainstorming")
   })
 
   test("forwards a seeded assignment prompt into the selected chat thread", async () => {
     const user = userEvent.setup()
     render(<AssignmentDetailPage assignmentId="item-1" />)
 
-    await user.click(screen.getByRole("button", { name: "Draft Assignment" }))
+    await user.click(screen.getByTestId("assignment-skill-brainstorming"))
     await user.type(screen.getByPlaceholderText("Search chats or folders..."), "binary")
     await user.click(screen.getByText("Binary trees lab"))
 
@@ -197,7 +227,7 @@ describe("AssignmentDetailPage", () => {
       expect.stringContaining("Final Paper"),
       [],
       null,
-      null,
+      "brainstorming",
     )
     expect(String(pageMocks.sendTurn.mock.calls[0]?.[1])).toContain("Final Paper")
     expect(String(pageMocks.sendTurn.mock.calls[0]?.[1])).toContain("Write a close reading of one myth.")
@@ -215,18 +245,18 @@ describe("AssignmentDetailPage", () => {
     const user = userEvent.setup()
     render(<AssignmentDetailPage assignmentId="item-1" />)
 
-    await user.click(screen.getByRole("button", { name: "Plan Assignment" }))
+    await user.click(screen.getByTestId("assignment-skill-clarify"))
     await user.click(screen.getByTestId("assignment-new-thread-workspace-2"))
 
     expect(pageMocks.createThread).toHaveBeenCalledTimes(1)
-    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-2", "Plan Assignment")
+    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-2", "clarify")
     expect(pageMocks.sendTurn).toHaveBeenCalledTimes(1)
     expect(pageMocks.sendTurn).toHaveBeenCalledWith(
       "thread-new",
       expect.stringContaining("Final Paper"),
       [],
       null,
-      null,
+      "clarify",
     )
     expect(pageMocks.navigate).toHaveBeenCalledWith({
       to: "/chat/$workspaceId/$threadId",
@@ -235,6 +265,20 @@ describe("AssignmentDetailPage", () => {
         threadId: "thread-new",
       },
     })
+  })
+
+  test("archives the assignment and returns to the dashboard", async () => {
+    const user = userEvent.setup()
+    render(<AssignmentDetailPage assignmentId="item-1" />)
+
+    await user.click(screen.getByRole("button", { name: /archive/i }))
+
+    await waitFor(() => {
+      expect(pageMocks.archiveAssignment).toHaveBeenCalledWith("item-1")
+    })
+    expect(pageMocks.removeArchivedAssignmentFromCanvasState).toHaveBeenCalledWith("item-1")
+    expect(pageMocks.removeAssignmentDetailEntry).toHaveBeenCalledWith("item-1")
+    expect(pageMocks.navigate).toHaveBeenCalledWith({ to: "/" })
   })
 
   test("still offers a 'New chat' option for workspaces that have no chats yet", async () => {
@@ -246,19 +290,19 @@ describe("AssignmentDetailPage", () => {
     const user = userEvent.setup()
     render(<AssignmentDetailPage assignmentId="item-1" />)
 
-    const quickAction = screen.getByRole("button", { name: "Explain Requirements" })
-    expect(quickAction.hasAttribute("disabled")).toBe(false)
+    const skillButton = screen.getByTestId("assignment-skill-audit")
+    expect(skillButton.hasAttribute("disabled")).toBe(false)
 
-    await user.click(quickAction)
+    await user.click(skillButton)
     await user.click(screen.getByTestId("assignment-new-thread-workspace-1"))
 
-    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-1", "Explain Requirements")
+    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-1", "audit")
     expect(pageMocks.sendTurn).toHaveBeenCalledWith(
       "thread-new",
       expect.stringContaining("Final Paper"),
       [],
       null,
-      null,
+      "audit",
     )
     expect(pageMocks.navigate).toHaveBeenCalledWith({
       to: "/chat/$workspaceId/$threadId",
@@ -266,6 +310,36 @@ describe("AssignmentDetailPage", () => {
         workspaceId: "workspace-1",
         threadId: "thread-new",
       },
+    })
+  })
+
+  test("launches a non-pinned skill from the hourglass skill search, then sends to a new chat", async () => {
+    pageMocks.createThread.mockResolvedValue("thread-extra")
+    const user = userEvent.setup()
+    render(<AssignmentDetailPage assignmentId="item-1" />)
+
+    await user.click(screen.getByTestId("assignment-skill-search-trigger"))
+    const skillSearchInput = await screen.findByPlaceholderText("Search skills…")
+    await user.click(skillSearchInput)
+    await user.type(skillSearchInput, "zebra")
+    const zebraOption = await screen.findByRole("option", { name: /zebra/i })
+    await user.click(zebraOption)
+    await waitFor(() => {
+      expect(screen.getByTestId("assignment-thread-picker-explore")).toBeDefined()
+    })
+    await user.click(screen.getByTestId("assignment-new-thread-workspace-2"))
+
+    expect(pageMocks.createThread).toHaveBeenCalledWith("workspace-2", "zebra")
+    expect(pageMocks.sendTurn).toHaveBeenCalledWith(
+      "thread-extra",
+      expect.stringContaining("Final Paper"),
+      [],
+      null,
+      "extra",
+    )
+    expect(pageMocks.navigate).toHaveBeenCalledWith({
+      to: "/chat/$workspaceId/$threadId",
+      params: { workspaceId: "workspace-2", threadId: "thread-extra" },
     })
   })
 

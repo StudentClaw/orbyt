@@ -3,6 +3,8 @@ import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsParams,
   CanvasAssignmentDetailsResult,
+  CanvasArchiveAssignmentParams,
+  CanvasArchiveAssignmentResult,
   CanvasCourseContentOverviewParams,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureParams,
@@ -15,6 +17,8 @@ import {
   CanvasGetMySubmissionStatusResult,
   CanvasGetMyTodoItemsResult,
   CanvasGetMyUpcomingAssignmentsResult,
+  CanvasGetFrontPageResult,
+  CanvasPageLookupResult,
   CanvasListAssignmentsParams,
   CanvasListAssignmentsResult,
   CanvasListCoursesResult,
@@ -29,6 +33,11 @@ import {
 import { PluginGateway, type PluginGatewayService } from "../mcp/PluginGateway.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
+import { createMemoryPaths } from "../memory/paths.js"
+import type { MemoryPaths } from "../memory/paths.js"
+import { projectAssignmentSourceRules } from "../memory/assignment-source-rules.js"
+import { MemorizeService } from "../memory/service.js"
+import { parseDatedReadingSchedule } from "./dated-reading-schedule.js"
 
 const TOOL_LIST_COURSES = "canvas.list_courses"
 const TOOL_GET_MY_UPCOMING_ASSIGNMENTS = "canvas.get_my_upcoming_assignments"
@@ -41,6 +50,8 @@ const TOOL_LIST_ASSIGNMENTS = "canvas.list_assignments"
 const TOOL_GET_COURSE_CONTENT_OVERVIEW = "canvas.get_course_content_overview"
 const TOOL_GET_COURSE_STRUCTURE = "canvas.get_course_structure"
 const TOOL_DOWNLOAD_COURSE_FILE = "canvas.download_course_file"
+const TOOL_GET_FRONT_PAGE = "canvas.get_front_page"
+const TOOL_GET_PAGE_CONTENT = "canvas.get_page_content"
 
 type SubmissionBucket = "submitted" | "pending" | "overdue"
 
@@ -58,16 +69,40 @@ type CourseworkRow = {
   id: string
   course_id: string
   title: string
+  description: string | null
   effective_due_at: string | null
   source_type: string
+  source_due_date_kind: string | null
   freshness_status: string
+  cached_at: string | null
+  last_verified_at: string | null
+  source_updated_at: string | null
   points_possible: number | null
   submission_status: string | null
   grade: string | null
   html_url: string | null
   canvas_assignment_id: string | null
+  assignment_source_id: string | null
   is_upcoming: number | null
   status_bucket: SubmissionBucket | null
+}
+
+type ArchivedCourseworkRow = {
+  id: string
+}
+
+type AssignmentSourceRow = {
+  id: string
+  local_course_id: string
+  canvas_course_id: string
+  source_kind: "canvas_page"
+  url: string
+  parser: "dated_reading_schedule"
+  purpose: string | null
+}
+
+type MemoryGraphPreferenceRow = {
+  memory_graph_path: string | null
 }
 
 type CourseGradeSummaryRow = {
@@ -101,6 +136,8 @@ type SyncedAssignmentRecord = {
   statusBucket?: SubmissionBucket
 }
 
+export type CanvasMemoryPromotionFlush = () => Promise<void>
+
 export interface CanvasSyncServiceShape {
   readonly sync: () => Promise<void>
   readonly listCourses: () => Course[]
@@ -115,6 +152,7 @@ export interface CanvasSyncServiceShape {
   readonly getMyPeerReviewsTodo: (courseId?: string) => CanvasStudentPeerReviewTodo[]
   readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<CanvasAssignmentDetailsResult>
   readonly listAssignments: (params: CanvasListAssignmentsParams) => Promise<CanvasListAssignmentsResult>
+  readonly archiveAssignment: (assignmentId: CanvasArchiveAssignmentParams["assignmentId"]) => CanvasArchiveAssignmentResult
   readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<CanvasCourseContentOverviewResult>
   readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<CanvasCourseStructureResult>
   readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<CanvasDownloadCourseFileResult>
@@ -132,6 +170,18 @@ function logError(context: string, error: unknown): void {
 
 function logGatewayFailure(context: string, failure: GatewayToolCallFailure): void {
   process.stderr.write(`[CanvasSync] ${context} (${failure.reason}): ${failure.message}\n`)
+}
+
+async function flushMemoryPromotion(
+  memoryPromotionFlush?: CanvasMemoryPromotionFlush,
+): Promise<void> {
+  if (!memoryPromotionFlush) return
+
+  try {
+    await memoryPromotionFlush()
+  } catch (error) {
+    logError("memory promotion flush failed", error)
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -218,10 +268,15 @@ function mergeItem(base: CourseWorkItem | undefined, next: CourseWorkItem): Cour
   return {
     ...base,
     title: next.title || base.title,
+    description: next.description ?? base.description,
     effectiveDueAt: next.effectiveDueAt ?? base.effectiveDueAt,
     sourceType: next.sourceType ?? base.sourceType,
     sourceId: next.sourceId ?? base.sourceId,
+    sourceDueDateKind: next.sourceDueDateKind ?? base.sourceDueDateKind,
     freshnessStatus: next.freshnessStatus ?? base.freshnessStatus,
+    cachedAt: next.cachedAt ?? base.cachedAt,
+    lastVerifiedAt: next.lastVerifiedAt ?? base.lastVerifiedAt,
+    sourceUpdatedAt: next.sourceUpdatedAt ?? base.sourceUpdatedAt,
     pointsPossible: next.pointsPossible ?? base.pointsPossible,
     submissionStatus: next.submissionStatus ?? base.submissionStatus,
     grade: next.grade ?? base.grade,
@@ -262,35 +317,60 @@ function extractAssignmentMap(
   return records
 }
 
-function replaceAssignmentState(
+function writeCourseworkRecord(
+  database: DatabaseService,
+  record: SyncedAssignmentRecord,
+  assignmentSourceId: string | null,
+): void {
+  const item = record.item
+  database.execute(
+    `INSERT OR REPLACE INTO coursework_items
+       (id, course_id, title, description, effective_due_at, source_type, source_due_date_kind,
+        freshness_status, cached_at, last_verified_at, source_updated_at, points_possible,
+        submission_status, grade, html_url, canvas_assignment_id, assignment_source_id,
+        is_upcoming, status_bucket)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      item.id,
+      item.courseId,
+      item.title,
+      item.description ?? null,
+      item.effectiveDueAt ?? null,
+      item.sourceType,
+      item.sourceDueDateKind ?? null,
+      item.freshnessStatus,
+      item.cachedAt ?? null,
+      item.lastVerifiedAt ?? null,
+      item.sourceUpdatedAt ?? null,
+      item.pointsPossible ?? null,
+      item.submissionStatus ?? null,
+      item.grade ?? null,
+      item.htmlUrl ?? null,
+      item.sourceId,
+      assignmentSourceId,
+      record.isUpcoming ? 1 : 0,
+      record.statusBucket ?? null,
+    ],
+  )
+}
+
+function readArchivedCourseworkIds(database: DatabaseService): Set<string> {
+  return new Set(
+    database.query<ArchivedCourseworkRow>("SELECT id FROM archived_coursework_items")
+      .map((row) => row.id),
+  )
+}
+
+function replaceOfficialAssignmentState(
   database: DatabaseService,
   records: ReadonlyMap<string, SyncedAssignmentRecord>,
 ): void {
-  database.execute("DELETE FROM coursework_items")
+  const archivedIds = readArchivedCourseworkIds(database)
+  database.execute("DELETE FROM coursework_items WHERE source_type = 'assignment'")
 
   for (const record of records.values()) {
-    const item = record.item
-    database.execute(
-      `INSERT INTO coursework_items
-         (id, course_id, title, effective_due_at, source_type, freshness_status,
-          points_possible, submission_status, grade, html_url, canvas_assignment_id, is_upcoming, status_bucket)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        item.id,
-        item.courseId,
-        item.title,
-        item.effectiveDueAt ?? null,
-        item.sourceType,
-        item.freshnessStatus,
-        item.pointsPossible ?? null,
-        item.submissionStatus ?? null,
-        item.grade ?? null,
-        item.htmlUrl ?? null,
-        item.sourceId,
-        record.isUpcoming ? 1 : 0,
-        record.statusBucket ?? null,
-      ],
-    )
+    if (archivedIds.has(record.item.id)) continue
+    writeCourseworkRecord(database, record, null)
   }
 }
 
@@ -351,7 +431,7 @@ function replacePeerReviewTodo(
   database.execute("DELETE FROM canvas_peer_review_todo")
   for (const item of items) {
     database.execute(
-      `INSERT INTO canvas_peer_review_todo
+      `INSERT OR REPLACE INTO canvas_peer_review_todo
          (id, course_id, assignment_id, assignment_name, reviewee_user_id, assessor_user_id, workflow_state)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -426,11 +506,11 @@ function readAssignments(database: DatabaseService): Array<CourseWorkItem & {
   readonly statusBucket?: SubmissionBucket
 }> {
   const rows = database.query<CourseworkRow>(
-    `SELECT id, course_id, title, effective_due_at, source_type, freshness_status,
-            points_possible, submission_status, grade, html_url, canvas_assignment_id,
-            is_upcoming, status_bucket
+    `SELECT id, course_id, title, description, effective_due_at, source_type,
+            source_due_date_kind, freshness_status, cached_at, last_verified_at,
+            source_updated_at, points_possible, submission_status, grade, html_url,
+            canvas_assignment_id, assignment_source_id, is_upcoming, status_bucket
      FROM coursework_items
-     WHERE source_type = 'assignment'
      ORDER BY effective_due_at ASC NULLS LAST`,
   )
 
@@ -438,10 +518,17 @@ function readAssignments(database: DatabaseService): Array<CourseWorkItem & {
     id: row.id as CourseWorkItem["id"],
     courseId: row.course_id as CourseWorkItem["courseId"],
     title: row.title,
+    description: row.description ?? undefined,
     effectiveDueAt: row.effective_due_at ?? undefined,
-    sourceType: "assignment" as const,
+    sourceType: row.source_type as CourseWorkItem["sourceType"],
     sourceId: row.canvas_assignment_id ?? row.id,
+    sourceDueDateKind: row.source_due_date_kind
+      ? row.source_due_date_kind as CourseWorkItem["sourceDueDateKind"]
+      : undefined,
     freshnessStatus: row.freshness_status as CourseWorkItem["freshnessStatus"],
+    cachedAt: row.cached_at ?? undefined,
+    lastVerifiedAt: row.last_verified_at ?? undefined,
+    sourceUpdatedAt: row.source_updated_at ?? undefined,
     pointsPossible: row.points_possible ?? undefined,
     submissionStatus: row.submission_status ?? undefined,
     grade: row.grade ?? undefined,
@@ -501,10 +588,181 @@ function readPeerReviewTodo(database: DatabaseService): CanvasStudentPeerReviewT
   }))
 }
 
+function resolveMemoryPaths(database: DatabaseService) {
+  const row = database.get<MemoryGraphPreferenceRow>(
+    "SELECT memory_graph_path FROM user_preferences WHERE id = 1",
+  )
+  return createMemoryPaths({
+    env: process.env,
+    graphDirOverride: row?.memory_graph_path ?? null,
+  })
+}
+
+function readEnabledAssignmentSources(database: DatabaseService): AssignmentSourceRow[] {
+  return database.query<AssignmentSourceRow>(
+    `SELECT id, local_course_id, canvas_course_id, source_kind, url, parser, purpose
+     FROM course_assignment_sources
+     WHERE enabled = 1 AND local_course_id IS NOT NULL
+     ORDER BY updated_at ASC`,
+  )
+}
+
+function updateAssignmentSourceChecked(
+  database: DatabaseService,
+  sourceId: string,
+  error: string | null,
+  now: Date,
+): void {
+  database.execute(
+    `UPDATE course_assignment_sources
+     SET last_checked_at = ?, last_error = ?, updated_at = ?
+     WHERE id = ?`,
+    [now.toISOString(), error, now.toISOString(), sourceId],
+  )
+}
+
+function sourcePageIdFromUrl(url: string): { type: "front" } | { type: "page"; pageId: string } {
+  const parsed = new URL(url)
+  const parts = parsed.pathname.split("/").filter(Boolean)
+  const wikiIndex = parts.findIndex((part) => part === "wiki")
+  if (wikiIndex >= 0 && wikiIndex === parts.length - 1) {
+    return { type: "front" }
+  }
+  const pagesIndex = parts.findIndex((part) => part === "pages")
+  const pageId = pagesIndex >= 0 ? parts[pagesIndex + 1] : undefined
+  return pageId ? { type: "page", pageId } : { type: "front" }
+}
+
+function statusForInferredItem(item: CourseWorkItem, now: Date): {
+  readonly isUpcoming: boolean
+  readonly statusBucket: SubmissionBucket
+} {
+  if (!item.effectiveDueAt) {
+    return { isUpcoming: false, statusBucket: "pending" }
+  }
+  const due = new Date(item.effectiveDueAt).getTime()
+  const current = now.getTime()
+  return due >= current
+    ? { isUpcoming: true, statusBucket: "pending" }
+    : { isUpcoming: false, statusBucket: "overdue" }
+}
+
+function markMissingSourceItemsStale(
+  database: DatabaseService,
+  sourceId: string,
+  freshIds: readonly string[],
+  now: Date,
+): void {
+  if (freshIds.length === 0) {
+    database.execute(
+      `UPDATE coursework_items
+       SET freshness_status = 'stale', last_verified_at = ?
+       WHERE assignment_source_id = ? AND source_type = 'page'`,
+      [now.toISOString(), sourceId],
+    )
+    return
+  }
+
+  const placeholders = freshIds.map(() => "?").join(", ")
+  database.execute(
+    `UPDATE coursework_items
+     SET freshness_status = 'stale', last_verified_at = ?
+     WHERE assignment_source_id = ? AND source_type = 'page' AND id NOT IN (${placeholders})`,
+    [now.toISOString(), sourceId, ...freshIds],
+  )
+}
+
+async function fetchAssignmentSourcePage(
+  gateway: PluginGatewayService,
+  source: AssignmentSourceRow,
+) {
+  const lookup = sourcePageIdFromUrl(source.url)
+  if (lookup.type === "front") {
+    return callDecodedTool(
+      gateway,
+      TOOL_GET_FRONT_PAGE,
+      { courseId: source.canvas_course_id },
+      CanvasGetFrontPageResult,
+    )
+  }
+  return callDecodedTool(
+    gateway,
+    TOOL_GET_PAGE_CONTENT,
+    { courseId: source.canvas_course_id, pageId: lookup.pageId },
+    CanvasPageLookupResult,
+  )
+}
+
+async function syncRememberedAssignmentSources(
+  gateway: PluginGatewayService,
+  database: DatabaseService,
+  sources: readonly AssignmentSourceRow[],
+  now: Date,
+): Promise<void> {
+  const courses = new Map(readCourses(database).map((course) => [course.id, course]))
+
+  for (const source of sources) {
+    const course = courses.get(source.local_course_id as Course["id"])
+    if (!course) {
+      updateAssignmentSourceChecked(database, source.id, "Local course not found.", now)
+      continue
+    }
+
+    try {
+      const result = await fetchAssignmentSourcePage(gateway, source)
+      const page = result.page
+      const body = page.body ?? ""
+      const parsedItems = source.parser === "dated_reading_schedule"
+        ? parseDatedReadingSchedule({
+            body,
+            course,
+            sourceId: source.id,
+            sourceUrl: page.html_url ?? source.url,
+            sourceUpdatedAt: page.updated_at ?? undefined,
+            now,
+          })
+        : []
+      console.log(
+        `[CanvasSync] remembered assignment source ${source.id} parsed ${parsedItems.length} item(s) for ${course.name} (${course.code})`,
+      )
+
+      const archivedIds = readArchivedCourseworkIds(database)
+      const visibleItems = parsedItems.filter((item) => !archivedIds.has(item.id))
+      const freshIds = visibleItems.map((item) => item.id)
+      database.transaction(() => {
+        for (const item of visibleItems) {
+          const status = statusForInferredItem(item, now)
+          writeCourseworkRecord(
+            database,
+            {
+              item,
+              isUpcoming: status.isUpcoming,
+              statusBucket: status.statusBucket,
+            },
+            source.id,
+          )
+        }
+        markMissingSourceItemsStale(database, source.id, freshIds, now)
+        updateAssignmentSourceChecked(database, source.id, null, now)
+      })
+    } catch (error) {
+      logError(`remembered assignment source ${source.id} failed`, error)
+      updateAssignmentSourceChecked(
+        database,
+        source.id,
+        error instanceof Error ? error.message : String(error),
+        now,
+      )
+    }
+  }
+}
+
 export function createSyncService(
   gateway: PluginGatewayService,
   pushBus: PushBusService,
   database: DatabaseService,
+  memoryPathsOverride?: MemoryPaths,
+  memoryPromotionFlush?: CanvasMemoryPromotionFlush,
 ): CanvasSyncServiceShape {
   let inFlight: Promise<void> | null = null
 
@@ -571,11 +829,21 @@ export function createSyncService(
 
       database.transaction(() => {
         upsertCourses(database, courses)
-        replaceAssignmentState(database, assignmentRecords)
+        replaceOfficialAssignmentState(database, assignmentRecords)
         replaceCourseGradeSummaries(database, courseGrades.courses)
         replaceTodoItems(database, todoItems)
         replacePeerReviewTodo(database, peerReviewsTodo)
       })
+
+      const memoryPaths = memoryPathsOverride ?? resolveMemoryPaths(database)
+      await flushMemoryPromotion(memoryPromotionFlush)
+      projectAssignmentSourceRules(database, memoryPaths)
+      await syncRememberedAssignmentSources(
+        gateway,
+        database,
+        readEnabledAssignmentSources(database),
+        new Date(),
+      )
 
       void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
         courseId: "",
@@ -646,6 +914,52 @@ export function createSyncService(
     return callDecodedTool(gateway, TOOL_GET_ASSIGNMENT_DETAILS, params, CanvasAssignmentDetailsResult)
   }
 
+  function archiveAssignment(
+    assignmentId: CanvasArchiveAssignmentParams["assignmentId"],
+  ): CanvasArchiveAssignmentResult {
+    const existingArchive = database.get<ArchivedCourseworkRow>(
+      "SELECT id FROM archived_coursework_items WHERE id = ?",
+      [assignmentId],
+    )
+    if (existingArchive) {
+      return { archived: true, assignmentId }
+    }
+
+    const row = database.get<CourseworkRow>(
+      `SELECT id, course_id, title, description, effective_due_at, source_type,
+              source_due_date_kind, freshness_status, cached_at, last_verified_at,
+              source_updated_at, points_possible, submission_status, grade, html_url,
+              canvas_assignment_id, assignment_source_id, is_upcoming, status_bucket
+       FROM coursework_items
+       WHERE id = ?`,
+      [assignmentId],
+    )
+    if (!row) {
+      throw new Error(`Assignment ${assignmentId} was not found in local coursework.`)
+    }
+
+    const now = new Date().toISOString()
+    database.transaction(() => {
+      database.execute(
+        `INSERT INTO archived_coursework_items
+           (id, course_id, source_type, source_id, title, html_url, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.id,
+          row.course_id,
+          row.source_type,
+          row.canvas_assignment_id ?? row.id,
+          row.title,
+          row.html_url,
+          now,
+        ],
+      )
+      database.execute("DELETE FROM coursework_items WHERE id = ?", [assignmentId])
+    })
+
+    return { archived: true, assignmentId }
+  }
+
   async function listAssignments(
     params: CanvasListAssignmentsParams,
   ): Promise<CanvasListAssignmentsResult> {
@@ -685,6 +999,7 @@ export function createSyncService(
     getMyPeerReviewsTodo,
     getAssignmentDetails,
     listAssignments,
+    archiveAssignment,
     getCourseContentOverview,
     getCourseStructure,
     downloadCourseFile,
@@ -697,6 +1012,9 @@ export const CanvasSyncServiceLive = Layer.effect(
     const gateway = yield* PluginGateway
     const pushBus = yield* PushBus
     const database = yield* Database
-    return createSyncService(gateway, pushBus, database)
+    const memorize = yield* MemorizeService
+    return createSyncService(gateway, pushBus, database, undefined, async () => {
+      await memorize.runIfNeeded(new Date(), { trigger: "auto" })
+    })
   }),
 )

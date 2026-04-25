@@ -19,6 +19,7 @@ import {
   getTodoItems,
   getUpcomingAssignments,
   getUpcomingDeadlines,
+  removeArchivedAssignmentFromCanvasState,
   resetCanvasStateForTests,
   setCourseGrades,
   setCourses,
@@ -184,6 +185,27 @@ describe("canvasState", () => {
     expect(upcoming[0].title).toBe("Due in 1 day")
     expect(upcoming[1].title).toBe("Due in 3 days")
     expect(upcoming[2].title).toBe("Due in 5 days")
+  })
+
+  test("removes archived assignments from upcoming and submission buckets", () => {
+    setUpcomingAssignments([
+      makeItem("i1", "c1", "HW1"),
+      makeItem("i2", "c1", "HW2"),
+    ])
+    setSubmissionStatus({
+      submitted: [makeItem("i1", "c1", "Done")],
+      pending: [makeItem("i2", "c1", "Soon")],
+      overdue: [makeItem("i3", "c1", "Late")],
+    })
+
+    removeArchivedAssignmentFromCanvasState("i2")
+
+    expect(getUpcomingAssignments().map((item) => item.id)).toEqual(["i1"])
+    expect(getSubmissionStatus()).toEqual({
+      submitted: [expect.objectContaining({ id: "i1" })],
+      pending: [],
+      overdue: [expect.objectContaining({ id: "i3" })],
+    })
   })
 
   test("resetCanvasStateForTests clears all atoms", () => {

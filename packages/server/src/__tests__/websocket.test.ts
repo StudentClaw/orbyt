@@ -108,6 +108,7 @@ function makeDependencies() {
         throw new Error("not implemented in websocket test")
       },
       listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
+      archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
       getCourseContentOverview: async () => ({
         course: undefined,
         pageCount: 0,
@@ -230,5 +231,42 @@ describe("Router", () => {
     expect(response.ok).toBe(true)
     expect(response.result.title).toContain("Weekly insight")
     expect(response.result.weekKey).toBe(getWeekKey(new Date()))
+  })
+
+  test("canvas.archiveAssignment routes validated params to the sync service", async () => {
+    const response = JSON.parse(
+      (await routeMessage(JSON.stringify({
+        kind: "request",
+        method: RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT,
+        id: "archive-1",
+        params: { assignmentId: "canvas-coursework:assignment:1:101" },
+      }), mockWs, makeDependencies())).response,
+    )
+
+    expect(response.ok).toBe(true)
+    expect(response.result).toEqual({
+      archived: true,
+      assignmentId: "canvas-coursework:assignment:1:101",
+    })
+  })
+
+  test("canvas.archiveAssignment returns a domain error when the item is unknown", async () => {
+    const deps = makeDependencies()
+    deps.canvasSync.archiveAssignment = () => {
+      throw new Error("Assignment missing")
+    }
+
+    const response = JSON.parse(
+      (await routeMessage(JSON.stringify({
+        kind: "request",
+        method: RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT,
+        id: "archive-2",
+        params: { assignmentId: "canvas-coursework:assignment:1:404" },
+      }), mockWs, deps)).response,
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response.error.code).toBe("archive_assignment_failed")
+    expect(response.error.message).toBe("Assignment missing")
   })
 })

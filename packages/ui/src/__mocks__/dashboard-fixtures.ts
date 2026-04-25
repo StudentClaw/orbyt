@@ -488,7 +488,7 @@ export const MOCK_INSIGHTS: ReadonlyArray<InsightData> = [
     action: {
       label: "Plan my week",
       prompt:
-        "I have 3 deadlines landing within 48 hours: Lab Report: Synthesis of Aspirin (CHEM 202, due tomorrow), Pre-lab Quiz: Distillation (CHEM 202, due tomorrow), and Problem Set 5: Recursion (CS 101, due in 2 days). Build me a day-by-day study plan for the next 3 days. Prioritize by urgency and effort, include specific time blocks, and account for the fact that I already have study sessions scheduled today.",
+        "Plan my week using my current calendar availability and the coursework due this week.\n\n[$scheduling-session](/Users/paul/.codex/skills/scheduling-session/SKILL.md)",
     },
   },
   {

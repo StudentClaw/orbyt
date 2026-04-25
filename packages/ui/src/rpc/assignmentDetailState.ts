@@ -7,7 +7,7 @@ import type {
 } from "@orbyt/contracts"
 import { waitForPrimaryWsRpcClient } from "./appRuntime"
 import { appAtomRegistry, createAtom, useAtomValue } from "./atomRegistry"
-import { getCourses, getSubmissionStatus, getUpcomingAssignments } from "./canvasState"
+import { getCourses, getSubmissionStatus, getUpcomingAssignments, useKnownCourseworkItemTitle } from "./canvasState"
 
 export interface AssignmentPreview {
   readonly assignmentId: string
@@ -163,6 +163,15 @@ export function seedAssignmentPreview(preview: AssignmentPreview): void {
   mergeEntry(preview.assignmentId, { preview })
 }
 
+export function removeAssignmentDetailEntry(assignmentId: string): void {
+  const current = appAtomRegistry.get(assignmentDetailEntriesAtom)
+  if (!(assignmentId in current)) return
+
+  const next = { ...current }
+  delete next[assignmentId]
+  appAtomRegistry.set(assignmentDetailEntriesAtom, next)
+}
+
 export function useAssignmentDetailEntry(assignmentId: string): AssignmentDetailEntry {
   return useAtomValue(
     assignmentDetailEntriesAtom,
@@ -171,7 +180,7 @@ export function useAssignmentDetailEntry(assignmentId: string): AssignmentDetail
 }
 
 export function useAssignmentDisplayTitle(assignmentId: string | null): string | null {
-  return useAtomValue(assignmentDetailEntriesAtom, (entries) => {
+  const fromEntry = useAtomValue(assignmentDetailEntriesAtom, (entries) => {
     if (!assignmentId) {
       return null
     }
@@ -179,6 +188,8 @@ export function useAssignmentDisplayTitle(assignmentId: string | null): string |
     const entry = entries[assignmentId]
     return entry?.detail?.item.title ?? entry?.preview?.title ?? null
   })
+  const fromCanvas = useKnownCourseworkItemTitle(assignmentId)
+  return fromEntry ?? fromCanvas
 }
 
 export async function loadAssignmentDetail(assignmentId: string): Promise<void> {

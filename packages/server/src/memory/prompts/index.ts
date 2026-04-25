@@ -41,6 +41,10 @@ Only include facts that are durable (preferences, stable course rules, professor
 patterns), not one-time events. Format each line exactly as:
 - candidate: "<the fact>" (source: conversation, confidence: <0.0-1.0>, branch: <branch>)
 
+If the student says a professor posts homework, readings, quizzes, or assignment
+instructions on a durable Canvas page URL, include that URL in the candidate
+fact and use the matching course branch.
+
 Where \`<branch>\` is one of:
 - \`school/courses/<course-slug>\` — course-specific facts (e.g. \`school/courses/cs-301\`)
 - \`school/playbooks/<playbook-slug>\` — reusable cross-course strategies
@@ -98,6 +102,10 @@ List insights that should probably move into the permanent memory graph.
 Only include stable, reusable lessons — not week-specific events.
 Format each line exactly as:
 - lesson: "<the lesson>" (confidence: <0.0-1.0>, branch: <branch>)
+
+If the lesson is that a course uses a specific Canvas page for homework,
+readings, quizzes, or assignment instructions, include the Canvas page URL in
+the lesson and use the matching course branch.
 
 Where \`<branch>\` is one of:
 - \`school/courses/<course-slug>\` — course-specific lessons
