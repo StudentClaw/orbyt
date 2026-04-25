@@ -115,8 +115,18 @@ export function startActivityStateSync(client: WsRpcClient): () => void {
 
   const cleanups = [
     client.activity.onFeedUpdate((event) => {
-      if (!disposed) {
-        applyActivityFeedUpsertEvent(event)
+      if (disposed) return
+      applyActivityFeedUpsertEvent(event)
+      if (event.notify) {
+        // Lazy-import to avoid pulling Electron-only code into headless test paths.
+        void import("../lib/nativeNotification.js")
+          .then(({ showDesktopNotification }) =>
+            showDesktopNotification({
+              title: event.title,
+              body: event.body ?? "",
+            }),
+          )
+          .catch(() => undefined)
       }
     }),
   ]

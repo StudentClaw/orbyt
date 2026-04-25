@@ -6,12 +6,9 @@ import type {
   SalienceClassifier,
   SalienceTurn,
 } from "./salience/classifier.js"
-import { CodexMemorizeDistiller } from "./distiller.js"
+import { CodexMemorizeDistiller, MEMORIZE_THREAD_ID, MEMORIZE_SALIENCE_THREAD_ID } from "./distiller.js"
 import { CodexCli } from "../ai/CodexCli.js"
 import { TurnEventBus } from "../orchestration/TurnEventBus.js"
-import {
-  MEMORIZE_THREAD_ID,
-} from "./distiller.js"
 
 export interface MemorizeTriggerHookOptions {
   readonly onRan?: (result: MemorizeRunResult) => void | Promise<void>
@@ -40,8 +37,10 @@ export const MemorizeTriggerServiceLive = Layer.effect(
     const eventBus = yield* TurnEventBus
     const codex = yield* CodexCli
 
+    // Salience classifier uses its own thread so prior classification verdicts
+    // don't pollute the daily distillation thread's conversation history.
     const classifier: SalienceClassifier = new LlmSalienceClassifier(
-      new CodexMemorizeDistiller(codex),
+      new CodexMemorizeDistiller(codex, MEMORIZE_SALIENCE_THREAD_ID),
     )
 
     let isRunning = false

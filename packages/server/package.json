@@ -16,6 +16,7 @@
     "@orbyt/contracts": "workspace:*",
     "@orbyt/shared": "workspace:*",
     "@orbyt/shared-runtime": "workspace:*",
+    "cron-parser": "^5.5.0",
     "effect": "^3.21.0",
     "gray-matter": "^4.0.3",
     "ws": "^8.20.0"

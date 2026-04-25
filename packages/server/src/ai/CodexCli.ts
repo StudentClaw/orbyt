@@ -174,6 +174,8 @@ export interface CodexCliService {
     cwd?: string | null
     accessMode?: ThreadAccessMode
     model?: string | null
+    /** Optional context block injected as `<student_state>` on every turn. */
+    studentState?: string | null
     onToken: (token: string, index: number) => Promise<void>
     onReasoning: (token: string, index: number) => Promise<void>
     onCompleted: () => Promise<void>
@@ -587,10 +589,13 @@ export function createCodexRuntimeInstance(
     if (method === "turn/completed") {
       activeProviderTurns.delete(activeTurn.localTurnId)
       clearPendingApprovalsForTurn(activeTurn.localTurnId)
-      await runtimeStore.updateState({
-        status: "idle",
-        lastError: null,
-      })
+      const currentState = await runtimeStore.getState()
+      if (currentState.status !== "rate_limited") {
+        await runtimeStore.updateState({
+          status: "idle",
+          lastError: null,
+        })
+      }
       const status = readString(turn, "status")
       if (status === "interrupted") {
         await activeTurn.onInterrupted()
@@ -936,6 +941,10 @@ export function createCodexRuntimeInstance(
         turnText = `<system>\n${ARTIFACT_CONTRACT}\n</system>\n\n${input.content}`
         artifactPreambleSentThreads.add(input.localThreadId)
         preambleAddedForFirstSend = true
+      }
+      const studentState = (input.studentState ?? "").trim()
+      if (studentState.length > 0) {
+        turnText = `<student_state>\n${studentState}\n</student_state>\n\n${turnText}`
       }
 
       // Pre-register the active turn BEFORE sending `turn/start`. Notifications

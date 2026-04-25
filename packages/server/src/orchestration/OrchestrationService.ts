@@ -45,6 +45,7 @@ import { ServerReadiness, type ServerReadinessService } from "../runtime/ServerR
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { RuntimeReceiptBus, type RuntimeReceiptBusService } from "./RuntimeReceiptBus.js"
 import { TurnEventBus } from "./TurnEventBus.js"
+import { ProactiveMemory } from "../proactive/index.js"
 import { tokenizeStubResponse } from "./StubProvider.js"
 import {
   ThreadRuntimeBusyError,
@@ -1576,6 +1577,7 @@ export const OrchestrationServiceLive = Layer.scoped(
     const codexCli = yield* CodexCli
     const threadRuntimeManager = yield* ThreadRuntimeManager
     const turnEventBus = yield* TurnEventBus
+    const proactiveMemory = yield* ProactiveMemory
     const activeTurns = new Map<string, { interrupted: boolean }>()
     const workQueue: WorkItem[] = []
     let drainingQueue = false
@@ -1842,6 +1844,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           cwd: executionCwd,
           accessMode: thread?.accessMode ?? "default",
           model: work.model,
+          studentState: proactiveMemory.readSoul(),
           onToken: async (token, index) => {
             if (activeTurns.get(work.turnId)?.interrupted) {
               const interrupted = await codexCli.interruptTurn(work.threadId, work.turnId)

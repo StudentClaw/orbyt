@@ -40,7 +40,7 @@ import {
 } from "@orbyt/contracts"
 import type { WebSocket } from "ws"
 import type { AppConfig } from "../config/defaults.js"
-import { generateWeeklyInsight } from "../activity/feed.js"
+import { generateWeeklyInsight, setActivityActedOn } from "../activity/feed.js"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
@@ -266,6 +266,14 @@ async function handleActivityMethod(
         database: dependencies.database,
         config: dependencies.config,
       }))
+    case RPC_METHODS.ACTIVITY_SET_ACTED: {
+      const params = (request.params ?? {}) as { id?: unknown; acted?: unknown }
+      if (typeof params.id !== "string" || typeof params.acted !== "boolean") {
+        return encodeError(id, "INVALID_PARAMS", "id (string) and acted (boolean) are required")
+      }
+      setActivityActedOn(dependencies.database, { id: params.id, acted: params.acted })
+      return encodeSuccess(id, { ok: true })
+    }
     default:
       return null
   }

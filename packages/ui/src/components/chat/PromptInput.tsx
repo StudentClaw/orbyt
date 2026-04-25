@@ -9,6 +9,7 @@ import {
   type TurnAttachmentInput,
 } from "@orbyt/contracts"
 import { PlusIcon, SquareIcon } from "lucide-react"
+import { toast } from "sonner"
 import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
 import { SkillPicker, filterSkills, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import { ChatAttachments } from "@/components/chat/ChatAttachments"
@@ -487,15 +488,21 @@ export function PromptInput({
       return
     }
 
-    await onSend({
-      content: text,
-      attachments: validatedAttachments,
-      ...(skillId ? { skillId } : {}),
-    })
+    try {
+      await onSend({
+        content: text,
+        attachments: validatedAttachments,
+        ...(skillId ? { skillId } : {}),
+      })
 
-    composerRef.current?.clear()
-    setAttachments([])
-    setAttachmentError(null)
+      composerRef.current?.clear()
+      setAttachments([])
+      setAttachmentError(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send message."
+      console.error("Failed to send chat message", error)
+      toast.error(message)
+    }
   }, [attachments.length, disabled, isConnected, onSend, validateAttachments, waitingForTurn])
 
   const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
