@@ -833,7 +833,6 @@ export function PromptInput({
               align="start"
               side="top"
               sideOffset={8}
-              onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
               onInteractOutside={(e) => {
                 const target = e.target as Element | null
@@ -889,7 +888,6 @@ export function PromptInput({
               align="start"
               side="top"
               sideOffset={8}
-              onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
               onInteractOutside={(e) => {
                 const target = e.target as Element | null

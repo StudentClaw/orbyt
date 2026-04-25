@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
@@ -28,6 +28,36 @@ const TOAST_ID_PLANNER = "dashboard-planner-stream"
 const SUBMITTED_PAGE_SIZE = 12
 const SCHEDULING_SESSION_SKILL_MENTION =
   "[$scheduling-session](/Users/paul/.codex/skills/scheduling-session/SKILL.md)"
+
+function getCanvasSyncProgressCopy(progress: number): { title: string; description: string } {
+  const percent = Math.round(progress)
+
+  if (percent < 15) {
+    return {
+      title: `Opening the Canvas backpack (${percent}%)`,
+      description: "Checking the connection before courses, grades, and deadlines come along for the ride.",
+    }
+  }
+
+  if (percent < 65) {
+    return {
+      title: `Gathering course intel (${percent}%)`,
+      description: "Pulling assignments, due dates, submissions, and grade snapshots into one place.",
+    }
+  }
+
+  if (percent < 95) {
+    return {
+      title: `Sorting the homework stack (${percent}%)`,
+      description: "Saving the latest Canvas updates so priorities and plans can reshuffle cleanly.",
+    }
+  }
+
+  return {
+    title: `Almost fresh (${percent}%)`,
+    description: "Finishing the dashboard refresh with your newest coursework details.",
+  }
+}
 
 function derivePriorityItems(
   courses: ReadonlyArray<{ id: string; code: string; name: string; color?: string }>,
@@ -168,6 +198,7 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const snapshot = useRuntimeOrchestrationSnapshot()
   const actions = useOrchestrationActions()
+  const hasShownActiveSyncToast = useRef(false)
   const [filter, setFilter] = useState<FilterScope>("thisWeek")
   const [submittedPage, setSubmittedPage] = useState(0)
   const [archivingAssignmentIds, setArchivingAssignmentIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -332,20 +363,55 @@ export function DashboardPage() {
     }
     toast.warning(
       staleness === "stale"
-        ? "Data may be outdated — last synced more than 24 hours ago"
-        : "Offline — showing cached data",
-      { id: TOAST_ID_STALE, duration: Infinity },
+        ? "Canvas might be a little stale"
+        : "Showing your saved Canvas snapshot",
+      {
+        id: TOAST_ID_STALE,
+        duration: Infinity,
+        description:
+          staleness === "stale"
+            ? "Last sync was over 24 hours ago. Refresh to catch new grades, deadlines, and course changes."
+            : "I could not confirm a fresh sync yet, so deadlines and grades may have changed.",
+      },
     )
   }, [isSyncing, lastSync])
 
   useEffect(() => {
-    if (!syncProgress || syncProgress.status !== "syncing") {
+    if (!syncProgress) {
       toast.dismiss(TOAST_ID_SYNC)
       return
     }
-    toast.loading(`Syncing Canvas… ${Math.round(syncProgress.progress)}%`, {
+
+    if (syncProgress.status === "syncing") {
+      hasShownActiveSyncToast.current = true
+      const copy = getCanvasSyncProgressCopy(syncProgress.progress)
+      toast.loading(copy.title, {
+        id: TOAST_ID_SYNC,
+        duration: Infinity,
+        description: copy.description,
+      })
+      return
+    }
+
+    if (!hasShownActiveSyncToast.current) {
+      toast.dismiss(TOAST_ID_SYNC)
+      return
+    }
+
+    hasShownActiveSyncToast.current = false
+    if (syncProgress.status === "done") {
+      toast.success("Canvas is fresh", {
+        id: TOAST_ID_SYNC,
+        duration: 4000,
+        description: "Courses, grades, deadlines, todos, and peer reviews are up to date.",
+      })
+      return
+    }
+
+    toast.error("Canvas sync hit a snag", {
       id: TOAST_ID_SYNC,
-      duration: Infinity,
+      duration: 6000,
+      description: "Your saved dashboard is still here. Try again from Connections when you are ready.",
     })
   }, [syncProgress])
 
