@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { ChatContainer } from "@/components/chat/ChatContainer"
 import { isChatPath, resolveChatRouteSelection } from "@/lib/chatRoutes"
@@ -11,6 +11,10 @@ export function ChatPage() {
   const snapshot = useRuntimeOrchestrationSnapshot()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const selection = resolveChatRouteSelection(pathname)
+  const [pendingCreatedThread, setPendingCreatedThread] = useState<{
+    workspaceId: string
+    threadId: string
+  } | null>(null)
 
   useEffect(() => {
     if (!snapshot || !isChatPath(pathname) || selection.workspaceId) {
@@ -26,6 +30,22 @@ export function ChatPage() {
       })
     }
   }, [navigate, pathname, selection.workspaceId, snapshot])
+
+  useEffect(() => {
+    if (!pendingCreatedThread) {
+      return
+    }
+
+    if (selection.threadId !== pendingCreatedThread.threadId) {
+      setPendingCreatedThread(null)
+      return
+    }
+
+    const threadExists = snapshot?.threads.some((thread) => thread.id === pendingCreatedThread.threadId) ?? false
+    if (threadExists) {
+      setPendingCreatedThread(null)
+    }
+  }, [pendingCreatedThread, selection.threadId, snapshot])
 
   useEffect(() => {
     if (!snapshot || !selection.workspaceId) {
@@ -44,6 +64,14 @@ export function ChatPage() {
 
     const thread = snapshot.threads.find((entry) => entry.id === selection.threadId) ?? null
     if (!thread) {
+      if (
+        pendingCreatedThread
+        && pendingCreatedThread.threadId === selection.threadId
+        && pendingCreatedThread.workspaceId === selection.workspaceId
+      ) {
+        return
+      }
+
       void navigate({
         to: "/chat/$workspaceId",
         params: { workspaceId: selection.workspaceId },
@@ -60,9 +88,10 @@ export function ChatPage() {
         },
       })
     }
-  }, [navigate, selection.threadId, selection.workspaceId, snapshot])
+  }, [navigate, pendingCreatedThread, selection.threadId, selection.workspaceId, snapshot])
 
   const handleThreadCreated = useCallback(async (workspaceId: string, threadId: string) => {
+    setPendingCreatedThread({ workspaceId, threadId })
     await navigate({
       to: "/chat/$workspaceId/$threadId",
       params: {

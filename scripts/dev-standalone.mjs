@@ -1,27 +1,17 @@
-import { randomBytes } from "node:crypto"
 import { spawn } from "node:child_process"
 import process from "node:process"
+import { getSharedDevEnv, runCommand, waitForExit } from "./dev-shared-env.mjs"
 
-const port = process.env.PORT ?? "8787"
-const wsAuthToken = randomBytes(32).toString("hex")
-const sharedEnv = {
-  ...process.env,
-  PORT: port,
-  WS_AUTH_TOKEN: wsAuthToken,
-  VITE_STANDALONE_WS_URL: `ws://127.0.0.1:${port}`,
-  VITE_STANDALONE_WS_AUTH_TOKEN: wsAuthToken,
-  VITE_STANDALONE_APP_VERSION: "0.1.0",
-  VITE_STANDALONE_PLATFORM: process.platform,
-}
+const sharedEnv = getSharedDevEnv(process.env)
 
 let shuttingDown = false
 let requestedExitCode = 0
 
 await runCommand("bun", ["run", "build:shared"], process.env)
 
-process.stdout.write(`Standalone dev bootstrap ready at ws://127.0.0.1:${port}\n`)
+process.stdout.write(`Standalone dev bootstrap ready at ${sharedEnv.VITE_STANDALONE_WS_URL}\n`)
 
-const server = spawn("bun", ["--cwd", "packages/server", "dev"], {
+const server = spawn("bun", ["--watch", "packages/server/src/index.ts"], {
   env: sharedEnv,
   stdio: "inherit",
 })
@@ -56,37 +46,15 @@ process.on("SIGTERM", () => {
 })
 
 const result = await Promise.race([
-  waitForExit("server", server),
-  waitForExit("ui", ui),
+  waitForExitWithShutdown("server", server),
+  waitForExitWithShutdown("ui", ui),
 ])
 
 shutdown("SIGTERM")
 process.exitCode = shuttingDown ? requestedExitCode : result.code
 
-async function runCommand(command, args, env) {
-  const child = spawn(command, args, {
-    env,
-    stdio: "inherit",
-  })
-
-  const result = await waitForExit(command, child)
-  if (result.code !== 0) {
-    process.exit(result.code)
-  }
-}
-
-function waitForExit(label, child) {
-  return new Promise((resolve) => {
-    child.on("exit", (code, signal) => {
-      if (signal && !shuttingDown) {
-        process.stderr.write(`${label} exited from signal ${signal}\n`)
-      }
-
-      resolve({ code: shuttingDown ? requestedExitCode : (code ?? 1) })
-    })
-    child.on("error", (error) => {
-      process.stderr.write(`${label} failed to start: ${String(error)}\n`)
-      resolve({ code: 1 })
-    })
-  })
+function waitForExitWithShutdown(label, child) {
+  return waitForExit(label, child).then((result) => ({
+    code: shuttingDown ? requestedExitCode : result.code,
+  }))
 }

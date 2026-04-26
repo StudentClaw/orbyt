@@ -1,4 +1,4 @@
-export const version = 19
+export const version = 21
 
 export const up = `
   CREATE TABLE IF NOT EXISTS archived_coursework_items (

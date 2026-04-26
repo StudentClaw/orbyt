@@ -1,5 +1,7 @@
 import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
 import { useNavigate } from "@tanstack/react-router"
+import { useState } from "react"
+import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
 
 interface ActivityFeedItemProps {
   readonly entry: ActivityFeedEntryWithMeta
@@ -38,7 +40,21 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     badge: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     label: "Insight",
   },
+  cron: {
+    container: "bg-cyan-500/5 border-cyan-500/20",
+    iconBg: "bg-cyan-500/15 text-cyan-400",
+    badge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    label: "Proactive",
+  },
+  reminder: {
+    container: "bg-pink-500/5 border-pink-500/20",
+    iconBg: "bg-pink-500/15 text-pink-400",
+    badge: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+    label: "Reminder",
+  },
 }
+
+const ACTABLE_CATEGORIES = new Set(["insight", "cron"])
 
 const DEFAULT_STYLE: CategoryStyle = {
   container: "bg-white/5 border-white/10",
@@ -88,12 +104,30 @@ function CategoryIcon({ category }: { readonly category: string }) {
 
 export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
   const navigate = useNavigate()
+  const [actedState, setActedState] = useState<boolean | null>(
+    entry.actedOn ?? null,
+  )
   const style = CATEGORY_STYLES[entry.category] ?? DEFAULT_STYLE
   const animationDelay = `${index * 40}ms`
+  const showActions =
+    ACTABLE_CATEGORIES.has(entry.category) && actedState === null
 
   const handleClick = () => {
     if (entry.deepLink) {
       navigate({ to: entry.deepLink })
+    }
+  }
+
+  const setActed = (acted: boolean) => async (
+    e: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    e.stopPropagation()
+    setActedState(acted)
+    try {
+      const client = getPrimaryWsRpcClient()
+      await client.activity.setActed({ id: entry.id, acted })
+    } catch {
+      setActedState(null)
     }
   }
 
@@ -126,6 +160,34 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
         <p className="text-sm font-medium leading-snug">{entry.title}</p>
         {entry.body && (
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{entry.body}</p>
+        )}
+        {showActions && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={setActed(true)}
+              className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-muted-foreground hover:bg-white/10"
+              data-testid={`activity-item-acted-${entry.id}`}
+            >
+              Mark acted
+            </button>
+            <button
+              type="button"
+              onClick={setActed(false)}
+              className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-muted-foreground hover:bg-white/10"
+              data-testid={`activity-item-dismiss-${entry.id}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {actedState !== null && (
+          <p
+            className="mt-1.5 text-xs italic text-muted-foreground opacity-60"
+            data-testid={`activity-item-acted-state-${entry.id}`}
+          >
+            {actedState ? "Marked acted" : "Dismissed"}
+          </p>
         )}
       </div>
 

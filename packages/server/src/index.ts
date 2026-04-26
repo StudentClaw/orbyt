@@ -19,6 +19,8 @@ import { PushBus, PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
 import { MemorizeService, MemorizeServiceLive } from "./memory/service.js"
+import { CronScheduler, CronServiceLive, CronStore, seedDefaultJobs } from "./cron/index.js"
+import { ProactiveMemoryLive } from "./proactive/index.js"
 
 const CoreLive = Layer.mergeAll(
   ConfigServiceLive,
@@ -29,6 +31,7 @@ const CoreLive = Layer.mergeAll(
   TurnEventBusLive,
   SkillResolverLive,
   SkillManagementLive.pipe(Layer.provide(ConfigServiceLive)),
+  ProactiveMemoryLive,
 )
 
 const RuntimeStoreLive = ProviderRuntimeStoreLive.pipe(Layer.provideMerge(CoreLive))
@@ -71,6 +74,11 @@ const MemorizeTriggerLive = MemorizeTriggerServiceLive.pipe(
   Layer.provideMerge(CoreLive),
 )
 
+const CronLive = CronServiceLive.pipe(
+  Layer.provideMerge(ProviderLive),
+  Layer.provideMerge(CoreLive),
+)
+
 const WebSocketLive = WebSocketServerLive.pipe(
   Layer.provideMerge(OrchestrationLive),
   Layer.provideMerge(CanvasSyncLive),
@@ -84,6 +92,7 @@ const MainLive = Layer.mergeAll(
   CanvasSyncLive,
   MemorizeLive,
   MemorizeTriggerLive,
+  CronLive,
   WebSocketLive,
 )
 
@@ -108,6 +117,8 @@ const program = Effect.gen(function* () {
   const canvasSync = yield* CanvasSyncService
   const memorize = yield* MemorizeService
   const memorizeTrigger = yield* MemorizeTriggerService
+  const cronScheduler = yield* CronScheduler
+  const cronStore = yield* CronStore
   const pushBus = yield* PushBus
 
   readiness.markReady()
@@ -137,6 +148,12 @@ const program = Effect.gen(function* () {
   // push so the chat UI can show a "Memory updated" pill.
   const stopMemorizeTrigger = memorizeTrigger.start({
     onRan: async (result) => {
+      const anythingWritten =
+        result.dailyFileWritten !== null ||
+        result.weeklyFileWritten !== null ||
+        result.recapFileWritten !== null ||
+        result.graphNodesUpdated.length > 0
+      if (!anythingWritten) return
       await pushBus.publish(PUSH_CHANNELS.MEMORY_UPDATED, {
         trigger: "auto",
         dailyFileWritten: result.dailyFileWritten,
@@ -153,10 +170,20 @@ const program = Effect.gen(function* () {
     })
   }, ONE_HOUR_MS)
 
+  // Seed heartbeat + daily-insight on first boot. Idempotent — checks for existing rows.
+  try {
+    seedDefaultJobs(cronStore, { includeDailyInsight: true })
+  } catch (error) {
+    writeStderr(`Cron seed failed: ${String(error)}`)
+  }
+
+  const stopCron = cronScheduler.start()
+
   const shutdown = () => {
     writeStdout("")
     writeStdout("Shutting down...")
     clearInterval(hourlyTimer)
+    stopCron()
     stopMemorizeTrigger()
     orchestration.shutdown()
       .catch(() => undefined)

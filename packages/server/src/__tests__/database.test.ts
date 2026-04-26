@@ -43,6 +43,9 @@ describe("Database migrations", () => {
     expect(tables).toContain("queued_provider_turns")
     expect(tables).toContain("chat_workspaces")
     expect(tables).toContain("orchestration_turn_attachments")
+    expect(tables).toContain("cron_jobs")
+    expect(tables).toContain("cron_runs")
+    expect(tables).toContain("cron_locks")
     expect(tables).toContain("orchestration_turn_references")
     expect(tables).toContain("archived_coursework_items")
 
@@ -57,7 +60,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(19)
+    expect(version?.version).toBe(21)
 
     db.close()
   })
@@ -69,14 +72,14 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(19)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+    expect(rows.length).toBe(21)
+    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21])
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
   })
 
-  test("migration 017 creates orchestration_turn_references with expected columns", () => {
+  test("migration 019 creates orchestration_turn_references with expected columns", () => {
     const db = createBunTestDatabase(":memory:")
     runBunMigrations(db)
 
@@ -147,7 +150,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(19)
+    expect(version?.version).toBe(21)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -367,7 +370,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(19)
+    expect(version?.version).toBe(21)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -476,7 +479,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(19)
+    expect(version?.version).toBe(21)
     expect(userPreferenceColumns).toContain("max_session_mins")
     expect(userPreferenceColumns).toContain("quiet_hours_start")
     expect(userPreferenceColumns).toContain("memory_graph_path")

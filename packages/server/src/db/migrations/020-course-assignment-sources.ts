@@ -1,6 +1,6 @@
 import type { RuntimeSqliteDatabase } from "../runtime-sqlite.js"
 
-export const version = 18
+export const version = 20
 
 function tableExists(db: RuntimeSqliteDatabase, tableName: string): boolean {
   return Boolean(

@@ -225,6 +225,7 @@ export interface WsRpcClient {
   }
   readonly activity: {
     readonly generateWeeklyInsight: () => Promise<WeeklyInsight>
+    readonly setActed: (params: { id: string; acted: boolean }) => Promise<{ ok: boolean }>
     readonly onFeedUpdate: (
       listener: (event: ActivityFeedUpsertEvent) => void,
       options?: StreamSubscriptionOptions,
@@ -502,6 +503,7 @@ function createMemoryApi(transport: WsTransport): WsRpcClient["memory"] {
 function createActivityApi(transport: WsTransport): WsRpcClient["activity"] {
   return {
     generateWeeklyInsight: () => transport.request(RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT, {}),
+    setActed: (params) => transport.request(RPC_METHODS.ACTIVITY_SET_ACTED, params),
     onFeedUpdate: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.ACTIVITY_FEED,

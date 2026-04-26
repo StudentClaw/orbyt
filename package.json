@@ -9,8 +9,8 @@
   ],
   "scripts": {
     "dev": "node scripts/patch-electron-name.mjs && bun run dev:electron",
-    "dev:ui": "bun run build:shared && bun --cwd packages/ui dev",
-    "dev:server": "bun run build:shared && bun --cwd packages/server dev",
+    "dev:ui": "bun scripts/dev-ui.mjs",
+    "dev:server": "bun scripts/dev-server.mjs",
     "dev:electron": "bun run build:shared && bun run build:extensions && bun --cwd packages/electron dev",
     "dev:pwa": "bun run build:shared && bun --cwd packages/pwa dev",
     "dev:standalone": "bun scripts/dev-standalone.mjs",

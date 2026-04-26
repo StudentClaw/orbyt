@@ -6,11 +6,17 @@ export interface MemorizeDistiller {
 }
 
 export const MEMORIZE_THREAD_ID = "thread_memorize_system"
+export const MEMORIZE_SALIENCE_THREAD_ID = "thread_memorize_salience"
 
 export class CodexMemorizeDistiller implements MemorizeDistiller {
-  private readonly memorizeThreadId = MEMORIZE_THREAD_ID
+  private readonly memorizeThreadId: string
 
-  constructor(private readonly codex: CodexCliService) {}
+  constructor(
+    private readonly codex: CodexCliService,
+    threadId: string = MEMORIZE_THREAD_ID,
+  ) {
+    this.memorizeThreadId = threadId
+  }
 
   async distill(prompt: string): Promise<string> {
     const turnId = createId("memorize-turn")

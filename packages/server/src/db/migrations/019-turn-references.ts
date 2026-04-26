@@ -1,4 +1,4 @@
-export const version = 17
+export const version = 19
 
 export const up = `
   CREATE TABLE IF NOT EXISTS orchestration_turn_references (
