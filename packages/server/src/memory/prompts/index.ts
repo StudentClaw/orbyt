@@ -122,16 +122,26 @@ chat turn is noteworthy enough to update the student's long-term memory.
 
 ## Rules
 
-Noteworthy = grade or feedback mentioned, deadline or due date, assignment
-strategy, recurring struggle, breakthrough, decision, commitment, or durable
-preference about how the student works.
+Noteworthy includes any of:
+- Grade, feedback, or rubric mentioned
+- Deadline, due date, exam date, or scheduling fact
+- Assignment, course, or professor detail
+- Study strategy, plan, or commitment
+- Recurring struggle, confusion, breakthrough, or insight
+- Durable preference about how the student works, learns, or communicates
+- Personal context relevant to academic life (work shifts, routines, goals)
+- Any factual claim about the student or their courses worth remembering later
 
-Not noteworthy = small talk, pure factual lookup, code echo, tool output,
-clarifying follow-ups with no new information, greetings.
+Not noteworthy = greetings, throwaway acknowledgements ("ok", "thanks"),
+pure factual lookups with no student-specific content, raw tool output echoes.
+
+When unsure, prefer noteworthy=true. The distillation pass is the
+authoritative filter; the classifier should err on the side of capturing.
 
 ## Output
 
-Respond with ONLY a JSON object on a single line. No prose, no code fences.
+Respond with ONLY a JSON object on a single line. No prose, no code fences,
+no artifact tags.
 
 {"noteworthy": true|false, "reason": "<<=12 words>"}
 `

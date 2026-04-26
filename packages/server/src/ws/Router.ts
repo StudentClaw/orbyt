@@ -49,7 +49,16 @@ import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import type { SkillResolverService } from "../skills/SkillResolver.js"
 import type { SkillManagementService } from "../skills/SkillManagementService.js"
 import type { MemorizeServiceShape } from "../memory/service.js"
-import { resolveMemoryGraphDir } from "../memory/paths.js"
+import { resolveMemoryGraphDir, createMemoryPaths } from "../memory/paths.js"
+import type { DnaClassifier } from "../onboarding/dna-classifier.js"
+import { writeDnaToMemoryGraph, writeStudentProfileTemplate } from "../onboarding/memory-bridge.js"
+import {
+  ClassifyDnaParams,
+  SetAnswersParams,
+  OnboardingAnswers as OnboardingAnswersSchema,
+  type StudentDna,
+  type CardWeight,
+} from "@orbyt/contracts"
 
 type RouteDependencies = {
   readonly config: AppConfig
@@ -61,6 +70,7 @@ type RouteDependencies = {
   readonly skillResolver: SkillResolverService
   readonly skillManagement?: SkillManagementService
   readonly memorize: MemorizeServiceShape
+  readonly dnaClassifier?: DnaClassifier
 }
 
 type UserPreferencesRow = {
@@ -697,12 +707,112 @@ async function handleProviderMethod(
   }
 }
 
+function readMemoryGraphPath(database: DatabaseService): string | null {
+  const row = database.get<{ memory_graph_path: string | null }>(
+    "SELECT memory_graph_path FROM user_preferences WHERE id = 1",
+  )
+  return row?.memory_graph_path ?? null
+}
+
+function rowToDna(row: Record<string, unknown> | null): StudentDna | null {
+  if (!row) return null
+  try {
+    return {
+      archetypeId: String(row["archetype_id"]),
+      trait: String(row["trait"]),
+      tagline: String(row["tagline"]),
+      icon: String(row["icon"]),
+      hue: Number(row["hue"]),
+      accentHue: Number(row["accent_hue"]),
+      isRare: Number(row["is_rare"]) === 1,
+      rarity: String(row["rarity"]),
+      stats: JSON.parse(String(row["stats"] ?? "{}")) as StudentDna["stats"],
+      peak: String(row["peak"]),
+      style: String(row["style"]),
+      motivation: String(row["motivation"]),
+      name: String(row["name"]),
+      aiPromptHint: String(row["ai_prompt_hint"]),
+      recommendedFeatures: JSON.parse(String(row["recommended_features"] ?? "[]")) as string[],
+      sentimentAnchors: JSON.parse(String(row["sentiment_anchors"] ?? "[]")) as string[],
+      orbytAdapts: String(row["orbyt_adapts"]),
+    }
+  } catch {
+    return null
+  }
+}
+
+function persistDna(database: DatabaseService, dna: StudentDna, answers: unknown): void {
+  const nowIso = new Date().toISOString()
+  database.execute(
+    `INSERT INTO student_dna
+       (id, archetype_id, trait, tagline, icon, hue, accent_hue, is_rare, rarity,
+        stats, peak, style, motivation, name, ai_prompt_hint,
+        recommended_features, sentiment_anchors, orbyt_adapts, raw_answers, classified_at)
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       archetype_id = excluded.archetype_id,
+       trait = excluded.trait,
+       tagline = excluded.tagline,
+       icon = excluded.icon,
+       hue = excluded.hue,
+       accent_hue = excluded.accent_hue,
+       is_rare = excluded.is_rare,
+       rarity = excluded.rarity,
+       stats = excluded.stats,
+       peak = excluded.peak,
+       style = excluded.style,
+       motivation = excluded.motivation,
+       name = excluded.name,
+       ai_prompt_hint = excluded.ai_prompt_hint,
+       recommended_features = excluded.recommended_features,
+       sentiment_anchors = excluded.sentiment_anchors,
+       orbyt_adapts = excluded.orbyt_adapts,
+       raw_answers = excluded.raw_answers,
+       classified_at = excluded.classified_at`,
+    [
+      dna.archetypeId, dna.trait, dna.tagline, dna.icon, dna.hue, dna.accentHue,
+      dna.isRare ? 1 : 0, dna.rarity,
+      JSON.stringify(dna.stats), dna.peak, dna.style, dna.motivation, dna.name,
+      dna.aiPromptHint,
+      JSON.stringify(dna.recommendedFeatures),
+      JSON.stringify(dna.sentimentAnchors),
+      dna.orbytAdapts,
+      JSON.stringify(answers ?? {}),
+      nowIso,
+    ],
+  )
+}
+
+function persistCardWeights(
+  database: DatabaseService,
+  weights: ReadonlyArray<CardWeight>,
+): void {
+  const nowIso = new Date().toISOString()
+  database.transaction(() => {
+    for (const w of weights) {
+      database.execute(
+        `INSERT INTO card_weights (card_id, weight, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(card_id) DO UPDATE SET weight = excluded.weight, updated_at = excluded.updated_at`,
+        [w.cardId, w.weight, nowIso],
+      )
+    }
+  })
+}
+
+function readCardWeights(database: DatabaseService): CardWeight[] {
+  return database
+    .query<{ card_id: string; weight: number }>(
+      "SELECT card_id, weight FROM card_weights",
+    )
+    .map((r) => ({ cardId: r.card_id, weight: Number(r.weight) }))
+}
+
 async function handleOnboardingMethod(
   request: RpcRequest,
   dependencies: RouteDependencies,
 ): Promise<string | null> {
   const { id, method, params } = request
-  const { database } = dependencies
+  const { database, dnaClassifier } = dependencies
 
   switch (method) {
     case RPC_METHODS.ONBOARDING_GET_AI_AUTH: {
@@ -862,6 +972,76 @@ async function handleOnboardingMethod(
       })
       return encodeSuccess(id, { count: decoded.cells.length })
     }
+    case RPC_METHODS.ONBOARDING_SET_ANSWERS: {
+      const decoded = decodeParams(SetAnswersParams, params, id, "setAnswers params are invalid")
+      if (typeof decoded === "string") return decoded
+      database.execute(
+        `INSERT INTO onboarding_answers (id, payload, updated_at) VALUES (1, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+        [JSON.stringify(decoded.answers), new Date().toISOString()],
+      )
+      return encodeSuccess(id, { ok: true })
+    }
+    case RPC_METHODS.ONBOARDING_GET_DNA: {
+      const dnaRow = database.get<Record<string, unknown>>(
+        `SELECT archetype_id, trait, tagline, icon, hue, accent_hue, is_rare, rarity,
+                stats, peak, style, motivation, name, ai_prompt_hint,
+                recommended_features, sentiment_anchors, orbyt_adapts
+         FROM student_dna WHERE id = 1`,
+      )
+      const dna = rowToDna(dnaRow ?? null)
+      const answersRow = database.get<{ payload: string }>(
+        "SELECT payload FROM onboarding_answers WHERE id = 1",
+      )
+      let answers: unknown = null
+      if (answersRow?.payload) {
+        try { answers = JSON.parse(answersRow.payload) } catch { answers = null }
+      }
+      return encodeSuccess(id, {
+        answers,
+        dna,
+        cardWeights: readCardWeights(database),
+      })
+    }
+    case RPC_METHODS.ONBOARDING_GET_CARD_WEIGHTS: {
+      return encodeSuccess(id, { cardWeights: readCardWeights(database) })
+    }
+    case RPC_METHODS.ONBOARDING_CLASSIFY_DNA: {
+      const decoded = decodeParams(ClassifyDnaParams, params, id, "classifyDna params are invalid")
+      if (typeof decoded === "string") return decoded
+      if (!dnaClassifier) {
+        return encodeError(id, "service_unavailable", "DNA classifier is not configured")
+      }
+      try {
+        const result = await dnaClassifier.classify(decoded.answers)
+        persistDna(database, result.dna, decoded.answers)
+        persistCardWeights(database, result.cardWeights)
+        // Persist answers too so they survive session restart.
+        database.execute(
+          `INSERT INTO onboarding_answers (id, payload, updated_at) VALUES (1, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+          [JSON.stringify(decoded.answers), new Date().toISOString()],
+        )
+        try {
+          const paths = createMemoryPaths({
+            env: process.env,
+            graphDirOverride: readMemoryGraphPath(database),
+          })
+          writeDnaToMemoryGraph(paths, result.dna, decoded.answers, new Date())
+          writeStudentProfileTemplate(paths, result.dna, decoded.answers, new Date())
+        } catch {
+          // Memory write failure should not block onboarding.
+        }
+        return encodeSuccess(id, {
+          dna: result.dna,
+          cardWeights: result.cardWeights,
+          source: result.source,
+        })
+      } catch (err) {
+        return encodeError(id, "internal_error",
+          err instanceof Error ? err.message : "DNA classification failed")
+      }
+    }
     default:
       return null
   }
@@ -983,6 +1163,59 @@ function summarizeFromService(
     .find((s) => s.id === skillId) ?? { id: skillId }
 }
 
+async function handleDevMethod(
+  request: RpcRequest,
+  dependencies: RouteDependencies,
+): Promise<string | null> {
+  const { id, method } = request
+  const { database } = dependencies
+  const now = new Date().toISOString()
+
+  switch (method) {
+    case RPC_METHODS.DEV_RESET_SOFT: {
+      // Reset all onboarding steps to pending
+      database.execute(
+        "UPDATE onboarding_state SET status = 'pending', completed_at = NULL",
+        [],
+      )
+      // Set overall_status back to in_progress
+      database.execute(
+        `INSERT INTO onboarding_meta (key, value, updated_at) VALUES ('overall_status', 'in_progress', ?)
+         ON CONFLICT(key) DO UPDATE SET value = 'in_progress', updated_at = excluded.updated_at`,
+        [now],
+      )
+      // Clear DNA and answers
+      database.execute("DELETE FROM student_dna", [])
+      database.execute("DELETE FROM onboarding_answers", [])
+      return encodeSuccess(id, { ok: true })
+    }
+    case RPC_METHODS.DEV_RESET_HARD: {
+      // All soft-reset steps
+      database.execute(
+        "UPDATE onboarding_state SET status = 'pending', completed_at = NULL",
+        [],
+      )
+      database.execute(
+        `INSERT INTO onboarding_meta (key, value, updated_at) VALUES ('overall_status', 'in_progress', ?)
+         ON CONFLICT(key) DO UPDATE SET value = 'in_progress', updated_at = excluded.updated_at`,
+        [now],
+      )
+      database.execute("DELETE FROM student_dna", [])
+      database.execute("DELETE FROM onboarding_answers", [])
+      // Additionally reset AI auth
+      database.execute(
+        `UPDATE ai_auth_state
+         SET status = 'pending', provider = NULL, connected_at = NULL, updated_at = ?
+         WHERE id = 1`,
+        [now],
+      )
+      return encodeSuccess(id, { ok: true })
+    }
+    default:
+      return null
+  }
+}
+
 async function handleMemorizeMethod(
   request: RpcRequest,
   dependencies: RouteDependencies,
@@ -1051,6 +1284,7 @@ export async function routeMessage(
       ?? await handleOnboardingMethod(decoded, dependencies)
       ?? await handleSkillsMethod(decoded, dependencies)
       ?? await handleMemorizeMethod(decoded, dependencies)
+      ?? await handleDevMethod(decoded, dependencies)
 
     if (response) {
       return { response }

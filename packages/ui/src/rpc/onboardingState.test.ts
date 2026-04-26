@@ -58,14 +58,14 @@ describe("onboardingState", () => {
       expect(ONBOARDING_STEPS).toHaveLength(6)
     })
 
-    test("ai-auth is not required", () => {
-      const aiStep = ONBOARDING_STEPS.find((s) => s.id === "ai-auth")
+    test("ai-connect is not required", () => {
+      const aiStep = ONBOARDING_STEPS.find((s) => s.id === "ai-connect")
       expect(aiStep?.required).toBe(false)
     })
 
-    test("welcome is not required", () => {
-      const step = ONBOARDING_STEPS.find((s) => s.id === "welcome")
-      expect(step?.required).toBe(false)
+    test("dna-discovery is required", () => {
+      const step = ONBOARDING_STEPS.find((s) => s.id === "dna-discovery")
+      expect(step?.required).toBe(true)
     })
   })
 

@@ -237,6 +237,10 @@ export interface WsRpcClient {
     readonly setRoutines: (params: SetRoutinesParams) => Promise<{ count: number }>
     readonly getAiAuth: () => Promise<AiAuthState>
     readonly setAiAuth: (params: SetAiAuthStatusParams) => Promise<AiAuthState>
+    readonly getDna: () => Promise<{ answers: import("@orbyt/contracts").OnboardingAnswers | null; dna: import("@orbyt/contracts").StudentDna | null; cardWeights: ReadonlyArray<import("@orbyt/contracts").CardWeight> }>
+    readonly setAnswers: (params: import("@orbyt/contracts").SetAnswersParams) => Promise<{ ok: boolean }>
+    readonly classifyDna: (params: import("@orbyt/contracts").ClassifyDnaParams) => Promise<{ dna: import("@orbyt/contracts").StudentDna; cardWeights: ReadonlyArray<import("@orbyt/contracts").CardWeight>; source: "codex" | "fallback" }>
+    readonly getCardWeights: () => Promise<{ cardWeights: ReadonlyArray<import("@orbyt/contracts").CardWeight> }>
   }
   readonly dev: {
     readonly resetSoft: () => Promise<{ ok: boolean }>
@@ -517,6 +521,10 @@ function createOnboardingApi(transport: WsTransport): WsRpcClient["onboarding"] 
     setRoutines: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_ROUTINES, params),
     getAiAuth: () => transport.request(RPC_METHODS.ONBOARDING_GET_AI_AUTH, {}),
     setAiAuth: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_AI_AUTH, params),
+    getDna: () => transport.request(RPC_METHODS.ONBOARDING_GET_DNA, {}),
+    setAnswers: (params) => transport.request(RPC_METHODS.ONBOARDING_SET_ANSWERS, params),
+    classifyDna: (params) => transport.request(RPC_METHODS.ONBOARDING_CLASSIFY_DNA, params),
+    getCardWeights: () => transport.request(RPC_METHODS.ONBOARDING_GET_CARD_WEIGHTS, {}),
   }
 }
 

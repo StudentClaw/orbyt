@@ -71,6 +71,14 @@ export function AppShell() {
     }
   }, [hydrationComplete, onboardingComplete, pathname, navigate])
 
+  if (pathname === "/onboarding") {
+    return (
+      <div className="fixed inset-0 z-[100] h-screen w-screen overflow-hidden bg-[#0A0E1A]">
+        <Outlet />
+      </div>
+    )
+  }
+
   return (
     <SidebarProvider>
       <AppShellLayout />

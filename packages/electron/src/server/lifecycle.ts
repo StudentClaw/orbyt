@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync } from "node:fs"
+import { homedir } from "node:os"
 import path from "node:path"
 import { WebSocket } from "ws"
 import { RPC_METHODS, WS_PROTOCOL, type DesktopBootstrap } from "@orbyt/contracts"
@@ -273,12 +274,20 @@ function spawnServerChild(
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
 ): ChildProcess {
+  // Capture the real `~/.orbyt` BEFORE buildIsolatedCodexEnv overrides HOME.
+  // Memory paths are resolved from ORBYT_HOME (treated as the directory that
+  // contains `memory/`). Without this, the server's `~/.orbyt/` would land
+  // inside the Codex isolation sandbox at codex-user-home/.orbyt instead of
+  // the user's real `~/.orbyt`.
+  const orbytHome = process.env.ORBYT_HOME ?? path.join(homedir(), ".orbyt")
+
   const child = spawn(launchSpec.command, launchSpec.args, {
     env: {
       ...(codexIsolation ? buildIsolatedCodexEnv(codexIsolation.userDataPath, gateway) : process.env),
       PORT: String(port),
       DB_PATH: dbPath,
       WS_AUTH_TOKEN: auth.authToken,
+      ORBYT_HOME: orbytHome,
       ...(launchSpec.packaged ? {
         ELECTRON_RUN_AS_NODE: "1",
       } : {}),

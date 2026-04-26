@@ -55,12 +55,14 @@ const onboardingRoute = createRoute({
   component: OnboardingPage,
 })
 
-function resolveSettingsPath(section: SettingsSection): "/settings" | "/settings/schedule" | "/settings/plugins" | "/settings/notifications" {
+function resolveSettingsPath(
+  section: SettingsSection,
+): "/settings" | "/settings/study-profile" | "/settings/plugins" | "/settings/notifications" {
   switch (section) {
     case "general":
       return "/settings"
-    case "schedule":
-      return "/settings/schedule"
+    case "study-profile":
+      return "/settings/study-profile"
     case "connections":
       return "/settings/plugins"
     case "notifications":
@@ -81,12 +83,12 @@ function SettingsGeneralRouteComponent() {
   )
 }
 
-function SettingsScheduleRouteComponent() {
+function SettingsStudyProfileRouteComponent() {
   const navigate = useNavigate()
 
   return (
     <SettingsPage
-      activeSection="schedule"
+      activeSection="study-profile"
       onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
       onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
       onPluginBack={() => void navigate({ to: "/settings/plugins" })}
@@ -141,10 +143,10 @@ const settingsGeneralRoute = createRoute({
   component: SettingsGeneralRouteComponent,
 })
 
-const settingsScheduleRoute = createRoute({
+const settingsStudyProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/settings/schedule",
-  component: SettingsScheduleRouteComponent,
+  path: "/settings/study-profile",
+  component: SettingsStudyProfileRouteComponent,
 })
 
 const settingsConnectionsRoute = createRoute({
@@ -179,7 +181,7 @@ const routeTree = rootRoute.addChildren([
   chatThreadRoute,
   onboardingRoute,
   settingsGeneralRoute,
-  settingsScheduleRoute,
+  settingsStudyProfileRoute,
   settingsConnectionsRoute,
   settingsPluginDetailRoute,
   settingsNotificationsRoute,

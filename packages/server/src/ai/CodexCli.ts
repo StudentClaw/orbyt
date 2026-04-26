@@ -2,6 +2,8 @@ import { Context, Effect, Layer } from "effect"
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
 import readline from "node:readline"
 import { ARTIFACT_CONTRACT } from "./prompts/artifactContract.js"
+import { MEMORY_PROTOCOL } from "./prompts/memoryProtocol.js"
+import { MEMORY_THREAD_CONTRACT } from "./prompts/memoryThreadContract.js"
 import {
   shouldAutoApproveShellCommand,
   type ProviderApprovalDecision,
@@ -176,6 +178,12 @@ export interface CodexCliService {
     model?: string | null
     /** Optional context block injected as `<student_state>` on every turn. */
     studentState?: string | null
+    /**
+     * Skip injection of the `<system>` artifact-output contract preamble.
+     * Used by background memory threads (distillation, salience classification)
+     * that need raw text output, not artifact-wrapped responses.
+     */
+    suppressArtifactContract?: boolean
     onToken: (token: string, index: number) => Promise<void>
     onReasoning: (token: string, index: number) => Promise<void>
     onCompleted: () => Promise<void>
@@ -938,7 +946,10 @@ export function createCodexRuntimeInstance(
       let turnText = input.content
       let preambleAddedForFirstSend = false
       if (!artifactPreambleSentThreads.has(input.localThreadId)) {
-        turnText = `<system>\n${ARTIFACT_CONTRACT}\n</system>\n\n${input.content}`
+        const preamble = input.suppressArtifactContract
+          ? MEMORY_THREAD_CONTRACT
+          : `${ARTIFACT_CONTRACT}\n\n${MEMORY_PROTOCOL}`
+        turnText = `<system>\n${preamble}\n</system>\n\n${input.content}`
         artifactPreambleSentThreads.add(input.localThreadId)
         preambleAddedForFirstSend = true
       }

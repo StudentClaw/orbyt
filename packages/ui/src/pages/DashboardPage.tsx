@@ -1,5 +1,9 @@
+import * as React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
+import { WalkthroughOverlay } from "@/components/onboarding/WalkthroughOverlay"
+import { DASHBOARD_WALKTHROUGH_STEPS } from "@/components/onboarding/walkthrough-steps"
+import { useCardWeights } from "@/rpc/onboardingState"
 import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
 import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
@@ -147,6 +151,33 @@ export function DashboardPage() {
   const actions = useOrchestrationActions()
   const [filter, setFilter] = useState<FilterScope>("thisWeek")
   const [submittedPage, setSubmittedPage] = useState(0)
+  const cardWeights = useCardWeights()
+  const weightOf = useCallback((id: string): number => {
+    const found = cardWeights.find((w) => w.cardId === id)
+    return found?.weight ?? 0.5
+  }, [cardWeights])
+
+  const [tourActive, setTourActive] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false
+    try {
+      if (sessionStorage.getItem("orbyt:pending-tour") === "1") return true
+    } catch { /* ignore */ }
+    return new URLSearchParams(window.location.search).get("tour") === "1"
+  })
+  const [tourStep, setTourStep] = useState(0)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!tourActive) return
+    try { sessionStorage.removeItem("orbyt:pending-tour") } catch { /* ignore */ }
+    const url = new URL(window.location.href)
+    if (url.searchParams.get("tour")) {
+      url.searchParams.delete("tour")
+      window.history.replaceState(null, "", url.pathname + (url.search ? `?${url.searchParams}` : ""))
+    }
+  }, [tourActive])
+
+  const tourSteps = DASHBOARD_WALKTHROUGH_STEPS
 
   const handleInsightAction = useCallback(
     async (action: InsightAction) => {
@@ -303,6 +334,7 @@ export function DashboardPage() {
   }))
 
   return (
+    <>
     <DashboardShell
       left={
         <div className="min-w-0">
@@ -365,18 +397,47 @@ export function DashboardPage() {
           </div>
         </div>
       }
-      right={
-        <>
-          <GradeInsightsWidget courses={courses} grades={courseGrades} />
-          <WeeklyOutlookWidget
-            weekStart={weekStart}
-            sessions={calendarSessions}
-            deadlines={priorityItems}
-            now={now}
-          />
-          <AiInsightCard insight={MOCK_INSIGHTS[0]} onAction={handleInsightAction} />
-        </>
-      }
+      right={(() => {
+        const widgets: Array<{ id: string; weight: number; node: React.ReactNode }> = [
+          {
+            id: "grade-insights",
+            weight: weightOf("grade-insights"),
+            node: <GradeInsightsWidget key="grade-insights" courses={courses} grades={courseGrades} />,
+          },
+          {
+            id: "weekly-outlook",
+            weight: weightOf("weekly-outlook"),
+            node: (
+              <WeeklyOutlookWidget
+                key="weekly-outlook"
+                weekStart={weekStart}
+                sessions={calendarSessions}
+                deadlines={priorityItems}
+                now={now}
+              />
+            ),
+          },
+          {
+            id: "ai-insight",
+            weight: weightOf("ai-insight"),
+            node: <AiInsightCard key="ai-insight" insight={MOCK_INSIGHTS[0]} onAction={handleInsightAction} />,
+          },
+        ]
+        widgets.sort((a, b) => b.weight - a.weight)
+        return <>{widgets.map((w) => w.node)}</>
+      })()}
     />
+    {tourActive && (
+      <WalkthroughOverlay
+        steps={tourSteps}
+        currentStep={tourStep}
+        onNext={() => {
+          if (tourStep >= tourSteps.length - 1) setTourActive(false)
+          else setTourStep((s) => s + 1)
+        }}
+        onDismiss={() => setTourActive(false)}
+      />
+    )}
+    </>
   )
 }

@@ -139,6 +139,10 @@ export class PluginAuthService {
     }
   }
 
+  clearCredentials(pluginId: string): void {
+    this.options.vault.clear(pluginId)
+  }
+
   getCredentialMessage(pluginId: string): PluginCredentialMessage | null {
     const record = this.getManualTokenRecord(pluginId)
     if (!record) {

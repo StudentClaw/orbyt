@@ -1,8 +1,8 @@
-export type SettingsSection = "general" | "schedule" | "connections" | "notifications"
+export type SettingsSection = "general" | "connections" | "notifications" | "study-profile"
 
 const NAV_ITEMS: Array<{ id: SettingsSection; label: string }> = [
   { id: "general", label: "General" },
-  { id: "schedule", label: "Schedule & Preferences" },
+  { id: "study-profile", label: "Study Profile" },
   { id: "connections", label: "Plugins" },
   { id: "notifications", label: "Notifications" },
 ]

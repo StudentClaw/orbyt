@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { SettingsSidebar, type SettingsSection } from "@/components/settings/SettingsSidebar"
 import { GeneralSection } from "@/components/settings/GeneralSection"
-import { SchedulePreferencesSection } from "@/components/settings/SchedulePreferencesSection"
 import { ConnectionsSection } from "@/components/settings/ConnectionsSection"
 import { NotificationsSection } from "@/components/settings/NotificationsSection"
+import { StudyProfileSection } from "@/components/settings/StudyProfileSection"
 
 type SettingsPageProps = {
   activeSection?: SettingsSection
@@ -55,7 +55,7 @@ export function SettingsPage({
       <SettingsSidebar active={activeSection} onSelect={handleSectionSelect} />
       <main className="flex-1 overflow-y-auto p-8">
         {activeSection === "general" && <GeneralSection />}
-        {activeSection === "schedule" && <SchedulePreferencesSection />}
+        {activeSection === "study-profile" && <StudyProfileSection />}
         {activeSection === "connections" && (
           <ConnectionsSection
             selectedPluginId={effectivePluginId}
