@@ -1,8 +1,9 @@
 import { describe, expect, test, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resolvedBorderColor, TaskCard } from "../components/dashboard/TaskCard"
+import { TaskCard } from "../components/dashboard/TaskCard"
 import type { PrioritizedItem } from "../components/dashboard/priority-model"
+import { resolvedBorderColor } from "../components/dashboard/task-card-style"
 
 const NOW = new Date("2026-04-21T12:00:00Z")
 
@@ -68,6 +69,11 @@ describe("TaskCard", () => {
   test("uses the course color for the card border when present", () => {
     const item = makeItem({ courseColor: "oklch(0.72 0.15 42)" })
     expect(resolvedBorderColor(item, NOW)).toBe("oklch(0.72 0.15 42)")
+  })
+
+  test("lets the course block accent color drive the card border", () => {
+    const item = makeItem({ courseColor: "oklch(0.72 0.15 42)" })
+    expect(resolvedBorderColor(item, NOW, "oklch(0.63 0.22 305)")).toBe("oklch(0.63 0.22 305)")
   })
 
   test("invokes the click handler when the card is activated", async () => {

@@ -16,9 +16,11 @@ import { AiInsightCard } from "@/components/dashboard/AiInsightCard"
 import { type PrioritizedItem } from "@/components/dashboard/priority-model"
 import {
   countDueThisWeek,
+  filterItemsByScope,
   groupAssignmentsByCourse,
   type FilterScope,
 } from "@/components/dashboard/subject-grouping"
+import { getPlanFilterCopy } from "@/components/dashboard/plan-filter-copy"
 import { removeAssignmentDetailEntry, seedAssignmentPreview } from "@/rpc/assignmentDetailState"
 import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
@@ -174,26 +176,6 @@ function deriveSubmittedItems(
     .toSorted((a, b) => new Date(b.effectiveDueAt).getTime() - new Date(a.effectiveDueAt).getTime())
 }
 
-function getCurrentWeekBounds(now: Date): { start: Date; end: Date } {
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
-  const day = start.getDay()
-  const daysSinceMonday = day === 0 ? 6 : day - 1
-  start.setDate(start.getDate() - daysSinceMonday)
-
-  const end = new Date(start)
-  end.setDate(end.getDate() + 7)
-
-  return { start, end }
-}
-
-function isDueInCurrentWeek(item: PrioritizedItem, now: Date): boolean {
-  const due = new Date(item.effectiveDueAt)
-  if (Number.isNaN(due.getTime())) return false
-  const { start, end } = getCurrentWeekBounds(now)
-  return due >= start && due < end
-}
-
 export function DashboardPage() {
   const navigate = useNavigate()
   const snapshot = useRuntimeOrchestrationSnapshot()
@@ -275,14 +257,19 @@ export function DashboardPage() {
     plannedSessions,
   } = useDashboard()
 
-  const now = new Date()
+  const now = useMemo(() => new Date(), [])
   const isSyncing = syncProgress?.status === "syncing"
   const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
+  const submittedItems = useMemo(
+    () => deriveSubmittedItems(courses, submissionStatus.submitted),
+    [courses, submissionStatus],
+  )
+  const planFilterCopy = getPlanFilterCopy(filter)
   const planWeekAction = useMemo<InsightAction>(() => {
-    const currentWeekItems = priorityItems
-      .filter((item) => isDueInCurrentWeek(item, now))
+    const sourceItems = filter === "submitted" ? submittedItems : priorityItems
+    const filteredItems = filterItemsByScope(sourceItems, filter, now)
       .toSorted((a, b) => new Date(a.effectiveDueAt).getTime() - new Date(b.effectiveDueAt).getTime())
-    const upcomingLines = currentWeekItems.map((item) => {
+    const assignmentLines = filteredItems.map((item) => {
       const due = item.effectiveDueAt
         ? new Date(item.effectiveDueAt).toLocaleString([], {
             weekday: "short",
@@ -297,24 +284,24 @@ export function DashboardPage() {
     })
 
     return {
-      label: "Plan my week",
+      label: planFilterCopy.planLabel,
       prompt: [
-        "Plan my week using my current calendar availability and the coursework due this week.",
-        upcomingLines.length > 0
-          ? `Assignments due this week (Monday-Sunday):\n${upcomingLines.join("\n")}`
-          : "No dashboard assignments are due this week (Monday-Sunday).",
-        "Read my calendars first, then propose a realistic weekly schedule. Ask only decision-critical questions.",
+        planFilterCopy.promptIntro,
+        assignmentLines.length > 0
+          ? `${planFilterCopy.assignmentsHeading}\n${assignmentLines.join("\n")}`
+          : planFilterCopy.emptyAssignments,
+        "Read my calendars first, then propose a realistic schedule for this dashboard filter. Ask only decision-critical questions.",
         SCHEDULING_SESSION_SKILL_MENTION,
       ].join("\n\n"),
     }
-  }, [now, priorityItems])
+  }, [filter, now, planFilterCopy, priorityItems, submittedItems])
   const handlePlanWeek = useCallback(() => {
     void handleInsightAction(planWeekAction)
   }, [handleInsightAction, planWeekAction])
-  const submittedItems = useMemo(
-    () => deriveSubmittedItems(courses, submissionStatus.submitted),
-    [courses, submissionStatus],
-  )
+  const handleFilterChange = useCallback((scope: FilterScope) => {
+    setFilter(scope)
+    setSubmittedPage(0)
+  }, [])
   const submittedPageCount = Math.max(1, Math.ceil(submittedItems.length / SUBMITTED_PAGE_SIZE))
   const currentSubmittedPage = Math.min(submittedPage, submittedPageCount - 1)
   const pagedSubmittedItems = useMemo(() => {
@@ -323,16 +310,6 @@ export function DashboardPage() {
   }, [currentSubmittedPage, submittedItems])
   const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
   const weekStart = calendarViewWeek || todayLocal
-
-  useEffect(() => {
-    setSubmittedPage(0)
-  }, [filter])
-
-  useEffect(() => {
-    if (submittedPage > submittedPageCount - 1) {
-      setSubmittedPage(Math.max(submittedPageCount - 1, 0))
-    }
-  }, [submittedPage, submittedPageCount])
 
   const grouped = useMemo(
     () =>
@@ -448,17 +425,23 @@ export function DashboardPage() {
             title="Dashboard"
             dateLabel={dateLabel}
             dueThisWeek={dueThisWeek}
+            planLabel={planFilterCopy.planLabel}
             onPlanWeek={handlePlanWeek}
             planDisabled={!workspace}
           />
-          <DashboardFilterTabs value={filter} onChange={setFilter} />
-          <div className="mt-10" data-testid="dashboard-assignments">
+          <section aria-label="Coursework filters">
+            <DashboardFilterTabs value={filter} onChange={handleFilterChange} />
+          </section>
+          <div className="mt-7" data-testid="dashboard-assignments">
             {grouped.length === 0 ? (
-              <p className="text-sm text-muted-foreground" data-testid="dashboard-no-matches">
+              <p
+                className="dashboard-filter-stage rounded-lg border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground"
+                data-testid="dashboard-no-matches"
+              >
                 No assignments match this filter.
               </p>
             ) : (
-              <>
+              <div key={filter} className="dashboard-filter-stage">
                 {grouped.map(({ course, items }) => (
                   <SubjectBlock
                     key={course.id}
@@ -483,7 +466,7 @@ export function DashboardPage() {
                         className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid="submitted-page-prev"
                         disabled={currentSubmittedPage === 0}
-                        onClick={() => setSubmittedPage((page) => Math.max(page - 1, 0))}
+                        onClick={() => setSubmittedPage(Math.max(currentSubmittedPage - 1, 0))}
                       >
                         Previous
                       </button>
@@ -492,14 +475,14 @@ export function DashboardPage() {
                         className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid="submitted-page-next"
                         disabled={currentSubmittedPage >= submittedPageCount - 1}
-                        onClick={() => setSubmittedPage((page) => Math.min(page + 1, submittedPageCount - 1))}
+                        onClick={() => setSubmittedPage(Math.min(currentSubmittedPage + 1, submittedPageCount - 1))}
                       >
                         Next
                       </button>
                     </div>
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
         </div>

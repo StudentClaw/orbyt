@@ -1,10 +1,13 @@
 import { Archive } from "lucide-react"
 import { formatCountdown } from "./dashboard-model"
-import { computePriorityDisplay, type PrioritizedItem } from "./priority-model"
+import type { PrioritizedItem } from "./priority-model"
+import { resolvedBorderColor } from "./task-card-style"
 
 interface TaskCardProps {
   readonly item: PrioritizedItem
   readonly now: Date
+  readonly featured?: boolean
+  readonly accentColor?: string
   readonly onClick?: () => void
   readonly onArchive?: () => void
 }
@@ -13,22 +16,6 @@ function dueLabel(item: PrioritizedItem, now: Date): string {
   const raw = formatCountdown(item.effectiveDueAt, now)
   if (raw === "Overdue") return "Overdue"
   return `Due in ${raw}`
-}
-
-export function resolvedBorderColor(item: PrioritizedItem, now: Date): string {
-  if (item.courseColor) return item.courseColor
-  const { zone } = computePriorityDisplay(item, now)
-  switch (zone) {
-    case "overdue":
-      return "var(--destructive)"
-    case "urgent":
-      return "var(--warning)"
-    case "attention":
-      return "oklch(0.79 0.14 78)"
-    case "calm":
-    default:
-      return "color-mix(in oklab, var(--muted-foreground) 65%, transparent)"
-  }
 }
 
 function formatPoints(pointsPossible: number): string {
@@ -74,26 +61,41 @@ function normalizeSubmissionStatus(submissionStatus?: string): string | null {
   }
 }
 
-export function TaskCard({ item, now, onClick, onArchive }: TaskCardProps) {
+export function TaskCard({
+  item,
+  now,
+  featured = false,
+  accentColor,
+  onClick,
+  onArchive,
+}: TaskCardProps) {
   const hours = (item.estimatedMinutes / 60).toFixed(item.estimatedMinutes % 60 === 0 ? 0 : 1)
   const submissionLabel = normalizeSubmissionStatus(item.submissionStatus)
   const hasMetadata = item.pointsPossible !== undefined || submissionLabel !== null
-  const borderColor = resolvedBorderColor(item, now)
+  const borderColor = resolvedBorderColor(item, now, accentColor)
 
   return (
     <div
-      className="group relative flex w-full items-stretch overflow-visible rounded-lg border border-border border-l-4 bg-card transition-colors hover:bg-muted/20 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/40"
+      className={`dashboard-task-card group relative flex w-full items-stretch overflow-visible rounded-lg border border-border border-l-4 bg-card hover:bg-muted/20 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/40 ${
+        featured ? "xl:col-span-2" : ""
+      }`}
       style={{ borderLeftColor: borderColor }}
     >
       <button
         type="button"
         onClick={onClick}
-        className="flex min-w-0 flex-1 items-stretch p-4 text-left focus-visible:outline-none"
+        className={`flex min-w-0 flex-1 items-stretch text-left focus-visible:outline-none ${
+          featured ? "p-5" : "p-4"
+        }`}
         data-testid={`task-card-${item.id}`}
       >
         <div className="min-w-0 flex-1 pr-3">
-          <p className="pr-9 text-sm font-medium leading-snug">{item.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{dueLabel(item, now)}</p>
+          <p className={`pr-9 font-medium leading-snug ${featured ? "text-base" : "text-sm"}`}>
+            {item.title}
+          </p>
+          <p className={`${featured ? "mt-2" : "mt-1"} text-xs text-muted-foreground`}>
+            {dueLabel(item, now)}
+          </p>
           {hasMetadata ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {item.pointsPossible !== undefined ? (
@@ -111,7 +113,11 @@ export function TaskCard({ item, now, onClick, onArchive }: TaskCardProps) {
             </div>
           ) : null}
         </div>
-        <div className="shrink-0 self-center text-right text-xs tabular-nums text-muted-foreground">
+        <div
+          className={`shrink-0 self-center text-right tabular-nums text-muted-foreground ${
+            featured ? "text-sm font-medium" : "text-xs"
+          }`}
+        >
           {hours}h
         </div>
       </button>
@@ -120,7 +126,7 @@ export function TaskCard({ item, now, onClick, onArchive }: TaskCardProps) {
           type="button"
           aria-label={`Archive ${item.title}`}
           title="Archive assignment"
-          className="pointer-events-none absolute -right-2 -top-2 z-10 flex size-8 items-center justify-center rounded-full border border-destructive/25 bg-destructive/10 text-destructive opacity-0 shadow-sm transition-all duration-150 hover:bg-destructive hover:text-background focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/35 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="dashboard-archive-action pointer-events-none absolute -right-2 -top-2 z-10 flex size-8 items-center justify-center rounded-full border border-destructive/25 bg-destructive/10 text-destructive opacity-0 shadow-sm hover:bg-destructive hover:text-background focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/35 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
           data-testid={`task-card-archive-${item.id}`}
           onClick={(event) => {
             event.stopPropagation()
