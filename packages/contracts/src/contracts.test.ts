@@ -361,14 +361,21 @@ describe("@orbyt/contracts", () => {
 
   test("locks the FILE_SEARCH_WORKSPACE channel with typed params", () => {
     expect(IpcChannel.FILE_SEARCH_WORKSPACE).toBe("file:search-workspace")
+    expect(IpcChannel.FILE_STAGE_PASTED_ATTACHMENT).toBe("file:stage-pasted-attachment")
     const params: import("./index.js").WorkspaceFileSearchParams = {
       workspaceRoot: "/tmp/orbyt-workspace",
       query: "drft",
       limit: 10,
       maxDepth: 4,
     }
+    const pasted: import("./index.js").StagePastedAttachmentParams = {
+      name: "screenshot.png",
+      mimeType: "image/png",
+      dataUrl: "data:image/png;base64,ZmFrZQ==",
+    }
     expect(params.workspaceRoot).toBe("/tmp/orbyt-workspace")
     expect(params.query).toBe("drft")
+    expect(pasted.mimeType).toBe("image/png")
   })
 
   test("classifies risky commands into beginner-friendly approval prompts", () => {

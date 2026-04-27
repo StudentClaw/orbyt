@@ -21,8 +21,9 @@ const makeReference = (
   id: string,
   label: string,
   url: string | null = `https://canvas.example.edu/${id}`,
+  kind: TurnReferenceInput["kind"] = "canvas-assignment",
 ): TurnReferenceInput => ({
-  kind: "canvas-assignment",
+  kind,
   id,
   label,
   url,
@@ -72,10 +73,10 @@ describe("buildPromptContent", () => {
     expect(result).not.toContain("  what is this?  ")
   })
 
-  test("emits a Referenced Canvas assignments block when references are present", () => {
+  test("emits a Referenced Canvas items block when references are present", () => {
     const refs = [makeReference("assignment:12345", "Essay 3")]
     const result = buildPromptContent("review this", [], refs)
-    expect(result.startsWith("Referenced Canvas assignments:")).toBe(true)
+    expect(result.startsWith("Referenced Canvas items:")).toBe(true)
     expect(result).toContain("assignment:12345")
     expect(result).toContain("https://canvas.example.edu/assignment:12345")
     expect(result).toContain("review this")
@@ -85,7 +86,7 @@ describe("buildPromptContent", () => {
     const attachments = [makeAttachment("/notes.pdf")]
     const refs = [makeReference("assignment:12345", "Essay 3")]
     const result = buildPromptContent("please review", attachments, refs)
-    const refIdx = result.indexOf("Referenced Canvas assignments:")
+    const refIdx = result.indexOf("Referenced Canvas items:")
     const attIdx = result.indexOf("Attached files:")
     expect(refIdx).toBeGreaterThanOrEqual(0)
     expect(attIdx).toBeGreaterThan(refIdx)
@@ -107,6 +108,21 @@ describe("buildPromptContent", () => {
     const result = buildPromptContent("hi", [], refs)
     expect(result).toContain("assignment_id=assignment:7")
     expect(result).not.toMatch(/url=null/)
+  })
+
+  test("labels coursework references distinctly from assignment references", () => {
+    const refs = [
+      makeReference(
+        "canvas-coursework:page:2:module-16-readings",
+        "Read: Folktale and Myth",
+        "https://canvas.example.edu/courses/2/pages/module-16-readings",
+        "canvas-coursework",
+      ),
+    ]
+    const result = buildPromptContent("summarize this", [], refs)
+    expect(result).toContain("Referenced Canvas items:")
+    expect(result).toContain("coursework_id=canvas-coursework:page:2:module-16-readings")
+    expect(result).not.toContain("assignment_id=canvas-coursework")
   })
 })
 

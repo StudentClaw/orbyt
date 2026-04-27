@@ -6,7 +6,8 @@ import type {
 import type { AttachmentData } from "@/components/ai/attachments"
 
 const ATTACHED_FILES_HEADER = "Attached files:"
-const REFERENCED_ASSIGNMENTS_HEADER = "Referenced Canvas assignments:"
+const REFERENCED_CANVAS_HEADER = "Referenced Canvas items:"
+const LEGACY_REFERENCED_ASSIGNMENTS_HEADER = "Referenced Canvas assignments:"
 const USER_MESSAGE_HEADER = "User message:"
 
 type AttachmentReference = Pick<TurnAttachmentInput, "path">
@@ -14,7 +15,10 @@ type AttachmentReference = Pick<TurnAttachmentInput, "path">
 type ReferenceView = Pick<TurnReferenceInput, "kind" | "id" | "label" | "url">
 
 function formatReferenceLine(reference: ReferenceView): string {
-  const segments = [`assignment_id=${reference.id}`]
+  const idLabel = reference.kind === "canvas-assignment"
+    ? "assignment_id"
+    : "coursework_id"
+  const segments = [`${idLabel}=${reference.id}`]
   if (reference.url) {
     segments.push(`url=${reference.url}`)
   }
@@ -23,8 +27,21 @@ function formatReferenceLine(reference: ReferenceView): string {
 
 function buildReferencesBlock(references: readonly ReferenceView[]): string {
   return [
-    REFERENCED_ASSIGNMENTS_HEADER,
+    REFERENCED_CANVAS_HEADER,
     ...references.map((reference) => formatReferenceLine(reference)),
+  ].join("\n")
+}
+
+function buildLegacyReferencesBlock(references: readonly ReferenceView[]): string {
+  return [
+    LEGACY_REFERENCED_ASSIGNMENTS_HEADER,
+    ...references.map((reference) => {
+      const segments = [`assignment_id=${reference.id}`]
+      if (reference.url) {
+        segments.push(`url=${reference.url}`)
+      }
+      return `- "${reference.label}" (${segments.join(", ")})`
+    }),
   ].join("\n")
 }
 
@@ -82,7 +99,9 @@ export function extractDisplayContent(
   let remainder = normalizedInput
 
   if (references.length > 0) {
-    const stripped = stripBlock(remainder, buildReferencesBlock(references))
+    const stripped =
+      stripBlock(remainder, buildReferencesBlock(references))
+      ?? stripBlock(remainder, buildLegacyReferencesBlock(references))
     if (stripped === null) {
       return input
     }
