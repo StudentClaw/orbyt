@@ -85,8 +85,8 @@ export function resolveRootNavbarContext({
     return { kind: "title", title: "General", rightSlot: null }
   }
 
-  if (pathname === "/settings/schedule") {
-    return { kind: "title", title: "Schedule & Preferences", rightSlot: null }
+  if (pathname === "/settings/study-profile") {
+    return { kind: "title", title: "Study Profile", rightSlot: null }
   }
 
   if (pathname === "/settings/plugins") {

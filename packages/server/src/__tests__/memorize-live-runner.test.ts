@@ -115,6 +115,41 @@ describe("LiveMemorizeTurnRunner", () => {
     expect(state.lastProcessedThreadCursor["_global"]).toBe("2026-04-19T06:00:00.000Z")
   })
 
+  test("appends new turns to existing daily file on second run same day", async () => {
+    const { paths, store } = setup()
+    const now = new Date(2026, 3, 19, 7, 0)
+
+    // First run — writes the daily file
+    const runner1 = new LiveMemorizeTurnRunner({
+      db: mockDb([
+        { id: "t1", thread_id: "th1", input_text: "morning q", output_text: "morning a", completed_at: "2026-04-19T06:00:00.000Z" },
+      ]),
+      paths,
+      store,
+      distiller: mockDistiller("### Notable Events\n\n- morning event\n"),
+    })
+    await runner1.run({ sinceCursor: {}, now, trigger: "auto" })
+
+    const cursor = store.read().lastProcessedThreadCursor
+
+    // Second run — new turn arrived after first run
+    let secondDistillCalled = false
+    const runner2 = new LiveMemorizeTurnRunner({
+      db: mockDb([
+        { id: "t2", thread_id: "th1", input_text: "afternoon q", output_text: "afternoon a", completed_at: "2026-04-19T10:00:00.000Z" },
+      ]),
+      paths,
+      store,
+      distiller: { distill: async () => { secondDistillCalled = true; return "### Notable Events\n\n- afternoon event\n" } },
+    })
+    const result2 = await runner2.run({ sinceCursor: cursor, now, trigger: "auto" })
+
+    expect(result2.ok).toBe(true)
+    expect(secondDistillCalled).toBe(true)
+    if (!result2.ok) return
+    expect(result2.result.dailyFileWritten).toBe("2026-04-19")
+  })
+
   test("records failure and preserves prior checkpoint on distiller error", async () => {
     const { paths, store } = setup()
     store.commitSuccess({

@@ -302,6 +302,27 @@ export function registerIpcHandlers(
     })
   })
 
+  registerHandler(IpcChannel.CODEX_AUTH_LOGOUT, (): Promise<{ ok: boolean }> => {
+    const codexPath = resolveCodexPath()
+    const env = buildIsolatedCodexEnv(app.getPath("userData"))
+
+    return new Promise((resolve) => {
+      const proc = spawn(codexPath, ["logout"], {
+        env,
+        stdio: "pipe",
+        shell: process.platform === "win32",
+      })
+
+      proc.on("exit", (code) => {
+        resolve({ ok: code === 0 })
+      })
+
+      proc.on("error", () => {
+        resolve({ ok: false })
+      })
+    })
+  })
+
   const pushManager = resolvePushManager(bootstrap, runtime)
   registerHandler(IpcChannel.PUSH_GET_SETTINGS, () => pushManager.getSettings())
   registerHandler(IpcChannel.PUSH_UPDATE_SETTINGS, (_event, params) => pushManager.updateSettings(params))
@@ -571,6 +592,17 @@ function registerPluginIpcHandlers(
       }
 
       return pluginAuthService.saveCredentials(params)
+    },
+  )
+
+  registerHandler(
+    IpcChannel.PLUGIN_CLEAR_AUTH,
+    (_event, params: { pluginId: string }): { ok: boolean } => {
+      if (!bootstrap.featureFlags.pluginSystem) {
+        return { ok: false }
+      }
+      pluginAuthService.clearCredentials(params.pluginId)
+      return { ok: true }
     },
   )
 

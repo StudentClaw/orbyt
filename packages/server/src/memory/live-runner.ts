@@ -74,10 +74,12 @@ export class LiveMemorizeTurnRunner implements MemorizeTurnRunner {
       let dailyContent: string | null = null
 
       const todayFileExists = existsSync(paths.dailyFile(dateKey))
+      // Recovery = file written but cursor not advanced (crash before commitSuccess).
+      // If new turns are available the cursor DID advance, so this is not a recovery.
       // On recovery, we don't re-parse the daily file for promotion candidates —
       // they were already (partially) processed in the prior run. Passing null
       // prevents evidenceCount from inflating on every crash-recovery cycle.
-      const isRecovery = todayFileExists
+      const isRecovery = todayFileExists && turns.length === 0
 
       if (isRecovery) {
         // Recovery path: a previous run wrote the daily file but failed before commitSuccess.

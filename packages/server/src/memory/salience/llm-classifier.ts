@@ -18,19 +18,62 @@ function formatTurn(turn: SalienceTurn): string {
   ].join("\n")
 }
 
-function extractJsonObject(text: string): string | null {
-  const trimmed = text.trim()
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const body = fenced ? fenced[1]!.trim() : trimmed
-  const start = body.indexOf("{")
-  const end = body.lastIndexOf("}")
-  if (start === -1 || end === -1 || end <= start) return null
-  return body.slice(start, end + 1)
+/**
+ * Walk the text and return every balanced `{...}` substring. Used to find a
+ * verdict JSON object even when the model wrapped the answer in markdown,
+ * artifact tags, or trailing prose.
+ */
+function findJsonObjectCandidates(text: string): string[] {
+  const candidates: string[] = []
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escape = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    if (escape) {
+      escape = false
+      continue
+    }
+    if (ch === "\\") {
+      escape = true
+      continue
+    }
+    if (ch === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+    if (ch === "{") {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === "}") {
+      depth--
+      if (depth === 0 && start !== -1) {
+        candidates.push(text.slice(start, i + 1))
+        start = -1
+      }
+      if (depth < 0) {
+        depth = 0
+        start = -1
+      }
+    }
+  }
+  return candidates
 }
 
-function parseVerdict(raw: string): SalienceVerdict {
-  const json = extractJsonObject(raw)
-  if (!json) return { noteworthy: false, reason: "classifier returned no json" }
+function stripFencesAndArtifacts(raw: string): string {
+  let text = raw.trim()
+  // Drop fenced code blocks but keep their bodies.
+  text = text.replace(/```(?:json)?\s*([\s\S]*?)```/g, (_match, body) => String(body))
+  // Strip artifact wrappers — keep inner content.
+  text = text.replace(/<artifact\b[^>]*>([\s\S]*?)<\/artifact>/gi, (_match, body) =>
+    String(body),
+  )
+  return text
+}
+
+function tryParseVerdict(json: string): SalienceVerdict | null {
   try {
     const parsed = JSON.parse(json) as unknown
     if (
@@ -45,9 +88,31 @@ function parseVerdict(raw: string): SalienceVerdict {
       return { noteworthy: rec["noteworthy"] as boolean, reason }
     }
   } catch {
-    // fall through
+    // ignore
   }
-  return { noteworthy: false, reason: "classifier returned invalid json" }
+  return null
+}
+
+function parseVerdict(raw: string): SalienceVerdict {
+  const cleaned = stripFencesAndArtifacts(raw)
+  const candidates = findJsonObjectCandidates(cleaned)
+
+  // Prefer the LAST valid verdict candidate so trailing prose containing braces
+  // does not eclipse the model's actual answer. Walking back also works when
+  // the daily distillation thread accidentally appends a JSON line.
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const verdict = tryParseVerdict(candidates[i]!)
+    if (verdict) return verdict
+  }
+
+  // Fail-open default: if the classifier output is unparseable, treat the turn
+  // as noteworthy so memory writes are not silently lost. The distillation pass
+  // is the authoritative filter and will skip if there is genuinely nothing to
+  // record.
+  process.stderr.write(
+    `LlmSalienceClassifier: failed to parse verdict, defaulting to noteworthy=true. Raw=${JSON.stringify(raw.slice(0, 200))}\n`,
+  )
+  return { noteworthy: true, reason: "classifier output unparseable" }
 }
 
 export class LlmSalienceClassifier implements SalienceClassifier {

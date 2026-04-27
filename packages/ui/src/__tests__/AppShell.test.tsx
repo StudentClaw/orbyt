@@ -222,11 +222,11 @@ describe("AppShell", () => {
   })
 
   test("shows settings section titles in the root navbar", () => {
-    shellMocks.pathname = "/settings/schedule"
+    shellMocks.pathname = "/settings/study-profile"
 
     render(<AppShell />)
 
-    expect(screen.getByTestId("root-navbar-title").textContent).toBe("Schedule & Preferences")
+    expect(screen.getByTestId("root-navbar-title").textContent).toBe("Study Profile")
     expect(screen.queryByTestId("chat-status-badge")).toBeNull()
   })
 

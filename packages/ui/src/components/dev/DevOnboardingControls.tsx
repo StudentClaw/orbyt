@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { ONBOARDING_STEPS, goToOnboardingStep, resetOnboardingWizardState, resetAllOnboardingState } from "@/rpc/onboardingState"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { IpcChannel } from "@orbyt/contracts"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -40,6 +41,11 @@ export function DevOnboardingControls() {
     setIsResetting(true)
     try {
       await resetAllOnboardingState(getPrimaryWsRpcClient())
+      // Also disconnect OAuth and plugin credentials
+      await Promise.allSettled([
+        window.electronAPI?.invoke(IpcChannel.CODEX_AUTH_LOGOUT),
+        window.electronAPI?.invoke(IpcChannel.PLUGIN_CLEAR_AUTH, { pluginId: "canvas-mcp" }),
+      ])
     } finally {
       setIsResetting(false)
     }

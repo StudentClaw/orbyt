@@ -1,2 +1,5 @@
 export * from "@orbyt/contracts"
 export * from "@orbyt/shared-runtime"
+export * from "./data/dna-questions.js"
+export * from "./data/archetypes.js"
+export * from "./data/orby-reactions.js"

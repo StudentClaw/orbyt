@@ -46,6 +46,8 @@ export const IpcChannel = {
   PLUGIN_READINESS: "plugin:readiness",
   PLUGIN_GET_AUTH_STATUS: "plugin:get-auth-status",
   PLUGIN_SAVE_AUTH: "plugin:save-auth",
+  PLUGIN_CLEAR_AUTH: "plugin:clear-auth",
+  CODEX_AUTH_LOGOUT: "codex:auth-logout",
   PLUGIN_REVEAL_PERMISSION_SETTINGS: "plugin:reveal-permission-settings",
 } as const
 
@@ -280,6 +282,8 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.PLUGIN_GET_RUNTIME_LOGS]: [params?: PluginGetRuntimeLogsParams]
   [IpcChannel.PLUGIN_GET_AUTH_STATUS]: [params: PluginGetAuthStatusParams]
   [IpcChannel.PLUGIN_SAVE_AUTH]: [params: PluginSaveAuthParams]
+  [IpcChannel.PLUGIN_CLEAR_AUTH]: [params: { pluginId: string }]
+  [IpcChannel.CODEX_AUTH_LOGOUT]: []
   [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: [params: PluginRevealPermissionSettingsParams]
 }
 
@@ -314,6 +318,8 @@ export type IpcInvokeResultMap = {
   [IpcChannel.PLUGIN_GET_RUNTIME_LOGS]: PluginRuntimeLogsResult
   [IpcChannel.PLUGIN_GET_AUTH_STATUS]: PluginAuthStatus | null
   [IpcChannel.PLUGIN_SAVE_AUTH]: PluginSaveAuthResult
+  [IpcChannel.PLUGIN_CLEAR_AUTH]: { ok: boolean }
+  [IpcChannel.CODEX_AUTH_LOGOUT]: { ok: boolean }
   [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: PluginRevealPermissionSettingsResult
 }
 

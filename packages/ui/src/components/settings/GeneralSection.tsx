@@ -89,6 +89,7 @@ export function GeneralSection() {
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [pickerState, setPickerState] = useState<"idle" | "opening">("idle")
+  const [codexLogoutState, setCodexLogoutState] = useState<"idle" | "pending" | "done" | "error">("idle")
 
   useEffect(() => {
     let cancelled = false
@@ -125,6 +126,20 @@ export function GeneralSection() {
       setSaveState("saved")
     } catch {
       setSaveState("error")
+    }
+  }
+
+  async function disconnectCodex() {
+    if (!window.electronAPI?.invoke) {
+      setCodexLogoutState("error")
+      return
+    }
+    setCodexLogoutState("pending")
+    try {
+      await window.electronAPI.invoke(IpcChannel.CODEX_AUTH_LOGOUT)
+      setCodexLogoutState("done")
+    } catch {
+      setCodexLogoutState("error")
     }
   }
 
@@ -180,7 +195,7 @@ export function GeneralSection() {
         <CardHeader>
           <CardTitle>Memory Graph</CardTitle>
           <CardDescription>
-            Choose where Orbyt writes the durable memory graph. By default it lives in your Documents folder.
+            Choose where Orbyt writes it's knowledge of you.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -213,7 +228,7 @@ export function GeneralSection() {
               : loadState === "error"
                 ? "Could not load the current graph location."
                 : pathMode === "default"
-                  ? "Using the default Documents location."
+                  ? "Using the default location (~/.orbyt/memory/graph)."
                   : "Using a custom graph location."}
           </p>
 
@@ -245,6 +260,36 @@ export function GeneralSection() {
           {saveState === "error" && (
             <p className="text-sm text-destructive" data-testid="settings-memory-graph-status">
               Could not save the memory graph location.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="settings-codex-auth-card">
+        <CardHeader>
+          <CardTitle>Codex (OpenAI)</CardTitle>
+          <CardDescription>
+            Disconnect your OpenAI account so you can re-run the OAuth flow.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void disconnectCodex()}
+            disabled={codexLogoutState === "pending"}
+            data-testid="settings-codex-disconnect"
+          >
+            {codexLogoutState === "pending" ? "Disconnecting..." : "Disconnect Codex"}
+          </Button>
+          {codexLogoutState === "done" && (
+            <p className="text-sm text-muted-foreground" data-testid="settings-codex-disconnect-status">
+              Disconnected. You can now re-authenticate from the onboarding flow.
+            </p>
+          )}
+          {codexLogoutState === "error" && (
+            <p className="text-sm text-destructive" data-testid="settings-codex-disconnect-status">
+              Failed to disconnect. Desktop bridge may be unavailable.
             </p>
           )}
         </CardContent>

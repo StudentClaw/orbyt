@@ -412,6 +412,7 @@ function PluginDetailView({
   entry,
   pendingPluginId,
   pendingAuthPluginId,
+  pendingClearAuthPluginId,
   pendingSyncPluginId,
   pendingReadinessPluginId,
   isCanvasSyncing,
@@ -422,6 +423,7 @@ function PluginDetailView({
   saveError,
   onToggle,
   onSaveAuth,
+  onClearAuth,
   onSyncCanvas,
   onRunReadinessAction,
   onChangeAuthField,
@@ -429,6 +431,7 @@ function PluginDetailView({
   entry: ExtensionRegistryEntry
   pendingPluginId: string | null
   pendingAuthPluginId: string | null
+  pendingClearAuthPluginId: string | null
   pendingSyncPluginId: string | null
   pendingReadinessPluginId: string | null
   isCanvasSyncing: boolean
@@ -439,6 +442,7 @@ function PluginDetailView({
   saveError: string | null | undefined
   onToggle: (pluginId: string, enabled: boolean) => void
   onSaveAuth: () => void
+  onClearAuth: () => void
   onSyncCanvas: () => void
   onRunReadinessAction: () => void
   onChangeAuthField: (fieldKey: string, nextValue: string) => void
@@ -497,6 +501,17 @@ function PluginDetailView({
                 data-testid={`settings-plugin-sync-${pluginId}`}
               >
                 {pendingSyncPluginId === pluginId || isCanvasSyncing ? "Syncing..." : "Sync Now"}
+              </Button>
+            )}
+
+            {isManualAuth && authStatus?.status === "configured" && (
+              <Button
+                variant="outline"
+                disabled={pendingClearAuthPluginId === pluginId}
+                onClick={onClearAuth}
+                data-testid={`settings-plugin-auth-disconnect-${pluginId}`}
+              >
+                {pendingClearAuthPluginId === pluginId ? "Disconnecting..." : "Disconnect"}
               </Button>
             )}
 
@@ -734,6 +749,7 @@ export function ConnectionsSection({
   const [registryError, setRegistryError] = useState<string | null>(null)
   const [pendingPluginId, setPendingPluginId] = useState<string | null>(null)
   const [pendingAuthPluginId, setPendingAuthPluginId] = useState<string | null>(null)
+  const [pendingClearAuthPluginId, setPendingClearAuthPluginId] = useState<string | null>(null)
   const [authStatuses, setAuthStatuses] = useState<AuthStatusMap>({})
   const [authForms, setAuthForms] = useState<Record<string, AuthFormValues>>({})
   const [authErrors, setAuthErrors] = useState<Record<string, string | null>>({})
@@ -856,6 +872,30 @@ export function ConnectionsSection({
       setAuthErrors((current) => ({ ...current, [pluginId]: error instanceof Error ? error.message : String(error) }))
     } finally {
       setPendingAuthPluginId((current) => (current === pluginId ? null : current))
+    }
+  }
+
+  async function clearPluginAuth(pluginId: string): Promise<void> {
+    if (!window.electronAPI?.invoke) {
+      setAuthErrors((current) => ({ ...current, [pluginId]: "Desktop bridge unavailable." }))
+      return
+    }
+
+    setPendingClearAuthPluginId(pluginId)
+    setAuthErrors((current) => ({ ...current, [pluginId]: null }))
+
+    try {
+      await window.electronAPI.invoke(IpcChannel.PLUGIN_CLEAR_AUTH, { pluginId })
+      setAuthStatuses((current) => ({ ...current, [pluginId]: { pluginId, status: "not_configured" } }))
+      const entry = registryEntries.find((e) => getEntryPluginId(e) === pluginId)
+      if (entry && hasManualTokenAuth(entry)) {
+        setAuthForms((current) => ({ ...current, [pluginId]: buildEmptyAuthValues(entry.manifest.auth) }))
+      }
+      setAuthFieldErrors((current) => ({ ...current, [pluginId]: {} }))
+    } catch (error) {
+      setAuthErrors((current) => ({ ...current, [pluginId]: error instanceof Error ? error.message : String(error) }))
+    } finally {
+      setPendingClearAuthPluginId((current) => (current === pluginId ? null : current))
     }
   }
 
@@ -1029,6 +1069,7 @@ export function ConnectionsSection({
           entry={selectedEntry}
           pendingPluginId={pendingPluginId}
           pendingAuthPluginId={pendingAuthPluginId}
+          pendingClearAuthPluginId={pendingClearAuthPluginId}
           pendingSyncPluginId={pendingSyncPluginId}
           pendingReadinessPluginId={pendingReadinessPluginId}
           isCanvasSyncing={isCanvasSyncing}
@@ -1044,6 +1085,9 @@ export function ConnectionsSection({
             if (hasManualTokenAuth(selectedEntry)) {
               void savePluginAuth(selectedEntry)
             }
+          }}
+          onClearAuth={() => {
+            void clearPluginAuth(getEntryPluginId(selectedEntry))
           }}
           onSyncCanvas={() => {
             void syncCanvasPlugin()

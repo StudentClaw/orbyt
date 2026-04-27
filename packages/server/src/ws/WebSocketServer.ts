@@ -13,6 +13,8 @@ import { SkillResolver, type SkillResolverService } from "../skills/SkillResolve
 import { SkillManagement } from "../skills/SkillManagement.js"
 import type { SkillManagementService } from "../skills/SkillManagementService.js"
 import { MemorizeService, type MemorizeServiceShape } from "../memory/service.js"
+import { CodexCli } from "../ai/CodexCli.js"
+import { CodexDnaClassifier, type DnaClassifier } from "../onboarding/dna-classifier.js"
 import { selectWebSocketProtocol, validateWebSocketHandshake } from "./handshake.js"
 import { routeMessage, type RouteMessageResult } from "./Router.js"
 
@@ -47,8 +49,10 @@ export const WebSocketServerLive = Layer.effect(
     const skillResolver = yield* SkillResolver
     const skillManagement = yield* SkillManagement
     const memorize = yield* MemorizeService
+    const codex = yield* CodexCli
+    const dnaClassifier = new CodexDnaClassifier(codex, database)
 
-    return createWebSocketService(config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, skillManagement, memorize)
+    return createWebSocketService(config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, skillManagement, memorize, dnaClassifier)
   }),
 )
 
@@ -69,6 +73,7 @@ function createWebSocketService(
   skillResolver: SkillResolverService,
   skillManagement: SkillManagementService,
   memorize: MemorizeServiceShape,
+  dnaClassifier: DnaClassifier,
 ): WebSocketService {
   const wss = new WsServer({
     port: config.port,
@@ -82,7 +87,7 @@ function createWebSocketService(
   })
 
   wss.on("connection", (ws) => {
-    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, skillManagement, memorize)
+    registerSocketHandlers(ws as WebSocket, config, readiness, pushBus, orchestration, database, canvasSync, skillResolver, skillManagement, memorize, dnaClassifier)
   })
 
   return {
@@ -105,6 +110,7 @@ function registerSocketHandlers(
   skillResolver: SkillResolverService,
   skillManagement: SkillManagementService,
   memorize: MemorizeServiceShape,
+  dnaClassifier: DnaClassifier,
 ): void {
   pushBus.registerClient(ws)
 
@@ -124,6 +130,7 @@ function registerSocketHandlers(
       skillResolver,
       skillManagement,
       memorize,
+      dnaClassifier,
     })
     sendRouteResponse(ws, result)
   })

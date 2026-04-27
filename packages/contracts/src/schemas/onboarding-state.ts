@@ -1,13 +1,12 @@
 import { Schema } from "@effect/schema"
 
 export const OnboardingStepName = Schema.Literal(
-  "welcome",
-  "canvas-credential",
-  "ai-auth",
-  "preferences",
-  "routines",
-  "first-sync",
-  "dashboard-walkthrough",
+  "dna-discovery",
+  "active-hours",
+  "busy-grid",
+  "ai-connect",
+  "canvas-sync",
+  "launch",
 )
 export type OnboardingStepName = Schema.Schema.Type<typeof OnboardingStepName>
 

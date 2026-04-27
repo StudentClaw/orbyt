@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event"
 import { IpcChannel } from "@orbyt/contracts"
 
-async function navigateTo(section: "general" | "connections" | "notifications" | "schedule") {
+async function navigateTo(section: "general" | "connections" | "notifications" | "study-profile") {
   await userEvent.click(screen.getByTestId(`settings-nav-${section}`))
 }
 

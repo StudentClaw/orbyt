@@ -48,16 +48,27 @@ export const MemorizeTriggerServiceLive = Layer.effect(
 
     return {
       start: (options?: MemorizeTriggerHookOptions) => {
-        const runNow = async (): Promise<void> => {
+        const runNow = async (turnId: string): Promise<void> => {
           if (isRunning) {
             pendingFlush = true
             return
           }
           isRunning = true
+          const startedAt = Date.now()
+          process.stdout.write(
+            `[memorize] auto run start (trigger turnId=${turnId})\n`,
+          )
           try {
             const outcome = await memorize.runIfNeeded(new Date(), {
               trigger: "auto",
             })
+            const durationMs = Date.now() - startedAt
+            const summary = outcome.result
+              ? `daily=${outcome.result.dailyFileWritten ?? "-"} weekly=${outcome.result.weeklyFileWritten ?? "-"} graphNodes=${outcome.result.graphNodesUpdated.length}`
+              : "no result"
+            process.stdout.write(
+              `[memorize] auto run done ran=${outcome.ran} ${summary} (${durationMs}ms)\n`,
+            )
             if (outcome.ran && outcome.result && options?.onRan) {
               try {
                 await options.onRan(outcome.result)
@@ -73,7 +84,7 @@ export const MemorizeTriggerServiceLive = Layer.effect(
               pendingFlush = false
               // Schedule on next tick to avoid deep recursion under bursts.
               setImmediate(() => {
-                void runNow()
+                void runNow("pending-flush")
               })
             }
           }
@@ -81,7 +92,12 @@ export const MemorizeTriggerServiceLive = Layer.effect(
 
         const unsubscribe = eventBus.subscribeTurnCompleted(async (payload) => {
           // Never reflect the memorize pipeline's own turns back into itself.
-          if (payload.threadId === MEMORIZE_THREAD_ID) return
+          if (
+            payload.threadId === MEMORIZE_THREAD_ID ||
+            payload.threadId === MEMORIZE_SALIENCE_THREAD_ID
+          ) {
+            return
+          }
 
           const turn: SalienceTurn = {
             turnId: payload.turnId,
@@ -95,13 +111,17 @@ export const MemorizeTriggerServiceLive = Layer.effect(
             verdict = await classifier.classify(turn)
           } catch (err) {
             process.stderr.write(
-              `Salience classifier failed: ${String(err)}\n`,
+              `Salience classifier failed (turnId=${payload.turnId}): ${String(err)}\n`,
             )
             return
           }
 
+          process.stdout.write(
+            `[memorize] salience turnId=${payload.turnId} noteworthy=${verdict.noteworthy} reason=${JSON.stringify(verdict.reason)}\n`,
+          )
+
           if (!verdict.noteworthy) return
-          await runNow()
+          await runNow(payload.turnId)
         })
 
         return unsubscribe
