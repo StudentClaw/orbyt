@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import * as React from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useBlocker } from "@tanstack/react-router"
 import type { OnboardingAnswers, StudentDna } from "@orbyt/contracts"
 import { buildStudyDna } from "@orbyt/shared"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
@@ -13,8 +15,22 @@ import { CinematicReveal } from "@/components/onboarding/dna/CinematicReveal"
 import { DNA_TOKENS, MONO } from "@/components/onboarding/dna/tokens"
 
 type LoadState = "loading" | "ready" | "error"
+type SaveState = "idle" | "saving" | "error"
 type RetakePhase = "off" | "quiz" | "reveal"
 type ConfirmState = "hidden" | "confirming"
+
+interface Baseline {
+  name: string
+  startHour: number
+  endHour: number
+  cells: ReadonlyArray<string>
+}
+
+function setsMatch(a: Set<string>, b: ReadonlyArray<string>): boolean {
+  if (a.size !== b.length) return false
+  for (const k of b) if (!a.has(k)) return false
+  return true
+}
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 const GRID_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
@@ -53,6 +69,7 @@ function buildStudyTimes(startHour: number, endHour: number): ReadonlyArray<stri
 
 export function StudyProfileSection() {
   const [loadState, setLoadState] = useState<LoadState>("loading")
+  const [saveState, setSaveState] = useState<SaveState>("idle")
   const [name, setName] = useState("")
   const [dna, setDnaState] = useState<StudentDna | null>(null)
   const [answers, setAnswersState] = useState<OnboardingAnswers | null>(null)
@@ -63,7 +80,17 @@ export function StudyProfileSection() {
   const [sliderDrag, setSliderDrag] = useState<"start" | "end" | null>(null)
   const [retake, setRetake] = useState<RetakePhase>("off")
   const [retakeDna, setRetakeDna] = useState<StudentDna | null>(null)
+  const [baseline, setBaseline] = useState<Baseline | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
+
+  const isDirty = useMemo(() => {
+    if (!baseline) return false
+    if (name !== baseline.name) return true
+    if (startHour !== baseline.startHour) return true
+    if (endHour !== baseline.endHour) return true
+    if (!setsMatch(cells, baseline.cells)) return true
+    return false
+  }, [baseline, name, startHour, endHour, cells])
 
   const hue = dna?.hue ?? DEFAULT_HUE
   const accentHue = dna?.accentHue ?? DEFAULT_ACCENT_HUE
@@ -79,15 +106,23 @@ export function StudyProfileSection() {
       ]))
       .then(([dnaResult, prefs, routines]) => {
         if (cancelled) return
+        const loadedName = dnaResult.answers?.name ?? ""
         if (dnaResult.answers) {
           setAnswersState(dnaResult.answers)
-          setName(dnaResult.answers.name)
+          setName(loadedName)
         }
         setDnaState(dnaResult.dna)
         const window = deriveActiveWindow(prefs.studyTimes)
         setStartHour(window.startHour)
         setEndHour(window.endHour)
-        setCells(new Set(routines.cells.map((c) => `${c.dayOfWeek}-${c.hourOfDay}`)))
+        const cellKeys = routines.cells.map((c) => `${c.dayOfWeek}-${c.hourOfDay}`)
+        setCells(new Set(cellKeys))
+        setBaseline({
+          name: loadedName,
+          startHour: window.startHour,
+          endHour: window.endHour,
+          cells: cellKeys,
+        })
         setLoadState("ready")
       })
       .catch(() => {
@@ -97,21 +132,49 @@ export function StudyProfileSection() {
     return () => { cancelled = true }
   }, [])
 
-  function commitName() {
-    if (!answers) return
-    if (answers.name === name) return
-    const next: OnboardingAnswers = { ...answers, name }
-    setAnswersState(next)
-    void waitForPrimaryWsRpcClient()
-      .then((client) => client.onboarding.setAnswers({ answers: next }))
-      .catch(() => undefined)
+  async function handleSave(): Promise<boolean> {
+    if (!isDirty) return true
+    setSaveState("saving")
+    try {
+      const client = await waitForPrimaryWsRpcClient()
+      const ops: Array<Promise<unknown>> = []
+      if (answers && answers.name !== name) {
+        const nextAnswers: OnboardingAnswers = { ...answers, name }
+        setAnswersState(nextAnswers)
+        ops.push(client.onboarding.setAnswers({ answers: nextAnswers }))
+      }
+      if (!baseline || baseline.startHour !== startHour || baseline.endHour !== endHour) {
+        ops.push(client.onboarding.setPreferences({ studyTimes: [...buildStudyTimes(startHour, endHour)] }))
+      }
+      if (!baseline || !setsMatch(cells, baseline.cells)) {
+        const out = Array.from(cells).map((k) => {
+          const [day, hour] = k.split("-").map(Number)
+          return { dayOfWeek: day!, hourOfDay: hour! }
+        })
+        ops.push(client.onboarding.setRoutines({ cells: out }))
+      }
+      await Promise.all(ops)
+      setBaseline({
+        name,
+        startHour,
+        endHour,
+        cells: Array.from(cells),
+      })
+      setSaveState("idle")
+      return true
+    } catch {
+      setSaveState("error")
+      return false
+    }
   }
 
-  function syncActiveHours(nextStart: number, nextEnd: number) {
-    if (nextEnd <= nextStart) return
-    void waitForPrimaryWsRpcClient()
-      .then((client) => client.onboarding.setPreferences({ studyTimes: [...buildStudyTimes(nextStart, nextEnd)] }))
-      .catch(() => undefined)
+  function handleDiscard() {
+    if (!baseline) return
+    setName(baseline.name)
+    setStartHour(baseline.startHour)
+    setEndHour(baseline.endHour)
+    setCells(new Set(baseline.cells))
+    setSaveState("idle")
   }
 
   const pct = (h: number): number => ((h - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100
@@ -134,11 +197,8 @@ export function StudyProfileSection() {
   }, [sliderDrag, startHour, endHour, getHFromMouse])
 
   const onSliderUp = useCallback(() => {
-    if (sliderDrag) {
-      syncActiveHours(startHour, endHour)
-      setSliderDrag(null)
-    }
-  }, [sliderDrag, startHour, endHour])
+    if (sliderDrag) setSliderDrag(null)
+  }, [sliderDrag])
 
   useEffect(() => {
     window.addEventListener("mousemove", onSliderMove)
@@ -149,19 +209,27 @@ export function StudyProfileSection() {
     }
   }, [onSliderMove, onSliderUp])
 
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [isDirty])
+
+  const blocker = useBlocker({
+    shouldBlockFn: () => isDirty,
+    withResolver: true,
+  })
+
   function toggleCell(d: number, h: number) {
     setCells((prev) => {
       const next = new Set(prev)
       const key = `${d}-${h}`
       if (next.has(key)) next.delete(key)
       else next.add(key)
-      const out = Array.from(next).map((k) => {
-        const [day, hour] = k.split("-").map(Number)
-        return { dayOfWeek: day!, hourOfDay: hour! }
-      })
-      void waitForPrimaryWsRpcClient()
-        .then((client) => client.onboarding.setRoutines({ cells: out }))
-        .catch(() => undefined)
       return next
     })
   }
@@ -181,7 +249,6 @@ export function StudyProfileSection() {
   }
 
   function startRetake() {
-    if (!answers) return
     setRetake("quiz")
   }
 
@@ -217,7 +284,7 @@ export function StudyProfileSection() {
       <div>
         <h2 className="text-xl font-semibold">Study Profile</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your identity, study DNA, and rhythm. Changes save automatically.
+          Your identity, study DNA, and rhythm. Save your changes when you're done.
         </p>
       </div>
 
@@ -243,7 +310,6 @@ export function StudyProfileSection() {
             type="button"
             onClick={startRetake}
             data-testid="sp-retake-quiz"
-            disabled={!answers}
           >
             {dna ? "Retake DNA quiz" : "Take DNA quiz"}
           </Button>
@@ -263,7 +329,6 @@ export function StudyProfileSection() {
               data-testid="sp-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onBlur={commitName}
               placeholder="Your name"
             />
           </div>
@@ -423,7 +488,56 @@ export function StudyProfileSection() {
         </CardContent>
       </Card>
 
-      {retake !== "off" && answers && (
+      <div
+        data-testid="sp-save-bar"
+        className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center justify-between gap-3 rounded-xl border bg-background/85 px-4 py-3 backdrop-blur"
+      >
+        <p className="text-xs text-muted-foreground" style={{ fontFamily: MONO }}>
+          {saveState === "saving"
+            ? "Saving…"
+            : saveState === "error"
+            ? "Couldn't save. Try again."
+            : isDirty
+            ? "You have unsaved changes."
+            : "All changes saved."}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="sp-discard"
+            onClick={handleDiscard}
+            disabled={!isDirty || saveState === "saving"}
+          >
+            Discard
+          </Button>
+          <Button
+            type="button"
+            data-testid="sp-save"
+            onClick={() => { void handleSave() }}
+            disabled={!isDirty || saveState === "saving"}
+          >
+            {saveState === "saving" ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </div>
+
+      {blocker.status === "blocked" && (
+        <LeaveConfirm
+          onSave={async () => {
+            const ok = await handleSave()
+            if (ok) blocker.proceed()
+          }}
+          onDiscard={() => {
+            handleDiscard()
+            blocker.proceed()
+          }}
+          onCancel={() => blocker.reset()}
+          saving={saveState === "saving"}
+        />
+      )}
+
+      {retake !== "off" && (
         <RetakeOverlay
           phase={retake}
           existingName={name}
@@ -432,6 +546,106 @@ export function StudyProfileSection() {
           onClose={closeRetake}
         />
       )}
+    </div>
+  )
+}
+
+function LeaveConfirm({
+  onSave,
+  onDiscard,
+  onCancel,
+  saving,
+}: {
+  onSave: () => void
+  onDiscard: () => void
+  onCancel: () => void
+  saving: boolean
+}) {
+  return (
+    <div
+      data-testid="sp-leave-confirm"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 80,
+        background: "rgba(0,0,0,0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          background: "oklch(0.14 0.01 240)",
+          border: `1px solid ${DNA_TOKENS.line}`,
+          borderRadius: 20,
+          padding: "32px 36px",
+          maxWidth: 380,
+          textAlign: "center",
+          color: DNA_TOKENS.text,
+        }}
+      >
+        <p style={{ fontSize: 18, fontWeight: 600, margin: "0 0 10px" }}>Save your changes?</p>
+        <p style={{ fontSize: 14, color: DNA_TOKENS.textDim, margin: "0 0 24px", lineHeight: 1.6 }}>
+          You have unsaved edits to your study profile. Save them before leaving, or discard to revert.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            data-testid="sp-leave-cancel"
+            onClick={onCancel}
+            disabled={saving}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 999,
+              border: `1px solid ${DNA_TOKENS.line}`,
+              background: "rgba(255,255,255,0.06)",
+              color: DNA_TOKENS.text,
+              fontSize: 14,
+              cursor: saving ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Stay
+          </button>
+          <button
+            type="button"
+            data-testid="sp-leave-discard"
+            onClick={onDiscard}
+            disabled={saving}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 999,
+              border: "none",
+              background: "rgba(239,68,68,0.18)",
+              color: "#fca5a5",
+              fontSize: 14,
+              cursor: saving ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            data-testid="sp-leave-save"
+            onClick={onSave}
+            disabled={saving}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 999,
+              border: "none",
+              background: "oklch(0.6 0.18 250)",
+              color: "white",
+              fontSize: 14,
+              cursor: saving ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {saving ? "Saving…" : "Save & leave"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -477,7 +691,8 @@ function RetakeOverlay({
         gridTemplateColumns: phase === "reveal" ? "1fr" : "1.15fr 1fr",
         overflow: "hidden",
         transition: "background 1s",
-      }}
+        WebkitAppRegion: "no-drag",
+      } as React.CSSProperties}
     >
       <button
         type="button"

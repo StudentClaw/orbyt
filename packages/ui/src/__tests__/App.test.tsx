@@ -10,7 +10,11 @@ const appMocks = vi.hoisted(() => ({
     detail: "Connecting to Orbyt",
     error: null,
   } as RuntimeStartupState,
+  hydrationComplete: true,
+  onboardingComplete: true,
   startAppRuntime: vi.fn().mockResolvedValue(undefined),
+  routerNavigate: vi.fn(),
+  routerPathname: "/",
 }))
 
 vi.mock("../hooks/useTheme", () => ({
@@ -19,6 +23,8 @@ vi.mock("../hooks/useTheme", () => ({
 
 vi.mock("../hooks/useAppRuntime", () => ({
   useRuntimeStartupState: () => appMocks.startupState,
+  useIsServerHydrationComplete: () => appMocks.hydrationComplete,
+  useIsOnboardingComplete: () => appMocks.onboardingComplete,
 }))
 
 vi.mock("../rpc/appRuntime", () => ({
@@ -36,7 +42,12 @@ vi.mock("../components/ui/tooltip", () => ({
 }))
 
 vi.mock("../router", () => ({
-  router: {},
+  router: {
+    get state() {
+      return { location: { pathname: appMocks.routerPathname } }
+    },
+    navigate: appMocks.routerNavigate,
+  },
 }))
 
 import App from "../App"
@@ -44,12 +55,16 @@ import App from "../App"
 describe("App", () => {
   beforeEach(() => {
     appMocks.startAppRuntime.mockClear()
+    appMocks.routerNavigate.mockClear()
     appMocks.startupState = {
       phase: "bootstrapping",
       label: "Starting Orbyt",
       detail: "Connecting to Orbyt",
       error: null,
     }
+    appMocks.hydrationComplete = true
+    appMocks.onboardingComplete = true
+    appMocks.routerPathname = "/"
   })
 
   test("renders the startup screen before the runtime is ready", () => {

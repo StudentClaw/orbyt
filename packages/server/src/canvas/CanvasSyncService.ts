@@ -5,6 +5,8 @@ import {
   CanvasAssignmentDetailsResult,
   CanvasArchiveAssignmentParams,
   CanvasArchiveAssignmentResult,
+  CanvasUnarchiveAssignmentParams,
+  CanvasUnarchiveAssignmentResult,
   CanvasCourseContentOverviewParams,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureParams,
@@ -94,6 +96,7 @@ type CourseworkRow = {
 
 type ArchivedCourseworkRow = {
   id: string
+  payload: string | null
 }
 
 type AssignmentSourceRow = {
@@ -159,6 +162,7 @@ export interface CanvasSyncServiceShape {
   readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<CanvasAssignmentDetailsResult>
   readonly listAssignments: (params: CanvasListAssignmentsParams) => Promise<CanvasListAssignmentsResult>
   readonly archiveAssignment: (assignmentId: CanvasArchiveAssignmentParams["assignmentId"]) => CanvasArchiveAssignmentResult
+  readonly unarchiveAssignment: (assignmentId: CanvasUnarchiveAssignmentParams["assignmentId"]) => CanvasUnarchiveAssignmentResult
   readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<CanvasCourseContentOverviewResult>
   readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<CanvasCourseStructureResult>
   readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<CanvasDownloadCourseFileResult>
@@ -938,11 +942,12 @@ export function createSyncService(
     }
 
     const now = new Date().toISOString()
+    const payload = JSON.stringify(row)
     database.transaction(() => {
       database.execute(
         `INSERT INTO archived_coursework_items
-           (id, course_id, source_type, source_id, title, html_url, archived_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, course_id, source_type, source_id, title, html_url, archived_at, payload)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.course_id,
@@ -951,12 +956,65 @@ export function createSyncService(
           row.title,
           row.html_url,
           now,
+          payload,
         ],
       )
       database.execute("DELETE FROM coursework_items WHERE id = ?", [assignmentId])
     })
 
     return { archived: true, assignmentId }
+  }
+
+  function unarchiveAssignment(
+    assignmentId: CanvasUnarchiveAssignmentParams["assignmentId"],
+  ): CanvasUnarchiveAssignmentResult {
+    const archived = database.get<ArchivedCourseworkRow>(
+      "SELECT id, payload FROM archived_coursework_items WHERE id = ?",
+      [assignmentId],
+    )
+    if (!archived) {
+      return { unarchived: true, assignmentId }
+    }
+    if (!archived.payload) {
+      throw new Error(`Assignment ${assignmentId} cannot be restored: missing snapshot.`)
+    }
+
+    const row = JSON.parse(archived.payload) as CourseworkRow
+
+    database.transaction(() => {
+      database.execute(
+        `INSERT OR REPLACE INTO coursework_items
+           (id, course_id, title, description, effective_due_at, source_type,
+            source_due_date_kind, freshness_status, cached_at, last_verified_at,
+            source_updated_at, points_possible, submission_status, grade, html_url,
+            canvas_assignment_id, assignment_source_id, is_upcoming, status_bucket)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.id,
+          row.course_id,
+          row.title,
+          row.description,
+          row.effective_due_at,
+          row.source_type,
+          row.source_due_date_kind,
+          row.freshness_status,
+          row.cached_at,
+          row.last_verified_at,
+          row.source_updated_at,
+          row.points_possible,
+          row.submission_status,
+          row.grade,
+          row.html_url,
+          row.canvas_assignment_id,
+          row.assignment_source_id,
+          row.is_upcoming,
+          row.status_bucket,
+        ],
+      )
+      database.execute("DELETE FROM archived_coursework_items WHERE id = ?", [assignmentId])
+    })
+
+    return { unarchived: true, assignmentId }
   }
 
   async function listAssignments(
@@ -999,6 +1057,7 @@ export function createSyncService(
     getAssignmentDetails,
     listAssignments,
     archiveAssignment,
+    unarchiveAssignment,
     getCourseContentOverview,
     getCourseStructure,
     downloadCourseFile,

@@ -3,6 +3,7 @@ import {
   type ActivityFeedEntry,
   CanvasAssignmentDetailsParams,
   CanvasArchiveAssignmentParams,
+  CanvasUnarchiveAssignmentParams,
   CanvasCourseContentOverviewParams,
   CanvasCourseStructureParams,
   CanvasDownloadCourseFileParams,
@@ -371,6 +372,24 @@ async function handleCanvasMethod(
         return encodeError(
           id,
           "archive_assignment_failed",
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    }
+    case RPC_METHODS.CANVAS_UNARCHIVE_ASSIGNMENT: {
+      const decoded = decodeParams(
+        CanvasUnarchiveAssignmentParams,
+        params,
+        id,
+        "Invalid Canvas assignment-unarchive request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      try {
+        return encodeSuccess(id, dependencies.canvasSync.unarchiveAssignment(decoded.assignmentId))
+      } catch (error) {
+        return encodeError(
+          id,
+          "unarchive_assignment_failed",
           error instanceof Error ? error.message : String(error),
         )
       }
@@ -1026,6 +1045,27 @@ async function handleOnboardingMethod(
          ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
         [JSON.stringify(decoded.answers), new Date().toISOString()],
       )
+
+      const existingDnaRow = database.get<Record<string, unknown>>(
+        `SELECT archetype_id, trait, tagline, icon, hue, accent_hue, is_rare, rarity,
+                stats, peak, style, motivation, name, ai_prompt_hint,
+                recommended_features, sentiment_anchors, orbyt_adapts
+         FROM student_dna WHERE id = 1`,
+      )
+      const existingDna = rowToDna(existingDnaRow ?? null)
+      if (existingDna) {
+        try {
+          const paths = createMemoryPaths({
+            env: process.env,
+            graphDirOverride: readMemoryGraphPath(database),
+          })
+          writeStudentProfileTemplate(paths, existingDna, decoded.answers, new Date())
+        } catch (err) {
+          process.stderr.write(
+            `[Router] writeStudentProfileTemplate (setAnswers) failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          )
+        }
+      }
       return encodeSuccess(id, { ok: true })
     }
     case RPC_METHODS.ONBOARDING_GET_DNA: {
@@ -1073,10 +1113,24 @@ async function handleOnboardingMethod(
             env: process.env,
             graphDirOverride: readMemoryGraphPath(database),
           })
-          writeDnaToMemoryGraph(paths, result.dna, decoded.answers, new Date())
-          writeStudentProfileTemplate(paths, result.dna, decoded.answers, new Date())
-        } catch {
-          // Memory write failure should not block onboarding.
+          try {
+            writeDnaToMemoryGraph(paths, result.dna, decoded.answers, new Date())
+          } catch (err) {
+            process.stderr.write(
+              `[Router] writeDnaToMemoryGraph failed: ${err instanceof Error ? err.message : String(err)}\n`,
+            )
+          }
+          try {
+            writeStudentProfileTemplate(paths, result.dna, decoded.answers, new Date())
+          } catch (err) {
+            process.stderr.write(
+              `[Router] writeStudentProfileTemplate failed: ${err instanceof Error ? err.message : String(err)}\n`,
+            )
+          }
+        } catch (err) {
+          process.stderr.write(
+            `[Router] memory paths resolution failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          )
         }
         return encodeSuccess(id, {
           dna: result.dna,
