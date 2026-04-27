@@ -9,12 +9,14 @@ import {
   type SaveDialogOptions,
 } from "electron"
 import { spawn } from "node:child_process"
-import { existsSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
+import { randomUUID } from "node:crypto"
 import {
   type AttachmentMetadataLookupParams,
+  type StagePastedAttachmentParams,
   type TurnAttachmentInput,
   type WorkspaceFileSearchParams,
   IpcChannel,
@@ -99,6 +101,39 @@ function buildAttachmentMetadata(filePath: string): TurnAttachmentInput | null {
   } catch {
     return null
   }
+}
+
+function extensionForMimeType(mimeType: string): string {
+  const match = Object.entries(MIME_TYPES_BY_EXTENSION).find(([, value]) => value === mimeType)
+  return match?.[0] ?? ".png"
+}
+
+function sanitizeAttachmentName(name: string, mimeType: string): string {
+  const base = path.basename(name || "pasted-image")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+  const fallback = `pasted-image${extensionForMimeType(mimeType)}`
+  const candidate = base || fallback
+  return path.extname(candidate) ? candidate : `${candidate}${extensionForMimeType(mimeType)}`
+}
+
+function stagePastedAttachment(params: StagePastedAttachmentParams): TurnAttachmentInput | null {
+  const match = /^data:([^;,]+);base64,(.+)$/u.exec(params.dataUrl)
+  if (!match) {
+    return null
+  }
+  const mimeType = params.mimeType || match[1] || "image/png"
+  if (!mimeType.startsWith("image/")) {
+    return null
+  }
+
+  const dir = path.join(app.getPath("userData"), "composer-attachments")
+  mkdirSync(dir, { recursive: true })
+  const name = sanitizeAttachmentName(params.name, mimeType)
+  const filePath = path.join(dir, `${Date.now()}-${randomUUID()}-${name}`)
+  writeFileSync(filePath, Buffer.from(match[2] ?? "", "base64"))
+  return buildAttachmentMetadata(filePath)
 }
 
 function resolveCodexPath(): string {
@@ -224,6 +259,17 @@ export function registerIpcHandlers(
         workspaceFileSearch.recordRecent(entry.path)
       }
       return results
+    },
+  )
+
+  registerHandler(
+    IPC_CHANNELS.FILE_STAGE_PASTED_ATTACHMENT,
+    (_event, params: StagePastedAttachmentParams): TurnAttachmentInput | null => {
+      const attachment = stagePastedAttachment(params)
+      if (attachment) {
+        workspaceFileSearch.recordRecent(attachment.path)
+      }
+      return attachment
     },
   )
 

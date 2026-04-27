@@ -21,6 +21,18 @@ describe("@orbyt/contracts TurnReferenceInput", () => {
     expect(decoded.url).toBe("https://canvas.example.edu/courses/42/assignments/12345")
   })
 
+  test("decodes a Canvas coursework reference", () => {
+    const decoded = Schema.decodeUnknownSync(TurnReferenceInput)({
+      kind: "canvas-coursework",
+      id: "canvas-coursework:page:42:week-16-readings",
+      label: "Read: Folktale and Myth",
+      url: "https://canvas.example.edu/courses/42/pages/week-16-readings",
+    })
+
+    expect(decoded.kind).toBe("canvas-coursework")
+    expect(decoded.id).toBe("canvas-coursework:page:42:week-16-readings")
+  })
+
   test("rejects an unknown reference kind", () => {
     expect(() =>
       Schema.decodeUnknownSync(TurnReferenceInput)({

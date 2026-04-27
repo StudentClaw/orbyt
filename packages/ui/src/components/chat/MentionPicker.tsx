@@ -16,6 +16,8 @@ export type AssignmentPickerEntry = {
   readonly id: string
   readonly label: string
   readonly url: string
+  readonly referenceKind?: "canvas-assignment" | "canvas-coursework"
+  readonly sourceType?: "assignment" | "module" | "page" | "announcement"
   readonly courseCode?: string
   readonly dueAt?: string | null
 }
@@ -56,8 +58,8 @@ type PickerValue =
 const ASSIGNMENT_LIMIT = 8
 const FILE_LIMIT = 12
 
-function includesCaseInsensitive(label: string, q: string): boolean {
-  return label.toLowerCase().includes(q)
+function includesCaseInsensitive(value: string | null | undefined, q: string): boolean {
+  return (value ?? "").toLowerCase().includes(q)
 }
 
 function filterAssignments(
@@ -67,7 +69,10 @@ function filterAssignments(
   const q = filter.trim().toLowerCase()
   if (q === "") return assignments.slice(0, ASSIGNMENT_LIMIT)
   return assignments
-    .filter((a) => includesCaseInsensitive(a.label, q))
+    .filter((a) => (
+      includesCaseInsensitive(a.label, q)
+      || includesCaseInsensitive(a.courseCode, q)
+    ))
     .slice(0, ASSIGNMENT_LIMIT)
 }
 
@@ -213,7 +218,7 @@ export const MentionPicker = forwardRef<MentionPickerHandle, MentionPickerProps>
             data-slot="mention-picker-list"
           >
             <SectionLabel icon={<BookOpen className="size-3" />}>
-              Assignments
+              Canvas
             </SectionLabel>
 
             {!canReadCanvas ? (
@@ -233,8 +238,8 @@ export const MentionPicker = forwardRef<MentionPickerHandle, MentionPickerProps>
             ) : visibleAssignments.length === 0 ? (
               <div className="py-3 text-center text-xs text-muted-foreground">
                 {filter.trim() === ""
-                  ? "No upcoming assignments"
-                  : "No assignments match"}
+                  ? "No upcoming Canvas items"
+                  : "No Canvas items match"}
               </div>
             ) : (
               visibleAssignments.map((a, idx) => {
@@ -348,7 +353,7 @@ function AssignmentRow({
       role="option"
       aria-selected={active}
       data-slot="combobox-item"
-      data-mention-kind="canvas-assignment"
+      data-mention-kind={entry.referenceKind ?? "canvas-assignment"}
       data-mention-id={entry.id}
       data-mention-label={entry.label}
       data-highlighted={active ? "" : undefined}
@@ -370,6 +375,11 @@ function AssignmentRow({
           {entry.courseCode ? (
             <Badge variant="secondary" className="text-[10px]">
               {entry.courseCode}
+            </Badge>
+          ) : null}
+          {entry.sourceType && entry.sourceType !== "assignment" ? (
+            <Badge variant="outline" className="text-[10px] capitalize">
+              {entry.sourceType}
             </Badge>
           ) : null}
         </div>

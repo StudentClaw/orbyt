@@ -17,6 +17,8 @@ interface ModelSelectorProps {
   readonly selectedModel: string
   readonly onModelChange: (model: string) => void
   readonly disabled?: boolean
+  readonly open?: boolean
+  readonly onOpenChange?: (open: boolean) => void
 }
 
 export function ModelSelector({
@@ -24,8 +26,17 @@ export function ModelSelector({
   selectedModel,
   onModelChange,
   disabled = false,
+  open: controlledOpen,
+  onOpenChange,
 }: ModelSelectorProps) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = (nextOpen: boolean) => {
+    onOpenChange?.(nextOpen)
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(nextOpen)
+    }
+  }
 
   const current = useMemo(() => {
     return models.find((model) => model.id === selectedModel) ?? models[0] ?? null

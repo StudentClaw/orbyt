@@ -6,8 +6,9 @@ import { useChatUiActions, useSkillsState, type SkillEntry } from "@/hooks/useAp
 import {
   useCanvasUpcomingAssignments,
   useCanvasCourses,
+  useCanvasSubmissionStatus,
 } from "@/rpc/canvasState"
-import { assignmentEntriesFromCourseWork } from "@/lib/mentionSources"
+import { priorityAssignmentEntriesFromCanvasState } from "@/lib/mentionSources"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
@@ -112,13 +113,24 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
   const { closePanel } = useChatUiActions()
 
   const upcomingAssignments = useCanvasUpcomingAssignments()
+  const submissionStatus = useCanvasSubmissionStatus()
   const canvasCourses = useCanvasCourses()
   const assignmentEntries = useMemo(
-    () => assignmentEntriesFromCourseWork(upcomingAssignments, canvasCourses),
-    [upcomingAssignments, canvasCourses],
+    () => priorityAssignmentEntriesFromCanvasState({
+      upcoming: upcomingAssignments,
+      pending: submissionStatus.pending,
+      overdue: submissionStatus.overdue,
+      submitted: submissionStatus.submitted,
+    }, canvasCourses),
+    [canvasCourses, submissionStatus, upcomingAssignments],
   )
   const workspaceRoot =
     currentWorkspace?.kind === "filesystem" ? currentWorkspace.rootPath : null
+  const composerDraftKey = currentThread
+    ? `thread:${currentThread.id}`
+    : currentWorkspace
+      ? `workspace:${currentWorkspace.id}:new`
+      : null
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
@@ -281,6 +293,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         canReadCanvas={true}
         onForkSkill={openFork}
         onManageSkillPermissions={openPromotion}
+        draftKey={composerDraftKey}
       />
 
       {dialog.kind === "fork" ? (

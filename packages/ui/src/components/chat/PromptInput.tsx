@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   IpcChannel,
   classifyShellCommandForApproval,
@@ -9,10 +9,10 @@ import {
   type TurnAttachmentInput,
   type TurnReferenceInput,
 } from "@orbyt/contracts"
-import { PlusIcon, SquareIcon } from "lucide-react"
+import { MoreHorizontalIcon, PlusIcon, SquareIcon } from "lucide-react"
 import { toast } from "sonner"
 import { RichComposer, type RichComposerHandle } from "@/components/chat/RichComposer"
-import { SkillPicker, filterSkills, type SkillPickerEntry } from "@/components/chat/SkillPicker"
+import { filterSkills, type SkillPickerEntry } from "@/components/chat/SkillPicker"
 import {
   MentionPicker,
   type AssignmentPickerEntry,
@@ -46,6 +46,12 @@ import {
 import type { ChatStatus } from "@/hooks/chat-model"
 import type { WsConnectionPhase } from "@/rpc/wsConnectionState"
 import { cn } from "@/lib/utils"
+import {
+  clearChatComposerDraft,
+  readChatComposerDraft,
+  writeChatComposerDraft,
+} from "@/lib/chatComposerDrafts"
+import { shouldUseCompactComposerFooter } from "@/lib/composerFooterLayout"
 import { ModelSelector } from "./ModelSelector"
 
 interface PromptInputProps {
@@ -62,6 +68,7 @@ interface PromptInputProps {
   readonly onRequestCanvasAccess?: () => void
   readonly onForkSkill?: (skill: SkillPickerEntry) => void
   readonly onManageSkillPermissions?: (skill: SkillPickerEntry) => void
+  readonly draftKey?: string | null
   readonly onInterrupt: () => void
   readonly status: ChatStatus
   readonly connectionState: WsConnectionPhase
@@ -91,6 +98,59 @@ type ApprovalTechnicalDetail = {
   readonly label: string
   readonly value: string
   readonly code: boolean
+}
+
+type SlashCommandItem =
+  | {
+      readonly kind: "command"
+      readonly id: "model" | "default-permissions" | "full-access"
+      readonly name: string
+      readonly description: string
+    }
+  | {
+      readonly kind: "skill"
+      readonly skill: SkillPickerEntry
+    }
+
+const BUILT_IN_SLASH_COMMANDS: readonly Extract<SlashCommandItem, { kind: "command" }>[] = [
+  {
+    kind: "command",
+    id: "model",
+    name: "model",
+    description: "Open the model selector",
+  },
+  {
+    kind: "command",
+    id: "default-permissions",
+    name: "default-permissions",
+    description: "Use per-command approval prompts",
+  },
+  {
+    kind: "command",
+    id: "full-access",
+    name: "full-access",
+    description: "Allow commands in this thread without per-command prompts",
+  },
+]
+
+function filterSlashItems(
+  skills: readonly SkillPickerEntry[],
+  filter: string,
+): readonly SlashCommandItem[] {
+  const q = filter.trim().toLowerCase()
+  const commands = q === ""
+    ? BUILT_IN_SLASH_COMMANDS
+    : BUILT_IN_SLASH_COMMANDS.filter((command) => command.name.includes(q) || command.description.toLowerCase().includes(q))
+  return [
+    ...commands,
+    ...filterSkills(skills, filter).map((skill) => ({ kind: "skill" as const, skill })),
+  ]
+}
+
+function findBuiltInSlashCommand(input: string): Extract<SlashCommandItem, { kind: "command" }> | null {
+  const commandName = input.trim().match(/^\/([a-z-]+)$/)?.[1]
+  if (!commandName) return null
+  return BUILT_IN_SLASH_COMMANDS.find((command) => command.name === commandName) ?? null
 }
 
 function DefaultPermissionsIcon({ className }: { className?: string }) {
@@ -207,6 +267,21 @@ function stripComposerAttachmentIds(
   return attachments.map(({ id: _id, ...attachment }) => attachment)
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result)
+      } else {
+        reject(new Error("Unable to read pasted file."))
+      }
+    }
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read pasted file."))
+    reader.readAsDataURL(file)
+  })
+}
+
 function ApprovalSurface({
   approvalCopy,
   approvalDecisionPending,
@@ -318,6 +393,96 @@ function ApprovalSurface({
   )
 }
 
+function SlashCommandPicker({
+  items,
+  highlightedIndex,
+  fullAccess,
+  onHighlightChange,
+  onSelect,
+  onForkSkill,
+  onManageSkillPermissions,
+}: {
+  readonly items: readonly SlashCommandItem[]
+  readonly highlightedIndex: number
+  readonly fullAccess: boolean
+  readonly onHighlightChange: (index: number) => void
+  readonly onSelect: (item: SlashCommandItem) => void
+  readonly onForkSkill?: (skill: SkillPickerEntry) => void
+  readonly onManageSkillPermissions?: (skill: SkillPickerEntry) => void
+}) {
+  return (
+    <div className="w-full overflow-hidden rounded-xl p-1">
+      {items.length === 0 ? (
+        <div className="px-3 py-4 text-xs text-muted-foreground">No commands found</div>
+      ) : null}
+      {items.map((item, index) => {
+        const isHighlighted = index === highlightedIndex
+        if (item.kind === "command") {
+          return (
+            <button
+              key={`command:${item.id}`}
+              type="button"
+              className={cn(
+                "flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left text-sm",
+                isHighlighted && "bg-accent text-accent-foreground",
+              )}
+              onMouseEnter={() => onHighlightChange(index)}
+              onClick={() => onSelect(item)}
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="font-medium text-foreground">/{item.name}</span>
+                <span className="line-clamp-1 text-xs text-muted-foreground">{item.description}</span>
+              </span>
+            </button>
+          )
+        }
+
+        const rawMissing = item.skill.missingCapabilities ?? []
+        const missing = fullAccess ? [] : rawMissing
+        return (
+          <div
+            key={`skill:${item.skill.id}`}
+            className={cn(
+              "flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm",
+              isHighlighted && "bg-accent text-accent-foreground",
+            )}
+            onMouseEnter={() => onHighlightChange(index)}
+          >
+            <button
+              type="button"
+              className="min-w-0 flex-1 text-left"
+              onClick={() => onSelect(item)}
+            >
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="font-medium text-foreground">/{item.skill.name}</span>
+                <span className="line-clamp-1 text-xs text-muted-foreground">{item.skill.description}</span>
+              </span>
+            </button>
+            {missing.length > 0 && onManageSkillPermissions ? (
+              <button
+                type="button"
+                className="mt-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-amber-600 hover:bg-amber-500/10"
+                onClick={() => onManageSkillPermissions(item.skill)}
+              >
+                Needs {missing.length}
+              </button>
+            ) : null}
+            {onForkSkill ? (
+              <button
+                type="button"
+                className="mt-0.5 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                onClick={() => onForkSkill(item.skill)}
+              >
+                Fork
+              </button>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function PromptInput({
   onSend,
   onInterrupt,
@@ -346,6 +511,7 @@ export function PromptInput({
   onRequestCanvasAccess,
   onForkSkill,
   onManageSkillPermissions,
+  draftKey = null,
 }: PromptInputProps) {
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
@@ -360,9 +526,15 @@ export function PromptInput({
   const [mentionFiles, setMentionFiles] = useState<readonly FilePickerEntry[]>([])
   const [mentionRecents, setMentionRecents] = useState<readonly FilePickerEntry[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
+  const [compactControlsOpen, setCompactControlsOpen] = useState(false)
+  const [footerCompact, setFooterCompact] = useState(false)
   const dragCounterRef = useRef(0)
   const composerRef = useRef<RichComposerHandle>(null)
   const mentionPickerRef = useRef<MentionPickerHandle>(null)
+  const footerRef = useRef<HTMLDivElement>(null)
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hydratingDraftRef = useRef(false)
 
   const isConnected = connectionState === "connected"
   const stopPending = status === "interrupting" || interruptPending
@@ -409,6 +581,67 @@ export function PromptInput({
   useEffect(() => {
     setApprovalTechnicalDetailsOpen(false)
   }, [pendingApproval?.id])
+
+  useLayoutEffect(() => {
+    const footer = footerRef.current
+    if (!footer) return
+    const updateCompactState = () => {
+      setFooterCompact(shouldUseCompactComposerFooter(footer.clientWidth))
+    }
+    updateCompactState()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(updateCompactState)
+    observer.observe(footer)
+    return () => observer.disconnect()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (showSkillPicker || showMentionPicker) {
+      composerRef.current?.focus()
+    }
+  }, [showMentionPicker, showSkillPicker])
+
+  useEffect(() => {
+    hydratingDraftRef.current = true
+    const draft = readChatComposerDraft(draftKey)
+    composerRef.current?.setSnapshot(draft?.snapshot ?? { segments: [] })
+    setAttachments(draft?.attachments.map(toComposerAttachment) ?? [])
+    setAttachmentError(null)
+    window.setTimeout(() => {
+      hydratingDraftRef.current = false
+    }, 0)
+  }, [draftKey])
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!draftKey || hydratingDraftRef.current) return
+    if (draftSaveTimerRef.current) {
+      clearTimeout(draftSaveTimerRef.current)
+    }
+    draftSaveTimerRef.current = setTimeout(() => {
+      const snapshot = composerRef.current?.getSnapshot() ?? { segments: [] }
+      if ((composerRef.current?.isEmpty() ?? true) && attachments.length === 0) {
+        clearChatComposerDraft(draftKey)
+        return
+      }
+      writeChatComposerDraft(draftKey, {
+        version: 1,
+        snapshot,
+        attachments: stripComposerAttachmentIds(attachments),
+      })
+    }, 250)
+  }, [attachments, draftKey])
+
+  useEffect(() => {
+    scheduleDraftSave()
+  }, [attachments, scheduleDraftSave])
+
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current)
+      }
+    }
+  }, [])
 
   const resolveAttachmentMetadata = useCallback(async (paths: readonly string[]) => {
     if (!window.electronAPI?.invoke) {
@@ -462,18 +695,18 @@ export function PromptInput({
     return stripComposerAttachmentIds(refreshedAttachments)
   }, [attachments, resolveAttachmentMetadata])
 
-  const visibleSkills = useMemo(
-    () => filterSkills(skills, skillFilter),
+  const visibleSlashItems = useMemo(
+    () => filterSlashItems(skills, skillFilter),
     [skills, skillFilter],
   )
 
   useEffect(() => {
     setHighlightedSkillIndex((current) => {
-      if (visibleSkills.length === 0) return 0
-      if (current >= visibleSkills.length) return 0
+      if (visibleSlashItems.length === 0) return 0
+      if (current >= visibleSlashItems.length) return 0
       return current
     })
-  }, [visibleSkills.length, skillFilter])
+  }, [visibleSlashItems.length, skillFilter])
 
   const handleSkillDismiss = useCallback(() => {
     setShowSkillPicker(false)
@@ -482,12 +715,38 @@ export function PromptInput({
     composerRef.current?.focus()
   }, [])
 
-  const handleSkillSelect = useCallback((skill: SkillPickerEntry) => {
-    composerRef.current?.insertSkill(skill)
+  const handleSlashCommandSelect = useCallback((item: SlashCommandItem) => {
+    if (item.kind === "skill") {
+      composerRef.current?.insertSkill(item.skill)
+      setShowSkillPicker(false)
+      setSkillFilter("")
+      setHighlightedSkillIndex(0)
+      return
+    }
+
+    composerRef.current?.replaceTriggerWithText("")
     setShowSkillPicker(false)
     setSkillFilter("")
     setHighlightedSkillIndex(0)
-  }, [])
+    if (item.id === "model") {
+      if (footerCompact) {
+        setCompactControlsOpen(true)
+        window.requestAnimationFrame(() => setModelSelectorOpen(true))
+      } else {
+        setModelSelectorOpen(true)
+      }
+      return
+    }
+    if (item.id === "default-permissions") {
+      if (accessMode !== "default") {
+        void onAccessModeChange("default")
+      }
+      return
+    }
+    if (item.id === "full-access" && accessMode !== "full") {
+      setFullAccessDialogOpen(true)
+    }
+  }, [accessMode, footerCompact, onAccessModeChange])
 
   const handleSkillTrigger = useCallback((filter: string, show: boolean) => {
     setShowSkillPicker(show)
@@ -546,6 +805,7 @@ export function PromptInput({
         id: entry.id,
         label: entry.label,
         url: entry.url,
+        referenceKind: entry.referenceKind,
       })
       setShowMentionPicker(false)
       setMentionFilter("")
@@ -584,8 +844,20 @@ export function PromptInput({
     await handleAddAttachments()
   }, [handleAddAttachments])
 
+  const handleContentChange = useCallback((empty: boolean) => {
+    setIsComposerEmpty(empty)
+    scheduleDraftSave()
+  }, [scheduleDraftSave])
+
   const handleActualSubmit = useCallback(async () => {
     const text = composerRef.current?.getText() ?? ""
+    const builtInCommand = findBuiltInSlashCommand(text)
+    if (builtInCommand) {
+      composerRef.current?.setSnapshot({ segments: [] })
+      handleSlashCommandSelect(builtInCommand)
+      return
+    }
+
     const skillId = composerRef.current?.getSkillId() ?? null
     const references = composerRef.current?.getReferences() ?? []
     if (
@@ -613,12 +885,13 @@ export function PromptInput({
       composerRef.current?.clear()
       setAttachments([])
       setAttachmentError(null)
+      clearChatComposerDraft(draftKey)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send message."
       console.error("Failed to send chat message", error)
       toast.error(message)
     }
-  }, [attachments.length, disabled, isConnected, onSend, validateAttachments, waitingForTurn])
+  }, [attachments.length, disabled, draftKey, handleSlashCommandSelect, isConnected, onSend, validateAttachments, waitingForTurn])
 
   const handleSubmit = useCallback(async (_message: PromptInputMessage) => {
     await handleActualSubmit()
@@ -661,16 +934,16 @@ export function PromptInput({
 
       if (!showSkillPicker) return
 
-      if (visibleSkills.length > 0) {
+      if (visibleSlashItems.length > 0) {
         if (event.key === "ArrowDown") {
           event.preventDefault()
-          setHighlightedSkillIndex((current) => (current + 1) % visibleSkills.length)
+          setHighlightedSkillIndex((current) => (current + 1) % visibleSlashItems.length)
           return
         }
         if (event.key === "ArrowUp") {
           event.preventDefault()
           setHighlightedSkillIndex(
-            (current) => (current - 1 + visibleSkills.length) % visibleSkills.length,
+            (current) => (current - 1 + visibleSlashItems.length) % visibleSlashItems.length,
           )
           return
         }
@@ -678,12 +951,9 @@ export function PromptInput({
 
       if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault()
-        const selected = visibleSkills[highlightedSkillIndex]
+        const selected = visibleSlashItems[highlightedSkillIndex]
         if (selected) {
-          composerRef.current?.insertSkill(selected)
-          setShowSkillPicker(false)
-          setSkillFilter("")
-          setHighlightedSkillIndex(0)
+          handleSlashCommandSelect(selected)
         } else {
           handleSkillDismiss()
         }
@@ -695,7 +965,7 @@ export function PromptInput({
         handleSkillDismiss()
       }
     },
-    [showSkillPicker, showMentionPicker, visibleSkills, highlightedSkillIndex, handleSkillDismiss, handleMentionDismiss],
+    [showSkillPicker, showMentionPicker, visibleSlashItems, highlightedSkillIndex, handleSlashCommandSelect, handleSkillDismiss, handleMentionDismiss],
   )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
@@ -753,6 +1023,58 @@ export function PromptInput({
     }
 
     setAttachments(current => mergeComposerAttachments(current, metadata.map(toComposerAttachment)))
+  }, [disabled, isConnected, resolveAttachmentMetadata, waitingForTurn])
+
+  const handleComposerPaste = useCallback(async (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(event.clipboardData.files)
+    if (files.length === 0) return
+    event.preventDefault()
+
+    if (!isConnected || disabled || waitingForTurn) {
+      return
+    }
+
+    const paths: string[] = []
+    const staged: TurnAttachmentInput[] = []
+    const getPathForFile = window.electronAPI?.getPathForFile
+
+    for (const file of files) {
+      const filePath = getPathForFile?.(file) ?? ""
+      if (filePath) {
+        paths.push(filePath)
+        continue
+      }
+
+      if (!file.type.startsWith("image/")) {
+        setAttachmentError("Pasted files without a local path must be images.")
+        continue
+      }
+
+      if (!window.electronAPI?.invoke) {
+        setAttachmentError("Pasted image attachments are only available in the desktop app.")
+        continue
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrl(file)
+        const attachment = await window.electronAPI.invoke(IpcChannel.FILE_STAGE_PASTED_ATTACHMENT, {
+          name: file.name || "pasted-image.png",
+          mimeType: file.type || "image/png",
+          dataUrl,
+        })
+        if (attachment) {
+          staged.push(attachment)
+        }
+      } catch (error) {
+        setAttachmentError(error instanceof Error ? error.message : "Pasted image could not be attached.")
+      }
+    }
+
+    const metadata = paths.length > 0 ? await resolveAttachmentMetadata(paths) : []
+    const incoming = [...metadata, ...staged]
+    if (incoming.length === 0) return
+    setAttachments((current) => mergeComposerAttachments(current, incoming.map(toComposerAttachment)))
+    setAttachmentError(metadata.length === paths.length ? null : "Some pasted files could not be attached.")
   }, [disabled, isConnected, resolveAttachmentMetadata, waitingForTurn])
 
   const handleDefaultAccessSelect = useCallback(() => {
@@ -840,6 +1162,37 @@ export function PromptInput({
               align="start"
               side="top"
               sideOffset={8}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault()
+                  handleSkillDismiss()
+                  return
+                }
+                if (event.key === "ArrowDown") {
+                  event.preventDefault()
+                  setHighlightedSkillIndex((current) => (
+                    visibleSlashItems.length === 0 ? 0 : (current + 1) % visibleSlashItems.length
+                  ))
+                  return
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault()
+                  setHighlightedSkillIndex((current) => (
+                    visibleSlashItems.length === 0
+                      ? 0
+                      : (current - 1 + visibleSlashItems.length) % visibleSlashItems.length
+                  ))
+                  return
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault()
+                  const selected = visibleSlashItems[highlightedSkillIndex]
+                  if (selected) {
+                    handleSlashCommandSelect(selected)
+                  }
+                }
+              }}
+              onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
               onInteractOutside={(e) => {
                 const target = e.target as Element | null
@@ -855,18 +1208,17 @@ export function PromptInput({
               className="w-(--radix-dropdown-menu-trigger-width) min-w-[280px] p-1"
               data-testid="skill-picker-content"
             >
-              <SkillPicker
-                skills={skills}
-                filter={skillFilter}
+              <SlashCommandPicker
+                items={visibleSlashItems}
                 highlightedIndex={highlightedSkillIndex}
                 onHighlightChange={setHighlightedSkillIndex}
                 fullAccess={accessMode === "full"}
-                onSelect={handleSkillSelect}
-                onFork={onForkSkill ? (skill) => {
+                onSelect={handleSlashCommandSelect}
+                onForkSkill={onForkSkill ? (skill) => {
                   setShowSkillPicker(false)
                   onForkSkill(skill)
                 } : undefined}
-                onManagePermissions={onManageSkillPermissions ? (skill) => {
+                onManageSkillPermissions={onManageSkillPermissions ? (skill) => {
                   setShowSkillPicker(false)
                   onManageSkillPermissions(skill)
                 } : undefined}
@@ -895,6 +1247,28 @@ export function PromptInput({
               align="start"
               side="top"
               sideOffset={8}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault()
+                  handleMentionDismiss()
+                  return
+                }
+                if (event.key === "ArrowDown") {
+                  event.preventDefault()
+                  mentionPickerRef.current?.moveHighlight(1)
+                  return
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault()
+                  mentionPickerRef.current?.moveHighlight(-1)
+                  return
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault()
+                  mentionPickerRef.current?.selectHighlighted()
+                }
+              }}
+              onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
               onInteractOutside={(e) => {
                 const target = e.target as Element | null
@@ -956,15 +1330,16 @@ export function PromptInput({
                     : "What would you like to know?"
               }
               className={cn("px-4 pb-2.5", attachments.length > 0 ? "pt-2.5" : "pt-3.5")}
-              onContentChange={setIsComposerEmpty}
+              onContentChange={handleContentChange}
               onSkillTrigger={handleSkillTrigger}
               onMentionTrigger={handleMentionTrigger}
               onSubmit={handleComposerSubmit}
               onKeyDown={handleComposerKeyDown}
+              onPaste={(event) => { void handleComposerPaste(event) }}
             />
 
             <PromptInputFooter className="flex-col items-stretch gap-2.5 pt-0">
-              <div className="flex items-center justify-between gap-3">
+              <div ref={footerRef} className="flex items-center justify-between gap-3">
                 <PromptInputTools className="gap-1.5">
                   <PromptInputButton
                     aria-label="Add attachments"
@@ -975,13 +1350,18 @@ export function PromptInput({
                     <PlusIcon className="size-4" />
                   </PromptInputButton>
 
-                  <ModelSelector
-                    models={availableModels}
-                    selectedModel={selectedModel}
-                    onModelChange={onModelChange}
-                    disabled={!isConnected || waitingForTurn}
-                  />
+                  {!footerCompact ? (
+                    <ModelSelector
+                      models={availableModels}
+                      selectedModel={selectedModel}
+                      onModelChange={onModelChange}
+                      disabled={!isConnected || waitingForTurn}
+                      open={modelSelectorOpen}
+                      onOpenChange={setModelSelectorOpen}
+                    />
+                  ) : null}
 
+                  {!footerCompact ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -1026,6 +1406,57 @@ export function PromptInput({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  ) : null}
+
+                  {footerCompact ? (
+                    <DropdownMenu open={compactControlsOpen} onOpenChange={setCompactControlsOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="More composer controls"
+                          className="rounded-full text-muted-foreground hover:text-foreground"
+                        >
+                          <MoreHorizontalIcon className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-72 rounded-3xl p-2">
+                        <div className="px-1 py-1">
+                          <ModelSelector
+                            models={availableModels}
+                            selectedModel={selectedModel}
+                            onModelChange={onModelChange}
+                            disabled={!isConnected || waitingForTurn}
+                            open={modelSelectorOpen}
+                            onOpenChange={setModelSelectorOpen}
+                          />
+                        </div>
+                        <DropdownMenuItem
+                          onSelect={handleDefaultAccessSelect}
+                          disabled={accessControlDisabled}
+                          className="rounded-2xl py-2.5"
+                        >
+                          <DefaultPermissionsIcon className="size-4 text-muted-foreground" />
+                          <span className="flex-1">Default permissions</span>
+                          {accessMode === "default" ? <CheckIcon className="size-4 text-foreground" /> : null}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={accessControlDisabled}
+                          onSelect={() => {
+                            if (accessMode !== "full") {
+                              setFullAccessDialogOpen(true)
+                            }
+                          }}
+                          className="rounded-2xl py-2.5"
+                        >
+                          <FullAccessIcon className="size-4 text-amber-500" />
+                          <span className="flex-1">Full access</span>
+                          {accessMode === "full" ? <CheckIcon className="size-4 text-foreground" /> : null}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
                 </PromptInputTools>
 
                 {showStopButton ? (

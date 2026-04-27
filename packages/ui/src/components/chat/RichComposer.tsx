@@ -5,13 +5,17 @@ import type {
   TurnReferenceInput,
 } from "@orbyt/contracts"
 import { cn } from "@/lib/utils"
+import { detectComposerTrigger } from "@/lib/composerTrigger"
 
-export type MentionKind = "canvas-assignment" | "file"
+type CanvasReferenceKind = "canvas-assignment" | "canvas-coursework"
+
+export type MentionKind = CanvasReferenceKind | "file"
 
 export interface AssignmentMentionInput {
   readonly id: string
   readonly label: string
   readonly url: string
+  readonly referenceKind?: CanvasReferenceKind
 }
 
 export interface FileMentionInput {
@@ -22,9 +26,35 @@ export interface FileMentionInput {
   readonly kind?: "image" | "file"
 }
 
+export type RichComposerSnapshotSegment =
+  | { readonly type: "text"; readonly text: string }
+  | { readonly type: "skill"; readonly id: string; readonly name: string }
+  | {
+      readonly type: "canvas-assignment"
+      readonly id: string
+      readonly label: string
+      readonly url: string
+      readonly referenceKind?: CanvasReferenceKind
+    }
+  | {
+      readonly type: "file"
+      readonly path: string
+      readonly label: string
+      readonly mimeType?: string | null
+      readonly sizeBytes?: number | null
+      readonly kind?: "image" | "file"
+    }
+
+export type RichComposerSnapshot = {
+  readonly segments: readonly RichComposerSnapshotSegment[]
+}
+
 export interface RichComposerHandle {
   focus: () => void
   clear: () => void
+  getSnapshot: () => RichComposerSnapshot
+  setSnapshot: (snapshot: RichComposerSnapshot) => void
+  replaceTriggerWithText: (text: string) => void
   getText: () => string
   getSkillId: () => string | null
   isEmpty: () => boolean
@@ -44,6 +74,7 @@ interface RichComposerProps {
   onMentionTrigger?: (filter: string, show: boolean, kind?: MentionKind) => void
   onSubmit?: () => void
   onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void
+  onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void
 }
 
 type ExtractedContent = {
@@ -51,6 +82,59 @@ type ExtractedContent = {
   readonly skillId: string | null
   readonly references: readonly TurnReferenceInput[]
   readonly attachments: readonly TurnAttachmentInput[]
+}
+
+type TextCursor = {
+  readonly node: Text
+  readonly offset: number
+}
+
+function lastTextDescendant(node: Node | null | undefined): Text | null {
+  if (!node) return null
+  if (node.nodeType === Node.TEXT_NODE) return node as Text
+  for (let child = node.lastChild; child; child = child.previousSibling) {
+    const text = lastTextDescendant(child)
+    if (text) return text
+  }
+  return null
+}
+
+function firstTextDescendant(node: Node | null | undefined): Text | null {
+  if (!node) return null
+  if (node.nodeType === Node.TEXT_NODE) return node as Text
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    const text = firstTextDescendant(child)
+    if (text) return text
+  }
+  return null
+}
+
+function getTextCursor(root: HTMLDivElement, range: Range): TextCursor | null {
+  if (!root.contains(range.startContainer)) return null
+  if (range.startContainer.nodeType === Node.TEXT_NODE) {
+    return {
+      node: range.startContainer as Text,
+      offset: range.startOffset,
+    }
+  }
+
+  const before = lastTextDescendant(range.startContainer.childNodes.item(range.startOffset - 1))
+  if (before) {
+    return {
+      node: before,
+      offset: before.textContent?.length ?? 0,
+    }
+  }
+
+  const after = firstTextDescendant(range.startContainer.childNodes.item(range.startOffset))
+  if (after) {
+    return {
+      node: after,
+      offset: 0,
+    }
+  }
+
+  return null
 }
 
 function parseIntOrNull(value: string | undefined): number | null {
@@ -79,13 +163,16 @@ function extractContent(div: HTMLDivElement | null): ExtractedContent {
       if (!skillId) skillId = node.dataset.skillId
       return
     }
-    if (node.dataset.mentionKind === "canvas-assignment") {
+    if (
+      node.dataset.mentionKind === "canvas-assignment"
+      || node.dataset.mentionKind === "canvas-coursework"
+    ) {
       const referenceId = node.dataset.referenceId ?? ""
       const label = node.dataset.label ?? ""
       const url = node.dataset.url ?? ""
       if (referenceId && label) {
         references.push({
-          kind: "canvas-assignment",
+          kind: node.dataset.mentionKind,
           id: referenceId,
           label,
           url: url || null,
@@ -121,6 +208,82 @@ function extractContent(div: HTMLDivElement | null): ExtractedContent {
 
   walk(div)
   return { text: text.trim(), skillId, references, attachments }
+}
+
+function snapshotFromDom(div: HTMLDivElement | null): RichComposerSnapshot {
+  if (!div) return { segments: [] }
+  const segments: RichComposerSnapshotSegment[] = []
+  const pushText = (value: string) => {
+    const text = value.replace(/\u200B/g, "")
+    if (!text) return
+    const previous = segments.at(-1)
+    if (previous?.type === "text") {
+      segments[segments.length - 1] = { type: "text", text: previous.text + text }
+      return
+    }
+    segments.push({ type: "text", text })
+  }
+
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      pushText(node.textContent ?? "")
+      return
+    }
+    if (!(node instanceof HTMLElement)) return
+    if (node.dataset.skillId) {
+      segments.push({
+        type: "skill",
+        id: node.dataset.skillId,
+        name: node.dataset.skillName ?? node.textContent?.replace(/^\/|×$/g, "") ?? "skill",
+      })
+      return
+    }
+    if (
+      node.dataset.mentionKind === "canvas-assignment"
+      || node.dataset.mentionKind === "canvas-coursework"
+    ) {
+      const id = node.dataset.referenceId ?? ""
+      const label = node.dataset.label ?? ""
+      if (id && label) {
+        segments.push({
+          type: "canvas-assignment",
+          id,
+          label,
+          url: node.dataset.url ?? "",
+          ...(node.dataset.mentionKind === "canvas-coursework"
+            ? { referenceKind: node.dataset.mentionKind }
+            : {}),
+        })
+      }
+      return
+    }
+    if (node.dataset.mentionKind === "file") {
+      const filePath = node.dataset.path ?? ""
+      const label = node.dataset.label ?? ""
+      if (filePath && label) {
+        segments.push({
+          type: "file",
+          path: filePath,
+          label,
+          mimeType: node.dataset.mimeType ?? null,
+          sizeBytes: parseIntOrNull(node.dataset.sizeBytes),
+          kind: node.dataset.fileKind === "image" ? "image" : "file",
+        })
+      }
+      return
+    }
+    if (node.tagName === "BR") {
+      pushText("\n")
+      return
+    }
+    if ((node.tagName === "DIV" || node.tagName === "P") && segments.length > 0) {
+      pushText("\n")
+    }
+    for (const child of node.childNodes) walk(child)
+  }
+
+  for (const child of div.childNodes) walk(child)
+  return { segments }
 }
 
 function computeIsEmpty(div: HTMLDivElement | null): boolean {
@@ -161,19 +324,19 @@ function buildRemoveButton(ariaLabel: string): HTMLButtonElement {
 function buildAssignmentChip(assignment: AssignmentMentionInput): HTMLElement {
   const chip = document.createElement("span")
   chip.contentEditable = "false"
-  chip.dataset.mentionKind = "canvas-assignment"
+  chip.dataset.mentionKind = assignment.referenceKind ?? "canvas-assignment"
   chip.dataset.referenceId = assignment.id
   chip.dataset.label = assignment.label
   chip.dataset.url = assignment.url
   chip.className =
     "inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 mx-0.5 align-middle select-none"
-  chip.setAttribute("aria-label", `Assignment: ${assignment.label}`)
+  chip.setAttribute("aria-label", `Canvas item: ${assignment.label}`)
 
   const labelEl = document.createElement("span")
   labelEl.textContent = `@${assignment.label}`
   chip.appendChild(labelEl)
 
-  chip.appendChild(buildRemoveButton(`Remove ${assignment.label} assignment`))
+  chip.appendChild(buildRemoveButton(`Remove ${assignment.label} Canvas item`))
   return chip
 }
 
@@ -221,6 +384,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       onMentionTrigger,
       onSubmit,
       onKeyDown,
+      onPaste,
     },
     ref,
   ) {
@@ -228,16 +392,46 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
     const triggerRef = useRef<TriggerRef | null>(null)
     const [showPlaceholder, setShowPlaceholder] = useState(true)
 
+    const syncState = () => {
+      const div = divRef.current
+      const empty = computeIsEmpty(div)
+      setShowPlaceholder(empty)
+      onContentChange?.(empty)
+    }
+
+    const appendChip = (chip: HTMLElement) => {
+      const div = divRef.current
+      if (!div) return
+      div.appendChild(chip)
+      const spacer = document.createTextNode("\u200B")
+      div.appendChild(spacer)
+      const sel = window.getSelection()
+      const range = document.createRange()
+      range.setStart(spacer, 1)
+      range.collapse(true)
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    }
+
     const insertChipAtTrigger = (chip: HTMLElement) => {
       const div = divRef.current
       if (!div) return false
       const info = triggerRef.current
-      if (!info) return false
+      if (!info) {
+        appendChip(chip)
+        return true
+      }
       const sel = window.getSelection()
-      if (!sel?.rangeCount) return false
+      if (!sel?.rangeCount) {
+        appendChip(chip)
+        return true
+      }
 
       const { node, offset } = info
-      const cursorOffset = sel.getRangeAt(0).startOffset
+      const range = sel.getRangeAt(0)
+      const cursorOffset = range.startContainer === node
+        ? range.startOffset
+        : (node.textContent ?? "").length
       const beforeText = (node.textContent ?? "").slice(0, offset)
       const afterText = (node.textContent ?? "").slice(cursorOffset)
 
@@ -258,6 +452,64 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       return true
     }
 
+    const replaceTriggerWithText = (replacement: string) => {
+      const info = triggerRef.current
+      const sel = window.getSelection()
+      if (!info || !sel?.rangeCount) return false
+      const { node, offset } = info
+      const range = sel.getRangeAt(0)
+      const cursorOffset = range.startContainer === node
+        ? range.startOffset
+        : (node.textContent ?? "").length
+      const beforeText = (node.textContent ?? "").slice(0, offset)
+      const afterText = (node.textContent ?? "").slice(cursorOffset)
+      const nextText = document.createTextNode(`${beforeText}${replacement}${afterText}`)
+      node.replaceWith(nextText)
+      const nextRange = document.createRange()
+      nextRange.setStart(nextText, beforeText.length + replacement.length)
+      nextRange.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(nextRange)
+      triggerRef.current = null
+      syncState()
+      onSkillTrigger?.("", false)
+      onMentionTrigger?.("", false)
+      return true
+    }
+
+    const applySnapshot = (snapshot: RichComposerSnapshot) => {
+      const div = divRef.current
+      if (!div) return
+      div.innerHTML = ""
+      for (const segment of snapshot.segments) {
+        if (segment.type === "text") {
+          div.appendChild(document.createTextNode(segment.text))
+        } else if (segment.type === "skill") {
+          div.appendChild(buildSkillChip({
+            id: segment.id,
+            name: segment.name,
+            description: "",
+          } as SkillPickerEntry))
+          div.appendChild(document.createTextNode("\u200B"))
+        } else if (segment.type === "canvas-assignment") {
+          div.appendChild(buildAssignmentChip({
+            id: segment.id,
+            label: segment.label,
+            url: segment.url,
+            referenceKind: segment.referenceKind,
+          }))
+          div.appendChild(document.createTextNode("\u200B"))
+        } else {
+          div.appendChild(buildFileChip(segment))
+          div.appendChild(document.createTextNode("\u200B"))
+        }
+      }
+      triggerRef.current = null
+      syncState()
+      onSkillTrigger?.("", false)
+      onMentionTrigger?.("", false)
+    }
+
     useImperativeHandle(ref, () => ({
       focus() {
         divRef.current?.focus()
@@ -271,6 +523,15 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         onContentChange?.(true)
         onSkillTrigger?.("", false)
         onMentionTrigger?.("", false)
+      },
+      getSnapshot() {
+        return snapshotFromDom(divRef.current)
+      },
+      setSnapshot(snapshot: RichComposerSnapshot) {
+        applySnapshot(snapshot)
+      },
+      replaceTriggerWithText(text: string) {
+        replaceTriggerWithText(text)
       },
       getText() {
         return extractContent(divRef.current).text
@@ -292,9 +553,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         if (!div) return
         insertChipAtTrigger(buildSkillChip(skill))
         triggerRef.current = null
-        const empty = computeIsEmpty(div)
-        setShowPlaceholder(empty)
-        onContentChange?.(empty)
+        syncState()
         onSkillTrigger?.("", false)
         onMentionTrigger?.("", false)
         div.focus()
@@ -304,9 +563,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         if (!div) return
         insertChipAtTrigger(buildAssignmentChip(assignment))
         triggerRef.current = null
-        const empty = computeIsEmpty(div)
-        setShowPlaceholder(empty)
-        onContentChange?.(empty)
+        syncState()
         onSkillTrigger?.("", false)
         onMentionTrigger?.("", false)
         div.focus()
@@ -316,9 +573,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         if (!div) return
         insertChipAtTrigger(buildFileChip(file))
         triggerRef.current = null
-        const empty = computeIsEmpty(div)
-        setShowPlaceholder(empty)
-        onContentChange?.(empty)
+        syncState()
         onSkillTrigger?.("", false)
         onMentionTrigger?.("", false)
         div.focus()
@@ -337,9 +592,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
 
       if (div.innerHTML === "<br>") div.innerHTML = ""
 
-      const empty = computeIsEmpty(div)
-      setShowPlaceholder(empty)
-      onContentChange?.(empty)
+      syncState()
 
       const sel = window.getSelection()
       if (!sel?.rangeCount) {
@@ -348,34 +601,25 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       }
 
       const range = sel.getRangeAt(0)
-      const container = range.startContainer
-
-      if (container.nodeType !== Node.TEXT_NODE) {
+      const cursor = getTextCursor(div, range)
+      if (!cursor) {
         clearTriggers()
         return
       }
 
-      const textBeforeCursor = (container.textContent ?? "").slice(0, range.startOffset)
-      const lastSlash = textBeforeCursor.lastIndexOf("/")
-      const lastAt = textBeforeCursor.lastIndexOf("@")
-
-      // Whichever sigil is closer to the caret wins
-      if (lastAt > lastSlash && lastAt !== -1) {
-        const fragment = textBeforeCursor.slice(lastAt + 1)
-        if (!fragment.includes(" ") && !fragment.includes("\n")) {
-          triggerRef.current = { kind: "at", node: container as Text, offset: lastAt }
+      const textBeforeCursor = (cursor.node.textContent ?? "").slice(0, cursor.offset)
+      const trigger = detectComposerTrigger(textBeforeCursor)
+      if (trigger) {
+        const offset = textBeforeCursor.length - trigger.filter.length - 1
+        triggerRef.current = { kind: trigger.kind, node: cursor.node, offset }
+        if (trigger.kind === "at") {
           onSkillTrigger?.("", false)
-          onMentionTrigger?.(fragment, true)
+          onMentionTrigger?.(trigger.filter, true)
           return
         }
-      } else if (lastSlash !== -1) {
-        const fragment = textBeforeCursor.slice(lastSlash + 1)
-        if (!fragment.includes(" ") && !fragment.includes("\n")) {
-          triggerRef.current = { kind: "slash", node: container as Text, offset: lastSlash }
-          onMentionTrigger?.("", false)
-          onSkillTrigger?.(fragment, true)
-          return
-        }
+        onMentionTrigger?.("", false)
+        onSkillTrigger?.(trigger.filter, true)
+        return
       }
 
       clearTriggers()
@@ -392,6 +636,8 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
     }
 
     const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+      onPaste?.(e)
+      if (e.defaultPrevented) return
       e.preventDefault()
       const text = e.clipboardData.getData("text/plain")
       document.execCommand("insertText", false, text)
@@ -409,10 +655,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
             next.remove()
           }
           chip.remove()
-          const div = divRef.current
-          const empty = computeIsEmpty(div)
-          setShowPlaceholder(empty)
-          onContentChange?.(empty)
+          syncState()
         }
       }
     }

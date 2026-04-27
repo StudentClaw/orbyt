@@ -242,4 +242,60 @@ describe("RichComposer mention insertion and extraction", () => {
     expect(ref.current?.getAttachments()).toHaveLength(1)
     expect(ref.current?.getText()).toContain("tail")
   })
+
+  test("snapshot round-trips text, skill, assignment, and file chips", () => {
+    const ref = createRef<RichComposerHandle>()
+    const { container } = render(<RichComposer ref={ref} />)
+    const editor = getEditor(container)
+
+    act(() => {
+      ref.current?.setSnapshot({
+        segments: [
+          { type: "text", text: "Review " },
+          { type: "skill", id: "skill_review", name: "reviewer" },
+          { type: "text", text: " " },
+          {
+            type: "canvas-assignment",
+            id: "canvas-course:1:assignment:2",
+            label: "Essay",
+            url: "https://canvas.example.edu/courses/1/assignments/2",
+          },
+          { type: "text", text: " with " },
+          {
+            type: "file",
+            path: "/tmp/a.md",
+            label: "a.md",
+            mimeType: "text/markdown",
+            sizeBytes: 123,
+            kind: "file",
+          },
+        ],
+      })
+    })
+
+    expect(editor.textContent).toContain("Review")
+    expect(ref.current?.getSkillId()).toBe("skill_review")
+    expect(ref.current?.getReferences()).toHaveLength(1)
+    expect(ref.current?.getAttachments()).toHaveLength(1)
+    expect(ref.current?.getSnapshot().segments).toEqual([
+      { type: "text", text: "Review " },
+      { type: "skill", id: "skill_review", name: "reviewer" },
+      { type: "text", text: " " },
+      {
+        type: "canvas-assignment",
+        id: "canvas-course:1:assignment:2",
+        label: "Essay",
+        url: "https://canvas.example.edu/courses/1/assignments/2",
+      },
+      { type: "text", text: " with " },
+      {
+        type: "file",
+        path: "/tmp/a.md",
+        label: "a.md",
+        mimeType: "text/markdown",
+        sizeBytes: 123,
+        kind: "file",
+      },
+    ])
+  })
 })

@@ -65,6 +65,7 @@ describe("PromptInput", () => {
   }
 
   beforeEach(() => {
+    localStorage.clear()
     const invoke = vi.fn(async (channel, ..._args) => {
         if (channel === IpcChannel.FILE_SELECT_ATTACHMENTS) {
           return null
@@ -375,6 +376,58 @@ describe("PromptInput", () => {
     expect(screen.getByLabelText("Send message").hasAttribute("disabled")).toBe(true)
   })
 
+  test("stages a pasted pathless image as an attachment", async () => {
+    const user = userEvent.setup()
+    const invokeMock = vi.fn(async (channel, ...args) => {
+      if (channel === IpcChannel.FILE_STAGE_PASTED_ATTACHMENT) {
+        expect(args[0]).toMatchObject({
+          name: "pasted.png",
+          mimeType: "image/png",
+        })
+        return {
+          path: "/tmp/orbyt/pasted.png",
+          name: "pasted.png",
+          mimeType: "image/png",
+          sizeBytes: 128,
+          kind: "image" as const,
+        }
+      }
+
+      if (channel === IpcChannel.FILE_GET_ATTACHMENT_METADATA) {
+        return [
+          {
+            path: "/tmp/orbyt/pasted.png",
+            name: "pasted.png",
+            mimeType: "image/png",
+            sizeBytes: 128,
+            kind: "image" as const,
+          },
+        ]
+      }
+
+      return null
+    }) as ElectronAPI["invoke"]
+
+    setElectronApi(invokeMock, vi.fn(() => ""))
+    render(<PromptInput {...defaultProps} />)
+
+    const input = screen.getByLabelText("Chat message input")
+    const file = new File(["fake"], "pasted.png", { type: "image/png" })
+    fireEvent.paste(input, {
+      clipboardData: {
+        files: [file],
+        getData: () => "",
+      },
+    })
+
+    expect(await screen.findByText("pasted.png")).toBeDefined()
+    await user.click(screen.getByLabelText("Send message"))
+    expect(invokeMock).toHaveBeenCalledWith(
+      IpcChannel.FILE_STAGE_PASTED_ATTACHMENT,
+      expect.objectContaining({ name: "pasted.png" }),
+    )
+  })
+
   test("changes the selected model from the selector", async () => {
     const onModelChange = vi.fn()
     const user = userEvent.setup()
@@ -384,6 +437,28 @@ describe("PromptInput", () => {
     await user.click(screen.getByText("GPT-5.3 Codex"))
 
     expect(onModelChange).toHaveBeenCalledWith("gpt-5.3-codex")
+  })
+
+  test("/model opens the model selector from the slash picker", async () => {
+    const user = userEvent.setup()
+    render(<PromptInput {...defaultProps} />)
+
+    await user.type(screen.getByLabelText("Chat message input"), "/model")
+    expect(within(await screen.findByTestId("skill-picker-content")).getByText("/model")).toBeDefined()
+    await user.keyboard("{Enter}")
+
+    expect(await screen.findByText("GPT-5.3 Codex")).toBeDefined()
+  })
+
+  test("/full-access opens the confirmation dialog", async () => {
+    const user = userEvent.setup()
+    render(<PromptInput {...defaultProps} />)
+
+    await user.type(screen.getByLabelText("Chat message input"), "/full-access")
+    expect(within(await screen.findByTestId("skill-picker-content")).getByText("/full-access")).toBeDefined()
+    await user.keyboard("{Enter}")
+
+    expect(await screen.findByText("Enable full access for this thread?")).toBeDefined()
   })
 
   test("hides the selector when the runtime exposes a single model", () => {
@@ -413,6 +488,38 @@ describe("PromptInput", () => {
   test("disables the access selector while streaming", () => {
     render(<PromptInput {...defaultProps} status="streaming" />)
     expect(screen.getByLabelText("Select permissions").hasAttribute("disabled")).toBe(true)
+  })
+
+  test("persists and hydrates a draft by draftKey", async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<PromptInput {...defaultProps} draftKey="thread:abc" />)
+
+    await user.type(screen.getByLabelText("Chat message input"), "Saved draft")
+    await waitFor(() => {
+      expect(localStorage.getItem("orbyt:chat-composer-drafts:v1")).toContain("Saved draft")
+    })
+
+    unmount()
+    render(<PromptInput {...defaultProps} draftKey="thread:abc" />)
+    await waitFor(() => {
+      expect(screen.getByLabelText("Chat message input").textContent).toContain("Saved draft")
+    })
+  })
+
+  test("clears a draft after a successful send", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PromptInput {...defaultProps} onSend={onSend} draftKey="thread:send" />)
+
+    await user.type(screen.getByLabelText("Chat message input"), "Send me")
+    await waitFor(() => {
+      expect(localStorage.getItem("orbyt:chat-composer-drafts:v1")).toContain("Send me")
+    })
+    await user.click(screen.getByLabelText("Send message"))
+
+    await waitFor(() => {
+      expect(localStorage.getItem("orbyt:chat-composer-drafts:v1")).not.toContain("Send me")
+    })
   })
 
   test("renders a beginner-friendly approval card and hides technical details by default", async () => {

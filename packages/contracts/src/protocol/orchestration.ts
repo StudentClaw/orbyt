@@ -266,7 +266,10 @@ export const OrchestrationTurnAttachment = Schema.Struct({
  * example `canvas-page`, `thread`, `memory`) are additive without a schema
  * migration of existing stored references.
  */
-export const TurnReferenceKind = Schema.Literal("canvas-assignment")
+export const TurnReferenceKind = Schema.Literal(
+  "canvas-assignment",
+  "canvas-coursework",
+)
 
 /**
  * A late-bound reference attached to a turn. References do not resolve

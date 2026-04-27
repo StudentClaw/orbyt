@@ -46,7 +46,7 @@ describe("MentionPicker", () => {
         onBrowseFiles={() => {}}
       />,
     )
-    expect(getByText("Assignments")).toBeTruthy()
+    expect(getByText("Canvas")).toBeTruthy()
     expect(getByText(/files\s*&\s*folders/i)).toBeTruthy()
   })
 
@@ -84,6 +84,61 @@ describe("MentionPicker", () => {
     expect(getByText("draft.md")).toBeTruthy()
     expect(queryByText("rubric.md")).toBeNull()
     expect(queryByText("Essay 3")).toBeNull()
+  })
+
+  test("typed filters search assignments beyond the empty-state limit", () => {
+    const assignments = Array.from({ length: 9 }, (_, index) => ({
+      id: `canvas-course:42:assignment:${index + 1}`,
+      label: index === 8 ? "Capstone Final" : `Weekly Check ${index + 1}`,
+      url: `https://canvas.example.edu/courses/42/assignments/${index + 1}`,
+      courseCode: "ENG 101",
+    }))
+    const { queryByText, rerender } = render(
+      <MentionPicker
+        filter=""
+        assignments={assignments}
+        files={[]}
+        recents={[]}
+        canReadCanvas={true}
+        onSelectAssignment={() => {}}
+        onSelectFile={() => {}}
+        onBrowseFiles={() => {}}
+      />,
+    )
+
+    expect(queryByText("Capstone Final")).toBeNull()
+
+    rerender(
+      <MentionPicker
+        filter="capstone"
+        assignments={assignments}
+        files={[]}
+        recents={[]}
+        canReadCanvas={true}
+        onSelectAssignment={() => {}}
+        onSelectFile={() => {}}
+        onBrowseFiles={() => {}}
+      />,
+    )
+
+    expect(queryByText("Capstone Final")).toBeTruthy()
+  })
+
+  test("typed filters search assignment course codes", () => {
+    const { getByText } = render(
+      <MentionPicker
+        filter="eng"
+        assignments={[ASSIGNMENT_A]}
+        files={[]}
+        recents={[]}
+        canReadCanvas={true}
+        onSelectAssignment={() => {}}
+        onSelectFile={() => {}}
+        onBrowseFiles={() => {}}
+      />,
+    )
+
+    expect(getByText("Essay 3")).toBeTruthy()
   })
 
   test("clicking an assignment row calls onSelectAssignment with that assignment", () => {
