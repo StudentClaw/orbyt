@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { X } from "lucide-react"
 import type { InsightAction, InsightWithAction } from "./insight-types"
 
 interface AiInsightCardProps {
@@ -13,22 +14,15 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
 
   return (
     <div
-      className="pagelet relative overflow-hidden p-5"
+      className="dashboard-side-widget pagelet relative overflow-hidden border-l-2 p-5"
       data-testid="ai-insight-card"
+      style={{ borderLeftColor: "var(--skill)" }}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-0.5"
-        style={{
-          background:
-            "linear-gradient(90deg, var(--skill) 0%, var(--primary) 100%)",
-        }}
-      />
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span
             aria-hidden
-            className="inline-block h-1.5 w-1.5 rounded-full"
+            className="dashboard-ai-pulse inline-block h-1.5 w-1.5 rounded-full"
             style={{ backgroundColor: "var(--skill)" }}
           />
           <p
@@ -40,12 +34,12 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
         </div>
         <button
           type="button"
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           aria-label="Dismiss insight"
           data-testid="ai-insight-dismiss"
           onClick={() => setDismissed(true)}
         >
-          ✕
+          <X className="size-4" aria-hidden />
         </button>
       </div>
       <p className="mt-2 text-sm font-semibold leading-snug" data-testid={`ai-insight-title-${insight.id}`}>
@@ -64,7 +58,6 @@ export function AiInsightCard({ insight, onAction }: AiInsightCardProps) {
           onClick={() => onAction?.(insight.action!)}
         >
           {insight.action.label}
-          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
         </button>
       ) : null}
     </div>

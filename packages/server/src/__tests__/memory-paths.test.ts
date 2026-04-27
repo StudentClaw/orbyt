@@ -23,17 +23,9 @@ describe("resolveMemoryRoot", () => {
     expect(root).toBe("/tmp/sc-test/memory")
   })
 
-  test("honors STUDENT_CLAW_HOME when ORBYT_HOME is unset", () => {
+  test("uses ORBYT_HOME as the branded home override", () => {
     const root = resolveMemoryRoot({
-      env: { STUDENT_CLAW_HOME: "/tmp/legacy-home" },
-      home: fakeHome,
-    })
-    expect(root).toBe("/tmp/legacy-home/memory")
-  })
-
-  test("prefers ORBYT_HOME over STUDENT_CLAW_HOME", () => {
-    const root = resolveMemoryRoot({
-      env: { ORBYT_HOME: "/tmp/new", STUDENT_CLAW_HOME: "/tmp/old" },
+      env: { ORBYT_HOME: "/tmp/new" },
       home: fakeHome,
     })
     expect(root).toBe("/tmp/new/memory")

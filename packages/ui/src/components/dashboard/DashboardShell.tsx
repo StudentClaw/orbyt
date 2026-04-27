@@ -6,19 +6,25 @@ interface DashboardShellProps {
 }
 
 /**
- * Asymmetric two-column shell: primary workspace (~65–70%) | contextual sidebar (~30–35%).
- * Divider: subtle 1px border on the sidebar’s leading edge at `lg+`.
+ * Asymmetric two-column shell: primary workspace | quieter contextual sidebar.
  */
 export function DashboardShell({ left, right }: DashboardShellProps) {
   return (
     <div
-      className="grid min-h-0 min-h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]"
+      className="dashboard-depth-shell grid min-h-0 min-h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] xl:grid-cols-[minmax(0,1fr)_400px]"
       data-testid="dashboard-shell"
     >
-      <div className="min-h-0 overflow-auto px-8 py-8">{left}</div>
-      <div className="min-h-0 overflow-auto border-border/40 px-8 py-8 lg:border-l">
-        <div className="flex flex-col gap-6">{right}</div>
-      </div>
+      <main className="min-h-0 overflow-auto px-6 py-6 md:px-8 lg:px-10 lg:py-8">
+        <div className="dashboard-panel-enter mx-auto max-w-6xl">{left}</div>
+      </main>
+      <aside className="min-h-0 overflow-auto border-border/60 bg-card/45 px-6 py-6 md:px-8 lg:border-l lg:py-8">
+        <div className="dashboard-panel-enter dashboard-panel-context mx-auto flex max-w-[28rem] flex-col gap-5 lg:mx-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Context
+          </p>
+          {right}
+        </div>
+      </aside>
     </div>
   )
 }

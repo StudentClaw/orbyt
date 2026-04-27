@@ -127,7 +127,7 @@ Make later phases cite **one** stable contract: which skills ship, how they are 
 
    **Memory** (`memory.read`):
 
-   - Not an MCP tool in this table; maps to Student Claw memory read APIs the harness injects. Phase 03 gate may treat as always-on read within planner scope per [docs/features/03-skill-system.md](../../features/03-skill-system.md).
+   - Not an MCP tool in this table; maps to Orbyt memory read APIs the harness injects. Phase 03 gate may treat as always-on read within planner scope per [docs/features/03-skill-system.md](../../features/03-skill-system.md).
 
 ### Primary Directories
 

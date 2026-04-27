@@ -172,11 +172,336 @@
 
 /* Flat surface for dashboard tiles — no glass, no tint variants. */
 @layer components {
+  .all-unset {
+    all: unset;
+    box-sizing: border-box;
+    color: inherit;
+    font: inherit;
+  }
+
+  .glass-button-wrap {
+    position: relative;
+    display: inline-flex;
+    min-width: max-content;
+    isolation: isolate;
+  }
+
+  .glass-button {
+    position: relative;
+    display: inline-flex;
+    min-width: max-content;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in oklab, var(--primary) 24%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--background) 88%, white 12%),
+        color-mix(in oklab, var(--primary) 18%, var(--background) 82%)
+      );
+    color: var(--foreground);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 68%, transparent),
+      inset 0 -1px 0 color-mix(in oklab, var(--primary) 22%, transparent),
+      0 10px 24px color-mix(in oklab, var(--primary) 20%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    backdrop-filter: blur(16px) saturate(1.2);
+  }
+
+  .glass-button::before {
+    content: "";
+    position: absolute;
+    inset: 2px 4px auto 4px;
+    height: 42%;
+    border-radius: inherit;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, white 74%, transparent),
+      transparent
+    );
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  .glass-button-wrap:hover .glass-button:not(:disabled) {
+    border-color: color-mix(in oklab, var(--primary) 42%, transparent);
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 72%, transparent),
+      inset 0 -1px 0 color-mix(in oklab, var(--primary) 28%, transparent),
+      0 14px 30px color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+
+  .glass-button:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 38%, transparent);
+    outline-offset: 3px;
+  }
+
+  .glass-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .glass-button-wrap:has(.glass-button:disabled) {
+    cursor: not-allowed;
+  }
+
+  .glass-button-text {
+    z-index: 1;
+    white-space: nowrap;
+  }
+
+  .glass-button-shadow {
+    position: absolute;
+    inset: auto 10% -5px 10%;
+    z-index: -1;
+    height: 14px;
+    background: color-mix(in oklab, var(--primary) 22%, transparent);
+    filter: blur(9px);
+    opacity: 0.65;
+    transition: opacity 150ms ease, transform 150ms ease;
+  }
+
+  .glass-button-wrap:hover .glass-button-shadow {
+    opacity: 0.85;
+    transform: translateY(1px) scaleX(1.06);
+  }
+
   .pagelet {
     position: relative;
     border-radius: var(--radius-2xl);
     background-color: var(--card);
     border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  .dashboard-depth-shell {
+    background-color: color-mix(in oklab, var(--background) 97%, var(--foreground) 3%);
+  }
+
+  .dashboard-depth-shell .pagelet,
+  .dashboard-depth-shell .group.bg-card {
+    background-color: color-mix(in oklab, var(--card) 98.5%, var(--foreground) 1.5%);
+    border-color: color-mix(in oklab, var(--border) 90%, var(--foreground) 10%);
+  }
+
+  .dark .dashboard-depth-shell {
+    background-color: color-mix(in oklab, var(--background) 92%, var(--foreground) 8%);
+  }
+
+  .dark .dashboard-depth-shell .pagelet,
+  .dark .dashboard-depth-shell .group.bg-card,
+  .dark .dashboard-depth-shell .dashboard-task-card {
+    background-color: color-mix(in oklab, var(--card) 94%, var(--foreground) 6%);
+    border-color: color-mix(in oklab, var(--border) 86%, var(--foreground) 14%);
+  }
+
+  .dark .dashboard-depth-shell .dashboard-task-card:hover,
+  .dark .dashboard-depth-shell .dashboard-task-card:focus-within {
+    background-color: color-mix(in oklab, var(--card) 94%, var(--foreground) 6%);
+  }
+
+  .dashboard-depth-shell {
+    --dashboard-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --dashboard-ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+    --dashboard-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --dashboard-motion-index: 0;
+  }
+
+  .dashboard-panel-enter {
+    animation: dashboard-panel-enter 560ms var(--dashboard-ease-out-expo) both;
+  }
+
+  .dashboard-panel-context {
+    animation-delay: 80ms;
+  }
+
+  .dashboard-header-motion,
+  .dashboard-filter-tabs,
+  .dashboard-filter-stage,
+  .dashboard-reveal-section,
+  .dashboard-side-widget {
+    animation: dashboard-reveal 440ms var(--dashboard-ease-out-quint) both;
+    animation-delay: calc(var(--dashboard-motion-index) * 70ms);
+  }
+
+  .dashboard-header-motion {
+    --dashboard-motion-index: 0;
+  }
+
+  .dashboard-filter-tabs {
+    --dashboard-motion-index: 1;
+    scrollbar-width: none;
+  }
+
+  .dashboard-filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-filter-stage {
+    --dashboard-motion-index: 2;
+  }
+
+  .dashboard-reveal-section {
+    --dashboard-motion-index: 3;
+  }
+
+  .dashboard-reveal-section:nth-of-type(2) {
+    --dashboard-motion-index: 4;
+  }
+
+  .dashboard-reveal-section:nth-of-type(3) {
+    --dashboard-motion-index: 5;
+  }
+
+  .dashboard-reveal-section:nth-of-type(n + 4) {
+    --dashboard-motion-index: 6;
+  }
+
+  .dashboard-side-widget {
+    --dashboard-motion-index: 2;
+  }
+
+  .dashboard-side-widget:nth-child(3) {
+    --dashboard-motion-index: 3;
+  }
+
+  .dashboard-side-widget:nth-child(4) {
+    --dashboard-motion-index: 4;
+  }
+
+  .dashboard-side-widget:nth-child(n + 5) {
+    --dashboard-motion-index: 5;
+  }
+
+  .dashboard-filter-tab {
+    position: relative;
+    transition:
+      color 180ms var(--dashboard-ease-out-quart),
+      transform 180ms var(--dashboard-ease-out-quart);
+  }
+
+  .dashboard-filter-tab::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 -2px 0;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--primary);
+    opacity: 0;
+    transform: scaleX(0.58);
+    transition:
+      opacity 180ms var(--dashboard-ease-out-quart),
+      transform 240ms var(--dashboard-ease-out-quint);
+  }
+
+  .dashboard-filter-tab:hover {
+    transform: translateY(-1px);
+  }
+
+  .dashboard-filter-tab[data-active="true"]::after {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .dashboard-task-card {
+    transform: translateZ(0);
+    transition:
+      background-color 180ms var(--dashboard-ease-out-quart),
+      border-color 180ms var(--dashboard-ease-out-quart),
+      box-shadow 220ms var(--dashboard-ease-out-quart),
+      transform 220ms var(--dashboard-ease-out-quart);
+  }
+
+  .dashboard-task-card:hover,
+  .dashboard-task-card:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px color-mix(in oklab, var(--foreground) 8%, transparent);
+  }
+
+  .dashboard-task-card:active {
+    transform: translateY(0);
+    transition-duration: 110ms;
+  }
+
+  .dashboard-task-card .dashboard-archive-action {
+    transform: translate3d(4px, -4px, 0) scale(0.94);
+    transition:
+      background-color 150ms var(--dashboard-ease-out-quart),
+      color 150ms var(--dashboard-ease-out-quart),
+      opacity 160ms var(--dashboard-ease-out-quart),
+      transform 180ms var(--dashboard-ease-out-quint);
+  }
+
+  .dashboard-task-card:hover .dashboard-archive-action,
+  .dashboard-task-card:focus-within .dashboard-archive-action {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  .dashboard-task-card .dashboard-archive-action:active {
+    transform: translate3d(0, 0, 0) scale(0.96);
+  }
+
+  .dashboard-side-widget {
+    transition:
+      border-color 180ms var(--dashboard-ease-out-quart),
+      box-shadow 220ms var(--dashboard-ease-out-quart),
+      transform 220ms var(--dashboard-ease-out-quart);
+  }
+
+  .dashboard-side-widget:hover,
+  .dashboard-side-widget:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px color-mix(in oklab, var(--foreground) 7%, transparent);
+  }
+
+  .dashboard-due-count {
+    animation: dashboard-count-focus 720ms var(--dashboard-ease-out-expo) 220ms both;
+  }
+
+  .dashboard-timeline-line {
+    transform-origin: top;
+    animation: dashboard-line-draw 640ms var(--dashboard-ease-out-expo) 160ms both;
+  }
+
+  .dashboard-timeline-row {
+    animation: dashboard-row-enter 360ms var(--dashboard-ease-out-quint) both;
+  }
+
+  .dashboard-timeline-row:nth-child(1) {
+    animation-delay: 120ms;
+  }
+
+  .dashboard-timeline-row:nth-child(2) {
+    animation-delay: 170ms;
+  }
+
+  .dashboard-timeline-row:nth-child(3) {
+    animation-delay: 220ms;
+  }
+
+  .dashboard-timeline-row:nth-child(n + 4) {
+    animation-delay: 270ms;
+  }
+
+  .dashboard-ai-pulse {
+    animation: dashboard-ai-pulse 1800ms var(--dashboard-ease-out-quart) infinite;
+  }
+
+  .dashboard-depth-shell [data-slot="button"]:not(:disabled) {
+    transition:
+      background-color 180ms var(--dashboard-ease-out-quart),
+      border-color 180ms var(--dashboard-ease-out-quart),
+      color 180ms var(--dashboard-ease-out-quart),
+      box-shadow 180ms var(--dashboard-ease-out-quart),
+      transform 150ms var(--dashboard-ease-out-quart);
+  }
+
+  .dashboard-depth-shell [data-slot="button"]:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  .dashboard-depth-shell [data-slot="button"]:not(:disabled):active {
+    transform: translateY(1px) scale(0.99);
   }
 
   .pagelet-sm {
@@ -202,4 +527,94 @@
 @keyframes flip-in {
   from { transform: rotateY(90deg); opacity: 0; }
   to { transform: rotateY(0deg); opacity: 1; }
+}
+
+@keyframes dashboard-panel-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dashboard-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dashboard-count-focus {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0) scale(0.96);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes dashboard-line-draw {
+  from {
+    opacity: 0;
+    transform: scaleY(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes dashboard-row-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(8px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dashboard-ai-pulse {
+  0%, 100% {
+    opacity: 0.74;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-depth-shell *,
+  .dashboard-depth-shell *::before,
+  .dashboard-depth-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .dashboard-depth-shell .dashboard-task-card,
+  .dashboard-depth-shell .dashboard-side-widget,
+  .dashboard-depth-shell [data-slot="button"],
+  .dashboard-depth-shell .dashboard-filter-tab,
+  .dashboard-depth-shell .dashboard-archive-action {
+    transform: none !important;
+  }
 }

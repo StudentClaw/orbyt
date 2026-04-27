@@ -1,8 +1,13 @@
-import { useRef, useEffect, useState, useCallback } from "react"
+import { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { useChat } from "@/hooks/useChat"
 import { useChatModel } from "@/hooks/useChatModel"
 import { useChatUiActions, useSkillsState, type SkillEntry } from "@/hooks/useAppRuntime"
+import {
+  useCanvasUpcomingAssignments,
+  useCanvasCourses,
+} from "@/rpc/canvasState"
+import { assignmentEntriesFromCourseWork } from "@/lib/mentionSources"
 import { ChatEmptyState } from "./ChatEmptyState"
 import { ChatProviderDisconnected } from "./ChatProviderDisconnected"
 import { ErrorBanner } from "./ErrorBanner"
@@ -105,6 +110,15 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
     interruptError,
   } = useChat({ ...selection, model: selectedModel })
   const { closePanel } = useChatUiActions()
+
+  const upcomingAssignments = useCanvasUpcomingAssignments()
+  const canvasCourses = useCanvasCourses()
+  const assignmentEntries = useMemo(
+    () => assignmentEntriesFromCourseWork(upcomingAssignments, canvasCourses),
+    [upcomingAssignments, canvasCourses],
+  )
+  const workspaceRoot =
+    currentWorkspace?.kind === "filesystem" ? currentWorkspace.rootPath : null
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
@@ -262,6 +276,9 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         interruptPending={interruptPending}
         interruptError={interruptError}
         skills={skills}
+        assignments={assignmentEntries}
+        workspaceRoot={workspaceRoot}
+        canReadCanvas={true}
         onForkSkill={openFork}
         onManageSkillPermissions={openPromotion}
       />

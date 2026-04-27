@@ -4,7 +4,10 @@ import {
   extractDisplayContent,
   fileUrlFromPath,
 } from "../lib/chatAttachments"
-import type { TurnAttachmentInput } from "@orbyt/contracts"
+import type {
+  TurnAttachmentInput,
+  TurnReferenceInput,
+} from "@orbyt/contracts"
 
 const makeAttachment = (path: string): TurnAttachmentInput => ({
   path,
@@ -12,6 +15,17 @@ const makeAttachment = (path: string): TurnAttachmentInput => ({
   mimeType: null,
   sizeBytes: null,
   kind: "file",
+})
+
+const makeReference = (
+  id: string,
+  label: string,
+  url: string | null = `https://canvas.example.edu/${id}`,
+): TurnReferenceInput => ({
+  kind: "canvas-assignment",
+  id,
+  label,
+  url,
 })
 
 // ============================================================================
@@ -57,6 +71,43 @@ describe("buildPromptContent", () => {
     expect(result).toContain("what is this?")
     expect(result).not.toContain("  what is this?  ")
   })
+
+  test("emits a Referenced Canvas assignments block when references are present", () => {
+    const refs = [makeReference("assignment:12345", "Essay 3")]
+    const result = buildPromptContent("review this", [], refs)
+    expect(result.startsWith("Referenced Canvas assignments:")).toBe(true)
+    expect(result).toContain("assignment:12345")
+    expect(result).toContain("https://canvas.example.edu/assignment:12345")
+    expect(result).toContain("review this")
+  })
+
+  test("emits references block before attachments block when both are present", () => {
+    const attachments = [makeAttachment("/notes.pdf")]
+    const refs = [makeReference("assignment:12345", "Essay 3")]
+    const result = buildPromptContent("please review", attachments, refs)
+    const refIdx = result.indexOf("Referenced Canvas assignments:")
+    const attIdx = result.indexOf("Attached files:")
+    expect(refIdx).toBeGreaterThanOrEqual(0)
+    expect(attIdx).toBeGreaterThan(refIdx)
+  })
+
+  test("produces byte-identical output to attachments-only path when references is empty", () => {
+    const attachments = [makeAttachment("/n.pdf")]
+    expect(buildPromptContent("hi", attachments, [])).toBe(
+      buildPromptContent("hi", attachments),
+    )
+  })
+
+  test("returns empty string for empty body and no refs or attachments", () => {
+    expect(buildPromptContent("", [], [])).toBe("")
+  })
+
+  test("renders a clean reference line when url is null (no literal null in output)", () => {
+    const refs = [makeReference("assignment:7", "Quiz 1", null)]
+    const result = buildPromptContent("hi", [], refs)
+    expect(result).toContain("assignment_id=assignment:7")
+    expect(result).not.toMatch(/url=null/)
+  })
 })
 
 // ============================================================================
@@ -98,6 +149,34 @@ describe("extractDisplayContent", () => {
     // Replace LF with CRLF as if it came from a Windows clipboard paste
     const crlfEncoded = encoded.replace(/\n/g, "\r\n")
     expect(extractDisplayContent(crlfEncoded, attachments)).toBe("question")
+  })
+
+  test("strips references block and returns user message", () => {
+    const refs = [makeReference("assignment:12345", "Essay 3")]
+    const encoded = buildPromptContent("review this", [], refs)
+    expect(extractDisplayContent(encoded, [], refs)).toBe("review this")
+  })
+
+  test("strips both references and attachments blocks in either order", () => {
+    const attachments = [makeAttachment("/notes.pdf")]
+    const refs = [makeReference("assignment:12345", "Essay 3")]
+    const encoded = buildPromptContent("please review", attachments, refs)
+    expect(extractDisplayContent(encoded, attachments, refs)).toBe(
+      "please review",
+    )
+  })
+
+  test("returns input unchanged when no headers present", () => {
+    const refs = [makeReference("assignment:1", "X")]
+    expect(extractDisplayContent("just a message", [], refs)).toBe(
+      "just a message",
+    )
+  })
+
+  test("returns empty string when only references were present and body was empty", () => {
+    const refs = [makeReference("assignment:1", "X")]
+    const encoded = buildPromptContent("", [], refs)
+    expect(extractDisplayContent(encoded, [], refs)).toBe("")
   })
 })
 

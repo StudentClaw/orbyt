@@ -16,7 +16,7 @@ interface DashboardFilterTabsProps {
 export function DashboardFilterTabs({ value, onChange }: DashboardFilterTabsProps) {
   return (
     <nav
-      className="flex flex-wrap gap-8 border-b border-border/50"
+      className="dashboard-filter-tabs -mx-1 flex gap-2 overflow-x-auto border-b border-border/50 px-1"
       aria-label="Assignment filters"
       data-testid="dashboard-filter-tabs"
     >
@@ -27,8 +27,9 @@ export function DashboardFilterTabs({ value, onChange }: DashboardFilterTabsProp
             key={tab.id}
             type="button"
             data-testid={`filter-tab-${tab.id}`}
+            data-active={active}
             onClick={() => onChange(tab.id)}
-            className={`-mb-px border-b-2 pb-3 text-sm transition-colors ${
+            className={`dashboard-filter-tab -mb-px shrink-0 border-b-2 px-2 pb-3 text-sm ${
               active
                 ? "border-primary font-semibold text-foreground"
                 : "border-transparent font-medium text-muted-foreground hover:text-foreground"

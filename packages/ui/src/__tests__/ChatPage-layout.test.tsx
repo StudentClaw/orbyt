@@ -1,6 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
-import type { OrchestrationSnapshot } from "@orbyt/contracts"
+import type { OrchestrationSnapshot, WorkspaceId } from "@orbyt/contracts"
 
 const pageMocks = vi.hoisted(() => ({
   pathname: "/chat",
@@ -87,7 +87,7 @@ describe("ChatPage layout", () => {
     pageMocks.snapshot = {
       workspaces: [
         {
-          id: "workspace-1",
+          id: "workspace-1" as WorkspaceId,
           kind: "filesystem",
           name: "Repo",
           rootPath: "/repo",

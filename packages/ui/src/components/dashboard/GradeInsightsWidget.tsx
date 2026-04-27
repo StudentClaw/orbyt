@@ -95,7 +95,7 @@ function growthMeta(growth: string): { readonly tone: string; readonly arrow: st
 export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProps) {
   if (grades.length === 0) {
     return (
-      <div className="pagelet p-5" data-testid="grade-insights-widget">
+      <div className="dashboard-side-widget pagelet p-5" data-testid="grade-insights-widget">
         <p className="text-sm text-muted-foreground" data-testid="no-grades">
           No grades yet
         </p>
@@ -117,7 +117,7 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
 
   if (rows.length === 0) {
     return (
-      <div className="pagelet p-5" data-testid="grade-insights-widget">
+      <div className="dashboard-side-widget pagelet p-5" data-testid="grade-insights-widget">
         <p className="text-sm text-muted-foreground" data-testid="no-grades">
           No grades yet
         </p>
@@ -146,7 +146,7 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
   const gpaTone = gpaToneClass(avgGpa)
 
   return (
-    <div className="pagelet p-5" data-testid="grade-insights-widget">
+    <div className="dashboard-side-widget pagelet p-5" data-testid="grade-insights-widget">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight">Grade Insights</h2>
         <a

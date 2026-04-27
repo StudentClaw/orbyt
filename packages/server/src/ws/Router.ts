@@ -2,6 +2,7 @@ import { Schema } from "@effect/schema"
 import {
   type ActivityFeedEntry,
   CanvasAssignmentDetailsParams,
+  CanvasArchiveAssignmentParams,
   CanvasCourseContentOverviewParams,
   CanvasCourseStructureParams,
   CanvasDownloadCourseFileParams,
@@ -48,6 +49,9 @@ import type { DatabaseService } from "../db/Database.js"
 import type { CanvasSyncServiceShape } from "../canvas/CanvasSyncService.js"
 import type { SkillResolverService } from "../skills/SkillResolver.js"
 import type { SkillManagementService } from "../skills/SkillManagementService.js"
+import type { ResolvedSkill } from "../skills/SkillParser.js"
+import { buildCanvasContext } from "../skills/CanvasContextBuilder.js"
+import { buildMemoryContext } from "../skills/MemoryContextBuilder.js"
 import type { MemorizeServiceShape } from "../memory/service.js"
 import { resolveMemoryGraphDir, createMemoryPaths } from "../memory/paths.js"
 import type { DnaClassifier } from "../onboarding/dna-classifier.js"
@@ -353,6 +357,24 @@ async function handleCanvasMethod(
       if (typeof decoded === "string") return decoded
       return encodeSuccess(id, await dependencies.canvasSync.listAssignments(decoded))
     }
+    case RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT: {
+      const decoded = decodeParams(
+        CanvasArchiveAssignmentParams,
+        params,
+        id,
+        "Invalid Canvas assignment-archive request parameters",
+      )
+      if (typeof decoded === "string") return decoded
+      try {
+        return encodeSuccess(id, dependencies.canvasSync.archiveAssignment(decoded.assignmentId))
+      } catch (error) {
+        return encodeError(
+          id,
+          "archive_assignment_failed",
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    }
     case RPC_METHODS.CANVAS_GET_COURSE_CONTENT_OVERVIEW: {
       const decoded = decodeParams(
         CanvasCourseContentOverviewParams,
@@ -580,7 +602,7 @@ async function handleSendTurn(
 
   const skill = decoded.skillId ? dependencies.skillResolver.resolve(decoded.skillId) : null
   const effectiveContent = skill
-    ? `${skill.instructions}\n\n${decoded.content}`.trim()
+    ? buildSkillTurnContent(skill, decoded.content, dependencies)
     : decoded.content
 
   return encodeSuccess(
@@ -591,8 +613,29 @@ async function handleSendTurn(
       effectiveContent,
       decoded.attachments,
       decoded.model ?? null,
+      decoded.references ?? [],
     ),
   )
+}
+
+function buildSkillTurnContent(
+  skill: ResolvedSkill,
+  content: string,
+  dependencies: RouteDependencies,
+): string {
+  const blocks = [skill.instructions]
+
+  if (skill.contextKey === "canvas") {
+    blocks.push(buildCanvasContext(dependencies.database, new Date()))
+  }
+
+  if (skill.requestedCapabilities.includes("memory.read")) {
+    blocks.push(buildMemoryContext(dependencies.database))
+  }
+
+  blocks.push(content)
+
+  return blocks.join("\n\n").trim()
 }
 
 async function handleListSkills(

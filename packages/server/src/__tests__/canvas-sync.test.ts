@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { Database as BunDatabase } from "bun:sqlite"
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import type {
   CanvasAssignmentDetailsResult,
   GatewayToolCallResult,
@@ -8,6 +11,7 @@ import type { PluginGatewayService } from "../mcp/PluginGateway.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { DatabaseService } from "../db/Database.js"
 import { createSyncService } from "../canvas/CanvasSyncService.js"
+import { createMemoryPaths } from "../memory/paths.js"
 import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
 
 function createDatabaseService(db: BunDatabase): DatabaseService {
@@ -66,6 +70,12 @@ function createSuccess(
     rawToolName,
     result,
   }
+}
+
+function createEmptyMemoryPaths() {
+  return createMemoryPaths({
+    env: { ORBYT_HOME: mkdtempSync(join(tmpdir(), "orbyt-canvas-sync-memory-")) },
+  })
 }
 
 describe("CanvasSyncService", () => {
@@ -192,6 +202,12 @@ describe("CanvasSyncService", () => {
                 assignmentName: "Problem Set 1",
                 workflowState: "assigned",
               },
+              {
+                courseId: "canvas-course:1",
+                assignmentId: "101",
+                assignmentName: "Problem Set 1",
+                workflowState: "assigned",
+              },
             ],
           },
         })
@@ -200,7 +216,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database)
+    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
 
     await service.sync()
 
@@ -242,6 +258,111 @@ describe("CanvasSyncService", () => {
         progress: 100,
       }),
     }))
+
+    database.close()
+  })
+
+  test("archived Canvas assignments stay hidden after sync returns them again", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [{ id: "canvas-course:1", name: "Algorithms", code: "CS101", canvasId: "1" }],
+          },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: {
+            items: [
+              {
+                id: "canvas-coursework:assignment:1:101",
+                courseId: "canvas-course:1",
+                title: "Problem Set 1",
+                effectiveDueAt: "2026-04-20T23:59:00.000Z",
+                sourceType: "assignment",
+                sourceId: "101",
+                freshnessStatus: "fresh",
+                htmlUrl: "https://canvas.example.edu/courses/1/assignments/101",
+                pointsPossible: 10,
+                submissionStatus: "not_submitted",
+              },
+            ],
+          },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: {
+            submitted: [],
+            pending: [
+              {
+                id: "canvas-coursework:assignment:1:101",
+                courseId: "canvas-course:1",
+                title: "Problem Set 1",
+                effectiveDueAt: "2026-04-20T23:59:00.000Z",
+                sourceType: "assignment",
+                sourceId: "101",
+                freshnessStatus: "fresh",
+                htmlUrl: "https://canvas.example.edu/courses/1/assignments/101",
+                pointsPossible: 10,
+                submissionStatus: "not_submitted",
+              },
+            ],
+            overdue: [],
+          },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
+
+    await service.sync()
+    expect(service.getMySubmissionStatus().pending).toEqual([
+      expect.objectContaining({ id: "canvas-coursework:assignment:1:101" }),
+    ])
+
+    const archived = service.archiveAssignment("canvas-coursework:assignment:1:101" as any)
+    expect(archived.archived).toBe(true)
+    expect(String(archived.assignmentId)).toBe("canvas-coursework:assignment:1:101")
+    expect(service.getMySubmissionStatus().pending).toEqual([])
+
+    await service.sync()
+
+    expect(service.getMyUpcomingAssignments()).toEqual([])
+    expect(service.getMySubmissionStatus()).toEqual({
+      submitted: [],
+      pending: [],
+      overdue: [],
+    })
 
     database.close()
   })
@@ -297,7 +418,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database)
+    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
 
     await service.sync()
 
@@ -354,12 +475,597 @@ describe("CanvasSyncService", () => {
       })
     })
 
-    const service = createSyncService(gateway, pushBus, database)
+    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
     const detail = await service.getAssignmentDetails({
       assignmentUrl: "https://canvas.example.edu/courses/1/assignments/101",
     })
 
     expect(detail.item.title).toBe("Problem Set 1")
+    database.close()
+  })
+
+  test("syncs remembered Canvas page assignment sources into coursework", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+    const memoryPaths = createEmptyMemoryPaths()
+    mkdirSync(memoryPaths.courseDir("mythology"), { recursive: true })
+    writeFileSync(
+      memoryPaths.courseIndex("mythology"),
+      [
+        "---",
+        "slug: mythology",
+        "canvasId: 19737",
+        "---",
+        "",
+        "# Mythology",
+        "",
+        "## Assignment Source Rules",
+        "",
+        "```json",
+        JSON.stringify({
+          id: "assignment-source:mythology-wiki",
+          kind: "canvas_page",
+          canvasCourseId: "19737",
+          url: "https://ivc-new.instructure.com/courses/19737/wiki",
+          purpose: "reading_homework_schedule",
+          parser: "dated_reading_schedule",
+          enabled: true,
+        }, null, 2),
+        "```",
+      ].join("\n"),
+      "utf-8",
+    )
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [
+              {
+                id: "canvas-course:19737",
+                name: "Mythology",
+                code: "MYTH",
+                canvasId: "19737",
+                term: "Spring 2026",
+              },
+            ],
+          },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: { submitted: [], pending: [], overdue: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_front_page") {
+        return createSuccess(exposedToolName, "get_front_page", {
+          structuredContent: {
+            course: {
+              id: "canvas-course:19737",
+              name: "Mythology",
+              code: "MYTH",
+              canvasId: "19737",
+              term: "Spring 2026",
+            },
+            page: {
+              page_id: 900,
+              url: "wiki",
+              title: "Home",
+              body: [
+                "Week 1: January 12-18",
+                "Wednesday, Jan. 14",
+                "Read: Chapter 1: What is Myth?",
+                "Read: Chapter 2: Ways of Understanding Myth",
+                "Week 6: February 16-22",
+                "Wednesday, Feb. 18",
+                "Quiz 1 Myths of Creation and Destruction",
+                "No Books, No Devices, No Screens",
+              ].join("\n"),
+              html_url: "https://ivc-new.instructure.com/courses/19737/wiki",
+              updated_at: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        })
+      }
+
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+
+    await service.sync()
+
+    const assignments = service.getMySubmissionStatus()
+    expect(assignments.overdue).toEqual([
+      expect.objectContaining({
+        title: "Read: Chapter 1: What is Myth?",
+        sourceType: "page",
+        sourceDueDateKind: "inferred",
+      }),
+      expect.objectContaining({
+        title: "Read: Chapter 2: Ways of Understanding Myth",
+        sourceType: "page",
+      }),
+      expect.objectContaining({
+        title: "Quiz 1 Myths of Creation and Destruction",
+        sourceType: "page",
+      }),
+    ])
+    expect(database.query("SELECT last_error FROM course_assignment_sources")).toEqual([
+      { last_error: null },
+    ])
+
+    const archivedId = assignments.overdue[0]?.id
+    expect(archivedId).toBeDefined()
+    service.archiveAssignment(archivedId!)
+    expect(service.getMySubmissionStatus().overdue.map((item) => item.id)).not.toContain(archivedId)
+
+    await service.sync()
+
+    expect(service.getMySubmissionStatus().overdue.map((item) => item.id)).not.toContain(archivedId)
+
+    database.close()
+  })
+
+  test("creates a durable course memory node for synced Canvas courses", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+    const memoryPaths = createEmptyMemoryPaths()
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [
+              {
+                id: "canvas-course:19737",
+                name: "Mythology",
+                code: "MYTH",
+                canvasId: "19737",
+                term: "Spring 2026",
+              },
+            ],
+          },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: { submitted: [], pending: [], overdue: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    await service.sync()
+
+    const nodePath = memoryPaths.courseIndex("myth")
+    expect(existsSync(nodePath)).toBe(true)
+    const content = readFileSync(nodePath, "utf-8")
+    expect(content).toContain("canvasId: 19737")
+    expect(content).toContain('canvasName: "Mythology"')
+    expect(content).toContain("## Assignment Source Discovery")
+
+    database.close()
+  })
+
+  test("uses bare Canvas course URL discovery hints to infer coursework from the front page", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+    const memoryPaths = createEmptyMemoryPaths()
+    mkdirSync(memoryPaths.courseDir("mythology"), { recursive: true })
+    writeFileSync(
+      memoryPaths.courseIndex("mythology"),
+      [
+        "---",
+        "slug: mythology",
+        "canvasId: 19737",
+        "---",
+        "",
+        "# Mythology",
+        "",
+        "## Assignment Source Discovery",
+        "",
+        "```json",
+        JSON.stringify({
+          kind: "canvas_assignment_source_hint",
+          canvasCourseId: "19737",
+          url: "https://ivc-new.instructure.com/courses/19737",
+          possibleContent: ["weekly readings"],
+          parser: "dated_reading_schedule",
+          status: "candidate",
+        }, null, 2),
+        "```",
+      ].join("\n"),
+      "utf-8",
+    )
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [
+              {
+                id: "canvas-course:19737",
+                name: "Mythology",
+                code: "MYTH",
+                canvasId: "19737",
+                term: "Spring 2026",
+              },
+            ],
+          },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: { submitted: [], pending: [], overdue: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_front_page") {
+        return createSuccess(exposedToolName, "get_front_page", {
+          structuredContent: {
+            course: {
+              id: "canvas-course:19737",
+              name: "Mythology",
+              code: "MYTH",
+              canvasId: "19737",
+              term: "Spring 2026",
+            },
+            page: {
+              page_id: 900,
+              url: "wiki",
+              title: "Home",
+              body: [
+                "Week 1: January 12-18",
+                "Wednesday, Jan. 14",
+                "Read: Chapter 1: What is Myth?",
+              ].join("\n"),
+              html_url: "https://ivc-new.instructure.com/courses/19737",
+              updated_at: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        })
+      }
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    await service.sync()
+
+    expect(service.getMySubmissionStatus().overdue).toEqual([
+      expect.objectContaining({
+        title: "Read: Chapter 1: What is Myth?",
+        sourceType: "page",
+        sourceDueDateKind: "inferred",
+      }),
+    ])
+    expect(database.query("SELECT last_error FROM course_assignment_sources")).toEqual([
+      { last_error: null },
+    ])
+    const courseMemory = readFileSync(memoryPaths.courseIndex("mythology"), "utf-8")
+    expect(courseMemory).toContain("## Assignment Source Rules")
+    expect(courseMemory).toContain('"url": "https://ivc-new.instructure.com/courses/19737"')
+    expect(courseMemory).toContain('"enabled": true')
+
+    database.close()
+  })
+
+  test("records last_error when a discovery hint is not parseable", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+    const memoryPaths = createEmptyMemoryPaths()
+    mkdirSync(memoryPaths.courseDir("mythology"), { recursive: true })
+    writeFileSync(
+      memoryPaths.courseIndex("mythology"),
+      [
+        "---",
+        "slug: mythology",
+        "canvasId: 19737",
+        "---",
+        "",
+        "# Mythology",
+        "",
+        "## Assignment Source Discovery",
+        "",
+        "```json",
+        JSON.stringify({
+          kind: "canvas_assignment_source_hint",
+          canvasCourseId: "19737",
+          url: "https://ivc-new.instructure.com/courses/19737",
+          possibleContent: ["weekly readings"],
+          parser: "dated_reading_schedule",
+          status: "candidate",
+        }, null, 2),
+        "```",
+      ].join("\n"),
+      "utf-8",
+    )
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [
+              {
+                id: "canvas-course:19737",
+                name: "Mythology",
+                code: "MYTH",
+                canvasId: "19737",
+                term: "Spring 2026",
+              },
+            ],
+          },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: { submitted: [], pending: [], overdue: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+      if (exposedToolName === "canvas.get_front_page") {
+        return createSuccess(exposedToolName, "get_front_page", {
+          structuredContent: {
+            course: {
+              id: "canvas-course:19737",
+              name: "Mythology",
+              code: "MYTH",
+              canvasId: "19737",
+              term: "Spring 2026",
+            },
+            page: {
+              page_id: 900,
+              url: "wiki",
+              title: "Home",
+              body: "Welcome to Mythology.",
+              html_url: "https://ivc-new.instructure.com/courses/19737",
+              updated_at: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        })
+      }
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    await service.sync()
+
+    expect(service.getMySubmissionStatus().pending).toEqual([])
+    expect(database.query("SELECT last_error FROM course_assignment_sources")).toEqual([
+      { last_error: "No coursework items found in remembered source." },
+    ])
+
+    database.close()
+  })
+
+  test("flushes memory promotion before projecting remembered assignment sources", async () => {
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+
+    const database = createDatabaseService(db)
+    const { pushBus } = createPushBusStub()
+    const memoryPaths = createEmptyMemoryPaths()
+    const toolCalls: string[] = []
+
+    const gateway = createGatewayStub(async (exposedToolName) => {
+      toolCalls.push(exposedToolName)
+
+      if (exposedToolName === "canvas.list_courses") {
+        return createSuccess(exposedToolName, "list_courses", {
+          structuredContent: {
+            courses: [
+              {
+                id: "canvas-course:19737",
+                name: "Mythology",
+                code: "MYTH",
+                canvasId: "19737",
+                term: "Spring 2026",
+              },
+            ],
+          },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_upcoming_assignments") {
+        return createSuccess(exposedToolName, "get_my_upcoming_assignments", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_submission_status") {
+        return createSuccess(exposedToolName, "get_my_submission_status", {
+          structuredContent: { submitted: [], pending: [], overdue: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_course_grades") {
+        return createSuccess(exposedToolName, "get_my_course_grades", {
+          structuredContent: { courses: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_todo_items") {
+        return createSuccess(exposedToolName, "get_my_todo_items", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_my_peer_reviews_todo") {
+        return createSuccess(exposedToolName, "get_my_peer_reviews_todo", {
+          structuredContent: { items: [] },
+        })
+      }
+
+      if (exposedToolName === "canvas.get_front_page") {
+        return createSuccess(exposedToolName, "get_front_page", {
+          structuredContent: {
+            course: {
+              id: "canvas-course:19737",
+              name: "Mythology",
+              code: "MYTH",
+              canvasId: "19737",
+              term: "Spring 2026",
+            },
+            page: {
+              page_id: 900,
+              url: "wiki",
+              title: "Home",
+              body: [
+                "Week 1: January 12-18",
+                "Wednesday, Jan. 14",
+                "Read: Chapter 1: What is Myth?",
+              ].join("\n"),
+              html_url: "https://ivc-new.instructure.com/courses/19737/wiki",
+              updated_at: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        })
+      }
+
+      throw new Error(`Unexpected tool call: ${exposedToolName}`)
+    })
+
+    const flushPromotion = async () => {
+      toolCalls.push("memory.promote")
+      mkdirSync(memoryPaths.courseDir("mythology"), { recursive: true })
+      writeFileSync(
+        memoryPaths.courseIndex("mythology"),
+        [
+          "---",
+          "slug: mythology",
+          "canvasId: 19737",
+          "---",
+          "",
+          "# Mythology",
+          "",
+          "## Assignment Source Rules",
+          "",
+          "```json",
+          JSON.stringify({
+            kind: "canvas_page",
+            canvasCourseId: "19737",
+            url: "https://ivc-new.instructure.com/courses/19737/wiki",
+            purpose: "reading_homework_schedule",
+            parser: "dated_reading_schedule",
+            enabled: true,
+          }, null, 2),
+          "```",
+        ].join("\n"),
+        "utf-8",
+      )
+    }
+
+    const service = createSyncService(gateway, pushBus, database, memoryPaths, flushPromotion)
+
+    await service.sync()
+
+    expect(toolCalls.indexOf("memory.promote")).toBeGreaterThan(-1)
+    expect(toolCalls.indexOf("canvas.get_front_page")).toBeGreaterThan(toolCalls.indexOf("memory.promote"))
+    expect(service.getMySubmissionStatus().overdue).toEqual([
+      expect.objectContaining({
+        title: "Read: Chapter 1: What is Myth?",
+        sourceType: "page",
+        sourceDueDateKind: "inferred",
+      }),
+    ])
+
     database.close()
   })
 })

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { WalkthroughOverlay } from "@/components/onboarding/WalkthroughOverlay"
 import { DASHBOARD_WALKTHROUGH_STEPS } from "@/components/onboarding/walkthrough-steps"
@@ -7,7 +7,8 @@ import { useCardWeights } from "@/rpc/onboardingState"
 import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
 import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
-import { computeStaleness } from "@/rpc/canvasState"
+import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { computeStaleness, removeArchivedAssignmentFromCanvasState } from "@/rpc/canvasState"
 import type { InsightAction } from "@/components/dashboard/insight-types"
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader"
@@ -19,15 +20,48 @@ import { AiInsightCard } from "@/components/dashboard/AiInsightCard"
 import { type PrioritizedItem } from "@/components/dashboard/priority-model"
 import {
   countDueThisWeek,
+  filterItemsByScope,
   groupAssignmentsByCourse,
   type FilterScope,
 } from "@/components/dashboard/subject-grouping"
-import { seedAssignmentPreview } from "@/rpc/assignmentDetailState"
+import { getPlanFilterCopy } from "@/components/dashboard/plan-filter-copy"
+import { removeAssignmentDetailEntry, seedAssignmentPreview } from "@/rpc/assignmentDetailState"
 
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
 const TOAST_ID_PLANNER = "dashboard-planner-stream"
 const SUBMITTED_PAGE_SIZE = 12
+const SCHEDULING_SESSION_SKILL_ID = "scheduling-session"
+
+function getCanvasSyncProgressCopy(progress: number): { title: string; description: string } {
+  const percent = Math.round(progress)
+
+  if (percent < 15) {
+    return {
+      title: `Opening the Canvas backpack (${percent}%)`,
+      description: "Checking the connection before courses, grades, and deadlines come along for the ride.",
+    }
+  }
+
+  if (percent < 65) {
+    return {
+      title: `Gathering course intel (${percent}%)`,
+      description: "Pulling assignments, due dates, submissions, and grade snapshots into one place.",
+    }
+  }
+
+  if (percent < 95) {
+    return {
+      title: `Sorting the homework stack (${percent}%)`,
+      description: "Saving the latest Canvas updates so priorities and plans can reshuffle cleanly.",
+    }
+  }
+
+  return {
+    title: `Almost fresh (${percent}%)`,
+    description: "Finishing the dashboard refresh with your newest coursework details.",
+  }
+}
 
 function derivePriorityItems(
   courses: ReadonlyArray<{ id: string; code: string; name: string; color?: string }>,
@@ -148,8 +182,10 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const snapshot = useRuntimeOrchestrationSnapshot()
   const actions = useOrchestrationActions()
+  const hasShownActiveSyncToast = useRef(false)
   const [filter, setFilter] = useState<FilterScope>("thisWeek")
   const [submittedPage, setSubmittedPage] = useState(0)
+  const [archivingAssignmentIds, setArchivingAssignmentIds] = useState<ReadonlySet<string>>(() => new Set())
   const cardWeights = useCardWeights()
   const weightOf = useCallback((id: string): number => {
     const found = cardWeights.find((w) => w.cardId === id)
@@ -192,10 +228,6 @@ export function DashboardPage() {
     [actions, navigate, snapshot],
   )
 
-  const handlePlanWeek = useCallback(() => {
-    // No-op until backend wires a real "plan my week" insight action.
-  }, [])
-
   const handleAssignmentSelect = useCallback(
     async (item: PrioritizedItem) => {
       seedAssignmentPreview({
@@ -221,6 +253,27 @@ export function DashboardPage() {
     [navigate],
   )
 
+  const handleAssignmentArchive = useCallback(async (item: PrioritizedItem) => {
+    if (archivingAssignmentIds.has(item.id)) return
+
+    setArchivingAssignmentIds((current) => new Set(current).add(item.id))
+    try {
+      const client = await waitForPrimaryWsRpcClient()
+      await client.canvas.archiveAssignment(item.id)
+      removeArchivedAssignmentFromCanvasState(item.id)
+      removeAssignmentDetailEntry(item.id)
+      toast.success(`Archived "${item.title}"`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to archive assignment.")
+    } finally {
+      setArchivingAssignmentIds((current) => {
+        const next = new Set(current)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }, [archivingAssignmentIds])
+
   const {
     courses,
     courseGrades,
@@ -233,13 +286,51 @@ export function DashboardPage() {
     plannedSessions,
   } = useDashboard()
 
-  const now = new Date()
+  const now = useMemo(() => new Date(), [])
   const isSyncing = syncProgress?.status === "syncing"
   const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
   const submittedItems = useMemo(
     () => deriveSubmittedItems(courses, submissionStatus.submitted),
     [courses, submissionStatus],
   )
+  const planFilterCopy = getPlanFilterCopy(filter)
+  const planWeekAction = useMemo<InsightAction>(() => {
+    const sourceItems = filter === "submitted" ? submittedItems : priorityItems
+    const filteredItems = filterItemsByScope(sourceItems, filter, now)
+      .toSorted((a, b) => new Date(a.effectiveDueAt).getTime() - new Date(b.effectiveDueAt).getTime())
+    const assignmentLines = filteredItems.map((item) => {
+      const due = item.effectiveDueAt
+        ? new Date(item.effectiveDueAt).toLocaleString([], {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "no due date"
+      const points = item.pointsPossible != null ? `, ${item.pointsPossible}pts` : ""
+      return `- ${item.courseCode}: ${item.title} (due ${due}${points})`
+    })
+
+    return {
+      label: planFilterCopy.planLabel,
+      prompt: [
+        planFilterCopy.promptIntro,
+        assignmentLines.length > 0
+          ? `${planFilterCopy.assignmentsHeading}\n${assignmentLines.join("\n")}`
+          : planFilterCopy.emptyAssignments,
+        "Read my calendars first, then propose a realistic schedule for this dashboard filter. Ask only decision-critical questions.",
+      ].join("\n\n"),
+      skillId: SCHEDULING_SESSION_SKILL_ID,
+    }
+  }, [filter, now, planFilterCopy, priorityItems, submittedItems])
+  const handlePlanWeek = useCallback(() => {
+    void handleInsightAction(planWeekAction)
+  }, [handleInsightAction, planWeekAction])
+  const handleFilterChange = useCallback((scope: FilterScope) => {
+    setFilter(scope)
+    setSubmittedPage(0)
+  }, [])
   const submittedPageCount = Math.max(1, Math.ceil(submittedItems.length / SUBMITTED_PAGE_SIZE))
   const currentSubmittedPage = Math.min(submittedPage, submittedPageCount - 1)
   const pagedSubmittedItems = useMemo(() => {
@@ -248,16 +339,6 @@ export function DashboardPage() {
   }, [currentSubmittedPage, submittedItems])
   const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
   const weekStart = calendarViewWeek || todayLocal
-
-  useEffect(() => {
-    setSubmittedPage(0)
-  }, [filter])
-
-  useEffect(() => {
-    if (submittedPage > submittedPageCount - 1) {
-      setSubmittedPage(Math.max(submittedPageCount - 1, 0))
-    }
-  }, [submittedPage, submittedPageCount])
 
   const grouped = useMemo(
     () =>
@@ -288,20 +369,55 @@ export function DashboardPage() {
     }
     toast.warning(
       staleness === "stale"
-        ? "Data may be outdated — last synced more than 24 hours ago"
-        : "Offline — showing cached data",
-      { id: TOAST_ID_STALE, duration: Infinity },
+        ? "Canvas might be a little stale"
+        : "Showing your saved Canvas snapshot",
+      {
+        id: TOAST_ID_STALE,
+        duration: Infinity,
+        description:
+          staleness === "stale"
+            ? "Last sync was over 24 hours ago. Refresh to catch new grades, deadlines, and course changes."
+            : "I could not confirm a fresh sync yet, so deadlines and grades may have changed.",
+      },
     )
   }, [isSyncing, lastSync])
 
   useEffect(() => {
-    if (!syncProgress || syncProgress.status !== "syncing") {
+    if (!syncProgress) {
       toast.dismiss(TOAST_ID_SYNC)
       return
     }
-    toast.loading(`Syncing Canvas… ${Math.round(syncProgress.progress)}%`, {
+
+    if (syncProgress.status === "syncing") {
+      hasShownActiveSyncToast.current = true
+      const copy = getCanvasSyncProgressCopy(syncProgress.progress)
+      toast.loading(copy.title, {
+        id: TOAST_ID_SYNC,
+        duration: Infinity,
+        description: copy.description,
+      })
+      return
+    }
+
+    if (!hasShownActiveSyncToast.current) {
+      toast.dismiss(TOAST_ID_SYNC)
+      return
+    }
+
+    hasShownActiveSyncToast.current = false
+    if (syncProgress.status === "done") {
+      toast.success("Canvas is fresh", {
+        id: TOAST_ID_SYNC,
+        duration: 4000,
+        description: "Courses, grades, deadlines, todos, and peer reviews are up to date.",
+      })
+      return
+    }
+
+    toast.error("Canvas sync hit a snag", {
       id: TOAST_ID_SYNC,
-      duration: Infinity,
+      duration: 6000,
+      description: "Your saved dashboard is still here. Try again from Connections when you are ready.",
     })
   }, [syncProgress])
 
@@ -339,17 +455,23 @@ export function DashboardPage() {
             title="Dashboard"
             dateLabel={dateLabel}
             dueThisWeek={dueThisWeek}
+            planLabel={planFilterCopy.planLabel}
             onPlanWeek={handlePlanWeek}
             planDisabled={!workspace}
           />
-          <DashboardFilterTabs value={filter} onChange={setFilter} />
-          <div className="mt-10" data-testid="dashboard-assignments">
+          <section aria-label="Coursework filters">
+            <DashboardFilterTabs value={filter} onChange={handleFilterChange} />
+          </section>
+          <div className="mt-7" data-testid="dashboard-assignments">
             {grouped.length === 0 ? (
-              <p className="text-sm text-muted-foreground" data-testid="dashboard-no-matches">
+              <p
+                className="dashboard-filter-stage rounded-lg border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground"
+                data-testid="dashboard-no-matches"
+              >
                 No assignments match this filter.
               </p>
             ) : (
-              <>
+              <div key={filter} className="dashboard-filter-stage">
                 {grouped.map(({ course, items }) => (
                   <SubjectBlock
                     key={course.id}
@@ -357,6 +479,7 @@ export function DashboardPage() {
                     items={items}
                     now={now}
                     onAssignmentSelect={handleAssignmentSelect}
+                    onAssignmentArchive={handleAssignmentArchive}
                   />
                 ))}
                 {filter === "submitted" && submittedItems.length > SUBMITTED_PAGE_SIZE ? (
@@ -373,7 +496,7 @@ export function DashboardPage() {
                         className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid="submitted-page-prev"
                         disabled={currentSubmittedPage === 0}
-                        onClick={() => setSubmittedPage((page) => Math.max(page - 1, 0))}
+                        onClick={() => setSubmittedPage(Math.max(currentSubmittedPage - 1, 0))}
                       >
                         Previous
                       </button>
@@ -382,14 +505,14 @@ export function DashboardPage() {
                         className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid="submitted-page-next"
                         disabled={currentSubmittedPage >= submittedPageCount - 1}
-                        onClick={() => setSubmittedPage((page) => Math.min(page + 1, submittedPageCount - 1))}
+                        onClick={() => setSubmittedPage(Math.min(currentSubmittedPage + 1, submittedPageCount - 1))}
                       >
                         Next
                       </button>
                     </div>
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
         </div>

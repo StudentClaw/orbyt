@@ -10,9 +10,9 @@ The crash happens before any assistant response is rendered, which points to a s
 
 ## Root Cause
 
-`ChatStatus` includes a `queued` state in [packages/ui/src/hooks/chat-model.ts](/Users/rereynrd/School/student-claw/packages/ui/src/hooks/chat-model.ts), but `getChatStatusPresentation()` does not return a presentation object for `queued`.
+`ChatStatus` includes a `queued` state in [packages/ui/src/hooks/chat-model.ts](/Users/rereynrd/School/orbyt/packages/ui/src/hooks/chat-model.ts), but `getChatStatusPresentation()` does not return a presentation object for `queued`.
 
-[packages/ui/src/components/chat/ChatStatusBadge.tsx](/Users/rereynrd/School/student-claw/packages/ui/src/components/chat/ChatStatusBadge.tsx) assumes the presentation object always exists and reads `presentation.dotClassName`. When a send transitions into `queued`, the badge receives `undefined` and throws.
+[packages/ui/src/components/chat/ChatStatusBadge.tsx](/Users/rereynrd/School/orbyt/packages/ui/src/components/chat/ChatStatusBadge.tsx) assumes the presentation object always exists and reads `presentation.dotClassName`. When a send transitions into `queued`, the badge receives `undefined` and throws.
 
 ## Approach Options
 

@@ -17,6 +17,7 @@ import { RuntimeReceiptBus } from "./RuntimeReceiptBus.js"
 import {
   type ThreadRow,
   type TurnAttachmentRow,
+  type TurnReferenceRow,
   type TurnRow,
   type WorkItem,
   type WorkspaceRow,
@@ -25,7 +26,9 @@ import {
   buildFilesystemWorkspace,
   buildThread,
   buildTurnAttachments,
+  buildTurnReferences,
   deleteTurnAttachmentsForThreadIds,
+  deleteTurnReferencesForThreadIds,
   readDefaultAccessModePreference,
   writeDefaultAccessModePreference,
   deriveWorkspaceName,
@@ -33,13 +36,16 @@ import {
   isDirectoryPath,
   mapThreadRow,
   mapTurnAttachmentRow,
+  mapTurnReferenceRow,
   mapTurnRow,
   mapWorkspaceRow,
   normalizeRootPath,
   normalizeThreadTitle,
   persistTurnAttachments,
+  persistTurnReferences,
   readFilesystemWorkspaceByRootPath,
   readTurnAttachmentsByTurnIds,
+  readTurnReferencesByTurnIds,
   readWorkspace,
   readWorkspaceThreadRows,
   reconcileStaleStreamingState,
@@ -125,13 +131,21 @@ export const OrchestrationServiceLive = Layer.scoped(
         [turnId],
       )
       const attachments = rows.map(mapTurnAttachmentRow)
+      const referenceRows = database.query<TurnReferenceRow>(
+        `SELECT id, turn_id, kind, reference_id, label, url, position
+         FROM orchestration_turn_references
+         WHERE turn_id = ?
+         ORDER BY position ASC`,
+        [turnId],
+      )
+      const references = referenceRows.map(mapTurnReferenceRow)
       const row = database.get<TurnRow>(
         `SELECT id, thread_id, input_text, output_text, reasoning_text, status, started_at, completed_at
          FROM orchestration_turns
          WHERE id = ?`,
         [turnId],
       )
-      return row ? mapTurnRow(row, attachments) : null
+      return row ? mapTurnRow(row, attachments, references) : null
     }
 
     const publishDomainEvent = async (event: OrchestrationDomainEvent): Promise<void> => {
@@ -523,8 +537,16 @@ export const OrchestrationServiceLive = Layer.scoped(
           database,
           turnRows.map((row) => row.id),
         )
+        const referencesByTurnId = readTurnReferencesByTurnIds(
+          database,
+          turnRows.map((row) => row.id),
+        )
         const turns = turnRows.map((row) =>
-          mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []),
+          mapTurnRow(
+            row,
+            attachmentsByTurnId.get(row.id) ?? [],
+            referencesByTurnId.get(row.id) ?? [],
+          ),
         )
         const providerRuntime = await runtimeStore.getState()
         return {
@@ -651,6 +673,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           if (deletedThreadIds.length > 0) {
             const placeholders = deletedThreadIds.map(() => "?").join(", ")
             deleteTurnAttachmentsForThreadIds(database, deletedThreadIds)
+            deleteTurnReferencesForThreadIds(database, deletedThreadIds)
             database.execute(
               `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
               deletedThreadIds,
@@ -809,6 +832,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         database.transaction(() => {
           deleteTurnAttachmentsForThreadIds(database, [threadId])
+          deleteTurnReferencesForThreadIds(database, [threadId])
           database.execute(
             `DELETE FROM orchestration_turns WHERE thread_id = ?`,
             [threadId],
@@ -841,7 +865,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { deleted: true, threadId })
         return { deleted: true }
       },
-      sendTurn: async (commandId, threadId, content, attachments, model) => {
+      sendTurn: async (commandId, threadId, content, attachments, model, references) => {
         const thread = readThread(threadId)
         if (!thread) {
           throw new Error(`Thread not found: ${threadId}`)
@@ -868,6 +892,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           completedAt: null,
           skill: null,
           attachments: buildTurnAttachments(attachments),
+          references: buildTurnReferences(references ?? []),
         }
 
         await receiptBus.track(commandId)
@@ -888,6 +913,7 @@ export const OrchestrationServiceLive = Layer.scoped(
             ],
           )
           persistTurnAttachments(database, turn.id, turn.attachments)
+          persistTurnReferences(database, turn.id, turn.references)
           database.execute(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?

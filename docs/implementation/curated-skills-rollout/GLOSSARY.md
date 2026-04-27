@@ -124,7 +124,7 @@ Launch-time routine that copies or upgrades bundled `SKILL.md` files into the Co
 
 ### User Skills Directory
 
-`<userData>/codex-user-home/.agents/skills/` — Codex CLI scans here; Student Claw mirrors bundled skills here and allows user edits and forks.
+`<userData>/codex-user-home/.agents/skills/` — Codex CLI scans here; Orbyt mirrors bundled skills here and allows user edits and forks.
 
 ### Repo Skills Root
 

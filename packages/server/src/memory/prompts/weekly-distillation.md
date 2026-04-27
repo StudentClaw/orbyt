@@ -44,6 +44,12 @@ Only include stable, reusable lessons — not week-specific events.
 Format each line exactly as:
 - lesson: "<the lesson>" (confidence: <0.0-1.0>, branch: <branch>)
 
+If the lesson is that a course uses a Canvas location for readings, homework,
+quizzes, deadlines, weekly schedules, syllabus work, modules, or the real
+assignments/work, include that URL exactly in the lesson. The URL may be a bare
+course URL, front page/wiki URL, Canvas page URL, module URL, assignment URL,
+announcement URL, or file URL.
+
 Where `<branch>` is one of:
 - `school/courses/<course-slug>` — course-specific lessons
 - `school/playbooks/<playbook-slug>` — reusable cross-course strategies

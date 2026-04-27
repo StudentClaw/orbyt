@@ -1,6 +1,7 @@
 import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsResult,
+  CanvasArchiveAssignmentResult,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureResult,
   CanvasDownloadCourseFileResult,
@@ -50,6 +51,7 @@ import {
   type SetStepStatusParams,
   type StudentPreference,
   type TurnAttachmentInput,
+  type TurnReferenceInput,
   type UpdatePreferencesParams,
   type MemoryUpdatedEvent,
   type WeeklyInsight,
@@ -161,6 +163,7 @@ export interface WsRpcClient {
       attachments: readonly TurnAttachmentInput[],
       model?: string | null,
       skillId?: string | null,
+      references?: readonly TurnReferenceInput[],
     ) => Promise<SendTurnResult>
     readonly interruptTurn: (threadId: string) => Promise<InterruptTurnResult>
     readonly onDomainEvent: (
@@ -196,6 +199,7 @@ export interface WsRpcClient {
     readonly getMyPeerReviewsTodo: (courseId?: string) => Promise<ReadonlyArray<CanvasStudentPeerReviewTodo>>
     readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<Schema.Schema.Type<typeof CanvasAssignmentDetailsResult>>
     readonly listAssignments: (params: { courseId?: string; includeCompleted?: boolean }) => Promise<Schema.Schema.Type<typeof CanvasListAssignmentsResult>>
+    readonly archiveAssignment: (assignmentId: string) => Promise<Schema.Schema.Type<typeof CanvasArchiveAssignmentResult>>
     readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<Schema.Schema.Type<typeof CanvasCourseContentOverviewResult>>
     readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
     readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
@@ -322,13 +326,14 @@ function createOrchestrationApi(transport: WsTransport): WsRpcClient["orchestrat
       }),
     deleteThread: async (threadId) =>
       transport.request<DeleteThreadResult>(RPC_METHODS.ORCHESTRATION_DELETE_THREAD, { threadId }),
-    sendTurn: async (threadId, content, attachments, model, skillId) =>
+    sendTurn: async (threadId, content, attachments, model, skillId, references) =>
       transport.request<SendTurnResult>(RPC_METHODS.ORCHESTRATION_SEND_TURN, {
         threadId,
         content,
         attachments,
         ...(model ? { model } : {}),
         ...(skillId ? { skillId } : {}),
+        ...(references && references.length > 0 ? { references } : {}),
       }),
     interruptTurn: async (threadId) =>
       transport.request<InterruptTurnResult>(RPC_METHODS.ORCHESTRATION_INTERRUPT_TURN, { threadId }),
@@ -415,6 +420,11 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
       decode(
         CanvasListAssignmentsResult,
         await transport.request(RPC_METHODS.CANVAS_LIST_ASSIGNMENTS, params),
+      ),
+    archiveAssignment: async (assignmentId) =>
+      decode(
+        CanvasArchiveAssignmentResult,
+        await transport.request(RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT, { assignmentId }),
       ),
     getCourseContentOverview: async (params) =>
       decode(

@@ -57,13 +57,14 @@ const OrchestrationLive = OrchestrationServiceLive.pipe(
   Layer.provideMerge(CoreLive),
 )
 
-const CanvasSyncLive = CanvasSyncServiceLive.pipe(
-  Layer.provideMerge(GatewayLive),
+const MemorizeLive = MemorizeServiceLive.pipe(
+  Layer.provideMerge(ProviderLive),
   Layer.provideMerge(CoreLive),
 )
 
-const MemorizeLive = MemorizeServiceLive.pipe(
-  Layer.provideMerge(ProviderLive),
+const CanvasSyncLive = CanvasSyncServiceLive.pipe(
+  Layer.provideMerge(MemorizeLive),
+  Layer.provideMerge(GatewayLive),
   Layer.provideMerge(CoreLive),
 )
 

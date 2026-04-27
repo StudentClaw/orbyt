@@ -273,6 +273,7 @@ describe("@orbyt/contracts", () => {
           completedAt: null,
           skill: null,
           attachments: [],
+          references: [],
         },
       ],
       pendingApprovals: [],
@@ -356,6 +357,18 @@ describe("@orbyt/contracts", () => {
     expect(readinessEvent.previousReadiness).toBe("bridge_starting")
     expect(readinessEvent.retryClass).toBe("retry_permission")
     expect(runtimeLogsResult.entries[0]?.source).toBe("bridge")
+  })
+
+  test("locks the FILE_SEARCH_WORKSPACE channel with typed params", () => {
+    expect(IpcChannel.FILE_SEARCH_WORKSPACE).toBe("file:search-workspace")
+    const params: import("./index.js").WorkspaceFileSearchParams = {
+      workspaceRoot: "/tmp/orbyt-workspace",
+      query: "drft",
+      limit: 10,
+      maxDepth: 4,
+    }
+    expect(params.workspaceRoot).toBe("/tmp/orbyt-workspace")
+    expect(params.query).toBe("drft")
   })
 
   test("classifies risky commands into beginner-friendly approval prompts", () => {

@@ -227,4 +227,3 @@ describe("CronDelivery", () => {
     expect(row?.notify).toBe(0)
   })
 })
-

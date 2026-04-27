@@ -4,6 +4,7 @@ import { isoWeekKey, parseIsoDate } from "./week.js"
 import type { MemoryPaths } from "./paths.js"
 import type { MemorizeDistiller } from "./distiller.js"
 import { fillTemplate, WEEKLY_DISTILLATION_PROMPT } from "./prompts/index.js"
+import { logMemoryWrite } from "./write-log.js"
 
 const WEEKLY_EMPTY = `## Recurring Struggles
 
@@ -46,13 +47,11 @@ export async function foldDailyIntoWeekly(
   })
 
   const aiOutput = await distiller.distill(prompt)
+  const content = `# Weekly - ${weekKey}\n\n${aiOutput.trimEnd()}\n`
 
   mkdirSync(dirname(weeklyPath), { recursive: true })
-  writeFileSync(
-    weeklyPath,
-    `# Weekly - ${weekKey}\n\n${aiOutput.trimEnd()}\n`,
-    "utf-8",
-  )
+  writeFileSync(weeklyPath, content, "utf-8")
+  logMemoryWrite("weekly memory", weeklyPath, content)
 
   return weekKey
 }

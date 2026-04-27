@@ -10,8 +10,6 @@ import {
 } from "@orbyt/contracts"
 
 const ORBYT_HOME_ENV = "ORBYT_HOME"
-/** Honored when `ORBYT_HOME` is unset (migration from the previous app name). */
-const LEGACY_ORBYT_HOME_ENV = "STUDENT_CLAW_HOME"
 const DEFAULT_HOME_DIR = ".orbyt"
 const DEFAULT_GRAPH_DIR = "Orbyt Memory Graph"
 const DOCUMENTS_DIR = "Documents"
@@ -84,10 +82,6 @@ function readHomeOverride(env: NodeJS.ProcessEnv): string | undefined {
   const primary = env[ORBYT_HOME_ENV]?.trim()
   if (primary && primary.length > 0) {
     return primary
-  }
-  const legacy = env[LEGACY_ORBYT_HOME_ENV]?.trim()
-  if (legacy && legacy.length > 0) {
-    return legacy
   }
   return undefined
 }

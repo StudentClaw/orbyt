@@ -49,7 +49,7 @@ import {
 import { useRuntimeStartupState as useStartupState } from "@/rpc/runtimeStartupState"
 import { useServerConfig, useServerWelcome } from "@/rpc/serverState"
 import { useDesktopBootstrap, useWsConnectionStatus } from "@/rpc/wsConnectionState"
-import type { TurnAttachmentInput } from "@orbyt/contracts"
+import type { TurnAttachmentInput, TurnReferenceInput } from "@orbyt/contracts"
 
 export function useRuntimeConnectionStatus() {
   return useWsConnectionStatus()
@@ -190,8 +190,17 @@ export function useOrchestrationActions() {
         attachments: readonly TurnAttachmentInput[],
         model?: string | null,
         skillId?: string | null,
+        references?: readonly TurnReferenceInput[],
       ) =>
-        sendOrchestrationTurn(getPrimaryWsRpcClient(), threadId, content, attachments, model, skillId),
+        sendOrchestrationTurn(
+          getPrimaryWsRpcClient(),
+          threadId,
+          content,
+          attachments,
+          model,
+          skillId,
+          references,
+        ),
       interruptTurn: (threadId: string) => interruptOrchestrationTurn(getPrimaryWsRpcClient(), threadId),
       startProviderAuth: () =>
         getPrimaryWsRpcClient().provider.startAuth(),

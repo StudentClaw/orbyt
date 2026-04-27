@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync } from "node:fs"
-import { homedir } from "node:os"
 import path from "node:path"
 import { WebSocket } from "ws"
 import { RPC_METHODS, WS_PROTOCOL, type DesktopBootstrap } from "@orbyt/contracts"
@@ -164,6 +163,7 @@ export async function spawnServer(
 ): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
   const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.orbyt/data.db`
+  const orbytHome = process.env.ORBYT_HOME ?? path.dirname(dbPath)
   const auth = createHandshakeAuth()
 
   const existingBootstrap = await healthCheck(port, auth)
@@ -178,7 +178,7 @@ export async function spawnServer(
   }
 
   const launchSpec = resolveServerLaunchSpec(launchContext)
-  const child = spawnServerChild(launchSpec, port, dbPath, auth, gateway, codexIsolation)
+  const child = spawnServerChild(launchSpec, port, dbPath, orbytHome, auth, gateway, codexIsolation)
   pipeChildOutput(child)
   const childError = createChildErrorTracker(child)
 
@@ -270,24 +270,18 @@ function spawnServerChild(
   launchSpec: ServerLaunchSpec,
   port: number,
   dbPath: string,
+  orbytHome: string,
   auth: WsHandshakeAuth,
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
 ): ChildProcess {
-  // Capture the real `~/.orbyt` BEFORE buildIsolatedCodexEnv overrides HOME.
-  // Memory paths are resolved from ORBYT_HOME (treated as the directory that
-  // contains `memory/`). Without this, the server's `~/.orbyt/` would land
-  // inside the Codex isolation sandbox at codex-user-home/.orbyt instead of
-  // the user's real `~/.orbyt`.
-  const orbytHome = process.env.ORBYT_HOME ?? path.join(homedir(), ".orbyt")
-
   const child = spawn(launchSpec.command, launchSpec.args, {
     env: {
       ...(codexIsolation ? buildIsolatedCodexEnv(codexIsolation.userDataPath, gateway) : process.env),
       PORT: String(port),
       DB_PATH: dbPath,
-      WS_AUTH_TOKEN: auth.authToken,
       ORBYT_HOME: orbytHome,
+      WS_AUTH_TOKEN: auth.authToken,
       ...(launchSpec.packaged ? {
         ELECTRON_RUN_AS_NODE: "1",
       } : {}),

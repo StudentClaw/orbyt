@@ -104,7 +104,7 @@ This keeps the current backend shape while tightening the renderer behavior to m
 
 ### Renderer
 
-Update [ChatHistory.tsx](/Users/rereynrd/School/student-claw/packages/ui/src/components/shell/ChatHistory.tsx) to:
+Update [ChatHistory.tsx](/Users/rereynrd/School/orbyt/packages/ui/src/components/shell/ChatHistory.tsx) to:
 
 - stop auto-creating a chat after folder add,
 - focus existing folders when a duplicate path is picked,
@@ -112,7 +112,7 @@ Update [ChatHistory.tsx](/Users/rereynrd/School/student-claw/packages/ui/src/com
 - prompt for confirmation before folder deletion,
 - keep folder clicks targeting the folder itself.
 
-Keep [ChatPage.tsx](/Users/rereynrd/School/student-claw/packages/ui/src/pages/ChatPage.tsx) and the existing route model as the source of truth for folder-empty versus active-chat states.
+Keep [ChatPage.tsx](/Users/rereynrd/School/orbyt/packages/ui/src/pages/ChatPage.tsx) and the existing route model as the source of truth for folder-empty versus active-chat states.
 
 ### Backend
 

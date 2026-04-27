@@ -2,7 +2,7 @@
 
 Generated: 2026-04-21T22:28:05.620Z
 Model: `gpt-5.4-mini`
-Codex binary: `/Users/rereynrd/School/student-claw/packages/server/node_modules/.bin/codex`
+Codex binary: `/Users/rereynrd/School/orbyt/packages/server/node_modules/.bin/codex`
 
 ## Scope
 

@@ -16,6 +16,7 @@ import {
   type OrchestrationSnapshot,
   type OrchestrationThread,
   type OrchestrationTurnAttachment,
+  type OrchestrationTurnReference,
   type OrchestrationTurn,
   type OrchestrationWorkspace,
   type ProviderRuntimeEvent,
@@ -26,6 +27,7 @@ import {
   type StartProviderAuthResult,
   type ThreadAccessMode,
   type TurnAttachmentInput,
+  type TurnReferenceInput,
   type WorkspaceId,
 } from "@orbyt/contracts"
 import type {
@@ -158,6 +160,7 @@ export interface OrchestrationServiceShape {
     content: string,
     attachments: readonly TurnAttachmentInput[],
     model?: string | null,
+    references?: readonly TurnReferenceInput[],
   ) => Promise<SendTurnResult>
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
   readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
@@ -315,9 +318,30 @@ function mapTurnAttachmentRow(row: TurnAttachmentRow): OrchestrationTurnAttachme
   }
 }
 
+type TurnReferenceRow = {
+  id: string
+  turn_id: string
+  kind: OrchestrationTurnReference["kind"]
+  reference_id: string
+  label: string
+  url: string | null
+  position: number
+}
+
+function mapTurnReferenceRow(row: TurnReferenceRow): OrchestrationTurnReference {
+  return {
+    id: row.id,
+    kind: row.kind,
+    referenceId: row.reference_id,
+    label: row.label,
+    url: row.url,
+  }
+}
+
 function mapTurnRow(
   row: TurnRow,
   attachments: readonly OrchestrationTurnAttachment[] = [],
+  references: readonly OrchestrationTurnReference[] = [],
 ): OrchestrationTurn {
   return {
     id: row.id as OrchestrationTurn["id"],
@@ -330,6 +354,7 @@ function mapTurnRow(
     completedAt: row.completed_at,
     skill: null,
     attachments: [...attachments],
+    references: [...references],
   }
 }
 
@@ -417,6 +442,101 @@ function deleteTurnAttachmentsForThreadIds(
   )
 }
 
+function readTurnReferences(
+  database: DatabaseService,
+  turnId: string,
+): readonly OrchestrationTurnReference[] {
+  return database.query<TurnReferenceRow>(
+    `SELECT id, turn_id, kind, reference_id, label, url, position
+     FROM orchestration_turn_references
+     WHERE turn_id = ?
+     ORDER BY position ASC`,
+    [turnId],
+  ).map(mapTurnReferenceRow)
+}
+
+function readTurnReferencesByTurnIds(
+  database: DatabaseService,
+  turnIds: readonly string[],
+): ReadonlyMap<string, readonly OrchestrationTurnReference[]> {
+  if (turnIds.length === 0) {
+    return new Map()
+  }
+
+  const placeholders = turnIds.map(() => "?").join(", ")
+  const rows = database.query<TurnReferenceRow>(
+    `SELECT id, turn_id, kind, reference_id, label, url, position
+     FROM orchestration_turn_references
+     WHERE turn_id IN (${placeholders})
+     ORDER BY turn_id ASC, position ASC`,
+    [...turnIds],
+  )
+
+  const grouped = new Map<string, OrchestrationTurnReference[]>()
+  for (const row of rows) {
+    const entries = grouped.get(row.turn_id) ?? []
+    entries.push(mapTurnReferenceRow(row))
+    grouped.set(row.turn_id, entries)
+  }
+
+  return grouped
+}
+
+function persistTurnReferences(
+  database: DatabaseService,
+  turnId: string,
+  references: readonly OrchestrationTurnReference[],
+): void {
+  references.forEach((reference, index) => {
+    database.execute(
+      `INSERT INTO orchestration_turn_references (
+         id, turn_id, kind, reference_id, label, url, position
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        reference.id,
+        turnId,
+        reference.kind,
+        reference.referenceId,
+        reference.label,
+        reference.url,
+        index,
+      ],
+    )
+  })
+}
+
+function deleteTurnReferencesForThreadIds(
+  database: DatabaseService,
+  threadIds: readonly string[],
+): void {
+  if (threadIds.length === 0) {
+    return
+  }
+
+  const placeholders = threadIds.map(() => "?").join(", ")
+  database.execute(
+    `DELETE FROM orchestration_turn_references
+     WHERE turn_id IN (
+       SELECT id
+       FROM orchestration_turns
+       WHERE thread_id IN (${placeholders})
+     )`,
+    [...threadIds],
+  )
+}
+
+function buildTurnReferencesLocal(
+  references: readonly TurnReferenceInput[],
+): readonly OrchestrationTurnReference[] {
+  return references.map((reference) => ({
+    id: createId("reference"),
+    kind: reference.kind,
+    referenceId: reference.id,
+    label: reference.label,
+    url: reference.url,
+  }))
+}
+
 function appendEvent(
   deps: OrchestrationRuntimeDeps,
   eventType: string,
@@ -497,7 +617,13 @@ function readTurn(database: DatabaseService, turnId: string): OrchestrationTurn 
      WHERE id = ?`,
     [turnId],
   )
-  return row ? mapTurnRow(row, readTurnAttachments(database, turnId)) : null
+  return row
+    ? mapTurnRow(
+        row,
+        readTurnAttachments(database, turnId),
+        readTurnReferences(database, turnId),
+      )
+    : null
 }
 
 function readWorkspaceThreadRows(database: DatabaseService, workspaceId: string): readonly WorkspaceThreadRow[] {
@@ -994,7 +1120,17 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
     deps.database,
     turnRows.map((row) => row.id),
   )
-  const turns = turnRows.map((row) => mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []))
+  const referencesByTurnId = readTurnReferencesByTurnIds(
+    deps.database,
+    turnRows.map((row) => row.id),
+  )
+  const turns = turnRows.map((row) =>
+    mapTurnRow(
+      row,
+      attachmentsByTurnId.get(row.id) ?? [],
+      referencesByTurnId.get(row.id) ?? [],
+    ),
+  )
 
   const provider = deps.database.get<{
     provider: "stub" | "codex"
@@ -1215,6 +1351,7 @@ async function deleteWorkspace(
     if (deletedThreadIds.length > 0) {
       const placeholders = buildDeletePlaceholders(deletedThreadIds.length)
       deleteTurnAttachmentsForThreadIds(deps.database, deletedThreadIds)
+      deleteTurnReferencesForThreadIds(deps.database, deletedThreadIds)
       deps.database.execute(
         `DELETE FROM orchestration_turns WHERE thread_id IN (${placeholders})`,
         deletedThreadIds,
@@ -1398,6 +1535,7 @@ async function deleteThread(
 
   deps.database.transaction(() => {
     deleteTurnAttachmentsForThreadIds(deps.database, [threadId])
+    deleteTurnReferencesForThreadIds(deps.database, [threadId])
     deps.database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
     deps.database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
     deps.database.execute(`DELETE FROM orchestration_threads WHERE id = ?`, [threadId])
@@ -1431,6 +1569,7 @@ function buildQueuedTurn(
   threadId: string,
   content: string,
   attachments: readonly TurnAttachmentInput[],
+  references: readonly TurnReferenceInput[] = [],
 ): OrchestrationTurn {
   const now = new Date().toISOString()
   return {
@@ -1444,6 +1583,7 @@ function buildQueuedTurn(
     completedAt: null,
     skill: null,
     attachments: buildTurnAttachments(attachments),
+    references: buildTurnReferencesLocal(references),
   }
 }
 
@@ -1454,6 +1594,7 @@ async function sendTurn(
   content: string,
   attachments: readonly TurnAttachmentInput[],
   model?: string | null,
+  references: readonly TurnReferenceInput[] = [],
 ): Promise<SendTurnResult> {
   const thread = readThread(deps.database, threadId)
   if (!thread) {
@@ -1469,7 +1610,7 @@ async function sendTurn(
   }
   assertWorkspaceAcceptsChat(workspace)
 
-  const turn = buildQueuedTurn(threadId, content, attachments)
+  const turn = buildQueuedTurn(threadId, content, attachments, references)
   const now = new Date().toISOString()
   const sessionCwd = workspace.kind === "filesystem" ? workspace.rootPath : null
   await deps.receiptBus.track(commandId)
@@ -1481,6 +1622,7 @@ async function sendTurn(
       [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, now],
     )
     persistTurnAttachments(deps.database, turn.id, turn.attachments)
+    persistTurnReferences(deps.database, turn.id, turn.references)
     deps.database.execute(
       `UPDATE orchestration_threads
        SET status = ?, current_turn_id = ?, updated_at = ?
@@ -1550,8 +1692,8 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
       setThreadAccessMode(deps, commandId, threadId, accessMode),
     deleteThread: (commandId, threadId) =>
       deleteThread(deps, commandId, threadId),
-    sendTurn: (commandId, threadId, content, attachments, model) =>
-      sendTurn(deps, commandId, threadId, content, attachments, model),
+    sendTurn: (commandId, threadId, content, attachments, model, references) =>
+      sendTurn(deps, commandId, threadId, content, attachments, model, references),
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
     startProviderAuth: async () => ({ started: false }),
     retryProviderInitialize: async () => ({ started: false }),
@@ -1640,7 +1782,13 @@ export const OrchestrationServiceLive = Layer.scoped(
          WHERE id = ?`,
         [turnId],
       )
-      return row ? mapTurnRow(row, readTurnAttachments(database, turnId)) : null
+      return row
+    ? mapTurnRow(
+        row,
+        readTurnAttachments(database, turnId),
+        readTurnReferences(database, turnId),
+      )
+    : null
     }
 
     const publishDomainEvent = async (event: OrchestrationDomainEvent): Promise<void> => {
@@ -2017,7 +2165,17 @@ export const OrchestrationServiceLive = Layer.scoped(
           database,
           turnRows.map((row) => row.id),
         )
-        const turns = turnRows.map((row) => mapTurnRow(row, attachmentsByTurnId.get(row.id) ?? []))
+        const referencesByTurnId = readTurnReferencesByTurnIds(
+          database,
+          turnRows.map((row) => row.id),
+        )
+        const turns = turnRows.map((row) =>
+          mapTurnRow(
+            row,
+            attachmentsByTurnId.get(row.id) ?? [],
+            referencesByTurnId.get(row.id) ?? [],
+          ),
+        )
         const providerRuntime = await runtimeStore.getState()
         const runtimeSnapshot = threadRuntimeManager.getSnapshot()
         return {
@@ -2131,6 +2289,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           if (deletedThreadIds.length > 0) {
             const placeholders = deletedThreadIds.map(() => "?").join(", ")
             deleteTurnAttachmentsForThreadIds(database, deletedThreadIds)
+            deleteTurnReferencesForThreadIds(database, deletedThreadIds)
             database.execute(
               `DELETE FROM queued_provider_turns WHERE thread_id IN (${placeholders})`,
               deletedThreadIds,
@@ -2281,6 +2440,7 @@ export const OrchestrationServiceLive = Layer.scoped(
 
         database.transaction(() => {
           deleteTurnAttachmentsForThreadIds(database, [threadId])
+          deleteTurnReferencesForThreadIds(database, [threadId])
           database.execute(`DELETE FROM queued_provider_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM orchestration_turns WHERE thread_id = ?`, [threadId])
           database.execute(`DELETE FROM provider_runtime_sessions WHERE thread_id = ?`, [threadId])
@@ -2293,7 +2453,7 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { deleted: true, threadId })
         return { deleted: true }
       },
-      sendTurn: async (commandId, threadId, content, attachments, model) => {
+      sendTurn: async (commandId, threadId, content, attachments, model, references) => {
         const runtimeState = await runtimeStore.getState()
         if (!threadRuntimeManager.getSnapshot().acceptingTurns) {
           throw new Error("Codex is still starting. Wait for Orbyt to finish preparing Codex and try again.")
@@ -2324,6 +2484,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           completedAt: null,
           skill: null,
           attachments: buildTurnAttachments(attachments),
+          references: buildTurnReferencesLocal(references ?? []),
         }
 
         await receiptBus.track(commandId)
@@ -2335,6 +2496,7 @@ export const OrchestrationServiceLive = Layer.scoped(
             [turn.id, turn.threadId, turn.input, turn.output, turn.status, turn.startedAt, turn.completedAt, now],
           )
           persistTurnAttachments(database, turn.id, turn.attachments)
+          persistTurnReferences(database, turn.id, turn.references)
           database.execute(
             `UPDATE orchestration_threads
              SET status = ?, current_turn_id = ?, updated_at = ?

@@ -41,6 +41,14 @@ Only include facts that are durable (preferences, stable course rules, professor
 patterns), not one-time events. Format each line exactly as:
 - candidate: "<the fact>" (source: conversation, confidence: <0.0-1.0>, branch: <branch>)
 
+If the student says a professor posts homework, readings, quizzes, deadlines,
+weekly schedules, syllabus work, modules, or "the real assignments/work" at a
+Canvas location, include that URL exactly in the candidate fact and use the
+matching course branch. The URL may be a bare course URL, front page/wiki URL,
+Canvas page URL, module URL, assignment URL, announcement URL, or file URL.
+Phrase the candidate as a possible assignment source so Orbyt can verify it
+during Canvas sync.
+
 Where \`<branch>\` is one of:
 - \`school/courses/<course-slug>\` — course-specific facts (e.g. \`school/courses/cs-301\`)
 - \`school/playbooks/<playbook-slug>\` — reusable cross-course strategies
@@ -98,6 +106,12 @@ List insights that should probably move into the permanent memory graph.
 Only include stable, reusable lessons — not week-specific events.
 Format each line exactly as:
 - lesson: "<the lesson>" (confidence: <0.0-1.0>, branch: <branch>)
+
+If the lesson is that a course uses a Canvas location for homework, readings,
+quizzes, deadlines, weekly schedules, syllabus work, modules, or the real
+assignments/work, include the Canvas URL exactly in the lesson and use the
+matching course branch. The URL may be a bare course URL, front page/wiki URL,
+Canvas page URL, module URL, assignment URL, announcement URL, or file URL.
 
 Where \`<branch>\` is one of:
 - \`school/courses/<course-slug>\` — course-specific lessons

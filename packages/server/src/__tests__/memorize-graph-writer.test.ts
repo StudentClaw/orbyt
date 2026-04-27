@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test"
-import { mkdtempSync, rmSync, readFileSync, existsSync, mkdirSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { createMemoryPaths } from "../memory/paths.js"
@@ -138,6 +138,73 @@ describe("writeGraphCandidate — course branches", () => {
     const assignIdx = content.indexOf("## Assignment Strategy")
     const factIdx = content.indexOf("Homework is graded on completeness")
     expect(factIdx).toBeGreaterThan(assignIdx)
+  })
+
+  test("adds structured assignment source rule for durable Canvas homework pages", () => {
+    const { paths } = setup()
+    writeGraphCandidate(
+      paths,
+      candidate(
+        "Professor posts reading homework at https://ivc-new.instructure.com/courses/19737/wiki",
+        "school/courses/mythology",
+      ),
+      NOW,
+    )
+    const content = readFileSync(paths.courseIndex("mythology"), "utf-8")
+    expect(content).toContain("## Assignment Source Rules")
+    expect(content).toContain('"kind": "canvas_page"')
+    expect(content).toContain('"canvasCourseId": "19737"')
+    expect(content).toContain('"parser": "dated_reading_schedule"')
+  })
+
+  test("adds assignment source discovery hint for bare Canvas course URLs", () => {
+    const { paths } = setup()
+    writeGraphCandidate(
+      paths,
+      candidate(
+        "My professor posts weekly readings here https://ivc-new.instructure.com/courses/19737",
+        "school/courses/mythology",
+      ),
+      NOW,
+    )
+    const content = readFileSync(paths.courseIndex("mythology"), "utf-8")
+    expect(content).toContain("## Assignment Source Discovery")
+    expect(content).toContain('"kind": "canvas_assignment_source_hint"')
+    expect(content).toContain('"canvasCourseId": "19737"')
+    expect(content).toContain('"url": "https://ivc-new.instructure.com/courses/19737"')
+  })
+
+  test("reuses an existing course node by Canvas id instead of creating a duplicate slug", () => {
+    const { paths } = setup()
+    mkdirSync(paths.courseDir("myth"), { recursive: true })
+    writeFileSync(
+      paths.courseIndex("myth"),
+      [
+        "---",
+        "slug: myth",
+        "canvasId: 19737",
+        "---",
+        "",
+        "# Mythology",
+        "",
+        "## Durable Facts",
+        "",
+        "_none yet_",
+      ].join("\n"),
+      "utf-8",
+    )
+
+    const filePath = writeGraphCandidate(
+      paths,
+      candidate(
+        "My professor posts weekly readings here https://ivc-new.instructure.com/courses/19737",
+        "school/courses/mythology",
+      ),
+      NOW,
+    )
+
+    expect(filePath).toBe(paths.courseIndex("myth"))
+    expect(existsSync(paths.courseIndex("mythology"))).toBe(false)
   })
 
   test("unmatched text routes to Durable Facts", () => {

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { buildBuckets, WeeklyOutlookWidget } from "../components/dashboard/WeeklyOutlookWidget"
+import { WeeklyOutlookWidget } from "../components/dashboard/WeeklyOutlookWidget"
 import type { CalendarSession } from "../components/dashboard/calendar-model"
 import type { PrioritizedItem } from "../components/dashboard/priority-model"
+import { buildBuckets } from "../components/dashboard/weekly-outlook-model"
 
 const WEEK_START = "2025-06-09"
 const NOW = new Date(2025, 5, 11, 12, 0, 0, 0)

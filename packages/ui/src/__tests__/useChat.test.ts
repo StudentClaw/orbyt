@@ -81,6 +81,7 @@ const baseSnapshot: OrchestrationSnapshot = {
       completedAt: null,
       skill: null,
       attachments: [],
+      references: [],
     },
   ],
   pendingApprovals: [],
@@ -142,7 +143,7 @@ describe("useChat", () => {
     await act(async () => {
       await result.current.sendMessage({ content: "Hello", attachments: [] })
     })
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], undefined)
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], undefined, undefined, [])
     expect(hookMocks.createThread).not.toHaveBeenCalled()
   })
 
@@ -158,7 +159,47 @@ describe("useChat", () => {
 
     expect(hookMocks.createThread).toHaveBeenCalledWith("workspace-1", "New thread title")
     expect(hookMocks.selectChatTarget).toHaveBeenCalledWith("workspace-1", "thread-new")
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title", [], undefined)
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-new", "New thread title", [], undefined, undefined, [])
+  })
+
+  test("sendMessage plumbs references into buildPromptContent and forwards them to sendTurn", async () => {
+    hookMocks.snapshot = {
+      ...baseSnapshot,
+      threads: [{ ...baseSnapshot.threads[0], status: "completed", currentTurnId: null }],
+      turns: [{ ...baseSnapshot.turns[0], status: "completed", completedAt: "2026-04-09T00:02:00.000Z" }],
+      providerStatus: "idle",
+      providerRuntime: {
+        ...baseSnapshot.providerRuntime,
+        status: "idle",
+      },
+    }
+
+    const references = [
+      {
+        kind: "canvas-assignment" as const,
+        id: "canvas-course:42:assignment:12345",
+        label: "Essay 3",
+        url: "https://canvas.example.edu/courses/42/assignments/12345",
+      },
+    ]
+    const { result } = renderHook(() => useChat())
+    await act(async () => {
+      await result.current.sendMessage({
+        content: "Review this",
+        attachments: [],
+        references,
+      })
+    })
+
+    expect(hookMocks.sendTurn).toHaveBeenCalledTimes(1)
+    const args = hookMocks.sendTurn.mock.calls[0] as unknown[]
+    expect(args[0]).toBe("thread-1")
+    expect(typeof args[1]).toBe("string")
+    const promptContent = args[1] as string
+    expect(promptContent.startsWith("Referenced Canvas assignments:")).toBe(true)
+    expect(promptContent).toContain("canvas-course:42:assignment:12345")
+    expect(promptContent).toContain("Review this")
+    expect(args[5]).toEqual(references)
   })
 
   test("sendMessage passes the selected model through to the runtime", async () => {
@@ -179,7 +220,7 @@ describe("useChat", () => {
       await result.current.sendMessage({ content: "Hello", attachments: [] })
     })
 
-    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], "o3")
+    expect(hookMocks.sendTurn).toHaveBeenCalledWith("thread-1", "Hello", [], "o3", undefined, [])
   })
 
   test("sendMessage is a no-op while chat is still preparing", async () => {

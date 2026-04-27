@@ -630,6 +630,50 @@ describe("CodexCli gateway wiring", () => {
     }
   })
 
+  test("prepends Orbyt identity and memory acknowledgement instructions on first provider turn", async () => {
+    const tempDir = createTempDir()
+    const logPath = path.join(tempDir, "codex.log")
+    const runtimeStore = createProviderRuntimeStore()
+    const fakeCodexBinary = createFakeCodexBinary(logPath)
+    const pluginGatewayHarness = createPluginGatewayHarness()
+    const { codex, readLogs } = await loadCodexCli({
+      codexBinaryPath: fakeCodexBinary,
+      logPath,
+      pluginGatewayHarness,
+      runtimeStore,
+    })
+
+    try {
+      await codex.streamTurn({
+        localThreadId: "thread_identity",
+        localTurnId: "turn_1",
+        content: "Remember that my professor posts weekly readings here.",
+        cwd: "/repo",
+        onToken: async () => undefined,
+        onReasoning: async () => undefined,
+        onCompleted: async () => undefined,
+        onInterrupted: async () => undefined,
+        onError: async () => undefined,
+        onMcpToolCall: async () => undefined,
+        onApprovalRequest: async () => undefined,
+      })
+      await sleep(80)
+
+      const turnStart = readLogs().find((entry) => entry.type === "request" && entry.method === "turn/start")
+      const params = turnStart?.params as { input?: Array<{ text?: string }> } | undefined
+      const text = params?.input?.[0]?.text ?? ""
+
+      expect(text).toContain("You are Orbyt")
+      expect(text).toContain("underlying provider/runtime")
+      expect(text).toContain("I'll capture that in your course memory so Canvas sync can look there")
+      expect(text).toContain("Artifact output contract")
+      expect(text).toStartWith("<system>\n# Artifact output contract")
+      expect(text).toContain("</system>\n\nOrbyt identity context:")
+    } finally {
+      await codex.shutdown()
+    }
+  })
+
   test("resumes a persisted provider thread when a cold runtime sends the next turn", async () => {
     const tempDir = createTempDir()
     const logPath = path.join(tempDir, "codex.log")
@@ -650,7 +694,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -663,7 +707,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -770,7 +814,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -846,7 +890,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -859,7 +903,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -948,7 +992,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,
@@ -961,7 +1005,7 @@ describe("CodexCli gateway wiring", () => {
         codexRequestTimeoutMs: 5_000,
         pluginGatewayMcpUrl: "http://127.0.0.1:8788/mcp",
         pluginGatewayMcpBearerToken: "gateway-secret",
-        pluginGatewayMcpServerName: "student-claw",
+        pluginGatewayMcpServerName: "orbyt",
       },
       pluginGateway: pluginGatewayHarness.service,
       runtimeStore,

@@ -44,7 +44,7 @@ these rules.
   - `bun run check:electron:mac:signed` passes on a full-Xcode macOS machine
   - notarization submission `bedaa1eb-fcff-4448-9b4e-4743dcb5671e` completed with `Accepted`
   - `xcrun stapler staple` succeeded for `release/mac-arm64/Orbyt.app`
-  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/student-claw/release/mac-arm64/Orbyt.app" --verbose` succeeded
+  - `bun run verify:electron:mac --app-path "/Users/paul/Documents/orbyt/release/mac-arm64/Orbyt.app" --verbose` succeeded
   - `bun run dist:electron:mac:signed --arch arm64` now completes end to end with post-package verification against `release/mac-arm64/Orbyt.app`
 
 ### Out Of Scope

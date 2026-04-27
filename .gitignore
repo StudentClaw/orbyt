@@ -18,6 +18,7 @@ build-logs/
 release/
 dist-electron/
 packages/extensions/apple-calendar-mcp/bridge/.build/
+*.tsbuildinfo
 
 # Local environment overrides
 .env

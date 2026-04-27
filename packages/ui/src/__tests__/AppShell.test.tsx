@@ -5,6 +5,8 @@ import type { OrchestrationSnapshot } from "@orbyt/contracts"
 import type { WsConnectionStatus } from "../rpc/wsConnectionState"
 
 const { shellMocks, mockRouter } = vi.hoisted(() => {
+  type HistoryNotify = (event: { action?: { type?: string } }) => void
+
   const shellMocks = {
     pathname: "/",
     navigateFn: vi.fn(),
@@ -22,14 +24,14 @@ const { shellMocks, mockRouter } = vi.hoisted(() => {
     canGoBack: false,
     historyBack: vi.fn(),
     historyForward: vi.fn(),
-    historySubscribe: vi.fn(() => () => {}),
+    historySubscribe: vi.fn<(cb: HistoryNotify) => () => void>(() => () => {}),
     historyIndex: 0,
   }
   const mockRouter = {
     history: {
-      back: (...args: unknown[]) => shellMocks.historyBack(...args),
-      forward: (...args: unknown[]) => shellMocks.historyForward(...args),
-      subscribe: (cb: unknown) => shellMocks.historySubscribe(cb),
+      back: () => shellMocks.historyBack(),
+      forward: () => shellMocks.historyForward(),
+      subscribe: (cb: HistoryNotify) => shellMocks.historySubscribe(cb),
       get location() {
         return { state: { __TSR_index: shellMocks.historyIndex } }
       },
@@ -306,9 +308,9 @@ describe("AppShell", () => {
 
   test("forward button becomes enabled after going back and invokes history", async () => {
     const user = userEvent.setup()
-    let notify: ((event: { action?: { type?: string } }) => void) | null = null
-    shellMocks.historySubscribe.mockImplementation((cb: unknown) => {
-      notify = cb as typeof notify
+    let notify: (event: { action?: { type?: string } }) => void = () => {}
+    shellMocks.historySubscribe.mockImplementation((cb) => {
+      notify = cb
       return () => {}
     })
     shellMocks.historyIndex = 2
@@ -318,7 +320,7 @@ describe("AppShell", () => {
     expect((screen.getByTestId("shell-nav-forward") as HTMLButtonElement).disabled).toBe(true)
 
     shellMocks.historyIndex = 1
-    notify?.({ action: { type: "GO" } })
+    notify({ action: { type: "GO" } })
 
     const forward = await screen.findByTestId("shell-nav-forward")
     expect((forward as HTMLButtonElement).disabled).toBe(false)

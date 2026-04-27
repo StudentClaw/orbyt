@@ -145,7 +145,7 @@ describe("PromptInput", () => {
     render(<PromptInput {...defaultProps} onSend={onSend} />)
     await user.type(screen.getByLabelText("Chat message input"), "  Hello  ")
     await user.click(screen.getByLabelText("Send message"))
-    expect(onSend).toHaveBeenCalledWith({ content: "Hello", attachments: [] })
+    expect(onSend).toHaveBeenCalledWith({ content: "Hello", attachments: [], references: [] })
   })
 
   test("calls onSend on Enter key", async () => {
@@ -153,7 +153,7 @@ describe("PromptInput", () => {
     const user = userEvent.setup()
     render(<PromptInput {...defaultProps} onSend={onSend} />)
     await user.type(screen.getByLabelText("Chat message input"), "Hello{Enter}")
-    expect(onSend).toHaveBeenCalledWith({ content: "Hello", attachments: [] })
+    expect(onSend).toHaveBeenCalledWith({ content: "Hello", attachments: [], references: [] })
   })
 
   test("Shift+Enter inserts newline instead of sending", async () => {
@@ -337,6 +337,7 @@ describe("PromptInput", () => {
           kind: "file",
         },
       ],
+      references: [],
     })
   })
 
@@ -602,6 +603,110 @@ describe("PromptInput", () => {
       expect(onSend).toHaveBeenCalledWith(
         expect.objectContaining({ attachments: [metadata] }),
       )
+    })
+  })
+
+  describe("mention picker wiring (Phase 05)", () => {
+    const assignment = {
+      id: "canvas-course:42:assignment:12345",
+      label: "Essay 3",
+      url: "https://canvas.example.edu/courses/42/assignments/12345",
+      courseCode: "ENG 101",
+    }
+
+    test("typing @ opens MentionPicker", async () => {
+      const user = userEvent.setup()
+      render(
+        <PromptInput
+          {...defaultProps}
+          assignments={[assignment]}
+          workspaceRoot="/repo"
+        />,
+      )
+      await user.type(screen.getByLabelText("Chat message input"), "@")
+      expect(await screen.findByText("Essay 3")).toBeDefined()
+    })
+
+    test("clicking an assignment inserts a chip and submit carries references", async () => {
+      const onSend = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <PromptInput
+          {...defaultProps}
+          onSend={onSend}
+          assignments={[assignment]}
+          workspaceRoot="/repo"
+        />,
+      )
+      await user.type(screen.getByLabelText("Chat message input"), "@")
+      const row = await screen.findByText("Essay 3")
+      await user.click(row)
+      await user.click(screen.getByLabelText("Send message"))
+      expect(onSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          references: [
+            expect.objectContaining({
+              kind: "canvas-assignment",
+              id: "canvas-course:42:assignment:12345",
+              label: "Essay 3",
+              url: "https://canvas.example.edu/courses/42/assignments/12345",
+            }),
+          ],
+        }),
+      )
+    })
+
+    test("ArrowDown + Enter selects a mention via keyboard without leaving the composer", async () => {
+      const onSend = vi.fn()
+      const user = userEvent.setup()
+      const otherAssignment = {
+        id: "canvas-course:42:assignment:99999",
+        label: "Reading Response",
+        url: "https://canvas.example.edu/courses/42/assignments/99999",
+        courseCode: "ENG 101",
+      }
+      render(
+        <PromptInput
+          {...defaultProps}
+          onSend={onSend}
+          assignments={[assignment, otherAssignment]}
+          workspaceRoot="/repo"
+        />,
+      )
+      const input = screen.getByLabelText("Chat message input")
+      await user.type(input, "@")
+      await screen.findByText("Essay 3")
+      await user.keyboard("{ArrowDown}{Enter}")
+      await user.click(screen.getByLabelText("Send message"))
+      expect(onSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          references: [
+            expect.objectContaining({
+              kind: "canvas-assignment",
+              id: "canvas-course:42:assignment:99999",
+              label: "Reading Response",
+            }),
+          ],
+        }),
+      )
+    })
+
+    test("Grant access button fires onRequestCanvasAccess when canReadCanvas is false", async () => {
+      const onRequestCanvasAccess = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <PromptInput
+          {...defaultProps}
+          assignments={[]}
+          workspaceRoot="/repo"
+          canReadCanvas={false}
+          onRequestCanvasAccess={onRequestCanvasAccess}
+        />,
+      )
+      await user.type(screen.getByLabelText("Chat message input"), "@")
+      const grant = await screen.findByRole("button", { name: /grant access/i })
+      await user.click(grant)
+      expect(onRequestCanvasAccess).toHaveBeenCalled()
     })
   })
 })

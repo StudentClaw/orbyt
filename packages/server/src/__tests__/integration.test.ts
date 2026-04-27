@@ -129,6 +129,7 @@ describe("Server integration", () => {
               throw new Error("not implemented in integration test")
             },
             listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
+            archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
             getCourseContentOverview: async () => ({
               course: undefined,
               pageCount: 0,
