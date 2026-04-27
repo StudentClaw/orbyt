@@ -649,9 +649,9 @@ export function PromptInput({
           {loading ? (
             <div
               data-testid="composer-loading-overlay"
-              className="absolute inset-0 z-40 flex items-center justify-center rounded-[2rem] bg-background/75 px-4 backdrop-blur-sm"
+              className="absolute inset-0 z-40 flex items-center justify-center rounded-[2rem] bg-background/75 backdrop-blur-sm"
             >
-              <div className="w-full max-w-sm rounded-[1.5rem] border border-border/70 bg-card/95 px-4 py-3 shadow-sm">
+              <div className="w-full rounded-[1.5rem] border border-border/70 bg-card/95 px-4 py-3 shadow-sm">
                 <div
                   role="progressbar"
                   aria-label="Runtime readiness progress"

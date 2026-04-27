@@ -58,7 +58,7 @@ export function createMacPackagingConfig(options: {
     appId: options.appId,
     productName: options.productName,
     electronVersion: String(electronPackageJson.dependencies.electron).replace(/^[^\d]*/, ""),
-    artifactName: "Student-Claw-${version}-${arch}.${ext}",
+    artifactName: "Orbyt-${version}-${arch}.${ext}",
     directories: {
       output: options.outputDir,
       buildResources: path.join(options.stageAppDir, "build-resources"),
@@ -409,7 +409,6 @@ export function createStagePackageJson(stageAppDir: string, signed: boolean) {
       "@orbyt/server": "file:vendor/server",
       "@orbyt/shared": "file:vendor/shared",
       "@orbyt/shared-runtime": "file:vendor/shared-runtime",
-      "web-push": electronPackageJson.dependencies["web-push"],
       "ws": electronPackageJson.dependencies.ws,
     },
   }

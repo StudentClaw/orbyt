@@ -171,6 +171,7 @@ export interface WsRpcClient {
   readonly provider: {
     readonly startAuth: () => Promise<StartProviderAuthResult>
     readonly retryInitialize: () => Promise<RetryProviderInitializeResult>
+    readonly disconnectProvider: () => Promise<void>
     readonly respondToApproval: (
       approvalRequestId: string,
       decision: "approve" | "deny",
@@ -348,6 +349,8 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
     startAuth: () => transport.request<StartProviderAuthResult>(RPC_METHODS.PROVIDER_START_AUTH, {}),
     retryInitialize: () =>
       transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
+    disconnectProvider: () =>
+      transport.request<void>(RPC_METHODS.PROVIDER_DISCONNECT, {}),
     respondToApproval: (approvalRequestId, decision) =>
       transport.request<RespondToProviderApprovalResult>(RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL, {
         approvalRequestId,

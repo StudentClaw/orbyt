@@ -6,7 +6,7 @@ Last updated: 2026-04-22
 
 - Target feature: create the rollout scaffold and lock the starting truth for
   T3-style core lifecycle parity
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/implementation/thread-runtime-isolation/README.md](../thread-runtime-isolation/README.md),
   [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)

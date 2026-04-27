@@ -516,26 +516,14 @@ export function createSyncService(
     })
 
     try {
-      const courses = [...(await callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult)).courses]
-        .sort(courseSort)
-      const upcomingAssignments = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_UPCOMING_ASSIGNMENTS,
-        {},
-        CanvasGetMyUpcomingAssignmentsResult,
-      )
-      const submissionStatus = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_SUBMISSION_STATUS,
-        {},
-        CanvasGetMySubmissionStatusResult,
-      )
-      const courseGrades = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_COURSE_GRADES,
-        {},
-        CanvasGetMyCourseGradesResult,
-      )
+      const [coursesResult, upcomingAssignments, submissionStatus, courseGrades] = await Promise.all([
+        callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult),
+        callDecodedTool(gateway, TOOL_GET_MY_UPCOMING_ASSIGNMENTS, {}, CanvasGetMyUpcomingAssignmentsResult),
+        callDecodedTool(gateway, TOOL_GET_MY_SUBMISSION_STATUS, {}, CanvasGetMySubmissionStatusResult),
+        callDecodedTool(gateway, TOOL_GET_MY_COURSE_GRADES, {}, CanvasGetMyCourseGradesResult),
+      ])
+
+      const courses = [...coursesResult.courses].sort(courseSort)
 
       void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
         courseId: "",
@@ -543,29 +531,18 @@ export function createSyncService(
         status: "syncing",
       })
 
-      let todoItems: CanvasStudentTodoItem[] = []
-      try {
-        todoItems = (await callDecodedTool(
-          gateway,
-          TOOL_GET_MY_TODO_ITEMS,
-          {},
-          CanvasGetMyTodoItemsResult,
-        )).items.slice()
-      } catch (error) {
-        logError("optional canvas todo sync failed", error)
-      }
+      const [todoResult, peerResult] = await Promise.allSettled([
+        callDecodedTool(gateway, TOOL_GET_MY_TODO_ITEMS, {}, CanvasGetMyTodoItemsResult),
+        callDecodedTool(gateway, TOOL_GET_MY_PEER_REVIEWS_TODO, {}, CanvasGetMyPeerReviewsTodoResult),
+      ])
 
-      let peerReviewsTodo: CanvasStudentPeerReviewTodo[] = []
-      try {
-        peerReviewsTodo = (await callDecodedTool(
-          gateway,
-          TOOL_GET_MY_PEER_REVIEWS_TODO,
-          {},
-          CanvasGetMyPeerReviewsTodoResult,
-        )).items.slice()
-      } catch (error) {
-        logError("optional canvas peer review sync failed", error)
-      }
+      const todoItems: CanvasStudentTodoItem[] =
+        todoResult.status === "fulfilled" ? todoResult.value.items.slice() : []
+      if (todoResult.status === "rejected") logError("optional canvas todo sync failed", todoResult.reason)
+
+      const peerReviewsTodo: CanvasStudentPeerReviewTodo[] =
+        peerResult.status === "fulfilled" ? peerResult.value.items.slice() : []
+      if (peerResult.status === "rejected") logError("optional canvas peer review sync failed", peerResult.reason)
 
       const assignmentRecords = extractAssignmentMap(upcomingAssignments.items, submissionStatus)
 

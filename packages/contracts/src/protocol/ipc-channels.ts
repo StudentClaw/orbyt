@@ -7,9 +7,6 @@ import type {
 } from "../schemas/extension.js"
 import type {
   PhonePushSettings,
-  PushPairingSession,
-  PushPairingStatusResult,
-  PushSendTestResult,
   UpdatePhonePushSettingsParams,
 } from "../schemas/push-notification.js"
 
@@ -27,11 +24,6 @@ export const IpcChannel = {
   CODEX_AUTH_STATUS: "codex:auth-status",
   PUSH_GET_SETTINGS: "push:get-settings",
   PUSH_UPDATE_SETTINGS: "push:update-settings",
-  PUSH_START_PAIRING: "push:start-pairing",
-  PUSH_GET_PAIRING_STATUS: "push:get-pairing-status",
-  PUSH_CANCEL_PAIRING: "push:cancel-pairing",
-  PUSH_SEND_TEST: "push:send-test",
-  PUSH_UNLINK_DEVICE: "push:unlink-device",
   PLUGIN_LIST: "plugin:list",
   PLUGIN_START: "plugin:start",
   PLUGIN_STOP: "plugin:stop",
@@ -257,11 +249,6 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.CODEX_AUTH_STATUS]: []
   [IpcChannel.PUSH_GET_SETTINGS]: []
   [IpcChannel.PUSH_UPDATE_SETTINGS]: [params: UpdatePhonePushSettingsParams]
-  [IpcChannel.PUSH_START_PAIRING]: []
-  [IpcChannel.PUSH_GET_PAIRING_STATUS]: []
-  [IpcChannel.PUSH_CANCEL_PAIRING]: []
-  [IpcChannel.PUSH_SEND_TEST]: []
-  [IpcChannel.PUSH_UNLINK_DEVICE]: []
   [IpcChannel.PLUGIN_LIST]: []
   [IpcChannel.PLUGIN_START]: [params: PluginStartParams]
   [IpcChannel.PLUGIN_STOP]: [params: PluginStopParams]
@@ -292,11 +279,6 @@ export type IpcInvokeResultMap = {
   [IpcChannel.CODEX_AUTH_STATUS]: { status: "pending" | "connected" | "failed"; error?: string }
   [IpcChannel.PUSH_GET_SETTINGS]: PhonePushSettings
   [IpcChannel.PUSH_UPDATE_SETTINGS]: PhonePushSettings
-  [IpcChannel.PUSH_START_PAIRING]: PushPairingSession
-  [IpcChannel.PUSH_GET_PAIRING_STATUS]: PushPairingStatusResult
-  [IpcChannel.PUSH_CANCEL_PAIRING]: PhonePushSettings
-  [IpcChannel.PUSH_SEND_TEST]: PushSendTestResult
-  [IpcChannel.PUSH_UNLINK_DEVICE]: PhonePushSettings
   [IpcChannel.PLUGIN_LIST]: ExtensionRegistryEntry[]
   [IpcChannel.PLUGIN_START]: PluginLifecycleActionResult
   [IpcChannel.PLUGIN_STOP]: PluginLifecycleActionResult

@@ -6,7 +6,7 @@ Last updated: 2026-04-22
 
 - Target feature: let a thread exist independently from a meaningful runtime
   attachment and create runtime bindings only when needed
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md),
   [phase-02-durable-runtime-bindings-and-session-recovery.md](phase-02-durable-runtime-bindings-and-session-recovery.md)
 - Constraints and boundaries:

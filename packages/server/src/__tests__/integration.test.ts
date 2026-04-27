@@ -112,6 +112,7 @@ describe("Server integration", () => {
             interruptTurn: async () => ({ interrupted: true }),
             startProviderAuth: async () => ({ started: true }),
             retryProviderInitialize: async () => ({ started: true }),
+            disconnectProvider: async () => undefined,
             respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
             shutdown: async () => undefined,
           },

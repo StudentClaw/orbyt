@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { StudentDna } from "@orbyt/contracts"
 import { IpcChannel } from "@orbyt/contracts"
 import { DNA_TOKENS, MONO, SERIF } from "../dna/tokens"
@@ -6,7 +6,8 @@ import { PhaseFooter } from "./PhaseFooter"
 
 interface CanvasSyncPhaseProps {
   dna: StudentDna
-  onSync: () => Promise<void>
+  onVerify: () => Promise<boolean>
+  onSyncBackground: () => void
   onContinue: () => void
   onBack?: () => void
 }
@@ -17,9 +18,8 @@ type CredentialStage =
   | "loading"
   | "needs_credentials"
   | "saving"
-  | "ready_to_sync"
-  | "syncing"
-  | "synced"
+  | "verifying"
+  | "verified"
   | "error"
 
 function isValidCanvasBaseUrl(value: string): boolean {
@@ -31,7 +31,7 @@ function isValidCanvasBaseUrl(value: string): boolean {
   }
 }
 
-export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncPhaseProps) {
+export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, onBack }: CanvasSyncPhaseProps) {
   const T = DNA_TOKENS
   const [stage, setStage] = useState<CredentialStage>("loading")
   const [baseUrl, setBaseUrl] = useState("")
@@ -41,7 +41,23 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
 
   const bridgeAvailable = typeof window !== "undefined" && !!window.electronAPI?.invoke
 
-  // Hydrate existing credential status
+  const runVerify = useCallback(async (): Promise<void> => {
+    setStage("verifying")
+    setError(null)
+    try {
+      const hasData = await onVerify()
+      if (hasData) {
+        setStage("verified")
+      } else {
+        setStage("error")
+        setError("No courses found. Check your token permissions and try again.")
+      }
+    } catch {
+      setStage("error")
+      setError("Could not connect to Canvas. Check your URL and token.")
+    }
+  }, [onVerify])
+
   useEffect(() => {
     let cancelled = false
     if (!bridgeAvailable) {
@@ -54,7 +70,7 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
         if (cancelled) return
         const status = (res as { status?: string } | null)?.status
         if (status === "configured") {
-          setStage("ready_to_sync")
+          void runVerify()
         } else {
           setStage("needs_credentials")
         }
@@ -63,7 +79,7 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
       }
     })()
     return () => { cancelled = true }
-  }, [bridgeAvailable])
+  }, [bridgeAvailable, runVerify])
 
   const validateAndSave = async (): Promise<void> => {
     const trimmedUrl = baseUrl.trim()
@@ -95,23 +111,19 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
         setStage("needs_credentials")
         return
       }
-      setStage("ready_to_sync")
+      await runVerify()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStage("needs_credentials")
     }
   }
 
-  const handleSync = async (): Promise<void> => {
-    setStage("syncing")
-    try {
-      await onSync()
-      setStage("synced")
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setStage("error")
-    }
+  const handleContinue = (): void => {
+    if (stage === "verified") onSyncBackground()
+    onContinue()
   }
+
+  const showForm = stage === "needs_credentials" || stage === "saving"
 
   return (
     <div style={{ padding: "32px 52px 32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "auto" }}>
@@ -125,7 +137,7 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
         Link Canvas to import every assignment, deadline, and syllabus — no copy-pasting, no missed dates.
       </p>
 
-      {(stage === "needs_credentials" || stage === "saving") && (
+      {showForm && (
         <CanvasCredsForm
           dna={dna}
           baseUrl={baseUrl}
@@ -139,18 +151,24 @@ export function CanvasSyncPhase({ dna, onSync, onContinue, onBack }: CanvasSyncP
         />
       )}
 
-      {(stage === "loading" || stage === "ready_to_sync" || stage === "syncing" || stage === "synced" || stage === "error") && (
-        <CanvasStatusCard dna={dna} stage={stage} error={error} onSync={handleSync} onReconfigure={() => {
-          setStage("needs_credentials")
-          setError(null)
-        }} />
+      {!showForm && (
+        <CanvasStatusCard
+          dna={dna}
+          stage={stage}
+          error={error}
+          onRetry={runVerify}
+          onReconfigure={() => {
+            setStage("needs_credentials")
+            setError(null)
+          }}
+        />
       )}
 
       <PhaseFooter
         dna={dna}
         onBack={onBack}
-        onContinue={onContinue}
-        continueLabel={stage === "synced" ? "Continue →" : "Continue without Canvas →"}
+        onContinue={handleContinue}
+        continueLabel={stage === "verified" ? "Continue →" : "Skip →"}
       />
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
@@ -297,63 +315,86 @@ function CanvasStatusCard({
   dna,
   stage,
   error,
-  onSync,
+  onRetry,
   onReconfigure,
 }: {
   dna: StudentDna
   stage: CredentialStage
   error: string | null
-  onSync: () => void
+  onRetry: () => void
   onReconfigure: () => void
 }) {
   const T = DNA_TOKENS
+  const isVerified = stage === "verified"
+  const isSpinning = stage === "loading" || stage === "verifying"
+
   return (
     <div
       style={{
         borderRadius: 16,
-        border: `1px solid ${T.lineStrong}`,
-        background: "rgba(255,255,255,0.03)",
         padding: 18,
+        border: `1px solid ${isVerified ? `oklch(0.6 0.2 ${dna.hue}/0.6)` : T.lineStrong}`,
+        background: isVerified
+          ? `linear-gradient(135deg, oklch(0.22 0.1 ${dna.hue}/0.5), oklch(0.18 0.08 ${dna.accentHue}/0.3))`
+          : "rgba(255,255,255,0.03)",
         marginBottom: 22,
+        transition: "all 0.4s",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: "#E03E2F", display: "grid", placeItems: "center", color: "white", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-          LMS
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: isVerified
+            ? `radial-gradient(circle at 35% 30%, oklch(0.9 0.15 ${dna.hue}), oklch(0.5 0.2 ${dna.hue}))`
+            : "#E03E2F",
+          display: "grid",
+          placeItems: "center",
+          color: "white",
+          fontWeight: 800,
+          fontSize: 13,
+          flexShrink: 0,
+          boxShadow: isVerified ? `0 0 24px oklch(0.6 0.22 ${dna.hue}/0.5)` : "none",
+          transition: "all 0.4s",
+        }}>
+          {isSpinning && (
+            <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 0.8s linear infinite" }} />
+          )}
+          {isVerified && <span style={{ fontSize: 22 }}>✓</span>}
+          {stage === "error" && <span style={{ fontSize: 18 }}>LMS</span>}
         </div>
+
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Canvas</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>Canvas</div>
           <div style={{ fontSize: 12, color: stage === "error" ? "#F87171" : T.textDim }}>
             {stage === "loading" && "Checking saved credentials…"}
-            {stage === "ready_to_sync" && "Credentials saved — ready to sync"}
-            {stage === "syncing" && "Syncing courses and assignments…"}
-            {stage === "synced" && "Sync complete"}
-            {stage === "error" && (error ?? "Sync failed")}
+            {stage === "verifying" && "Verifying your Canvas access…"}
+            {stage === "verified" && "Canvas connected — courses are loading in the background"}
+            {stage === "error" && (error ?? "Could not verify Canvas access.")}
           </div>
         </div>
-        {stage === "ready_to_sync" && (
-          <button
-            onClick={onSync}
-            data-testid="onboarding-canvas-sync"
-            style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: `linear-gradient(135deg, ${T.blue}, ${T.purpleDeep})`, color: "white", fontWeight: 600, cursor: "pointer" }}
-          >
-            Sync now →
-          </button>
-        )}
-        {stage === "syncing" && (
-          <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: T.blue, animation: "spin 0.8s linear infinite" }} />
-        )}
-        {stage === "synced" && <span style={{ fontSize: 18, color: `oklch(0.85 0.2 ${dna.hue})` }}>✓</span>}
+
         {stage === "error" && (
           <button
-            onClick={onSync}
-            style={{ padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.lineStrong}`, background: "transparent", color: T.text, fontWeight: 600, cursor: "pointer" }}
+            onClick={onRetry}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "none",
+              background: `linear-gradient(135deg, ${T.blue}, ${T.purpleDeep})`,
+              color: "white",
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
           >
-            Retry
+            Retry →
           </button>
         )}
       </div>
-      {(stage === "ready_to_sync" || stage === "synced" || stage === "error") && (
+
+      {stage === "error" && (
         <button
           onClick={onReconfigure}
           style={{ marginTop: 10, background: "transparent", border: "none", color: T.textFaint, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0 }}

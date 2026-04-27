@@ -5,7 +5,7 @@ Last updated: 2026-04-16
 ## Orientation Note
 
 - Target feature: admit up to `4` isolated thread runtimes in parallel and queue the rest
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)
 - Constraints and boundaries:
   - concurrency cap must be enforced in one manager only
   - block re-entry within the same thread

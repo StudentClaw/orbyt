@@ -167,6 +167,7 @@ function readProviderThreadId(
 export interface CodexCliService {
   readonly initialize: () => Promise<void>
   readonly retryInitialize: () => Promise<boolean>
+  readonly disconnectProvider: () => Promise<void>
   readonly startAuth: () => Promise<boolean>
   readonly reloadGatewayTools: () => Promise<boolean>
   readonly streamTurn: (input: {
@@ -901,6 +902,15 @@ export function createCodexRuntimeInstance(
       await cleanupProcess()
       await initialize()
       return true
+    },
+    disconnectProvider: async () => {
+      await cleanupProcess(
+        new ProviderRuntimeFailure(
+          "codex_auth_required",
+          "Disconnected by user. Connect a new account to continue.",
+          false,
+        ),
+      )
     },
     reloadGatewayTools,
     startAuth: async () => {

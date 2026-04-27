@@ -81,6 +81,7 @@ export const RPC_METHODS = {
   ORCHESTRATION_SUBSCRIBE_DOMAIN: "orchestration.subscribeDomain",
   PROVIDER_START_AUTH: "provider.startAuth",
   PROVIDER_RETRY_INITIALIZE: "provider.retryInitialize",
+  PROVIDER_DISCONNECT: "provider.disconnect",
   PROVIDER_RESPOND_TO_APPROVAL: "provider.respondToApproval",
   PROVIDER_SUBSCRIBE_RUNTIME: "provider.subscribeRuntime",
   CANVAS_LIST_COURSES: "canvas.listCourses",

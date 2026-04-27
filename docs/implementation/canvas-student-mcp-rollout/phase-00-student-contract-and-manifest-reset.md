@@ -5,7 +5,7 @@ Last updated: 2026-04-17
 ## Orientation Note
 
 - Target feature: reset the Canvas rollout around a student-role MCP surface and make the replacement contract explicit before implementation starts
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/features/INDEX.md](../../features/INDEX.md), [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md), [docs/architecture/05-external-services.md](../../architecture/05-external-services.md), current Canvas extension files under `packages/extensions/canvas-mcp/`
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/features/INDEX.md](../../features/INDEX.md), [docs/features/02-canvas-integration.md](../../features/02-canvas-integration.md), [docs/architecture/05-external-services.md](../../architecture/05-external-services.md), current Canvas extension files under `packages/extensions/canvas-mcp/`
 - Constraints and boundaries:
   - keep the existing Orbyt plugin, gateway, and vault architecture
   - treat this as a breaking contract reset for Canvas tools

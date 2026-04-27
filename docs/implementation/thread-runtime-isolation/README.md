@@ -10,7 +10,7 @@ It exists because this feature crosses shared contracts, server orchestration, t
 
 1. Read the design spec first.
 2. Work phases in order unless a phase explicitly says it can be parallelized.
-3. Before coding a phase, use its Orientation Note and follow the required Beginning -> Middle -> End flow from [PLAN.md](../../../PLAN.md).
+3. Before coding a phase, use its Orientation Note and follow the required Beginning -> Middle -> End flow from [PLAN.md](../../internal/PLAN.md).
 4. Do not mark a phase complete until its verification gates are green and its handoff notes are recorded in the phase doc or branch notes.
 
 ## Phase Order

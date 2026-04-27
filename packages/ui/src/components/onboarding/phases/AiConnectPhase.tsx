@@ -47,6 +47,7 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
     setErrorMessage(null)
     try {
       await onConnect()
+      setPhase("connected")
     } catch (err: unknown) {
       setPhase("error")
       setErrorMessage(err instanceof Error ? err.message : "Sign-in did not complete.")

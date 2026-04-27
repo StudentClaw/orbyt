@@ -37,6 +37,7 @@ function createControlledRuntimeFactory() {
       initialize: async () => undefined,
       retryInitialize: async () => true,
       startAuth: async () => true,
+      disconnectProvider: async () => undefined,
       reloadGatewayTools: async () => true,
       streamTurn: async (input) => {
         runtime.streamCalls.push({
@@ -529,6 +530,7 @@ describe("ThreadRuntimeManager", () => {
       },
       retryInitialize: async () => true,
       startAuth: async () => true,
+      disconnectProvider: async () => undefined,
       reloadGatewayTools: async () => true,
       streamTurn: async () => undefined,
       listPendingApprovals: () => [],
@@ -578,6 +580,7 @@ describe("ThreadRuntimeManager", () => {
       },
       retryInitialize: async () => true,
       startAuth: async () => true,
+      disconnectProvider: async () => undefined,
       reloadGatewayTools: async () => true,
       streamTurn: async () => undefined,
       listPendingApprovals: () => [],

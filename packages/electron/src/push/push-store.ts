@@ -2,35 +2,15 @@ import { dirname } from "node:path"
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs"
 import type {
   PhonePushSettings,
-  PushLinkedDevice,
-  PushLinkedDevicePlatform,
-  PushPairingSession,
-  PushPairingStatusResult,
   UpdatePhonePushSettingsParams,
-  WebPushSubscriptionRecord,
 } from "@orbyt/contracts"
-import webPush from "web-push"
-
-type InternalLinkedDevice = PushLinkedDevice & {
-  readonly subscription: WebPushSubscriptionRecord
-}
 
 type PushStoreData = {
-  readonly vapidKeys: {
-    readonly publicKey: string
-    readonly privateKey: string
-  }
-  readonly settings: Omit<PhonePushSettings, "linkedDevice" | "activePairing">
-  readonly linkedDevice: InternalLinkedDevice | null
-  readonly activePairing: PushPairingSession | null
+  readonly settings: PhonePushSettings
   readonly lastWeeklyInsightWeekKey: string | null
 }
 
-type PushStoreOptions = {
-  readonly generateVapidKeys?: () => { publicKey: string; privateKey: string }
-}
-
-const DEFAULT_SETTINGS: Omit<PhonePushSettings, "linkedDevice" | "activePairing"> = {
+const DEFAULT_SETTINGS: PhonePushSettings = {
   enabled: true,
   workflowEventsEnabled: true,
   weeklyInsightsEnabled: true,
@@ -38,13 +18,12 @@ const DEFAULT_SETTINGS: Omit<PhonePushSettings, "linkedDevice" | "activePairing"
   quietHoursEnd: "08:00",
   weeklyInsightsDay: 1,
   weeklyInsightsTime: "08:00",
-  relayBaseUrl: "",
 }
 
 function normalizeSettings(
-  current: Omit<PhonePushSettings, "linkedDevice" | "activePairing">,
+  current: PhonePushSettings,
   patch: UpdatePhonePushSettingsParams,
-): Omit<PhonePushSettings, "linkedDevice" | "activePairing"> {
+): PhonePushSettings {
   return {
     enabled: patch.enabled ?? current.enabled,
     workflowEventsEnabled: patch.workflowEventsEnabled ?? current.workflowEventsEnabled,
@@ -53,7 +32,6 @@ function normalizeSettings(
     quietHoursEnd: patch.quietHoursEnd ?? current.quietHoursEnd,
     weeklyInsightsDay: patch.weeklyInsightsDay ?? current.weeklyInsightsDay,
     weeklyInsightsTime: patch.weeklyInsightsTime ?? current.weeklyInsightsTime,
-    relayBaseUrl: patch.relayBaseUrl ?? current.relayBaseUrl,
   }
 }
 
@@ -81,34 +59,12 @@ function isTimeWithinQuietHours(time: string, quietStart: string, quietEnd: stri
 export class PushStore {
   private data: PushStoreData
 
-  constructor(
-    private readonly filePath: string,
-    options: PushStoreOptions = {},
-  ) {
-    this.data = this.load(options)
-  }
-
-  getVapidKeys(): { publicKey: string; privateKey: string } {
-    return this.data.vapidKeys
+  constructor(private readonly filePath: string) {
+    this.data = this.load()
   }
 
   getSettings(): PhonePushSettings {
-    return {
-      ...this.data.settings,
-      linkedDevice: this.getLinkedDevice(),
-      activePairing: this.data.activePairing,
-    }
-  }
-
-  getPairingStatus(): PushPairingStatusResult {
-    return {
-      linkedDevice: this.getLinkedDevice(),
-      activePairing: this.data.activePairing,
-    }
-  }
-
-  getLinkedSubscription(): WebPushSubscriptionRecord | null {
-    return this.data.linkedDevice?.subscription ?? null
+    return this.data.settings
   }
 
   getLastWeeklyInsightWeekKey(): string | null {
@@ -125,7 +81,13 @@ export class PushStore {
 
   updateSettings(patch: UpdatePhonePushSettingsParams): PhonePushSettings {
     const nextSettings = normalizeSettings(this.data.settings, patch)
-    if (isTimeWithinQuietHours(nextSettings.weeklyInsightsTime, nextSettings.quietHoursStart, nextSettings.quietHoursEnd)) {
+    if (
+      isTimeWithinQuietHours(
+        nextSettings.weeklyInsightsTime,
+        nextSettings.quietHoursStart,
+        nextSettings.quietHoursEnd,
+      )
+    ) {
       throw new Error("Weekly insight time must be outside quiet hours.")
     }
 
@@ -134,88 +96,16 @@ export class PushStore {
       settings: nextSettings,
     }
     this.persist()
-    return this.getSettings()
+    return this.data.settings
   }
 
-  setPairingSession(session: PushPairingSession | null): void {
-    this.data = {
-      ...this.data,
-      activePairing: session,
-    }
-    this.persist()
-  }
-
-  updatePairingState(state: PushPairingSession["state"]): void {
-    if (!this.data.activePairing) {
-      return
-    }
-
-    this.data = {
-      ...this.data,
-      activePairing: {
-        ...this.data.activePairing,
-        state,
-      },
-    }
-    this.persist()
-  }
-
-  linkDevice(input: {
-    readonly platform: PushLinkedDevicePlatform
-    readonly subscription: WebPushSubscriptionRecord
-  }): PhonePushSettings {
-    const linkedAt = new Date().toISOString()
-    this.data = {
-      ...this.data,
-      linkedDevice: {
-        endpoint: input.subscription.endpoint,
-        platform: input.platform,
-        linkedAt,
-        subscription: input.subscription,
-      },
-      activePairing: this.data.activePairing
-        ? {
-            ...this.data.activePairing,
-            state: "paired",
-          }
-        : null,
-    }
-    this.persist()
-    return this.getSettings()
-  }
-
-  unlinkDevice(): PhonePushSettings {
-    this.data = {
-      ...this.data,
-      linkedDevice: null,
-    }
-    this.persist()
-    return this.getSettings()
-  }
-
-  private getLinkedDevice(): PushLinkedDevice | null {
-    if (!this.data.linkedDevice) {
-      return null
-    }
-
-    return {
-      endpoint: this.data.linkedDevice.endpoint,
-      platform: this.data.linkedDevice.platform,
-      linkedAt: this.data.linkedDevice.linkedAt,
-    }
-  }
-
-  private load(options: PushStoreOptions): PushStoreData {
+  private load(): PushStoreData {
     if (existsSync(this.filePath)) {
       return JSON.parse(readFileSync(this.filePath, "utf8")) as PushStoreData
     }
 
-    const generateVapidKeys = options.generateVapidKeys ?? (() => webPush.generateVAPIDKeys())
     const data: PushStoreData = {
-      vapidKeys: generateVapidKeys(),
       settings: DEFAULT_SETTINGS,
-      linkedDevice: null,
-      activePairing: null,
       lastWeeklyInsightWeekKey: null,
     }
     this.ensureDir()

@@ -683,6 +683,9 @@ async function handleProviderMethod(
       return encodeSuccess(id, await dependencies.orchestration.startProviderAuth(id))
     case RPC_METHODS.PROVIDER_RETRY_INITIALIZE:
       return encodeSuccess(id, await dependencies.orchestration.retryProviderInitialize(id))
+    case RPC_METHODS.PROVIDER_DISCONNECT:
+      await dependencies.orchestration.disconnectProvider(id)
+      return encodeSuccess(id, {})
     case RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL: {
       const decoded = decodeParams(
         RespondToProviderApprovalParams,

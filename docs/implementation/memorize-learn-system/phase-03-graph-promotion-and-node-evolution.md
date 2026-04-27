@@ -6,7 +6,7 @@ Last updated: 2026-04-19
 
 - Target feature: define how durable facts and repeated patterns get promoted
   from daily and weekly memory into the long-term markdown graph
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
   [phase-00-memory-filesystem-scaffold-and-contracts.md](phase-00-memory-filesystem-scaffold-and-contracts.md),
   [phase-02-daily-and-weekly-distillation-pipeline.md](phase-02-daily-and-weekly-distillation-pipeline.md),

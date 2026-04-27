@@ -74,6 +74,7 @@ function makeDependencies() {
       interruptTurn: async () => ({ interrupted: true }),
       startProviderAuth: async () => ({ started: true }),
       retryProviderInitialize: async () => ({ started: true }),
+      disconnectProvider: async () => undefined,
       respondToProviderApproval: async () => ({ approvalRequestId: "a1", resolved: true }),
       shutdown: async () => undefined,
     },

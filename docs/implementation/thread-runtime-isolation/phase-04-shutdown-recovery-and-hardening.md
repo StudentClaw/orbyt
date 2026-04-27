@@ -5,7 +5,7 @@ Last updated: 2026-04-16
 ## Orientation Note
 
 - Target feature: make shutdown and restart deterministic and harden the isolated runtime path
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md)
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md)
 - Constraints and boundaries:
   - shutdown must be terminal for queued and streaming work
   - startup must not auto-resume prior work

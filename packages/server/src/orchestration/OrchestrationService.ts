@@ -162,6 +162,7 @@ export interface OrchestrationServiceShape {
   readonly interruptTurn: (commandId: string, threadId: string) => Promise<InterruptTurnResult>
   readonly startProviderAuth: (commandId: string) => Promise<StartProviderAuthResult>
   readonly retryProviderInitialize: (commandId: string) => Promise<RetryProviderInitializeResult>
+  readonly disconnectProvider: (commandId: string) => Promise<void>
   readonly respondToProviderApproval: (
     commandId: string,
     approvalRequestId: string,
@@ -1554,6 +1555,7 @@ export function createOrchestrationService(deps: OrchestrationRuntimeDeps): Orch
     interruptTurn: (commandId, threadId) => interruptTurn(deps, commandId, threadId),
     startProviderAuth: async () => ({ started: false }),
     retryProviderInitialize: async () => ({ started: false }),
+    disconnectProvider: async () => undefined,
     respondToProviderApproval: async (_commandId, approvalRequestId) => ({
       approvalRequestId,
       resolved: false,
@@ -2578,9 +2580,17 @@ export const OrchestrationServiceLive = Layer.scoped(
       },
       retryProviderInitialize: async (commandId) => {
         const started = await codexCli.retryInitialize()
+        if (started) {
+          void threadRuntimeManager.warmBootstrap().catch(() => undefined)
+        }
         recordReceipt(commandId, started ? "completed" : "failed", { started })
         await receiptBus.resolve(commandId, { started })
         return { started }
+      },
+      disconnectProvider: async (commandId) => {
+        await codexCli.disconnectProvider()
+        recordReceipt(commandId, "completed", {})
+        await receiptBus.resolve(commandId, {})
       },
       respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
         const result = await threadRuntimeManager.respondToApproval(approvalRequestId, decision)

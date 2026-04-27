@@ -5,7 +5,7 @@ Last updated: 2026-04-16
 ## Orientation Note
 
 - Target feature: add explicit queued semantics and remove shared chat-busy status leakage in the renderer
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/architecture/01-shared-contracts.md](../../architecture/01-shared-contracts.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md)
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/architecture/01-shared-contracts.md](../../architecture/01-shared-contracts.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md)
 - Constraints and boundaries:
   - do not introduce per-thread Codex processes yet
   - do not land parallel execution yet

@@ -5,13 +5,19 @@ It helps students plan study time, track assignments, and improve academic outco
 
 ## Repository Status
 
-This repository is initialized with a monorepo scaffold and baseline packages for:
+Monorepo packages shipped in V1 (macOS desktop):
 
-- `packages/ui` - React + Vite frontend
-- `packages/server` - local server runtime
-- `packages/electron` - desktop shell placeholder
-- `packages/shared` - shared types/contracts
-- `packages/extensions/template-mcp` - MCP extension template
+- `packages/ui` - React + Vite frontend rendered inside Electron
+- `packages/electron` - desktop shell, IPC bridge, and local notifications
+- `packages/server` - local Bun server (Canvas sync, planner, memory)
+- `packages/contracts` - schemas and IPC/RPC types
+- `packages/shared`, `packages/shared-runtime` - shared utilities
+- `packages/extensions/{template-mcp,canvas-mcp,apple-calendar-mcp}` - bundled MCP extensions
+
+V1 ships macOS-only as a signed `.dmg`. The previous PWA + cross-device push relay
+have been removed; notifications are delivered locally through `Notification` from
+Electron. The proactive weekly-insight scheduler is preserved in
+`packages/electron/src/push/`.
 
 ## Prerequisites
 
@@ -66,10 +72,9 @@ If authorization is required, sign in to shadcn and rerun the command.
 
 ## Product and Process Docs
 
-- `PRODUCT_SENSE.md` - mission and product principles
 - `DESIGN.md` - design language and interaction principles
-- `TEST.md` - TDD workflow and test logging expectations
-- `PLAN.md` - feature implementation lifecycle and delivery process
 - `docs/features` - feature specs
 - `docs/architecture` - system architecture docs
+- `docs/internal/` - internal planning, TDD process, demo notes (not shipped)
+- `experiments/` - research and reference codebases (not built or shipped)
 

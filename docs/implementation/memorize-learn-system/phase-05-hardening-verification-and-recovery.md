@@ -7,7 +7,7 @@ Last updated: 2026-04-19
 - Target feature: define failure handling, recovery behavior, duplicate
   prevention, and the end-to-end verification contract for the memorize
   rollout
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
   [phase-01-memorize-scheduler-and-run-checkpointing.md](phase-01-memorize-scheduler-and-run-checkpointing.md),
   [phase-02-daily-and-weekly-distillation-pipeline.md](phase-02-daily-and-weekly-distillation-pipeline.md),

@@ -190,7 +190,7 @@ export function DnaDiscoveryPhase({
               }}
             >
               {currentQ.options.map((opt, i) => {
-                const isSelected = pendingChoice === opt.v || answers[currentQ.id] === opt.v
+                const isSelected = pendingChoice !== null ? pendingChoice === opt.v : answers[currentQ.id as keyof typeof answers] === opt.v
                 return (
                   <OptionCheck
                     key={opt.v}

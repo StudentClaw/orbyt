@@ -10,9 +10,22 @@ package-lock.json
 
 # Local reference repos
 references/
+experiments/references/
 graphify-out/GRAPH_REPORT.md
 
 # Local build outputs
 build-logs/
 release/
+dist-electron/
 packages/extensions/apple-calendar-mcp/bridge/.build/
+
+# Local environment overrides
+.env
+.env.local
+.env.*.local
+
+# Experiment runtime state (sqlite databases, run logs)
+experiments/**/diagnostics/
+experiments/**/*.db
+experiments/**/*.db-shm
+experiments/**/*.db-wal

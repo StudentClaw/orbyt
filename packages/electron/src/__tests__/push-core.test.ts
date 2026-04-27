@@ -1,12 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { EventEmitter } from "node:events"
 import { mkdtempSync, rmSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import { PUSH_CHANNELS, type ActivityFeedEntry } from "@orbyt/contracts"
 import { PushStore } from "../push/push-store.js"
 import { PushDeliveryService } from "../push/push-delivery-service.js"
-import { PushActivityBridge } from "../push/push-activity-bridge.js"
 
 const tempDirs: string[] = []
 
@@ -14,12 +11,6 @@ function createTempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "orbyt-push-core-"))
   tempDirs.push(dir)
   return dir
-}
-
-class FakeWebSocket extends EventEmitter {
-  close(): void {
-    this.emit("close")
-  }
 }
 
 afterEach(() => {
@@ -32,160 +23,75 @@ afterEach(() => {
 })
 
 describe("PushStore", () => {
-  test("generates and reuses VAPID keys from disk", () => {
+  test("persists default settings on first read and reloads them from disk", () => {
     const root = createTempDir()
-    let generateCalls = 0
+    const filePath = path.join(root, "push-store.json")
 
-    const first = new PushStore(path.join(root, "push-store.json"), {
-      generateVapidKeys: () => {
-        generateCalls += 1
-        return {
-          publicKey: "public-key",
-          privateKey: "private-key",
-        }
-      },
+    const first = new PushStore(filePath)
+    expect(first.getSettings()).toMatchObject({
+      enabled: true,
+      weeklyInsightsEnabled: true,
+      quietHoursStart: "22:00",
+      quietHoursEnd: "08:00",
+      weeklyInsightsDay: 1,
+      weeklyInsightsTime: "08:00",
     })
 
-    expect(first.getVapidKeys()).toEqual({
-      publicKey: "public-key",
-      privateKey: "private-key",
-    })
-    expect(generateCalls).toBe(1)
+    const second = new PushStore(filePath)
+    expect(second.getSettings()).toEqual(first.getSettings())
+  })
 
-    const second = new PushStore(path.join(root, "push-store.json"), {
-      generateVapidKeys: () => {
-        throw new Error("should not regenerate")
-      },
-    })
+  test("rejects a weekly insight time inside quiet hours", () => {
+    const store = new PushStore(path.join(createTempDir(), "push-store.json"))
+    expect(() =>
+      store.updateSettings({
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+        weeklyInsightsTime: "23:30",
+      }),
+    ).toThrow(/quiet hours/i)
+  })
 
-    expect(second.getVapidKeys()).toEqual({
-      publicKey: "public-key",
-      privateKey: "private-key",
-    })
-    expect(generateCalls).toBe(1)
+  test("remembers the last weekly insight week key", () => {
+    const store = new PushStore(path.join(createTempDir(), "push-store.json"))
+    expect(store.getLastWeeklyInsightWeekKey()).toBeNull()
+    store.setLastWeeklyInsightWeekKey("2026-04-13")
+    expect(store.getLastWeeklyInsightWeekKey()).toBe("2026-04-13")
   })
 })
 
 describe("PushDeliveryService", () => {
-  test("clears the linked device when the push endpoint is gone", async () => {
-    const root = createTempDir()
-    const store = new PushStore(path.join(root, "push-store.json"), {
-      generateVapidKeys: () => ({
-        publicKey: "public-key",
-        privateKey: "private-key",
-      }),
-    })
-
-    store.linkDevice({
-      platform: "ios",
-      subscription: {
-        endpoint: "https://example.com/subscription",
-        expirationTime: null,
-        keys: {
-          p256dh: "p256dh-key",
-          auth: "auth-key",
-        },
-      },
-    })
-
-    const service = new PushDeliveryService(store, {
-      setVapidDetails: () => undefined,
-      sendNotification: async () => {
-        throw Object.assign(new Error("gone"), { statusCode: 410 })
-      },
-    })
-
-    const result = await service.send({
-      title: "Workflow complete",
-      body: "The agent finished your task.",
-    })
-
-    expect(result).toEqual({ ok: false, unlinkedDevice: true })
-    expect(store.getSettings().linkedDevice).toBeNull()
+  test("returns ok=false when the OS does not support notifications", async () => {
+    const service = new PushDeliveryService(
+      () => ({ show: () => undefined }),
+      () => false,
+    )
+    expect(await service.send({ title: "t", body: "b" })).toEqual({ ok: false })
   })
-})
 
-describe("PushActivityBridge", () => {
-  test("sends only high-priority activity feed events", async () => {
-    const root = createTempDir()
-    const store = new PushStore(path.join(root, "push-store.json"), {
-      generateVapidKeys: () => ({
-        publicKey: "public-key",
-        privateKey: "private-key",
+  test("shows a native notification when supported", async () => {
+    let shown: { title: string; body: string } | null = null
+    const service = new PushDeliveryService(
+      (options) => ({
+        show: () => {
+          shown = options
+        },
       }),
+      () => true,
+    )
+    expect(await service.send({ title: "Weekly insight", body: "You finished 3 workflows." })).toEqual({
+      ok: true,
     })
-    const socket = new FakeWebSocket()
-    const sent: Array<{ title: string; body: string }> = []
+    expect(shown).toEqual({ title: "Weekly insight", body: "You finished 3 workflows." })
+  })
 
-    store.linkDevice({
-      platform: "android",
-      subscription: {
-        endpoint: "https://example.com/subscription",
-        expirationTime: null,
-        keys: {
-          p256dh: "p256dh-key",
-          auth: "auth-key",
-        },
+  test("returns ok=false when the notification factory throws", async () => {
+    const service = new PushDeliveryService(
+      () => {
+        throw new Error("boom")
       },
-    })
-
-    const bridge = new PushActivityBridge({
-      wsUrl: "ws://127.0.0.1:8787",
-      wsAuthToken: "a".repeat(64),
-      store,
-      delivery: {
-        send: async (payload) => {
-          sent.push(payload)
-          return { ok: true, unlinkedDevice: false }
-        },
-      },
-      now: () => new Date("2026-04-15T12:00:00.000Z"),
-      webSocketFactory: () => socket as never,
-    })
-
-    bridge.start()
-
-    const lowPriority: ActivityFeedEntry = {
-      id: "activity_1" as ActivityFeedEntry["id"],
-      category: "workflow",
-      type: "workflow_completed",
-      title: "Low priority",
-      body: "Ignored",
-      priority: 2,
-    }
-    const highPriority: ActivityFeedEntry = {
-      id: "activity_2" as ActivityFeedEntry["id"],
-      category: "workflow",
-      type: "workflow_completed",
-      title: "Workflow complete",
-      body: "Sent",
-      priority: 3,
-    }
-
-    socket.emit("message", JSON.stringify({
-      kind: "push",
-      channel: PUSH_CHANNELS.ACTIVITY_FEED,
-      sequence: 1,
-      data: lowPriority,
-    }))
-    socket.emit("message", JSON.stringify({
-      kind: "push",
-      channel: PUSH_CHANNELS.ACTIVITY_FEED,
-      sequence: 2,
-      data: highPriority,
-    }))
-
-    await Promise.resolve()
-
-    expect(sent).toEqual([
-      {
-        title: "Workflow complete",
-        body: "Sent",
-        deepLink: undefined,
-        tag: "workflow_completed",
-      },
-    ])
-
-    bridge.stop()
+      () => true,
+    )
+    expect(await service.send({ title: "t", body: "b" })).toEqual({ ok: false })
   })
 })

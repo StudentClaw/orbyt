@@ -6,7 +6,7 @@ Last updated: 2026-04-22
 
 - Target feature: finish the rollout with renderer parity, snapshot parity, and
   lifecycle hardening
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md),
   [phase-01-thread-lifecycle-contracts-and-command-surface.md](phase-01-thread-lifecycle-contracts-and-command-surface.md),
   [phase-02-durable-runtime-bindings-and-session-recovery.md](phase-02-durable-runtime-bindings-and-session-recovery.md),

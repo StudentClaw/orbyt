@@ -25,7 +25,7 @@ authoritative projections and rollback or revert flows are explicitly deferred.
 3. Work phases in order unless a later phase explicitly says it can start in
    parallel.
 4. Before coding a phase, read that phase's Orientation Note and follow the
-   required Beginning -> Middle -> End flow from [PLAN.md](../../../PLAN.md).
+   required Beginning -> Middle -> End flow from [PLAN.md](../../internal/PLAN.md).
 5. Do not mark a phase complete until its verification gates are green and its
    handoff notes are recorded in [GLOSSARY.md](GLOSSARY.md).
 

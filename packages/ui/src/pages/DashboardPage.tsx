@@ -23,7 +23,6 @@ import {
   type FilterScope,
 } from "@/components/dashboard/subject-grouping"
 import { seedAssignmentPreview } from "@/rpc/assignmentDetailState"
-import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
@@ -193,11 +192,9 @@ export function DashboardPage() {
     [actions, navigate, snapshot],
   )
 
-  const planWeekAction = MOCK_INSIGHTS[0]?.action
-
   const handlePlanWeek = useCallback(() => {
-    if (planWeekAction) void handleInsightAction(planWeekAction)
-  }, [handleInsightAction, planWeekAction])
+    // No-op until backend wires a real "plan my week" insight action.
+  }, [])
 
   const handleAssignmentSelect = useCallback(
     async (item: PrioritizedItem) => {
@@ -343,7 +340,7 @@ export function DashboardPage() {
             dateLabel={dateLabel}
             dueThisWeek={dueThisWeek}
             onPlanWeek={handlePlanWeek}
-            planDisabled={!workspace || !planWeekAction}
+            planDisabled={!workspace}
           />
           <DashboardFilterTabs value={filter} onChange={setFilter} />
           <div className="mt-10" data-testid="dashboard-assignments">
@@ -420,7 +417,7 @@ export function DashboardPage() {
           {
             id: "ai-insight",
             weight: weightOf("ai-insight"),
-            node: <AiInsightCard key="ai-insight" insight={MOCK_INSIGHTS[0]} onAction={handleInsightAction} />,
+            node: <AiInsightCard key="ai-insight" insight={undefined} onAction={handleInsightAction} />,
           },
         ]
         widgets.sort((a, b) => b.weight - a.weight)

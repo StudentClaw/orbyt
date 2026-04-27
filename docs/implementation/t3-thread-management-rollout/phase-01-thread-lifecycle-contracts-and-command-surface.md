@@ -6,7 +6,7 @@ Last updated: 2026-04-22
 
 - Target feature: add archive and unarchive as first-class thread lifecycle
   operations
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/architecture/01-shared-contracts.md](../../architecture/01-shared-contracts.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md),
   [docs/architecture/04-react-ui.md](../../architecture/04-react-ui.md),
