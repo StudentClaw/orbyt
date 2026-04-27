@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createHash } from "node:crypto"
 import type { DatabaseService } from "../db/Database.js"
 import type { MemoryPaths } from "./paths.js"
+import { logMemoryWrite } from "./write-log.js"
 
 export type AssignmentSourceKind = "canvas_page"
 export type AssignmentSourceParser = "dated_reading_schedule"
@@ -18,6 +19,29 @@ export interface AssignmentSourceRule {
   readonly graphNodePath: string
   readonly graphRuleIndex: number
   readonly courseSlug: string
+}
+
+export interface AssignmentSourceDiscoveryHint {
+  readonly id: string
+  readonly canvasCourseId: string
+  readonly url: string
+  readonly parser: AssignmentSourceParser
+  readonly possibleContent: readonly string[]
+  readonly confidence: number | null
+  readonly status: string
+  readonly graphNodePath: string
+  readonly graphRuleIndex: number
+  readonly courseSlug: string
+}
+
+export interface AssignmentSourceRulePromotionInput {
+  readonly id: string
+  readonly canvasCourseId: string
+  readonly sourceKind: AssignmentSourceKind
+  readonly url: string
+  readonly parser: AssignmentSourceParser
+  readonly purpose: string | null
+  readonly graphNodePath: string | null
 }
 
 type CourseLookupRow = {
@@ -69,6 +93,32 @@ function extractJsonBlocks(section: string): string[] {
   return blocks
 }
 
+function appendJsonBlockToSection(markdown: string, heading: string, block: string): string {
+  const lines = markdown.split("\n")
+  const start = lines.findIndex((line) => line.trim() === heading)
+  if (start < 0) {
+    return `${markdown.trimEnd()}\n\n${heading}\n\n${block}\n`
+  }
+
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index++) {
+    if (lines[index]?.startsWith("## ")) {
+      end = index
+      break
+    }
+  }
+
+  const before = lines.slice(0, start + 1)
+  const existingSection = lines.slice(start + 1, end).join("\n").trim()
+  const after = lines.slice(end)
+  const replacementSection =
+    existingSection.length === 0 || existingSection === "_none yet_"
+      ? ["", block, ""]
+      : ["", existingSection, "", block, ""]
+
+  return [...before, ...replacementSection, ...after].join("\n").trimEnd() + "\n"
+}
+
 function readFrontmatter(markdown: string): ParsedFrontmatter {
   if (!markdown.startsWith("---\n")) return {}
   const end = markdown.indexOf("\n---", 4)
@@ -98,6 +148,18 @@ function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const text = readString(entry)
+    return text ? [text] : []
+  })
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
 function normalizeRule(
@@ -151,6 +213,47 @@ function normalizeRule(
   }
 }
 
+function normalizeDiscoveryHint(
+  value: unknown,
+  context: {
+    readonly graphNodePath: string
+    readonly graphRuleIndex: number
+    readonly courseSlug: string
+    readonly frontmatter: ParsedFrontmatter
+  },
+): AssignmentSourceDiscoveryHint | null {
+  if (!value || typeof value !== "object") return null
+  const record = value as Record<string, unknown>
+  if (record["kind"] !== "canvas_assignment_source_hint") return null
+  const url = readString(record["url"])
+  const rawCanvasCourseId =
+    readString(record["canvasCourseId"]) ??
+    readString(record["canvas_course_id"]) ??
+    context.frontmatter.canvasId ??
+    null
+  if (!url || !rawCanvasCourseId || !/^https:\/\//i.test(url)) return null
+  const parserValue = readString(record["parser"]) ?? "dated_reading_schedule"
+  if (!isSourceParser(parserValue)) return null
+
+  return {
+    id: readString(record["id"]) ?? stableRuleId({
+      kind: "canvas_page",
+      canvasCourseId: rawCanvasCourseId,
+      url,
+      parser: parserValue,
+    }),
+    canvasCourseId: rawCanvasCourseId,
+    url,
+    parser: parserValue,
+    possibleContent: readStringArray(record["possibleContent"]),
+    confidence: readNumber(record["confidence"]),
+    status: readString(record["status"]) ?? "candidate",
+    graphNodePath: context.graphNodePath,
+    graphRuleIndex: context.graphRuleIndex,
+    courseSlug: context.courseSlug,
+  }
+}
+
 function parseJsonRuleBlock(
   block: string,
   context: {
@@ -193,6 +296,33 @@ export function parseAssignmentSourceRulesFromMarkdown(
   )
 }
 
+export function parseAssignmentSourceDiscoveryHintsFromMarkdown(
+  markdown: string,
+  graphNodePath: string,
+  courseSlug: string,
+): AssignmentSourceDiscoveryHint[] {
+  const section = extractSection(markdown, "## Assignment Source Discovery")
+  if (!section) return []
+  const frontmatter = readFrontmatter(markdown)
+  return extractJsonBlocks(section).flatMap((block, index) => {
+    try {
+      const parsed = JSON.parse(block) as unknown
+      const values = Array.isArray(parsed) ? parsed : [parsed]
+      return values.flatMap((value, offset) => {
+        const hint = normalizeDiscoveryHint(value, {
+          graphNodePath,
+          graphRuleIndex: index + offset,
+          courseSlug,
+          frontmatter,
+        })
+        return hint ? [hint] : []
+      })
+    } catch {
+      return []
+    }
+  })
+}
+
 export function readAssignmentSourceRules(paths: MemoryPaths): AssignmentSourceRule[] {
   if (!existsSync(paths.coursesDir)) return []
   return readdirSync(paths.coursesDir, { withFileTypes: true }).flatMap((entry) => {
@@ -201,6 +331,21 @@ export function readAssignmentSourceRules(paths: MemoryPaths): AssignmentSourceR
     const nodePath = join(paths.coursesDir, courseSlug, "index.md")
     if (!existsSync(nodePath)) return []
     return parseAssignmentSourceRulesFromMarkdown(
+      readFileSync(nodePath, "utf-8"),
+      nodePath,
+      courseSlug,
+    )
+  })
+}
+
+export function readAssignmentSourceDiscoveryHints(paths: MemoryPaths): AssignmentSourceDiscoveryHint[] {
+  if (!existsSync(paths.coursesDir)) return []
+  return readdirSync(paths.coursesDir, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return []
+    const courseSlug = entry.name
+    const nodePath = join(paths.coursesDir, courseSlug, "index.md")
+    if (!existsSync(nodePath)) return []
+    return parseAssignmentSourceDiscoveryHintsFromMarkdown(
       readFileSync(nodePath, "utf-8"),
       nodePath,
       courseSlug,
@@ -321,4 +466,121 @@ export function projectAssignmentSourceRules(
   }
 
   return rules
+}
+
+export function projectAssignmentSourceDiscoveryHints(
+  database: DatabaseService,
+  paths: MemoryPaths,
+  confirmedRules: readonly AssignmentSourceRule[] = readAssignmentSourceRules(paths),
+): AssignmentSourceDiscoveryHint[] {
+  const hints = readAssignmentSourceDiscoveryHints(paths)
+  const courses = readCourseLookup(database)
+  const confirmedCanvasCourseIds = new Set(
+    confirmedRules
+      .filter((rule) => rule.enabled)
+      .map((rule) => rule.canvasCourseId),
+  )
+  const now = new Date().toISOString()
+
+  for (const hint of hints) {
+    if (hint.status === "rejected" || confirmedCanvasCourseIds.has(hint.canvasCourseId)) {
+      continue
+    }
+    const localCourseId = resolveLocalCourseId(
+      {
+        id: stableRuleId({
+          kind: "canvas_page",
+          canvasCourseId: hint.canvasCourseId,
+          url: hint.url,
+          parser: hint.parser,
+        }),
+        kind: "canvas_page",
+        canvasCourseId: hint.canvasCourseId,
+        url: hint.url,
+        parser: hint.parser,
+        purpose: hint.possibleContent.length > 0 ? hint.possibleContent.join(", ") : "possible_assignment_source",
+        enabled: true,
+        graphNodePath: hint.graphNodePath,
+        graphRuleIndex: hint.graphRuleIndex,
+        courseSlug: hint.courseSlug,
+      },
+      courses,
+    )
+    database.execute(
+      `INSERT INTO course_assignment_sources
+         (id, local_course_id, canvas_course_id, source_kind, url, parser, purpose,
+          enabled, graph_node_path, graph_rule_index, updated_at, last_error)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         local_course_id = excluded.local_course_id,
+         canvas_course_id = excluded.canvas_course_id,
+         source_kind = excluded.source_kind,
+         url = excluded.url,
+         parser = excluded.parser,
+         purpose = excluded.purpose,
+         enabled = excluded.enabled,
+         graph_node_path = excluded.graph_node_path,
+         graph_rule_index = excluded.graph_rule_index,
+         updated_at = excluded.updated_at,
+         last_error = CASE
+           WHEN excluded.local_course_id IS NULL THEN excluded.last_error
+           ELSE course_assignment_sources.last_error
+         END`,
+      [
+        stableRuleId({
+          kind: "canvas_page",
+          canvasCourseId: hint.canvasCourseId,
+          url: hint.url,
+          parser: hint.parser,
+        }),
+        localCourseId,
+        hint.canvasCourseId,
+        "canvas_page",
+        hint.url,
+        hint.parser,
+        hint.possibleContent.length > 0 ? hint.possibleContent.join(", ") : "possible_assignment_source",
+        1,
+        hint.graphNodePath,
+        hint.graphRuleIndex,
+        now,
+        localCourseId ? null : "No matching local Canvas course.",
+      ],
+    )
+  }
+
+  return hints
+}
+
+export function promoteAssignmentSourceRuleInMemory(
+  source: AssignmentSourceRulePromotionInput,
+): boolean {
+  if (!source.graphNodePath || !existsSync(source.graphNodePath)) return false
+
+  const markdown = readFileSync(source.graphNodePath, "utf-8")
+  const existingRules = parseAssignmentSourceRulesFromMarkdown(
+    markdown,
+    source.graphNodePath,
+    "",
+  )
+  if (existingRules.some((rule) => rule.id === source.id || rule.url === source.url)) {
+    return false
+  }
+
+  const block = [
+    "```json",
+    JSON.stringify({
+      id: source.id,
+      kind: source.sourceKind,
+      canvasCourseId: source.canvasCourseId,
+      url: source.url,
+      purpose: source.purpose ?? "possible_assignment_source",
+      parser: source.parser,
+      enabled: true,
+    }, null, 2),
+    "```",
+  ].join("\n")
+  const next = appendJsonBlockToSection(markdown, "## Assignment Source Rules", block)
+  writeFileSync(source.graphNodePath, next, "utf-8")
+  logMemoryWrite("promoted assignment source rule", source.graphNodePath, next)
+  return true
 }

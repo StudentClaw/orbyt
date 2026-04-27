@@ -4,7 +4,9 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { Database as BunDatabase } from "bun:sqlite"
 import {
+  parseAssignmentSourceDiscoveryHintsFromMarkdown,
   parseAssignmentSourceRulesFromMarkdown,
+  projectAssignmentSourceDiscoveryHints,
   projectAssignmentSourceRules,
 } from "../memory/assignment-source-rules.js"
 import { createMemoryPaths } from "../memory/paths.js"
@@ -50,6 +52,46 @@ describe("assignment source rules", () => {
         url: "https://ivc-new.instructure.com/courses/19737/wiki",
         parser: "dated_reading_schedule",
         enabled: true,
+      }),
+    ])
+  })
+
+  test("parses assignment source discovery hints from course memory", () => {
+    const markdown = [
+      "---",
+      "slug: mythology",
+      "canvasId: 19737",
+      "---",
+      "",
+      "# Mythology",
+      "",
+      "## Assignment Source Discovery",
+      "",
+      "```json",
+      JSON.stringify({
+        kind: "canvas_assignment_source_hint",
+        canvasCourseId: "19737",
+        url: "https://ivc-new.instructure.com/courses/19737",
+        possibleContent: ["weekly readings"],
+        parser: "dated_reading_schedule",
+        confidence: 0.75,
+        status: "candidate",
+      }, null, 2),
+      "```",
+    ].join("\n")
+
+    const hints = parseAssignmentSourceDiscoveryHintsFromMarkdown(
+      markdown,
+      "/memory/graph/school/courses/mythology/index.md",
+      "mythology",
+    )
+
+    expect(hints).toEqual([
+      expect.objectContaining({
+        canvasCourseId: "19737",
+        url: "https://ivc-new.instructure.com/courses/19737",
+        parser: "dated_reading_schedule",
+        status: "candidate",
       }),
     ])
   })
@@ -146,6 +188,58 @@ describe("assignment source rules", () => {
       {
         local_course_id: "canvas-course:19737",
         canvas_course_id: "19737",
+      },
+    ])
+
+    database.close()
+  })
+
+  test("projects discovery hints only when no confirmed rule exists for the course", () => {
+    const root = mkdtempSync(join(tmpdir(), "orbyt-assignment-source-hint-"))
+    const paths = createMemoryPaths({ env: { ORBYT_HOME: root } })
+    mkdirSync(paths.courseDir("mythology"), { recursive: true })
+    writeFileSync(
+      paths.courseIndex("mythology"),
+      [
+        "---",
+        "slug: mythology",
+        "canvasId: 19737",
+        "---",
+        "",
+        "# Mythology",
+        "",
+        "## Assignment Source Discovery",
+        "",
+        "```json",
+        JSON.stringify({
+          kind: "canvas_assignment_source_hint",
+          canvasCourseId: "19737",
+          url: "https://ivc-new.instructure.com/courses/19737",
+          possibleContent: ["weekly readings"],
+          parser: "dated_reading_schedule",
+          status: "candidate",
+        }, null, 2),
+        "```",
+      ].join("\n"),
+      "utf-8",
+    )
+
+    const db = new BunDatabase(":memory:")
+    runBunMigrations(db)
+    const database = createBunDatabaseService(db)
+    database.execute(
+      "INSERT INTO courses (id, name, code, canvas_id) VALUES (?, ?, ?, ?)",
+      ["canvas-course:19737", "Mythology", "MYTH", "19737"],
+    )
+
+    projectAssignmentSourceDiscoveryHints(database, paths, [])
+
+    expect(database.query("SELECT local_course_id, canvas_course_id, url, enabled FROM course_assignment_sources")).toEqual([
+      {
+        local_course_id: "canvas-course:19737",
+        canvas_course_id: "19737",
+        url: "https://ivc-new.instructure.com/courses/19737",
+        enabled: 1,
       },
     ])
 

@@ -4,6 +4,7 @@ import readline from "node:readline"
 import { ARTIFACT_CONTRACT } from "./prompts/artifactContract.js"
 import { MEMORY_PROTOCOL } from "./prompts/memoryProtocol.js"
 import { MEMORY_THREAD_CONTRACT } from "./prompts/memoryThreadContract.js"
+import { ORBYT_IDENTITY_CONTRACT } from "./prompts/orbytIdentity.js"
 import {
   shouldAutoApproveShellCommand,
   type ProviderApprovalDecision,
@@ -949,7 +950,9 @@ export function createCodexRuntimeInstance(
         const preamble = input.suppressArtifactContract
           ? MEMORY_THREAD_CONTRACT
           : `${ARTIFACT_CONTRACT}\n\n${MEMORY_PROTOCOL}`
-        turnText = `<system>\n${preamble}\n</system>\n\n${input.content}`
+        turnText = input.suppressArtifactContract
+          ? `<system>\n${preamble}\n</system>\n\n${input.content}`
+          : `<system>\n${preamble}\n</system>\n\n${ORBYT_IDENTITY_CONTRACT}\n\nUser message:\n${input.content}`
         artifactPreambleSentThreads.add(input.localThreadId)
         preambleAddedForFirstSend = true
       }

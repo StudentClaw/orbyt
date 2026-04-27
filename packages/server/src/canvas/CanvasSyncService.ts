@@ -35,7 +35,12 @@ import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
 import { createMemoryPaths } from "../memory/paths.js"
 import type { MemoryPaths } from "../memory/paths.js"
-import { projectAssignmentSourceRules } from "../memory/assignment-source-rules.js"
+import {
+  promoteAssignmentSourceRuleInMemory,
+  projectAssignmentSourceDiscoveryHints,
+  projectAssignmentSourceRules,
+} from "../memory/assignment-source-rules.js"
+import { ensureCanvasCourseMemoryNodes } from "../memory/course-nodes.js"
 import { MemorizeService } from "../memory/service.js"
 import { parseDatedReadingSchedule } from "./dated-reading-schedule.js"
 
@@ -99,6 +104,7 @@ type AssignmentSourceRow = {
   url: string
   parser: "dated_reading_schedule"
   purpose: string | null
+  graph_node_path: string | null
 }
 
 type MemoryGraphPreferenceRow = {
@@ -600,7 +606,7 @@ function resolveMemoryPaths(database: DatabaseService) {
 
 function readEnabledAssignmentSources(database: DatabaseService): AssignmentSourceRow[] {
   return database.query<AssignmentSourceRow>(
-    `SELECT id, local_course_id, canvas_course_id, source_kind, url, parser, purpose
+    `SELECT id, local_course_id, canvas_course_id, source_kind, url, parser, purpose, graph_node_path
      FROM course_assignment_sources
      WHERE enabled = 1 AND local_course_id IS NOT NULL
      ORDER BY updated_at ASC`,
@@ -725,6 +731,20 @@ async function syncRememberedAssignmentSources(
       console.log(
         `[CanvasSync] remembered assignment source ${source.id} parsed ${parsedItems.length} item(s) for ${course.name} (${course.code})`,
       )
+      if (parsedItems.length === 0) {
+        updateAssignmentSourceChecked(database, source.id, "No coursework items found in remembered source.", now)
+        continue
+      }
+
+      promoteAssignmentSourceRuleInMemory({
+        id: source.id,
+        canvasCourseId: source.canvas_course_id,
+        sourceKind: source.source_kind,
+        url: source.url,
+        parser: source.parser,
+        purpose: source.purpose,
+        graphNodePath: source.graph_node_path,
+      })
 
       const archivedIds = readArchivedCourseworkIds(database)
       const visibleItems = parsedItems.filter((item) => !archivedIds.has(item.id))
@@ -836,8 +856,10 @@ export function createSyncService(
       })
 
       const memoryPaths = memoryPathsOverride ?? resolveMemoryPaths(database)
+      ensureCanvasCourseMemoryNodes(memoryPaths, courses)
       await flushMemoryPromotion(memoryPromotionFlush)
-      projectAssignmentSourceRules(database, memoryPaths)
+      const confirmedRules = projectAssignmentSourceRules(database, memoryPaths)
+      projectAssignmentSourceDiscoveryHints(database, memoryPaths, confirmedRules)
       await syncRememberedAssignmentSources(
         gateway,
         database,

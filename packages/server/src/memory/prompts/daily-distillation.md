@@ -41,6 +41,13 @@ Only include facts that are durable (preferences, stable course rules, professor
 patterns), not one-time events. Format each line exactly as:
 - candidate: "<the fact>" (source: conversation, confidence: <0.0-1.0>, branch: <branch>)
 
+If the student says a course uses a Canvas location for readings, homework,
+quizzes, deadlines, weekly schedules, syllabus work, modules, or the real
+assignments/work, include that URL exactly in the candidate fact. The URL may be
+a bare course URL, front page/wiki URL, Canvas page URL, module URL, assignment
+URL, announcement URL, or file URL. Phrase it as a possible assignment source so
+Orbyt can verify it during Canvas sync.
+
 Where `<branch>` is one of:
 - `school/courses/<course-slug>` — course-specific facts (e.g. `school/courses/cs-301`)
 - `school/playbooks/<playbook-slug>` — reusable cross-course strategies

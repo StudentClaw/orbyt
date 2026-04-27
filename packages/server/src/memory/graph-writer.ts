@@ -3,8 +3,9 @@ import {
   writeFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
 } from "node:fs"
-import { dirname } from "node:path"
+import { dirname, join } from "node:path"
 import { createHash } from "node:crypto"
 import { SCAFFOLD_BRANCHES, type ScaffoldBranch } from "@orbyt/contracts"
 import type { MemoryPaths } from "./paths.js"
@@ -35,6 +36,8 @@ const PROFESSOR_RE = /professor|prof |instructor|dr\.|grader|rubric|submission f
 const PITFALL_RE = /pitfall|mistake|avoid|don't|beware|warning/i
 const ASSIGNMENT_RE = /assignment|homework|problem set|lab|essay|project|quiz|exam strateg/i
 const CANVAS_URL_RE = /https:\/\/[^\s)"']*\/courses\/(\d+)\/(?:wiki|pages\/[^\s)"']+)/i
+const CANVAS_COURSE_URL_RE = /https:\/\/[^\s)"']*\/courses\/(\d+)(?:\/(?:wiki|pages\/[^\s)"']+))?/i
+const ASSIGNMENT_SOURCE_SIGNAL_RE = /read|reading|homework|assignment|assignments|quiz|quizzes|schedule|deadline|due|module|syllabus|weekly|work is|work's|real work/i
 
 function selectCourseSection(text: string): string {
   if (CANVAS_RE.test(text)) return "## Canvas Layout"
@@ -94,14 +97,39 @@ function appendRuleToSection(content: string, rule: Record<string, unknown>): st
   return appendBulletToSection(content, "## Assignment Source Rules", block)
 }
 
+function appendDiscoveryToSection(content: string, hint: Record<string, unknown>): string {
+  const block = [
+    "```json",
+    JSON.stringify(hint, null, 2),
+    "```",
+  ].join("\n")
+  return appendBulletToSection(content, "## Assignment Source Discovery", block)
+}
+
 function sourceRuleId(url: string): string {
   return `assignment-source:${createHash("sha1").update(url).digest("hex").slice(0, 12)}`
+}
+
+function sourceHintId(url: string): string {
+  return `assignment-source-hint:${createHash("sha1").update(url).digest("hex").slice(0, 12)}`
+}
+
+function possibleContentFromText(text: string): string[] {
+  const content = new Set<string>()
+  if (/read|reading/i.test(text)) content.add("readings")
+  if (/homework|assignment|assignments|work is|work's|real work/i.test(text)) content.add("assignments")
+  if (/quiz|quizzes/i.test(text)) content.add("quizzes")
+  if (/schedule|weekly/i.test(text)) content.add("weekly schedule")
+  if (/deadline|due/i.test(text)) content.add("deadlines")
+  if (/module/i.test(text)) content.add("modules")
+  if (/syllabus/i.test(text)) content.add("syllabus")
+  return [...content]
 }
 
 function extractAssignmentSourceRule(text: string): Record<string, unknown> | null {
   const match = text.match(CANVAS_URL_RE)
   if (!match?.[0] || !match[1]) return null
-  if (!/(read|reading|homework|assignment|quiz|schedule)/i.test(text)) return null
+  if (!ASSIGNMENT_SOURCE_SIGNAL_RE.test(text)) return null
   return {
     id: sourceRuleId(match[0]),
     kind: "canvas_page",
@@ -110,6 +138,24 @@ function extractAssignmentSourceRule(text: string): Record<string, unknown> | nu
     purpose: "reading_homework_schedule",
     parser: "dated_reading_schedule",
     enabled: true,
+  }
+}
+
+function extractAssignmentSourceDiscoveryHint(text: string): Record<string, unknown> | null {
+  const match = text.match(CANVAS_COURSE_URL_RE)
+  if (!match?.[0] || !match[1]) return null
+  if (!ASSIGNMENT_SOURCE_SIGNAL_RE.test(text)) return null
+  const possibleContent = possibleContentFromText(text)
+  return {
+    id: sourceHintId(match[0]),
+    kind: "canvas_assignment_source_hint",
+    canvasCourseId: match[1],
+    url: match[0],
+    userLanguage: text,
+    possibleContent: possibleContent.length > 0 ? possibleContent : ["coursework"],
+    parser: "dated_reading_schedule",
+    confidence: 0.75,
+    status: "candidate",
   }
 }
 
@@ -124,6 +170,48 @@ function resolvePath(paths: MemoryPaths, branch: string): string {
   }
   const root = (parts[0] ?? "school") as ScaffoldBranch
   return paths.branchIndex(root)
+}
+
+function extractCanvasCourseId(text: string): string | null {
+  return text.match(CANVAS_COURSE_URL_RE)?.[1] ?? null
+}
+
+function readCanvasIdFromFrontmatter(content: string): string | null {
+  if (!content.startsWith("---\n")) return null
+  const end = content.indexOf("\n---", 4)
+  if (end < 0) return null
+  for (const line of content.slice(4, end).split("\n")) {
+    const [key, ...rest] = line.split(":")
+    if (key?.trim() !== "canvasId") continue
+    const value = rest.join(":").trim().replace(/^"|"$/g, "")
+    return value && value !== "null" ? value : null
+  }
+  return null
+}
+
+function findCourseNodeByCanvasId(paths: MemoryPaths, canvasId: string): string | null {
+  if (!existsSync(paths.coursesDir)) return null
+  for (const entry of readdirSync(paths.coursesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const nodePath = join(paths.coursesDir, entry.name, "index.md")
+    if (!existsSync(nodePath)) continue
+    if (readCanvasIdFromFrontmatter(readFileSync(nodePath, "utf-8")) === canvasId) {
+      return nodePath
+    }
+  }
+  return null
+}
+
+function resolveCandidatePath(paths: MemoryPaths, candidate: GraphCandidateInput): string {
+  const parts = candidate.branch.split("/").filter(Boolean)
+  if (parts[0] === "school" && parts[1] === "courses") {
+    const canvasId = extractCanvasCourseId(candidate.text)
+    if (canvasId) {
+      const existing = findCourseNodeByCanvasId(paths, canvasId)
+      if (existing) return existing
+    }
+  }
+  return resolvePath(paths, candidate.branch)
 }
 
 function seedBaseNode(heading: string): string {
@@ -196,6 +284,10 @@ function seedCourseNode(slug: string): string {
     "",
     NONE_PLACEHOLDER,
     "",
+    "## Assignment Source Discovery",
+    "",
+    NONE_PLACEHOLDER,
+    "",
     "## Recurring Pitfalls",
     "",
     NONE_PLACEHOLDER,
@@ -240,7 +332,7 @@ export function writeGraphCandidate(
   candidate: GraphCandidateInput,
   now: Date,
 ): string {
-  const filePath = resolvePath(paths, candidate.branch)
+  const filePath = resolveCandidatePath(paths, candidate)
   mkdirSync(dirname(filePath), { recursive: true })
 
   const parts = candidate.branch.split("/")
@@ -255,7 +347,9 @@ export function writeGraphCandidate(
 
   const withBullet = appendBulletToSection(content, section, bullet)
   const sourceRule = isCourse ? extractAssignmentSourceRule(candidate.text) : null
-  const updated = sourceRule ? appendRuleToSection(withBullet, sourceRule) : withBullet
+  const sourceHint = isCourse ? extractAssignmentSourceDiscoveryHint(candidate.text) : null
+  const withRule = sourceRule ? appendRuleToSection(withBullet, sourceRule) : withBullet
+  const updated = sourceHint ? appendDiscoveryToSection(withRule, sourceHint) : withRule
   writeFileSync(filePath, updated, "utf-8")
   logMemoryWrite("long-term graph memory", filePath, updated)
 

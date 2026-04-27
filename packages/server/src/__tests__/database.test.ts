@@ -1,6 +1,12 @@
 import { describe, test, expect } from "bun:test"
 import { createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
+const LATEST_SCHEMA_VERSION = 23
+const EXPECTED_SCHEMA_VERSIONS = Array.from(
+  { length: LATEST_SCHEMA_VERSION },
+  (_, index) => index + 1,
+)
+
 describe("Database migrations", () => {
   test("creates SQLite DB in memory", () => {
     const db = createBunTestDatabase(":memory:")
@@ -48,6 +54,9 @@ describe("Database migrations", () => {
     expect(tables).toContain("cron_locks")
     expect(tables).toContain("orchestration_turn_references")
     expect(tables).toContain("archived_coursework_items")
+    expect(tables).toContain("student_dna")
+    expect(tables).toContain("onboarding_answers")
+    expect(tables).toContain("card_weights")
 
     db.close()
   })
@@ -60,7 +69,7 @@ describe("Database migrations", () => {
     const version = db
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
-    expect(version?.version).toBe(21)
+    expect(version?.version).toBe(LATEST_SCHEMA_VERSION)
 
     db.close()
   })
@@ -72,8 +81,8 @@ describe("Database migrations", () => {
     const rows = db
       .query<{ version: number; applied_at: string }, []>("SELECT * FROM schema_version")
       .all()
-    expect(rows.length).toBe(21)
-    expect(rows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21])
+    expect(rows.length).toBe(LATEST_SCHEMA_VERSION)
+    expect(rows.map((row) => row.version)).toEqual(EXPECTED_SCHEMA_VERSIONS)
     expect(rows.every((row) => Boolean(row.applied_at))).toBe(true)
 
     db.close()
@@ -150,7 +159,7 @@ describe("Database migrations", () => {
       .all()
       .map((t) => t.name)
 
-    expect(version?.version).toBe(21)
+    expect(version?.version).toBe(LATEST_SCHEMA_VERSION)
     expect(tables).toContain("orchestration_threads")
     expect(tables).toContain("provider_runtime_sessions")
     expect(tables).toContain("provider_runtime_state")
@@ -211,6 +220,14 @@ describe("Database migrations", () => {
         last_sync_at TEXT
       )
     `)
+    db.run(`
+      CREATE TABLE onboarding_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.run("INSERT INTO onboarding_meta (key, value) VALUES ('overall_status', 'in_progress')")
     db.run("INSERT INTO courses (id, name, code) VALUES ('course-1', 'Intro to CS', 'CS101')")
     db.run("INSERT INTO schema_version (version) VALUES (13)")
 
@@ -370,7 +387,7 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(21)
+    expect(version?.version).toBe(LATEST_SCHEMA_VERSION)
     expect(tables).toContain("provider_runtime_state")
     expect(tables).toContain("queued_provider_turns")
     expect(sessionColumns).toContain("provider_thread_id")
@@ -467,7 +484,7 @@ describe("Database migrations", () => {
       .get()
     const onboardingRow = db
       .query<{ step_name: string; status: string }, []>(
-        "SELECT step_name, status FROM onboarding_state WHERE step_name = 'ai-auth'",
+        "SELECT step_name, status FROM onboarding_state WHERE step_name = 'dna-discovery'",
       )
       .get()
     const overallStatus = db
@@ -479,13 +496,16 @@ describe("Database migrations", () => {
       .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_version")
       .get()
 
-    expect(version?.version).toBe(21)
+    expect(version?.version).toBe(LATEST_SCHEMA_VERSION)
     expect(userPreferenceColumns).toContain("max_session_mins")
     expect(userPreferenceColumns).toContain("quiet_hours_start")
     expect(userPreferenceColumns).toContain("memory_graph_path")
     expect(onboardingColumns).toContain("step_name")
     expect(onboardingColumns).not.toContain("step")
     expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'routines'").get()).toBeDefined()
+    expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'student_dna'").get()).toBeDefined()
+    expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'onboarding_answers'").get()).toBeDefined()
+    expect(db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'card_weights'").get()).toBeDefined()
     expect(userPreferenceRow).toEqual(expect.objectContaining({
       id: 1,
       study_times: "[\"morning\"]",
@@ -498,10 +518,7 @@ describe("Database migrations", () => {
       calendar_integration: "none",
       memory_graph_path: null,
     }))
-    expect(onboardingRow).toEqual({
-      step_name: "ai-auth",
-      status: "completed",
-    })
+    expect(onboardingRow).toBeNull()
     expect(overallStatus?.value).toBe("in_progress")
 
     db.close()

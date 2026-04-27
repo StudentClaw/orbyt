@@ -31,6 +31,7 @@ export const COURSE_NODE_HEADINGS = [
   "## Professor Patterns",
   "## Assignment Strategy",
   "## Assignment Source Rules",
+  "## Assignment Source Discovery",
   "## Recurring Pitfalls",
   "## Current Improvements",
   "## Observed Patterns",
