@@ -76,6 +76,17 @@ describe("subject-grouping", () => {
     expect(todayOnly.map((i) => i.id)).toEqual(["a"])
   })
 
+  test("filterItemsByScope thisWeek includes today's assignments", () => {
+    const items: PrioritizedItem[] = [
+      item({ id: "today", effectiveDueAt: new Date(2025, 5, 11, 18, 0, 0).toISOString() }),
+      item({ id: "later-this-week", effectiveDueAt: new Date(2025, 5, 13, 9, 0, 0).toISOString() }),
+      item({ id: "overdue", effectiveDueAt: new Date(2025, 5, 10, 9, 0, 0).toISOString() }),
+      item({ id: "upcoming", effectiveDueAt: new Date(2025, 5, 20, 9, 0, 0).toISOString() }),
+    ]
+    const thisWeek = filterItemsByScope(items, "thisWeek", ANCHOR)
+    expect(thisWeek.map((i) => i.id)).toEqual(["today", "later-this-week"])
+  })
+
   test("filterItemsByScope keeps submitted and graded items for submitted filter", () => {
     const items: PrioritizedItem[] = [
       item({ id: "submitted", submissionStatus: "submitted" }),

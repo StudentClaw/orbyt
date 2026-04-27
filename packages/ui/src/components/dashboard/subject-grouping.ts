@@ -56,6 +56,12 @@ export function filterItemsByScope(
       return status === "submitted" || status === "graded"
     })
   }
+  if (filter === "thisWeek") {
+    return items.filter((item) => {
+      const scope = classifyAssignmentScope(item, now)
+      return scope === "thisWeek" || scope === "today"
+    })
+  }
   return items.filter((item) => classifyAssignmentScope(item, now) === filter)
 }
 
