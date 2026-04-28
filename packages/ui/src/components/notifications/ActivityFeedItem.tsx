@@ -1,4 +1,4 @@
-import type { ActivityFeedEntryWithMeta } from "@/rpc/activityState"
+import { type ActivityFeedEntryWithMeta, removeActivityEntry } from "@/rpc/activityState"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
@@ -131,6 +131,20 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
     }
   }
 
+  const dismissEntry = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    // Optimistically remove from UI; reinstate on failure.
+    const previousEntry = entry
+    removeActivityEntry(entry.id)
+    try {
+      const client = getPrimaryWsRpcClient()
+      await client.activity.setActed({ id: previousEntry.id, acted: false })
+    } catch {
+      // Best-effort: if the persistence call fails, the next refresh from the
+      // server will re-hydrate the entry since acted_on stayed NULL.
+    }
+  }
+
   return (
     <div
       className={`
@@ -201,6 +215,20 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
           </svg>
         </span>
       )}
+
+      <button
+        type="button"
+        onClick={dismissEntry}
+        aria-label="Dismiss notification"
+        title="Dismiss"
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all duration-150 hover:bg-white/10 hover:text-foreground group-hover:opacity-70"
+        data-testid={`activity-item-close-${entry.id}`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </div>
   )
 }

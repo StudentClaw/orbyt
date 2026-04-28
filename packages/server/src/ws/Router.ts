@@ -42,7 +42,7 @@ import {
 } from "@orbyt/contracts"
 import type { WebSocket } from "ws"
 import type { AppConfig } from "../config/defaults.js"
-import { generateWeeklyInsight, setActivityActedOn } from "../activity/feed.js"
+import { generateWeeklyInsight, loadActivityFeed, setActivityActedOn } from "../activity/feed.js"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
@@ -276,6 +276,8 @@ async function handleActivityMethod(
   const { id, method } = request
 
   switch (method) {
+    case RPC_METHODS.ACTIVITY_GET_FEED:
+      return encodeSuccess(id, { entries: loadActivityFeed(dependencies.database) })
     case RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT:
       return encodeSuccess(id, await generateWeeklyInsight({
         database: dependencies.database,

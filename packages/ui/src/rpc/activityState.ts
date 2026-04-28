@@ -50,6 +50,19 @@ export function setActivityEntries(entries: ReadonlyArray<ActivityFeedEntryWithM
   appAtomRegistry.set(activityUnreadCountAtom, entries.length)
 }
 
+export function removeActivityEntry(id: ActivityFeedEntry["id"]): void {
+  const current = appAtomRegistry.get(activityEntriesAtom)
+  const next = current.filter((entry) => entry.id !== id)
+  if (next.length === current.length) return
+  appAtomRegistry.set(activityEntriesAtom, next)
+  const removedUnread = current.length - next.length
+  const currentUnread = appAtomRegistry.get(activityUnreadCountAtom)
+  appAtomRegistry.set(
+    activityUnreadCountAtom,
+    Math.max(0, currentUnread - removedUnread),
+  )
+}
+
 // --- Event application ---
 
 export function applyActivityFeedUpsertEvent(data: {
@@ -112,6 +125,33 @@ export function filterActivityEntries(
 
 export function startActivityStateSync(client: WsRpcClient): () => void {
   let disposed = false
+
+  // Hydrate the activity feed from the persisted server state so notifications
+  // survive app restarts. We only seed entries that are missing from the
+  // current in-memory atom; live push events take precedence.
+  void client.activity
+    .getFeed()
+    .then((entries) => {
+      if (disposed) return
+      const seeded: ReadonlyArray<ActivityFeedEntryWithMeta> = entries.map((entry) => ({
+        ...entry,
+        receivedAt: entry.createdAt ?? new Date().toISOString(),
+      }))
+      // Merge with anything that arrived via push during the request window.
+      const current = appAtomRegistry.get(activityEntriesAtom)
+      const knownIds = new Set(current.map((e) => e.id))
+      const merged = [
+        ...current,
+        ...seeded.filter((e) => !knownIds.has(e.id)),
+      ]
+      // Newest first by receivedAt.
+      const sorted = [...merged].sort(
+        (a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt),
+      )
+      appAtomRegistry.set(activityEntriesAtom, sorted)
+      appAtomRegistry.set(activityUnreadCountAtom, sorted.length)
+    })
+    .catch(() => undefined)
 
   const cleanups = [
     client.activity.onFeedUpdate((event) => {

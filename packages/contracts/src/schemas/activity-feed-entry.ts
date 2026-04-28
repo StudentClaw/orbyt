@@ -22,5 +22,6 @@ export const ActivityFeedEntry = Schema.Struct({
   notify: Schema.optional(Schema.Boolean),
   actedOn: Schema.optional(Schema.NullOr(Schema.Boolean)),
   actedAt: Schema.optional(Schema.NullOr(Schema.Number)),
+  createdAt: Schema.optional(Schema.String),
 })
 export type ActivityFeedEntry = Schema.Schema.Type<typeof ActivityFeedEntry>

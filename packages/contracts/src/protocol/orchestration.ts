@@ -105,6 +105,7 @@ export const RPC_METHODS = {
   PLANNER_CHECK_IN: "planner.checkIn",
   PLANNER_SUBSCRIBE_CHECK_INS: "planner.subscribeCheckIns",
   ACTIVITY_SUBSCRIBE_FEED: "activity.subscribeFeed",
+  ACTIVITY_GET_FEED: "activity.getFeed",
   ACTIVITY_GENERATE_WEEKLY_INSIGHT: "activity.generateWeeklyInsight",
   ACTIVITY_SET_ACTED: "activity.setActed",
   ONBOARDING_GET_SNAPSHOT: "onboarding.getSnapshot",

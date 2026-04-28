@@ -10,7 +10,6 @@ import {
 } from "@orbyt/contracts"
 import type { AppConfig } from "../config/defaults.js"
 import type { DatabaseService } from "../db/Database.js"
-import { readThread } from "../orchestration/OrchestrationDB.js"
 import type { PushBusService } from "../ws/PushBus.js"
 
 type ActivityEntryInput = Omit<ActivityFeedEntry, "id">
@@ -18,12 +17,6 @@ type ActivityEntryInput = Omit<ActivityFeedEntry, "id">
 type ActivityWriterDeps = {
   readonly database: DatabaseService
   readonly pushBus: PushBusService
-}
-
-type WorkflowCompletionTurn = {
-  readonly id: string
-  readonly threadId: string
-  readonly output: string
 }
 
 type WeeklyInsightDeps = {
@@ -58,17 +51,8 @@ function toActivityFeedEntry(row: ActivityFeedRow): ActivityFeedEntry {
     ...(row.notify === 1 ? { notify: true } : {}),
     ...(row.acted_on === null ? {} : { actedOn: row.acted_on === 1 }),
     ...(row.acted_at === null ? {} : { actedAt: row.acted_at }),
+    createdAt: row.created_at,
   }
-}
-
-function previewBody(output: string): string {
-  const trimmed = output.trim()
-  if (trimmed.length === 0) {
-    return "The agent finished your requested workflow."
-  }
-
-  const normalized = trimmed.replace(/\s+/g, " ")
-  return normalized.length <= 180 ? normalized : `${normalized.slice(0, 177)}...`
 }
 
 function pad(value: number): string {
@@ -185,6 +169,27 @@ function tryGenerateAiWeeklyInsight(
   }
 }
 
+/**
+ * Loads the most recent activity-feed entries that the user has not yet
+ * dismissed or acted on, for hydrating the renderer-side activity center on
+ * startup. Dismissed/acted entries are excluded so they do not reappear.
+ */
+export function loadActivityFeed(
+  database: DatabaseService,
+  limit = 100,
+): ReadonlyArray<ActivityFeedEntry> {
+  const rows = database.query<ActivityFeedRow>(
+    `SELECT id, category, type, title, body, priority, deep_link,
+            notify, acted_on, acted_at, created_at
+       FROM activity_feed
+      WHERE acted_on IS NULL
+      ORDER BY created_at DESC
+      LIMIT ?`,
+    [limit],
+  )
+  return rows.map(toActivityFeedEntry)
+}
+
 function loadRecentActivityEntries(database: DatabaseService, now: Date): ReadonlyArray<ActivityFeedRow> {
   const since = new Date(now)
   since.setDate(since.getDate() - 7)
@@ -258,31 +263,6 @@ export async function recordActivityEntry({
 
   await pushBus.publish(PUSH_CHANNELS.ACTIVITY_FEED, nextEntry)
   return nextEntry
-}
-
-export async function recordWorkflowCompletionActivity({
-  database,
-  pushBus,
-  turn,
-}: ActivityWriterDeps & {
-  readonly turn: WorkflowCompletionTurn
-}): Promise<ActivityFeedEntry> {
-  const thread = readThread(database, turn.threadId)
-  const deepLink = thread
-    ? `/chat/${thread.workspaceId}/${turn.threadId}`
-    : "/chat"
-  return recordActivityEntry({
-    database,
-    pushBus,
-    entry: {
-      category: "workflow",
-      type: "workflow_completed",
-      title: "Workflow complete",
-      body: previewBody(turn.output),
-      priority: 3,
-      deepLink,
-    },
-  })
 }
 
 export interface InsightHistoryRecord {
