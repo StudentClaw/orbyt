@@ -140,6 +140,15 @@ describe("build-macos-desktop-artifact", () => {
     })).toBe("/repo/release/mac-arm64/Orbyt.app")
   })
 
+  test("resolves the packaged x64 app path from the generic mac release directory", () => {
+    expect(resolvePackagedAppPath({
+      releaseDir: "/repo/release",
+      productName: "Orbyt",
+      arch: "x64",
+      exists: (candidate) => candidate === "/repo/release/mac/Orbyt.app",
+    })).toBe("/repo/release/mac/Orbyt.app")
+  })
+
   test("builds electron-builder args without overriding mac targets to dmg only", () => {
     expect(createElectronBuilderArgs({
       stageAppDir: "/tmp/orbyt-stage",

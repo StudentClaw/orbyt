@@ -2,12 +2,20 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { resolvePackagedAppleCalendarBridgePathsFromApp } from "../packages/electron/src/plugins/apple-calendar-bridge-paths.js"
+import { resolvePackagedAppPath, type AppleBridgeArch } from "./build-macos-desktop-artifact"
 
 export function resolveMacArtifactPaths(options: {
   releaseDir: string
   productName: string
+  arch?: AppleBridgeArch
+  exists?: (path: string) => boolean
 }) {
-  const appPath = path.join(options.releaseDir, `${options.productName}.app`)
+  const appPath = resolvePackagedAppPath({
+    releaseDir: options.releaseDir,
+    productName: options.productName,
+    arch: options.arch ?? "arm64",
+    exists: options.exists,
+  })
   return {
     appPath,
     helperPath: resolvePackagedAppleCalendarBridgePathsFromApp(appPath).executablePath,
@@ -91,6 +99,9 @@ if (import.meta.main) {
   const productName = process.argv.includes("--product-name")
     ? process.argv[process.argv.indexOf("--product-name") + 1]
     : "Orbyt"
+  const archArg = process.argv.includes("--arch")
+    ? process.argv[process.argv.indexOf("--arch") + 1]
+    : undefined
   const appPathArg = process.argv.includes("--app-path")
     ? process.argv[process.argv.indexOf("--app-path") + 1]
     : undefined
@@ -99,8 +110,12 @@ if (import.meta.main) {
     ? {
       appPath: appPathArg,
       helperPath: resolvePackagedAppleCalendarBridgePathsFromApp(appPathArg).executablePath,
-    }
-    : resolveMacArtifactPaths({ releaseDir, productName })
+      }
+    : resolveMacArtifactPaths({
+      releaseDir,
+      productName,
+      arch: archArg === "x64" ? "x64" : "arm64",
+    })
 
   const result = verifyMacDesktopArtifact({
     ...paths,

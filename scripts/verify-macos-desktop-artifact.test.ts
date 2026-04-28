@@ -6,13 +6,26 @@ import {
 } from "./verify-macos-desktop-artifact"
 
 describe("verify-macos-desktop-artifact", () => {
-  test("resolves the packaged app and helper paths from the release directory", () => {
+  test("resolves the packaged arm64 app and helper paths from the release directory", () => {
     expect(resolveMacArtifactPaths({
       releaseDir: "/tmp/orbyt-release",
       productName: "Orbyt",
+      exists: (candidate) => candidate === "/tmp/orbyt-release/mac-arm64/Orbyt.app",
     })).toEqual({
-      appPath: "/tmp/orbyt-release/Orbyt.app",
-      helperPath: "/tmp/orbyt-release/Orbyt.app/Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge",
+      appPath: "/tmp/orbyt-release/mac-arm64/Orbyt.app",
+      helperPath: "/tmp/orbyt-release/mac-arm64/Orbyt.app/Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge",
+    })
+  })
+
+  test("resolves the packaged x64 app and helper paths from the generic mac release directory", () => {
+    expect(resolveMacArtifactPaths({
+      releaseDir: "/tmp/orbyt-release",
+      productName: "Orbyt",
+      arch: "x64",
+      exists: (candidate) => candidate === "/tmp/orbyt-release/mac/Orbyt.app",
+    })).toEqual({
+      appPath: "/tmp/orbyt-release/mac/Orbyt.app",
+      helperPath: "/tmp/orbyt-release/mac/Orbyt.app/Contents/Resources/extensions/apple-calendar-mcp/bridge/CalendarAPIBridge",
     })
   })
 

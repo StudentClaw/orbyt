@@ -610,7 +610,7 @@ function buildDesktopArtifact(options: {
     logger,
   })
 
-  const releaseDir = options.outputDir ?? path.join(options.repoRoot, "release")
+  const releaseDir = path.resolve(options.repoRoot, options.outputDir ?? "release")
   mkdirSync(releaseDir, { recursive: true })
 
   const builderEnv = normalizeAppleApiKeyEnv(process.env, stageAppDir)
