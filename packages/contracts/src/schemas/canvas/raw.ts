@@ -102,6 +102,7 @@ export const CanvasCourseWithEnrollments = Schema.Struct({
   teacher: Schema.optional(Schema.NullOr(CanvasUser)),
   teachers: Schema.optional(Schema.NullOr(Schema.Array(CanvasUser))),
   enrollments: Schema.optional(Schema.NullOr(Schema.Array(CanvasEnrollment))),
+  credits: Schema.optional(Schema.NullOr(Schema.Number)),
   created_at: Schema.optional(Schema.NullOr(Schema.String)),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
   uuid: Schema.optional(Schema.NullOr(Schema.String)),

@@ -120,6 +120,7 @@ type CourseGradeSummaryRow = {
   current_grade: string | null
   final_score: number | null
   final_grade: string | null
+  units: number | null
 }
 
 type TodoItemRow = {
@@ -392,14 +393,15 @@ function replaceCourseGradeSummaries(
   for (const summary of summaries) {
     database.execute(
       `INSERT INTO canvas_course_grade_summaries
-         (course_id, current_score, current_grade, final_score, final_grade)
-       VALUES (?, ?, ?, ?, ?)`,
+         (course_id, current_score, current_grade, final_score, final_grade, units)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         summary.course.id,
         toNullableNumber(summary.currentScore),
         summary.currentGrade ?? null,
         toNullableNumber(summary.finalScore),
         summary.finalGrade ?? null,
+        toNullableNumber(summary.units),
       ],
     )
   }
@@ -551,7 +553,7 @@ function readAssignments(database: DatabaseService): Array<CourseWorkItem & {
 function readCourseGradeSummaries(database: DatabaseService): CanvasStudentCourseGradeSummary[] {
   const courses = new Map(readCourses(database).map((course) => [course.id, course]))
   const rows = database.query<CourseGradeSummaryRow>(
-    `SELECT course_id, current_score, current_grade, final_score, final_grade
+    `SELECT course_id, current_score, current_grade, final_score, final_grade, units
      FROM canvas_course_grade_summaries
      ORDER BY course_id ASC`,
   )
@@ -565,6 +567,7 @@ function readCourseGradeSummaries(database: DatabaseService): CanvasStudentCours
       currentGrade: row.current_grade ?? undefined,
       finalScore: row.final_score ?? undefined,
       finalGrade: row.final_grade ?? undefined,
+      units: row.units ?? undefined,
     }]
   })
 }

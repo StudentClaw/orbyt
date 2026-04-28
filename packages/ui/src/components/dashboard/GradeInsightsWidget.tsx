@@ -130,12 +130,15 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
       const pct = computeCourseGradePercentage(grades, course.id)
       if (pct === 0) return null
       const letter = percentageToLetter(pct)
-      return { course, pct, letter }
+      const gradeSummary = grades.find((g) => g.course.id === course.id)
+      const units = gradeSummary?.units ?? null
+      return { course, pct, letter, units }
     })
-    .filter(Boolean) as Array<{ course: Course; pct: number; letter: string }>
+    .filter(Boolean) as Array<{ course: Course; pct: number; letter: string; units: number | null }>
 
-  const avgGpa =
-    courseData.reduce((sum, d) => sum + letterToGpa(d.letter), 0) / courseData.length
+  const totalWeightedPoints = courseData.reduce((sum, d) => sum + letterToGpa(d.letter) * (d.units ?? 1), 0)
+  const totalUnits = courseData.reduce((sum, d) => sum + (d.units ?? 1), 0)
+  const avgGpa = totalUnits > 0 ? totalWeightedPoints / totalUnits : 0
 
   const chartConfig: ChartConfig = Object.fromEntries(
     rows.map((r) => [r.code, { label: r.code, color: r.fill }]),

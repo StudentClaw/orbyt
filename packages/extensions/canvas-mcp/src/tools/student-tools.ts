@@ -205,6 +205,7 @@ function registerStudentSelfTools(server: McpServer, deps: CanvasToolDependencie
             currentGrade: enrollment?.grades?.current_grade ?? enrollment?.computed_current_grade ?? undefined,
             finalScore: enrollment?.grades?.final_score ?? enrollment?.computed_final_score ?? undefined,
             finalGrade: enrollment?.grades?.final_grade ?? enrollment?.computed_final_grade ?? undefined,
+            units: course.credits ?? undefined,
           }
         })
 

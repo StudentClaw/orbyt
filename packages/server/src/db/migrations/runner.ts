@@ -23,6 +23,7 @@ import * as migration021 from "./021-course-assignment-sources.js"
 import * as migration022 from "./022-archived-coursework-items.js"
 import * as migration023 from "./023-dna-onboarding-repair.js"
 import * as migration024 from "./024-archived-coursework-payload.js"
+import * as migration025 from "./025-grade-summary-units.js"
 
 type SqlMigration = {
   readonly version: number
@@ -59,6 +60,7 @@ const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration022,
   migration023,
   migration024,
+  migration025,
 ]
 
 export function runMigrations(db: RuntimeSqliteDatabase): void {
