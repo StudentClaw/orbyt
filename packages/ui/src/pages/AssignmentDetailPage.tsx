@@ -3,7 +3,7 @@ import DOMPurify from "dompurify"
 import { useNavigate } from "@tanstack/react-router"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons"
-import { Archive } from "lucide-react"
+import { Archive, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -843,6 +843,19 @@ export function AssignmentDetailPage({ assignmentId }: AssignmentDetailPageProps
 
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 p-6 lg:p-8" data-testid="assignment-detail-page">
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 -ml-2 rounded-full px-2.5 text-muted-foreground hover:text-foreground"
+          onClick={() => void navigate({ to: "/" })}
+          data-testid="assignment-detail-back"
+        >
+          <ArrowLeft className="mr-1.5 size-4" aria-hidden="true" />
+          Back to dashboard
+        </Button>
+      </div>
       <AssignmentSummaryHeader entry={entry} isArchiving={isArchiving} onArchive={handleArchive} />
       {noSkillsInstalled ? (
         <section className="pagelet p-5" data-testid="assignment-detail-actions">

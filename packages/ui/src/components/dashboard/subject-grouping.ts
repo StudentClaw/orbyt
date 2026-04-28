@@ -45,18 +45,27 @@ export function classifyAssignmentScope(item: PrioritizedItem, now: Date): Filte
   return "upcoming"
 }
 
+function isFinishedAssignment(item: PrioritizedItem): boolean {
+  const status = item.submissionStatus?.trim().toLowerCase()
+  return status === "submitted" || status === "graded"
+}
+
 export function filterItemsByScope(
   items: ReadonlyArray<PrioritizedItem>,
   filter: FilterScope,
   now: Date,
 ): ReadonlyArray<PrioritizedItem> {
   if (filter === "submitted") {
-    return items.filter((item) => {
-      const status = item.submissionStatus?.trim().toLowerCase()
-      return status === "submitted" || status === "graded"
+    return items.filter(isFinishedAssignment)
+  }
+  const unfinished = items.filter((item) => !isFinishedAssignment(item))
+  if (filter === "thisWeek") {
+    return unfinished.filter((item) => {
+      const scope = classifyAssignmentScope(item, now)
+      return scope === "thisWeek" || scope === "today"
     })
   }
-  return items.filter((item) => classifyAssignmentScope(item, now) === filter)
+  return unfinished.filter((item) => classifyAssignmentScope(item, now) === filter)
 }
 
 export interface CourseWithWork {
@@ -90,11 +99,12 @@ export function groupAssignmentsByCourse(
     .filter((g) => g.items.length > 0)
 }
 
-/** Non-overdue items with due datetime falling in the current local Mon–Sun window. */
+/** Non-overdue, unfinished items with due datetime falling in the current local Mon–Sun window. */
 export function countDueThisWeek(items: ReadonlyArray<PrioritizedItem>, now: Date): number {
   const monday = startOfWeekMonday(now)
   const sunday = endOfWeekSunday(monday)
   return items.filter((item) => {
+    if (isFinishedAssignment(item)) return false
     const due = new Date(item.effectiveDueAt)
     if (due.getTime() < now.getTime()) return false
     return due.getTime() >= monday.getTime() && due.getTime() <= sunday.getTime()

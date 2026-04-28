@@ -90,6 +90,7 @@ export function GeneralSection() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [pickerState, setPickerState] = useState<"idle" | "opening">("idle")
   const [codexLogoutState, setCodexLogoutState] = useState<"idle" | "pending" | "done" | "error">("idle")
+  const [codexConnectState, setCodexConnectState] = useState<"idle" | "connecting" | "connected" | "error">("idle")
   const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null)
   const [updateActionState, setUpdateActionState] = useState<"idle" | "pending" | "error">("idle")
 
@@ -167,10 +168,53 @@ export function GeneralSection() {
     }
     setCodexLogoutState("pending")
     try {
-      await window.electronAPI.invoke(IpcChannel.CODEX_AUTH_LOGOUT)
+      const result = await window.electronAPI.invoke(IpcChannel.CODEX_AUTH_LOGOUT)
+      if (!result?.ok) {
+        setCodexLogoutState("error")
+        return
+      }
+      // Kill the running codex process and mark auth_required — do NOT reinitialize,
+      // since re-init can succeed via macOS Keychain even with auth.json deleted.
+      try {
+        const client = await waitForPrimaryWsRpcClient()
+        await Promise.allSettled([
+          client.onboarding.setAiAuth({ status: "skipped", provider: null }),
+          client.provider.disconnectProvider(),
+        ])
+      } catch {
+        // Logout itself succeeded; runtime state will reflect auth_required.
+      }
       setCodexLogoutState("done")
     } catch {
       setCodexLogoutState("error")
+    }
+  }
+
+  async function connectCodex() {
+    if (!window.electronAPI?.codexAuthStart) {
+      setCodexConnectState("error")
+      return
+    }
+    setCodexConnectState("connecting")
+    try {
+      const result = await window.electronAPI.codexAuthStart()
+      if (result?.status !== "connected") {
+        setCodexConnectState("error")
+        return
+      }
+      try {
+        const client = await waitForPrimaryWsRpcClient()
+        await Promise.allSettled([
+          client.onboarding.setAiAuth({ status: "connected", provider: "codex" }),
+          client.provider.retryInitialize(),
+        ])
+      } catch {
+        // Auth succeeded; runtime state will catch up.
+      }
+      setCodexConnectState("connected")
+      setCodexLogoutState("idle")
+    } catch {
+      setCodexConnectState("error")
     }
   }
 
@@ -448,22 +492,45 @@ export function GeneralSection() {
         <CardHeader>
           <CardTitle>Codex (OpenAI)</CardTitle>
           <CardDescription>
-            Disconnect your OpenAI account so you can re-run the OAuth flow.
+            Connect or disconnect your OpenAI Codex account.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void disconnectCodex()}
-            disabled={codexLogoutState === "pending"}
-            data-testid="settings-codex-disconnect"
-          >
-            {codexLogoutState === "pending" ? "Disconnecting..." : "Disconnect Codex"}
-          </Button>
-          {codexLogoutState === "done" && (
-            <p className="text-sm text-muted-foreground" data-testid="settings-codex-disconnect-status">
-              Disconnected. You can now re-authenticate from the onboarding flow.
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {codexLogoutState === "done" ? (
+              <Button
+                type="button"
+                onClick={() => void connectCodex()}
+                disabled={codexConnectState === "connecting"}
+                data-testid="settings-codex-connect"
+              >
+                {codexConnectState === "connecting" ? "Connecting..." : "Connect Codex"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void disconnectCodex()}
+                disabled={codexLogoutState === "pending"}
+                data-testid="settings-codex-disconnect"
+              >
+                {codexLogoutState === "pending" ? "Disconnecting..." : "Disconnect Codex"}
+              </Button>
+            )}
+          </div>
+          {codexLogoutState === "done" && codexConnectState === "idle" && (
+            <p className="text-sm text-muted-foreground" data-testid="settings-codex-status">
+              Disconnected. Connect a new account above.
+            </p>
+          )}
+          {codexConnectState === "connected" && (
+            <p className="text-sm text-muted-foreground" data-testid="settings-codex-status">
+              Connected successfully.
+            </p>
+          )}
+          {codexConnectState === "error" && (
+            <p className="text-sm text-destructive" data-testid="settings-codex-status">
+              Sign-in did not complete. Try again.
             </p>
           )}
           {codexLogoutState === "error" && (

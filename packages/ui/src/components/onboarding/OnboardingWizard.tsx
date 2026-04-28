@@ -133,8 +133,17 @@ export function OnboardingWizard() {
     advanceAndGo("canvas-sync")
   }
 
-  const handleCanvasSync = async (): Promise<void> => {
-    await getPrimaryWsRpcClient().canvas.sync().catch(() => undefined)
+  const handleCanvasVerify = async (): Promise<boolean> => {
+    try {
+      const courses = await getPrimaryWsRpcClient().canvas.listCourses()
+      return courses.length > 0
+    } catch {
+      return false
+    }
+  }
+
+  const handleCanvasStartBackgroundSync = (): void => {
+    void getPrimaryWsRpcClient().canvas.sync().catch(() => undefined)
   }
 
   const handleCanvasContinue = (): void => {
@@ -182,7 +191,8 @@ export function OnboardingWizard() {
         return (
           <CanvasSyncPhase
             dna={liveDna}
-            onSync={handleCanvasSync}
+            onVerify={handleCanvasVerify}
+            onSyncBackground={handleCanvasStartBackgroundSync}
             onContinue={handleCanvasContinue}
             onBack={goBack}
           />

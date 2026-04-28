@@ -79,7 +79,10 @@ export function prepareIsolatedCodexRuntime(
   }
 
   const globalCodexHome = path.join(process.env.HOME ?? "", ".codex")
-  copyIfMissing(path.join(globalCodexHome, "auth.json"), path.join(codexHomePath, "auth.json"))
+  const disconnectedMarker = path.join(codexHomePath, ".disconnected")
+  if (!existsSync(disconnectedMarker)) {
+    copyIfMissing(path.join(globalCodexHome, "auth.json"), path.join(codexHomePath, "auth.json"))
+  }
   copyIfMissing(path.join(globalCodexHome, "installation_id"), path.join(codexHomePath, "installation_id"))
 
   const configPath = path.join(codexHomePath, "config.toml")

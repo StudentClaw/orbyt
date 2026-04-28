@@ -77,7 +77,7 @@ export class WeeklyInsightScheduler {
   start(): void {
     this.stop()
     const settings = this.options.store.getSettings()
-    if (!settings.enabled || !settings.weeklyInsightsEnabled || !settings.linkedDevice) {
+    if (!settings.enabled || !settings.weeklyInsightsEnabled) {
       return
     }
 
@@ -99,7 +99,7 @@ export class WeeklyInsightScheduler {
 
   async runCatchUpIfNeeded(): Promise<void> {
     const settings = this.options.store.getSettings()
-    if (!settings.enabled || !settings.weeklyInsightsEnabled || !settings.linkedDevice) {
+    if (!settings.enabled || !settings.weeklyInsightsEnabled) {
       return
     }
 

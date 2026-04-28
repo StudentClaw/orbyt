@@ -7,7 +7,7 @@ Last updated: 2026-04-19
 - Target feature: lock the markdown memory filesystem layout, root graph
   scaffold, and file-update contract before scheduler or summarization code
   begins
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
   [docs/features/INDEX.md](../../features/INDEX.md),
   [docs/features/04-memory-system.md](../../features/04-memory-system.md),

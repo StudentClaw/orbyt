@@ -8,7 +8,12 @@ import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
 import { useOrchestrationActions, useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
-import { computeStaleness, removeArchivedAssignmentFromCanvasState } from "@/rpc/canvasState"
+import {
+  captureAssignmentSnapshot,
+  computeStaleness,
+  removeArchivedAssignmentFromCanvasState,
+  restoreAssignmentSnapshot,
+} from "@/rpc/canvasState"
 import type { InsightAction } from "@/components/dashboard/insight-types"
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader"
@@ -26,14 +31,12 @@ import {
 } from "@/components/dashboard/subject-grouping"
 import { getPlanFilterCopy } from "@/components/dashboard/plan-filter-copy"
 import { removeAssignmentDetailEntry, seedAssignmentPreview } from "@/rpc/assignmentDetailState"
-import { MOCK_INSIGHTS } from "@/__mocks__/dashboard-fixtures"
 
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
 const TOAST_ID_PLANNER = "dashboard-planner-stream"
 const SUBMITTED_PAGE_SIZE = 12
-const SCHEDULING_SESSION_SKILL_MENTION =
-  "[$scheduling-session](/Users/paul/.codex/skills/scheduling-session/SKILL.md)"
+const SCHEDULING_SESSION_SKILL_ID = "scheduling-session"
 
 function getCanvasSyncProgressCopy(progress: number): { title: string; description: string } {
   const percent = Math.round(progress)
@@ -258,13 +261,31 @@ export function DashboardPage() {
   const handleAssignmentArchive = useCallback(async (item: PrioritizedItem) => {
     if (archivingAssignmentIds.has(item.id)) return
 
+    const snapshot = captureAssignmentSnapshot(item.id)
+
     setArchivingAssignmentIds((current) => new Set(current).add(item.id))
     try {
       const client = await waitForPrimaryWsRpcClient()
       await client.canvas.archiveAssignment(item.id)
       removeArchivedAssignmentFromCanvasState(item.id)
       removeAssignmentDetailEntry(item.id)
-      toast.success(`Archived "${item.title}"`)
+      toast.success(`Archived "${item.title}"`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void (async () => {
+              try {
+                const undoClient = await waitForPrimaryWsRpcClient()
+                await undoClient.canvas.unarchiveAssignment(item.id)
+                restoreAssignmentSnapshot(snapshot)
+                toast.success(`Restored "${item.title}"`)
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Failed to restore assignment.")
+              }
+            })()
+          },
+        },
+      })
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to archive assignment.")
     } finally {
@@ -322,8 +343,8 @@ export function DashboardPage() {
           ? `${planFilterCopy.assignmentsHeading}\n${assignmentLines.join("\n")}`
           : planFilterCopy.emptyAssignments,
         "Read my calendars first, then propose a realistic schedule for this dashboard filter. Ask only decision-critical questions.",
-        SCHEDULING_SESSION_SKILL_MENTION,
       ].join("\n\n"),
+      skillId: SCHEDULING_SESSION_SKILL_ID,
     }
   }, [filter, now, planFilterCopy, priorityItems, submittedItems])
   const handlePlanWeek = useCallback(() => {
@@ -542,7 +563,7 @@ export function DashboardPage() {
           {
             id: "ai-insight",
             weight: weightOf("ai-insight"),
-            node: <AiInsightCard key="ai-insight" insight={MOCK_INSIGHTS[0]} onAction={handleInsightAction} />,
+            node: <AiInsightCard key="ai-insight" insight={undefined} onAction={handleInsightAction} />,
           },
         ]
         widgets.sort((a, b) => b.weight - a.weight)

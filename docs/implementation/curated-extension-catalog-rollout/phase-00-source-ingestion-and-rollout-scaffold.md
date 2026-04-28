@@ -5,7 +5,7 @@ Last updated: 2026-04-18
 ## Orientation Note
 
 - Target feature: establish the rollout package, shared vocabulary, and source-ingestion boundary for Apple Calendar as the first curated extension beyond Canvas
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/implementation/mcp-plugin-system/README.md](../mcp-plugin-system/README.md), the external source package at `~/Documents/calendar/apple-calendar-mcp`
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/implementation/mcp-plugin-system/README.md](../mcp-plugin-system/README.md), the external source package at `~/Documents/calendar/apple-calendar-mcp`
 - Constraints and boundaries:
   - do not implement runtime code in this phase
   - do not define remote download or marketplace behavior

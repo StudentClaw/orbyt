@@ -6,7 +6,7 @@ Last updated: 2026-04-22
 
 - Target feature: strengthen runtime-binding persistence so a thread can adopt
   or recreate its provider session intentionally
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md),
   [docs/features/01-ai-harness.md](../../features/01-ai-harness.md),
   [phase-01-thread-lifecycle-contracts-and-command-surface.md](phase-01-thread-lifecycle-contracts-and-command-surface.md)

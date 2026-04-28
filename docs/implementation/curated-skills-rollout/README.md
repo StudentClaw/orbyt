@@ -12,7 +12,7 @@ The AI harness context for Codex CLI is documented in [docs/features/01-ai-harne
 
 1. Start with [GLOSSARY.md](GLOSSARY.md) for status, shared vocabulary, and the handoff record.
 2. Work phases in order unless a later phase explicitly says it can start in parallel.
-3. Before coding a phase, read that phase's Orientation Note and follow the required Beginning → Middle → End flow from [PLAN.md](../../../PLAN.md).
+3. Before coding a phase, read that phase's Orientation Note and follow the required Beginning → Middle → End flow from [PLAN.md](../../internal/PLAN.md).
 4. Do not mark a phase complete until its verification gates are green and its handoff notes are recorded in [GLOSSARY.md](GLOSSARY.md).
 
 ## Phase Order

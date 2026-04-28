@@ -74,6 +74,7 @@ function makeDependencies() {
       interruptTurn: async () => ({ interrupted: true }),
       startProviderAuth: async () => ({ started: true }),
       retryProviderInitialize: async () => ({ started: true }),
+      disconnectProvider: async () => undefined,
       respondToProviderApproval: async () => ({ approvalRequestId: "a1", resolved: true }),
       shutdown: async () => undefined,
     },
@@ -91,6 +92,7 @@ function makeDependencies() {
       },
       listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
       archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
+      unarchiveAssignment: (assignmentId: any) => ({ unarchived: true as const, assignmentId }),
       getCourseContentOverview: async () => ({
         course: undefined,
         pageCount: 0,

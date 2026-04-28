@@ -187,6 +187,14 @@ export const CanvasArchiveAssignmentResult = Schema.Struct({
   assignmentId: CourseWorkItemId,
 })
 
+export const CanvasUnarchiveAssignmentParams = Schema.Struct({
+  assignmentId: CourseWorkItemId,
+})
+export const CanvasUnarchiveAssignmentResult = Schema.Struct({
+  unarchived: Schema.Literal(true),
+  assignmentId: CourseWorkItemId,
+})
+
 export const CanvasListModulesParams = Schema.Struct({
   courseId: CourseId,
 })
@@ -472,6 +480,8 @@ export type CanvasAssignmentDetailsParams = Schema.Schema.Type<typeof CanvasAssi
 export type CanvasAssignmentDetailsResult = Schema.Schema.Type<typeof CanvasAssignmentDetailsResult>
 export type CanvasArchiveAssignmentParams = Schema.Schema.Type<typeof CanvasArchiveAssignmentParams>
 export type CanvasArchiveAssignmentResult = Schema.Schema.Type<typeof CanvasArchiveAssignmentResult>
+export type CanvasUnarchiveAssignmentParams = Schema.Schema.Type<typeof CanvasUnarchiveAssignmentParams>
+export type CanvasUnarchiveAssignmentResult = Schema.Schema.Type<typeof CanvasUnarchiveAssignmentResult>
 export type CanvasListModulesParams = Schema.Schema.Type<typeof CanvasListModulesParams>
 export type CanvasListModulesResult = Schema.Schema.Type<typeof CanvasListModulesResult>
 export type CanvasListModuleItemsParams = Schema.Schema.Type<typeof CanvasListModuleItemsParams>

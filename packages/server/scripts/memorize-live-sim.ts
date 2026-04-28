@@ -3,7 +3,7 @@
  *
  * Runs the real LiveMemorizeTurnRunner with the real Codex-backed distiller,
  * archives all seeded chats plus every daily/weekly distillation output, and
- * writes a report under simulation/memorize-live/.
+ * writes a report under experiments/memorize-live/.
  *
  * Usage:
  *   bun run packages/server/scripts/memorize-live-sim.ts
@@ -792,7 +792,7 @@ function createRecordingDistiller(args: {
 
 async function main(): Promise<void> {
   const root = repoRoot()
-  const simulationDir = join(root, "simulation", "memorize-live")
+  const simulationDir = join(root, "experiments", "memorize-live")
   const appHome = join(simulationDir, ".orbyt-home")
   const dbPath = join(simulationDir, "diagnostics", "sim.db")
   const runStartedAt = new Date()

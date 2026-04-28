@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { AnnouncementsFeed } from "../components/dashboard/AnnouncementsFeed"
-import type { AnnouncementData } from "../__mocks__/dashboard-fixtures"
+import type { AnnouncementData } from "../components/dashboard/announcement-types"
 
 function makeAnnouncement(
   id: string,

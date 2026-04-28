@@ -5,6 +5,8 @@ import {
   CanvasAssignmentDetailsResult,
   CanvasArchiveAssignmentParams,
   CanvasArchiveAssignmentResult,
+  CanvasUnarchiveAssignmentParams,
+  CanvasUnarchiveAssignmentResult,
   CanvasCourseContentOverviewParams,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureParams,
@@ -94,6 +96,7 @@ type CourseworkRow = {
 
 type ArchivedCourseworkRow = {
   id: string
+  payload: string | null
 }
 
 type AssignmentSourceRow = {
@@ -159,6 +162,7 @@ export interface CanvasSyncServiceShape {
   readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<CanvasAssignmentDetailsResult>
   readonly listAssignments: (params: CanvasListAssignmentsParams) => Promise<CanvasListAssignmentsResult>
   readonly archiveAssignment: (assignmentId: CanvasArchiveAssignmentParams["assignmentId"]) => CanvasArchiveAssignmentResult
+  readonly unarchiveAssignment: (assignmentId: CanvasUnarchiveAssignmentParams["assignmentId"]) => CanvasUnarchiveAssignmentResult
   readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<CanvasCourseContentOverviewResult>
   readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<CanvasCourseStructureResult>
   readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<CanvasDownloadCourseFileResult>
@@ -794,26 +798,14 @@ export function createSyncService(
     })
 
     try {
-      const courses = [...(await callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult)).courses]
-        .sort(courseSort)
-      const upcomingAssignments = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_UPCOMING_ASSIGNMENTS,
-        {},
-        CanvasGetMyUpcomingAssignmentsResult,
-      )
-      const submissionStatus = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_SUBMISSION_STATUS,
-        {},
-        CanvasGetMySubmissionStatusResult,
-      )
-      const courseGrades = await callDecodedTool(
-        gateway,
-        TOOL_GET_MY_COURSE_GRADES,
-        {},
-        CanvasGetMyCourseGradesResult,
-      )
+      const [coursesResult, upcomingAssignments, submissionStatus, courseGrades] = await Promise.all([
+        callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult),
+        callDecodedTool(gateway, TOOL_GET_MY_UPCOMING_ASSIGNMENTS, {}, CanvasGetMyUpcomingAssignmentsResult),
+        callDecodedTool(gateway, TOOL_GET_MY_SUBMISSION_STATUS, {}, CanvasGetMySubmissionStatusResult),
+        callDecodedTool(gateway, TOOL_GET_MY_COURSE_GRADES, {}, CanvasGetMyCourseGradesResult),
+      ])
+
+      const courses = [...coursesResult.courses].sort(courseSort)
 
       void pushBus.publish(PUSH_CHANNELS.CANVAS_SYNC_PROGRESS, {
         courseId: "",
@@ -821,29 +813,18 @@ export function createSyncService(
         status: "syncing",
       })
 
-      let todoItems: CanvasStudentTodoItem[] = []
-      try {
-        todoItems = (await callDecodedTool(
-          gateway,
-          TOOL_GET_MY_TODO_ITEMS,
-          {},
-          CanvasGetMyTodoItemsResult,
-        )).items.slice()
-      } catch (error) {
-        logError("optional canvas todo sync failed", error)
-      }
+      const [todoResult, peerResult] = await Promise.allSettled([
+        callDecodedTool(gateway, TOOL_GET_MY_TODO_ITEMS, {}, CanvasGetMyTodoItemsResult),
+        callDecodedTool(gateway, TOOL_GET_MY_PEER_REVIEWS_TODO, {}, CanvasGetMyPeerReviewsTodoResult),
+      ])
 
-      let peerReviewsTodo: CanvasStudentPeerReviewTodo[] = []
-      try {
-        peerReviewsTodo = (await callDecodedTool(
-          gateway,
-          TOOL_GET_MY_PEER_REVIEWS_TODO,
-          {},
-          CanvasGetMyPeerReviewsTodoResult,
-        )).items.slice()
-      } catch (error) {
-        logError("optional canvas peer review sync failed", error)
-      }
+      const todoItems: CanvasStudentTodoItem[] =
+        todoResult.status === "fulfilled" ? todoResult.value.items.slice() : []
+      if (todoResult.status === "rejected") logError("optional canvas todo sync failed", todoResult.reason)
+
+      const peerReviewsTodo: CanvasStudentPeerReviewTodo[] =
+        peerResult.status === "fulfilled" ? peerResult.value.items.slice() : []
+      if (peerResult.status === "rejected") logError("optional canvas peer review sync failed", peerResult.reason)
 
       const assignmentRecords = extractAssignmentMap(upcomingAssignments.items, submissionStatus)
 
@@ -961,11 +942,12 @@ export function createSyncService(
     }
 
     const now = new Date().toISOString()
+    const payload = JSON.stringify(row)
     database.transaction(() => {
       database.execute(
         `INSERT INTO archived_coursework_items
-           (id, course_id, source_type, source_id, title, html_url, archived_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, course_id, source_type, source_id, title, html_url, archived_at, payload)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.course_id,
@@ -974,12 +956,65 @@ export function createSyncService(
           row.title,
           row.html_url,
           now,
+          payload,
         ],
       )
       database.execute("DELETE FROM coursework_items WHERE id = ?", [assignmentId])
     })
 
     return { archived: true, assignmentId }
+  }
+
+  function unarchiveAssignment(
+    assignmentId: CanvasUnarchiveAssignmentParams["assignmentId"],
+  ): CanvasUnarchiveAssignmentResult {
+    const archived = database.get<ArchivedCourseworkRow>(
+      "SELECT id, payload FROM archived_coursework_items WHERE id = ?",
+      [assignmentId],
+    )
+    if (!archived) {
+      return { unarchived: true, assignmentId }
+    }
+    if (!archived.payload) {
+      throw new Error(`Assignment ${assignmentId} cannot be restored: missing snapshot.`)
+    }
+
+    const row = JSON.parse(archived.payload) as CourseworkRow
+
+    database.transaction(() => {
+      database.execute(
+        `INSERT OR REPLACE INTO coursework_items
+           (id, course_id, title, description, effective_due_at, source_type,
+            source_due_date_kind, freshness_status, cached_at, last_verified_at,
+            source_updated_at, points_possible, submission_status, grade, html_url,
+            canvas_assignment_id, assignment_source_id, is_upcoming, status_bucket)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.id,
+          row.course_id,
+          row.title,
+          row.description,
+          row.effective_due_at,
+          row.source_type,
+          row.source_due_date_kind,
+          row.freshness_status,
+          row.cached_at,
+          row.last_verified_at,
+          row.source_updated_at,
+          row.points_possible,
+          row.submission_status,
+          row.grade,
+          row.html_url,
+          row.canvas_assignment_id,
+          row.assignment_source_id,
+          row.is_upcoming,
+          row.status_bucket,
+        ],
+      )
+      database.execute("DELETE FROM archived_coursework_items WHERE id = ?", [assignmentId])
+    })
+
+    return { unarchived: true, assignmentId }
   }
 
   async function listAssignments(
@@ -1022,6 +1057,7 @@ export function createSyncService(
     getAssignmentDetails,
     listAssignments,
     archiveAssignment,
+    unarchiveAssignment,
     getCourseContentOverview,
     getCourseStructure,
     downloadCourseFile,

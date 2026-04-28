@@ -5,7 +5,7 @@ Last updated: 2026-04-11
 ## Orientation Note
 
 - Target feature: create the shared contract and planning foundation for the Orbyt MCP plugin system rollout
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/architecture/02-electron-shell.md](../../architecture/02-electron-shell.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), current extension packages under `packages/extensions/`
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/architecture/02-electron-shell.md](../../architecture/02-electron-shell.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md), current extension packages under `packages/extensions/`
 - Constraints and boundaries:
   - ignore `docs/features/05-plugin-system.md`; it is outdated for sequencing
   - do not spawn real plugin processes yet

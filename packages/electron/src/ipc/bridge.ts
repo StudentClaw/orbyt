@@ -9,7 +9,7 @@ import {
   type SaveDialogOptions,
 } from "electron"
 import { spawn } from "node:child_process"
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
@@ -169,7 +169,6 @@ function resolvePushManager(
     defaultPushManager = createPushManager({
       userDataPath: app.getPath("userData"),
       bootstrap,
-      relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
     })
   }
 
@@ -314,7 +313,12 @@ export function registerIpcHandlers(
 
   registerHandler(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
     const codexPath = resolveCodexPath()
-    const env = buildIsolatedCodexEnv(app.getPath("userData"))
+    const userDataPath = app.getPath("userData")
+    const disconnectedMarker = path.join(userDataPath, "codex-home", ".disconnected")
+    if (existsSync(disconnectedMarker)) {
+      try { unlinkSync(disconnectedMarker) } catch { /* ignore */ }
+    }
+    const env = buildIsolatedCodexEnv(userDataPath)
 
     return new Promise((resolve) => {
       const proc = spawn(codexPath, ["login"], {
@@ -350,7 +354,11 @@ export function registerIpcHandlers(
 
   registerHandler(IpcChannel.CODEX_AUTH_LOGOUT, (): Promise<{ ok: boolean }> => {
     const codexPath = resolveCodexPath()
-    const env = buildIsolatedCodexEnv(app.getPath("userData"))
+    const userDataPath = app.getPath("userData")
+    const codexHomePath = path.join(userDataPath, "codex-home")
+    const isolatedAuthPath = path.join(codexHomePath, "auth.json")
+    const disconnectedMarker = path.join(codexHomePath, ".disconnected")
+    const env = buildIsolatedCodexEnv(userDataPath)
 
     return new Promise((resolve) => {
       const proc = spawn(codexPath, ["logout"], {
@@ -359,12 +367,23 @@ export function registerIpcHandlers(
         shell: process.platform === "win32",
       })
 
+      const finalize = (cliOk: boolean): void => {
+        // Belt-and-suspenders: ensure isolated auth is gone even if the CLI failed,
+        // and write a marker so prepareIsolatedCodexRuntime won't re-import the
+        // global ~/.codex/auth.json on the next spawn.
+        if (existsSync(isolatedAuthPath)) {
+          try { unlinkSync(isolatedAuthPath) } catch { /* ignore */ }
+        }
+        try { writeFileSync(disconnectedMarker, "", "utf8") } catch { /* ignore */ }
+        resolve({ ok: cliOk || !existsSync(isolatedAuthPath) })
+      }
+
       proc.on("exit", (code) => {
-        resolve({ ok: code === 0 })
+        finalize(code === 0)
       })
 
       proc.on("error", () => {
-        resolve({ ok: false })
+        finalize(false)
       })
     })
   })
@@ -372,11 +391,6 @@ export function registerIpcHandlers(
   const pushManager = resolvePushManager(bootstrap, runtime)
   registerHandler(IpcChannel.PUSH_GET_SETTINGS, () => pushManager.getSettings())
   registerHandler(IpcChannel.PUSH_UPDATE_SETTINGS, (_event, params) => pushManager.updateSettings(params))
-  registerHandler(IpcChannel.PUSH_START_PAIRING, () => pushManager.startPairing())
-  registerHandler(IpcChannel.PUSH_GET_PAIRING_STATUS, () => pushManager.getPairingStatus())
-  registerHandler(IpcChannel.PUSH_CANCEL_PAIRING, () => pushManager.cancelPairing())
-  registerHandler(IpcChannel.PUSH_SEND_TEST, () => pushManager.sendTest())
-  registerHandler(IpcChannel.PUSH_UNLINK_DEVICE, () => pushManager.unlinkDevice())
 
   return registerPluginIpcHandlers(bootstrap, runtime)
 }

@@ -1,4 +1,4 @@
-import type { AnnouncementData } from "@/__mocks__/dashboard-fixtures"
+import type { AnnouncementData } from "./announcement-types"
 import { AnnouncementCard } from "./AnnouncementCard"
 
 interface AnnouncementsFeedProps {

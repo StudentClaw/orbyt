@@ -90,7 +90,6 @@ async function ensureServerProcess(): Promise<ServerProcess> {
       pushManager = createPushManager({
         userDataPath: app.getPath("userData"),
         bootstrap: nextServerProcess.bootstrap,
-        relayBaseUrl: process.env.PUSH_RELAY_BASE_URL,
       })
       pluginManager = registerIpcHandlers(
         nextServerProcess.bootstrap,

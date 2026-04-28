@@ -76,6 +76,17 @@ describe("subject-grouping", () => {
     expect(todayOnly.map((i) => i.id)).toEqual(["a"])
   })
 
+  test("filterItemsByScope thisWeek includes today's assignments", () => {
+    const items: PrioritizedItem[] = [
+      item({ id: "today", effectiveDueAt: new Date(2025, 5, 11, 18, 0, 0).toISOString() }),
+      item({ id: "later-this-week", effectiveDueAt: new Date(2025, 5, 13, 9, 0, 0).toISOString() }),
+      item({ id: "overdue", effectiveDueAt: new Date(2025, 5, 10, 9, 0, 0).toISOString() }),
+      item({ id: "upcoming", effectiveDueAt: new Date(2025, 5, 20, 9, 0, 0).toISOString() }),
+    ]
+    const thisWeek = filterItemsByScope(items, "thisWeek", ANCHOR)
+    expect(thisWeek.map((i) => i.id)).toEqual(["today", "later-this-week"])
+  })
+
   test("filterItemsByScope keeps submitted and graded items for submitted filter", () => {
     const items: PrioritizedItem[] = [
       item({ id: "submitted", submissionStatus: "submitted" }),
@@ -104,6 +115,44 @@ describe("subject-grouping", () => {
     const items: PrioritizedItem[] = [
       item({ id: "ok", effectiveDueAt: new Date(2025, 5, 12, 9, 0, 0).toISOString() }),
       item({ id: "bad", effectiveDueAt: new Date(2025, 5, 8, 9, 0, 0).toISOString() }),
+    ]
+    expect(countDueThisWeek(items, ANCHOR)).toBe(1)
+  })
+
+  test("filterItemsByScope excludes submitted/graded from time tabs", () => {
+    const items: PrioritizedItem[] = [
+      item({ id: "todo-today", effectiveDueAt: new Date(2025, 5, 11, 18, 0, 0).toISOString() }),
+      item({
+        id: "submitted-today",
+        effectiveDueAt: new Date(2025, 5, 11, 18, 0, 0).toISOString(),
+        submissionStatus: "submitted",
+      }),
+      item({
+        id: "graded-week",
+        effectiveDueAt: new Date(2025, 5, 13, 9, 0, 0).toISOString(),
+        submissionStatus: "graded",
+      }),
+      item({ id: "todo-upcoming", effectiveDueAt: new Date(2025, 5, 20, 9, 0, 0).toISOString() }),
+    ]
+
+    expect(filterItemsByScope(items, "today", ANCHOR).map((i) => i.id)).toEqual(["todo-today"])
+    expect(filterItemsByScope(items, "thisWeek", ANCHOR).map((i) => i.id)).toEqual(["todo-today"])
+    expect(filterItemsByScope(items, "upcoming", ANCHOR).map((i) => i.id)).toEqual(["todo-upcoming"])
+  })
+
+  test("countDueThisWeek excludes submitted/graded items", () => {
+    const items: PrioritizedItem[] = [
+      item({ id: "open", effectiveDueAt: new Date(2025, 5, 12, 9, 0, 0).toISOString() }),
+      item({
+        id: "done",
+        effectiveDueAt: new Date(2025, 5, 13, 9, 0, 0).toISOString(),
+        submissionStatus: "submitted",
+      }),
+      item({
+        id: "graded",
+        effectiveDueAt: new Date(2025, 5, 14, 9, 0, 0).toISOString(),
+        submissionStatus: "graded",
+      }),
     ]
     expect(countDueThisWeek(items, ANCHOR)).toBe(1)
   })

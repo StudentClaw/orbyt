@@ -143,8 +143,7 @@ describe("registerIpcHandlers plugin reads", () => {
 
     expect(await pushSettingsHandler?.({})).toMatchObject({
       enabled: true,
-      linkedDevice: null,
-      activePairing: null,
+      weeklyInsightsTime: "08:00",
     })
   })
 
@@ -405,7 +404,7 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(revealedPath).toBe(artifactPath)
   })
 
-  test("registers phone push IPC handlers when a push manager is provided", async () => {
+  test("registers local notification IPC handlers when a push manager is provided", async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>()
     const userDataRoot = createTempDir()
     const pushManager = {
@@ -419,9 +418,6 @@ describe("registerIpcHandlers plugin reads", () => {
         quietHoursEnd: "08:00",
         weeklyInsightsDay: 1,
         weeklyInsightsTime: "08:00",
-        relayBaseUrl: "https://push.example.com",
-        linkedDevice: null,
-        activePairing: null,
       }),
       updateSettings: () => ({
         enabled: false,
@@ -431,44 +427,6 @@ describe("registerIpcHandlers plugin reads", () => {
         quietHoursEnd: "08:00",
         weeklyInsightsDay: 1,
         weeklyInsightsTime: "08:00",
-        relayBaseUrl: "https://push.example.com",
-        linkedDevice: null,
-        activePairing: null,
-      }),
-      startPairing: async () => ({
-        sessionId: "session_1",
-        qrUrl: "https://push.example.com/pair/session_1",
-        expiresAt: "2026-04-15T13:00:00.000Z",
-        state: "pending" as const,
-      }),
-      getPairingStatus: async () => ({
-        linkedDevice: null,
-        activePairing: null,
-      }),
-      cancelPairing: async () => ({
-        enabled: true,
-        workflowEventsEnabled: true,
-        weeklyInsightsEnabled: true,
-        quietHoursStart: "22:00",
-        quietHoursEnd: "08:00",
-        weeklyInsightsDay: 1,
-        weeklyInsightsTime: "08:00",
-        relayBaseUrl: "https://push.example.com",
-        linkedDevice: null,
-        activePairing: null,
-      }),
-      sendTest: async () => ({ ok: true }),
-      unlinkDevice: () => ({
-        enabled: true,
-        workflowEventsEnabled: true,
-        weeklyInsightsEnabled: true,
-        quietHoursStart: "22:00",
-        quietHoursEnd: "08:00",
-        weeklyInsightsDay: 1,
-        weeklyInsightsTime: "08:00",
-        relayBaseUrl: "https://push.example.com",
-        linkedDevice: null,
-        activePairing: null,
       }),
     }
 
@@ -538,21 +496,17 @@ describe("registerIpcHandlers plugin reads", () => {
     })
 
     const getSettings = handlers.get(IpcChannel.PUSH_GET_SETTINGS)
-    const startPairing = handlers.get(IpcChannel.PUSH_START_PAIRING)
-    const sendTest = handlers.get(IpcChannel.PUSH_SEND_TEST)
+    const updateSettings = handlers.get(IpcChannel.PUSH_UPDATE_SETTINGS)
 
     expect(getSettings).toBeDefined()
-    expect(startPairing).toBeDefined()
-    expect(sendTest).toBeDefined()
+    expect(updateSettings).toBeDefined()
     expect(await getSettings?.({})).toMatchObject({
       enabled: true,
-      relayBaseUrl: "https://push.example.com",
+      weeklyInsightsTime: "08:00",
     })
-    expect(await startPairing?.({})).toMatchObject({
-      sessionId: "session_1",
-      state: "pending",
+    expect(await updateSettings?.({}, { enabled: false })).toMatchObject({
+      enabled: false,
     })
-    expect(await sendTest?.({})).toEqual({ ok: true })
   })
 
   test("rejects invalid plugin retry classes over IPC", async () => {

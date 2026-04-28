@@ -6,7 +6,7 @@ Last updated: 2026-04-19
 
 - Target feature: define how memorize reads unprocessed chat activity and turns
   it into rolling daily and weekly memory layers
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [GLOSSARY.md](GLOSSARY.md),
   [phase-00-memory-filesystem-scaffold-and-contracts.md](phase-00-memory-filesystem-scaffold-and-contracts.md),
   [phase-01-memorize-scheduler-and-run-checkpointing.md](phase-01-memorize-scheduler-and-run-checkpointing.md),

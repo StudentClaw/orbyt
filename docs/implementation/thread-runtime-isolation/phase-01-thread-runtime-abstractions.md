@@ -5,7 +5,7 @@ Last updated: 2026-04-16
 ## Orientation Note
 
 - Target feature: introduce a thread-scoped Codex runtime abstraction that can own one process per thread
-- Key dependencies: [PLAN.md](../../../PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)
+- Key dependencies: [PLAN.md](../../internal/PLAN.md), [docs/superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md](../../superpowers/specs/2026-04-16-thread-runtime-isolation-and-parallel-chat-design.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [docs/architecture/03-local-server.md](../../architecture/03-local-server.md)
 - Constraints and boundaries:
   - keep admission logic simple in this phase
   - do not enable parallel work beyond the current behavior yet

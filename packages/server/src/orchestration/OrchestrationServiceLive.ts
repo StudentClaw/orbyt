@@ -983,6 +983,11 @@ export const OrchestrationServiceLive = Layer.scoped(
         await receiptBus.resolve(commandId, { started })
         return { started }
       },
+      disconnectProvider: async (commandId) => {
+        await codexCli.disconnectProvider()
+        recordReceipt(commandId, "completed", {})
+        await receiptBus.resolve(commandId, {})
+      },
       respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
         const result = await codexCli.respondToApproval(approvalRequestId, decision)
         if (result.resolved) {

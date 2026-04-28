@@ -176,7 +176,18 @@ export function startAppRuntime(): Promise<void> {
 
       await orchestrationSync.startupReady
 
-      void loadCanvasData(client)
+      setRuntimeStartupState({
+        phase: "hydrating",
+        label: "Loading your courses",
+        detail: "Fetching Canvas data",
+        error: null,
+      })
+
+      try {
+        await loadCanvasData(client)
+      } catch {
+        // Canvas data failure is non-fatal — proceed with empty atoms
+      }
 
       setRuntimeStartupState({
         phase: "ready",

@@ -2,6 +2,7 @@ import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsResult,
   CanvasArchiveAssignmentResult,
+  CanvasUnarchiveAssignmentResult,
   CanvasCourseContentOverviewResult,
   CanvasCourseStructureResult,
   CanvasDownloadCourseFileResult,
@@ -174,6 +175,7 @@ export interface WsRpcClient {
   readonly provider: {
     readonly startAuth: () => Promise<StartProviderAuthResult>
     readonly retryInitialize: () => Promise<RetryProviderInitializeResult>
+    readonly disconnectProvider: () => Promise<void>
     readonly respondToApproval: (
       approvalRequestId: string,
       decision: "approve" | "deny",
@@ -199,6 +201,7 @@ export interface WsRpcClient {
     readonly getAssignmentDetails: (params: CanvasAssignmentDetailsParams) => Promise<Schema.Schema.Type<typeof CanvasAssignmentDetailsResult>>
     readonly listAssignments: (params: { courseId?: string; includeCompleted?: boolean }) => Promise<Schema.Schema.Type<typeof CanvasListAssignmentsResult>>
     readonly archiveAssignment: (assignmentId: string) => Promise<Schema.Schema.Type<typeof CanvasArchiveAssignmentResult>>
+    readonly unarchiveAssignment: (assignmentId: string) => Promise<Schema.Schema.Type<typeof CanvasUnarchiveAssignmentResult>>
     readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<Schema.Schema.Type<typeof CanvasCourseContentOverviewResult>>
     readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
     readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
@@ -353,6 +356,8 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
     startAuth: () => transport.request<StartProviderAuthResult>(RPC_METHODS.PROVIDER_START_AUTH, {}),
     retryInitialize: () =>
       transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
+    disconnectProvider: () =>
+      transport.request<void>(RPC_METHODS.PROVIDER_DISCONNECT, {}),
     respondToApproval: (approvalRequestId, decision) =>
       transport.request<RespondToProviderApprovalResult>(RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL, {
         approvalRequestId,
@@ -422,6 +427,11 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
       decode(
         CanvasArchiveAssignmentResult,
         await transport.request(RPC_METHODS.CANVAS_ARCHIVE_ASSIGNMENT, { assignmentId }),
+      ),
+    unarchiveAssignment: async (assignmentId) =>
+      decode(
+        CanvasUnarchiveAssignmentResult,
+        await transport.request(RPC_METHODS.CANVAS_UNARCHIVE_ASSIGNMENT, { assignmentId }),
       ),
     getCourseContentOverview: async (params) =>
       decode(

@@ -21,7 +21,7 @@ the existing Orbyt Electron Main plugin system documented in
 
 1. Start with [GLOSSARY.md](GLOSSARY.md) for status, shared vocabulary, and handoff notes.
 2. Work phases in order unless a later phase explicitly says it can begin in parallel.
-3. Before implementation, review [PLAN.md](../../../PLAN.md), the predecessor plugin-system rollout, and the relevant product or architecture docs.
+3. Before implementation, review [PLAN.md](../../internal/PLAN.md), the predecessor plugin-system rollout, and the relevant product or architecture docs.
 4. Do not mark a phase complete until its verification gates are green and the glossary handoff log is updated.
 
 ## Phase Order

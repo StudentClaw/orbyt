@@ -436,7 +436,6 @@ export function createStagePackageJson(stageAppDir: string, signed: boolean) {
       "@orbyt/shared": "file:vendor/shared",
       "@orbyt/shared-runtime": "file:vendor/shared-runtime",
       "electron-updater": electronPackageJson.dependencies["electron-updater"],
-      "web-push": electronPackageJson.dependencies["web-push"],
       "ws": electronPackageJson.dependencies.ws,
     },
   }

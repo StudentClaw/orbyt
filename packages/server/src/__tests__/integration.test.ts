@@ -112,6 +112,7 @@ describe("Server integration", () => {
             interruptTurn: async () => ({ interrupted: true }),
             startProviderAuth: async () => ({ started: true }),
             retryProviderInitialize: async () => ({ started: true }),
+            disconnectProvider: async () => undefined,
             respondToProviderApproval: async () => ({ approvalRequestId: "approval_1", resolved: true }),
             shutdown: async () => undefined,
           },
@@ -129,6 +130,7 @@ describe("Server integration", () => {
             },
             listAssignments: async () => ({ course: undefined, items: [], courses: undefined }),
             archiveAssignment: (assignmentId: any) => ({ archived: true as const, assignmentId }),
+            unarchiveAssignment: (assignmentId: any) => ({ unarchived: true as const, assignmentId }),
             getCourseContentOverview: async () => ({
               course: undefined,
               pageCount: 0,

@@ -2,6 +2,7 @@ import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsParams,
   CanvasArchiveAssignmentParams,
+  CanvasUnarchiveAssignmentParams,
   CanvasCourseContentOverviewParams,
   CanvasCourseStructureParams,
   CanvasDownloadCourseFileParams,
@@ -90,6 +91,12 @@ export const CanvasArchiveAssignment = Schema.Struct({
   params: CanvasArchiveAssignmentParams,
 })
 
+export const CanvasUnarchiveAssignment = Schema.Struct({
+  method: Schema.Literal("canvas.unarchiveAssignment"),
+  id: Schema.String,
+  params: CanvasUnarchiveAssignmentParams,
+})
+
 export const CanvasGetCourseContentOverview = Schema.Struct({
   method: Schema.Literal("canvas.getCourseContentOverview"),
   id: Schema.String,
@@ -133,6 +140,7 @@ export const ClientMessage = Schema.Union(
   CanvasGetAssignmentDetails,
   CanvasListAssignments,
   CanvasArchiveAssignment,
+  CanvasUnarchiveAssignment,
   CanvasGetCourseContentOverview,
   CanvasGetCourseStructure,
   CanvasDownloadCourseFile,

@@ -1,9 +1,0 @@
-{
-  "name": "Orbyt Pair Phone",
-  "short_name": "Orbyt",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#0d1b2a",
-  "theme_color": "#0d1b2a",
-  "icons": []
-}

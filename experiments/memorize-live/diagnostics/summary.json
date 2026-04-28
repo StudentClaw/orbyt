@@ -1,0 +1,511 @@
+{
+  "generatedAt": "2026-04-21T22:28:05.620Z",
+  "model": "gpt-5.4-mini",
+  "codexBinaryPath": "/Users/rereynrd/School/student-claw/packages/server/node_modules/.bin/codex",
+  "scenario": {
+    "days": 14,
+    "startDate": "2026-04-07",
+    "endDate": "2026-04-20",
+    "threads": [
+      "thread_assignment_habits",
+      "thread_cs301_canvas",
+      "thread_cs301_debugging",
+      "thread_cs301_dp",
+      "thread_cs301_foundations",
+      "thread_cs301_midterm_review",
+      "thread_cs301_policy",
+      "thread_cs301_post_midterm",
+      "thread_cs301_project",
+      "thread_hw3_wrapup",
+      "thread_math201_drills",
+      "thread_math201_quiz",
+      "thread_next_week_plan",
+      "thread_peer_review",
+      "thread_planning_routines",
+      "thread_project_proposal",
+      "thread_work_schedule",
+      "thread_writing_revision"
+    ],
+    "focuses": [
+      {
+        "date": "2026-04-07",
+        "focus": [
+          "routine candidate: hard work fits best in the 7-9 AM window",
+          "personality candidate: wants worked examples before theory",
+          "ephemeral assignment detail: CS 301 HW2 doubly linked list"
+        ]
+      },
+      {
+        "date": "2026-04-08",
+        "focus": [
+          "work branch candidate: Tue/Thu 5-9 PM campus help desk shift",
+          "course branch candidate: CS 301 submit as one zip in Canvas Assignments, not Modules"
+        ]
+      },
+      {
+        "date": "2026-04-09",
+        "focus": [
+          "routine reinforcement: calculus also works best in the morning window",
+          "ephemeral math assignment details should stay out of the graph"
+        ]
+      },
+      {
+        "date": "2026-04-10",
+        "focus": [
+          "course branch candidate: Chen posts solutions 24h after deadline and accepts no late work",
+          "personality reinforcement: worked example before rule statement"
+        ]
+      },
+      {
+        "date": "2026-04-11",
+        "focus": [
+          "school branch candidate: checks Canvas Announcements before starting assignments",
+          "work shift reinforcement"
+        ]
+      },
+      {
+        "date": "2026-04-12",
+        "focus": [
+          "playbook candidate: breaks large projects into research -> implementation -> polish",
+          "ephemeral project due date should remain temporary"
+        ]
+      },
+      {
+        "date": "2026-04-13",
+        "focus": [
+          "personality reinforcement: repeated preference for examples",
+          "relationship branch candidate: Sunday peer review with Maya"
+        ]
+      },
+      {
+        "date": "2026-04-14",
+        "focus": [
+          "school branch reinforcement: checks announcements before work starts",
+          "routine reinforcement: reserve morning block for hard math drills"
+        ]
+      },
+      {
+        "date": "2026-04-15",
+        "focus": [
+          "personality reinforcement: DP clicks after examples",
+          "course logistics reinforcement: CS 301 zip submission habit"
+        ]
+      },
+      {
+        "date": "2026-04-16",
+        "focus": [
+          "course policy consequence: starts CS 301 early because late work is impossible",
+          "ephemeral midterm recap"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "focus": [
+          "playbook reinforcement: same research -> implementation -> polish split",
+          "relationship reinforcement: Maya peer review repeats"
+        ]
+      },
+      {
+        "date": "2026-04-18",
+        "focus": [
+          "work shift reinforcement",
+          "personality reinforcement with another worked-example preference"
+        ]
+      },
+      {
+        "date": "2026-04-19",
+        "focus": [
+          "school branch reinforcement: announcement check catches rubric clarification",
+          "routine reinforcement for clean writing window"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "focus": [
+          "routine reinforcement for final day",
+          "playbook reinforcement on final project planning"
+        ]
+      }
+    ]
+  },
+  "runLog": [
+    {
+      "day": "2026-04-07",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-07",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
+      ],
+      "pendingCandidateCount": 0
+    },
+    {
+      "day": "2026-04-08",
+      "runHour": 20,
+      "ok": true,
+      "dailyFileWritten": "2026-04-08",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+      ],
+      "pendingCandidateCount": 0
+    },
+    {
+      "day": "2026-04-09",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-09",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+      ],
+      "pendingCandidateCount": 1
+    },
+    {
+      "day": "2026-04-10",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-10",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+      ],
+      "pendingCandidateCount": 1
+    },
+    {
+      "day": "2026-04-11",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-11",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
+      ],
+      "pendingCandidateCount": 1
+    },
+    {
+      "day": "2026-04-12",
+      "runHour": 20,
+      "ok": true,
+      "dailyFileWritten": "2026-04-12",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
+      ],
+      "pendingCandidateCount": 2
+    },
+    {
+      "day": "2026-04-13",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-13",
+      "weeklyFileWritten": null,
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+      ],
+      "pendingCandidateCount": 3
+    },
+    {
+      "day": "2026-04-14",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-14",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md"
+      ],
+      "pendingCandidateCount": 3
+    },
+    {
+      "day": "2026-04-15",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-15",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/worked-example-first.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/work/index.md"
+      ],
+      "pendingCandidateCount": 3
+    },
+    {
+      "day": "2026-04-16",
+      "runHour": 20,
+      "ok": true,
+      "dailyFileWritten": "2026-04-16",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+      ],
+      "pendingCandidateCount": 4
+    },
+    {
+      "day": "2026-04-17",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-17",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-workflow.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/courses/cs-301/index.md"
+      ],
+      "pendingCandidateCount": 5
+    },
+    {
+      "day": "2026-04-18",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-18",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/canvas-announcement-first.md"
+      ],
+      "pendingCandidateCount": 6
+    },
+    {
+      "day": "2026-04-19",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-19",
+      "weeklyFileWritten": "2026-W16",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-learning.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/project-scoping.md"
+      ],
+      "pendingCandidateCount": 6
+    },
+    {
+      "day": "2026-04-20",
+      "runHour": 7,
+      "ok": true,
+      "dailyFileWritten": "2026-04-20",
+      "weeklyFileWritten": "2026-W17",
+      "graphNodesUpdated": [
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/school/playbooks/example-first-explanations.md",
+        "/Users/rereynrd/School/student-claw/simulation/memorize-live/.orbyt-home/memory/graph/routine/index.md"
+      ],
+      "pendingCandidateCount": 9
+    }
+  ],
+  "distillation": {
+    "dailyCalls": 14,
+    "weeklyCalls": 7,
+    "dailyHeadingValid": 11,
+    "weeklyHeadingValid": 7,
+    "dailyParsedCandidates": 25,
+    "weeklyParsedLessons": 31
+  },
+  "finalMemory": {
+    "archivedDailyFiles": [
+      "2026-04-07.md",
+      "2026-04-08.md",
+      "2026-04-09.md",
+      "2026-04-10.md",
+      "2026-04-11.md",
+      "2026-04-12.md",
+      "2026-04-13.md",
+      "2026-04-14.md",
+      "2026-04-15.md",
+      "2026-04-16.md",
+      "2026-04-17.md",
+      "2026-04-18.md",
+      "2026-04-19.md",
+      "2026-04-20.md"
+    ],
+    "archivedWeeklyFiles": [
+      "2026-W15-rev-01-from-2026-04-07.md",
+      "2026-W15-rev-02-from-2026-04-08.md",
+      "2026-W15-rev-03-from-2026-04-09.md",
+      "2026-W15-rev-04-from-2026-04-10.md",
+      "2026-W15-rev-05-from-2026-04-11.md",
+      "2026-W15-rev-06-from-2026-04-12.md",
+      "2026-W16-rev-01-from-2026-04-13.md"
+    ],
+    "retainedDailyFiles": [
+      "2026-04-14.md",
+      "2026-04-15.md",
+      "2026-04-16.md",
+      "2026-04-17.md",
+      "2026-04-18.md",
+      "2026-04-19.md",
+      "2026-04-20.md"
+    ],
+    "retainedWeeklyFiles": [
+      "2026-W15.md",
+      "2026-W16.md"
+    ],
+    "graphFiles": [
+      "routine/index.md",
+      "school/courses/cs-301/index.md",
+      "school/playbooks/canvas-announcement-first.md",
+      "school/playbooks/example-first-explanations.md",
+      "school/playbooks/example-first-learning.md",
+      "school/playbooks/project-scoping.md",
+      "school/playbooks/project-workflow.md",
+      "school/playbooks/worked-example-first.md",
+      "work/index.md"
+    ],
+    "pendingCandidates": [
+      {
+        "id": "candidate_cdeb7cb5-90b6-43ee-8be7-488d30cb31de",
+        "source": "daily",
+        "branch": "school/playbooks/worked-example-first",
+        "text": "The student prefers starting problem sets with one worked example before independent practice.",
+        "confidence": 0.72,
+        "firstSeenAt": "2026-04-09T07:00:00.000Z",
+        "lastSeenAt": "2026-04-09T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_bb302ee9-7c9f-4a90-9dbe-59e411ec21f6",
+        "source": "daily",
+        "branch": "personality",
+        "text": "The student learns technical concepts better from examples than from pure definitions.",
+        "confidence": 0.89,
+        "firstSeenAt": "2026-04-12T20:00:00.000Z",
+        "lastSeenAt": "2026-04-12T20:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_91f7ee41-a0b7-43db-a1e7-08fa84b9d94e",
+        "source": "daily",
+        "branch": "relationships",
+        "text": "Maya is a recurring peer-review partner",
+        "confidence": 0.86,
+        "firstSeenAt": "2026-04-13T07:00:00.000Z",
+        "lastSeenAt": "2026-04-13T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_bf6f0d87-e336-4802-9552-453338dd6c5a",
+        "source": "daily",
+        "branch": "school/playbooks/time-management",
+        "text": "A safe strategy for CS 301 is to start assignments at least three days early",
+        "confidence": 0.86,
+        "firstSeenAt": "2026-04-16T20:00:00.000Z",
+        "lastSeenAt": "2026-04-16T20:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_34e02553-5943-4104-85dd-72c7426f74f5",
+        "source": "daily",
+        "branch": "relationships",
+        "text": "Maya is a recurring peer review partner",
+        "confidence": 0.71,
+        "firstSeenAt": "2026-04-17T07:00:00.000Z",
+        "lastSeenAt": "2026-04-17T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_e85fbbd5-4f13-4f75-b089-8a58b7221619",
+        "source": "daily",
+        "branch": "school/playbooks/worked-example-first",
+        "text": "prefers worked examples before formal explanations of new topics",
+        "confidence": 0.72,
+        "firstSeenAt": "2026-04-18T07:00:00.000Z",
+        "lastSeenAt": "2026-04-18T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_148d5352-e531-4240-bee1-fea7bc437492",
+        "source": "daily",
+        "branch": "routine",
+        "text": "The student uses a 7-9 AM focus window for concentrated homework work",
+        "confidence": 0.78,
+        "firstSeenAt": "2026-04-20T07:00:00.000Z",
+        "lastSeenAt": "2026-04-20T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_0c4aaf6d-6422-41a4-ab84-7dd2644e5c26",
+        "source": "daily",
+        "branch": "school/playbooks/phase-based-project-work",
+        "text": "The student prefers dividing larger projects into research, implementation, and polish phases",
+        "confidence": 0.86,
+        "firstSeenAt": "2026-04-20T07:00:00.000Z",
+        "lastSeenAt": "2026-04-20T07:00:00.000Z",
+        "evidenceCount": 1
+      },
+      {
+        "id": "candidate_7cc99c5d-91a9-41ee-a7f3-1c65f1e12442",
+        "source": "weekly",
+        "branch": "relationships",
+        "text": "Maya is a recurring peer-review partner.",
+        "confidence": 0.86,
+        "firstSeenAt": "2026-04-20T07:00:00.000Z",
+        "lastSeenAt": "2026-04-20T07:00:00.000Z",
+        "evidenceCount": 1
+      }
+    ],
+    "promotedFingerprintCount": 27,
+    "errorLogExists": false
+  },
+  "themeCoverage": [
+    {
+      "label": "Morning 7-9 AM focus window",
+      "dailyHits": 5,
+      "weeklyHits": 6,
+      "graphHits": 1,
+      "pendingHits": 1
+    },
+    {
+      "label": "Worked examples before theory",
+      "dailyHits": 6,
+      "weeklyHits": 5,
+      "graphHits": 3,
+      "pendingHits": 2
+    },
+    {
+      "label": "CS 301 Assignments-tab zip submission rule",
+      "dailyHits": 2,
+      "weeklyHits": 5,
+      "graphHits": 1,
+      "pendingHits": 0
+    },
+    {
+      "label": "CS 301 no-late-work / 24h solutions policy",
+      "dailyHits": 2,
+      "weeklyHits": 3,
+      "graphHits": 1,
+      "pendingHits": 0
+    },
+    {
+      "label": "Check Canvas Announcements before starting assignments",
+      "dailyHits": 3,
+      "weeklyHits": 2,
+      "graphHits": 2,
+      "pendingHits": 0
+    },
+    {
+      "label": "Research -> implementation -> polish project playbook",
+      "dailyHits": 3,
+      "weeklyHits": 0,
+      "graphHits": 2,
+      "pendingHits": 1
+    },
+    {
+      "label": "Tue/Thu campus help desk shifts",
+      "dailyHits": 3,
+      "weeklyHits": 5,
+      "graphHits": 2,
+      "pendingHits": 0
+    },
+    {
+      "label": "Sunday peer review with Maya",
+      "dailyHits": 2,
+      "weeklyHits": 1,
+      "graphHits": 1,
+      "pendingHits": 3
+    }
+  ]
+}

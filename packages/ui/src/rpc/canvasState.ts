@@ -96,6 +96,47 @@ export function removeArchivedAssignmentFromCanvasState(assignmentId: string): v
   })
 }
 
+export interface ArchivedAssignmentSnapshot {
+  readonly upcoming: CourseWorkItem | null
+  readonly submitted: CourseWorkItem | null
+  readonly pending: CourseWorkItem | null
+  readonly overdue: CourseWorkItem | null
+}
+
+export function captureAssignmentSnapshot(assignmentId: string): ArchivedAssignmentSnapshot {
+  const upcoming = appAtomRegistry.get(canvasUpcomingAssignmentsAtom).find((item) => item.id === assignmentId) ?? null
+  const status = appAtomRegistry.get(canvasSubmissionStatusAtom)
+  return {
+    upcoming,
+    submitted: status.submitted.find((item) => item.id === assignmentId) ?? null,
+    pending: status.pending.find((item) => item.id === assignmentId) ?? null,
+    overdue: status.overdue.find((item) => item.id === assignmentId) ?? null,
+  }
+}
+
+function addItemIfMissing(
+  items: ReadonlyArray<CourseWorkItem>,
+  next: CourseWorkItem | null,
+): ReadonlyArray<CourseWorkItem> {
+  if (!next) return items
+  if (items.some((item) => item.id === next.id)) return items
+  return [...items, next]
+}
+
+export function restoreAssignmentSnapshot(snapshot: ArchivedAssignmentSnapshot): void {
+  appAtomRegistry.set(
+    canvasUpcomingAssignmentsAtom,
+    addItemIfMissing(appAtomRegistry.get(canvasUpcomingAssignmentsAtom), snapshot.upcoming),
+  )
+
+  const status = appAtomRegistry.get(canvasSubmissionStatusAtom)
+  appAtomRegistry.set(canvasSubmissionStatusAtom, {
+    submitted: addItemIfMissing(status.submitted, snapshot.submitted),
+    pending: addItemIfMissing(status.pending, snapshot.pending),
+    overdue: addItemIfMissing(status.overdue, snapshot.overdue),
+  })
+}
+
 export function getCourseGrades(): ReadonlyArray<CanvasStudentCourseGradeSummary> {
   return appAtomRegistry.get(canvasCourseGradesAtom)
 }

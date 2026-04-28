@@ -5,7 +5,7 @@ Last updated: 2026-04-22
 ## Orientation Note
 
 - Target feature: make thread delete cleanup explicit, complete, and future-safe
-- Key dependencies: [PLAN.md](../../../PLAN.md),
+- Key dependencies: [PLAN.md](../../internal/PLAN.md),
   [docs/architecture/03-local-server.md](../../architecture/03-local-server.md),
   [phase-03-thread-runtime-separation-and-lazy-session-attachment.md](phase-03-thread-runtime-separation-and-lazy-session-attachment.md)
 - Constraints and boundaries:

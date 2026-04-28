@@ -49,10 +49,6 @@ vi.mock("@/lib/codexAuth", () => ({
   connectCodexAccount: codexAuthMocks.connectCodexAccount,
 }))
 
-vi.mock("qrcode", () => ({
-  toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qr"),
-}))
-
 vi.mock("@/rpc/appRuntime", () => ({
   getPrimaryWsRpcClient: () => ({
     canvas: {
@@ -96,9 +92,6 @@ describe("SettingsPage", () => {
     quietHoursEnd: "08:00",
     weeklyInsightsDay: 1,
     weeklyInsightsTime: "08:00",
-    relayBaseUrl: "https://push.example.com",
-    linkedDevice: null,
-    activePairing: null,
   } as const
 
   const registryEntries = [
@@ -256,34 +249,10 @@ describe("SettingsPage", () => {
           return defaultPushSettings
         }
 
-        if (channel === IpcChannel.PUSH_GET_PAIRING_STATUS) {
-          return {
-            linkedDevice: null,
-            activePairing: null,
-          }
-        }
-
-        if (channel === IpcChannel.PUSH_SEND_TEST) {
-          return { ok: true }
-        }
-
-        if (channel === IpcChannel.PUSH_UNLINK_DEVICE || channel === IpcChannel.PUSH_CANCEL_PAIRING) {
-          return defaultPushSettings
-        }
-
         if (channel === IpcChannel.PUSH_UPDATE_SETTINGS) {
           return {
             ...defaultPushSettings,
             ...(params ?? {}),
-          }
-        }
-
-        if (channel === IpcChannel.PUSH_START_PAIRING) {
-          return {
-            sessionId: "session_1",
-            qrUrl: "https://push.example.com/pair/session_1",
-            expiresAt: "2026-04-15T13:00:00.000Z",
-            state: "pending" as const,
           }
         }
 
@@ -429,7 +398,7 @@ describe("SettingsPage", () => {
     expect(syncButton.hasAttribute("disabled")).toBe(true)
   })
 
-  test("renders phone push settings and starts pairing", async () => {
+  test("renders desktop notification settings and toggles a preference", async () => {
     const user = userEvent.setup()
     runtimeHooks.useRuntimeBootstrap.mockReturnValue({
       platform: "darwin",
@@ -445,22 +414,17 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-push-card")).toBeDefined()
     })
 
-    expect(screen.getByTestId("settings-push-status").textContent).toBe("Not linked")
-    expect(screen.getByTestId("settings-push-admin-tools")).toBeDefined()
-    expect(screen.getByTestId("settings-push-main-flow")).toBeDefined()
-    expect(within(screen.getByTestId("settings-push-main-flow")).getByText("Get alerts on your phone when work finishes.")).toBeDefined()
-    expect(screen.getByTestId("settings-push-send-test").hasAttribute("disabled")).toBe(true)
-    expect(screen.queryByTestId("settings-push-weekly-day")).toBeNull()
-    expect((within(screen.getByTestId("settings-push-admin-tools")).getByTestId("settings-push-relay") as HTMLInputElement).value)
-      .toBe("https://push.example.com")
+    expect(screen.getByTestId("settings-push-enabled")).toBeDefined()
+    expect(screen.getByTestId("settings-push-weekly-day")).toBeDefined()
+    expect(screen.getByTestId("settings-push-weekly-time")).toBeDefined()
+    expect(screen.getByTestId("settings-push-quiet-start")).toBeDefined()
+    expect(screen.getByTestId("settings-push-quiet-end")).toBeDefined()
 
-    await user.click(screen.getByTestId("settings-push-pair"))
-
-    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_START_PAIRING)
-    await waitFor(() => {
-      expect(screen.getByTestId("settings-push-pairing")).toBeDefined()
-      expect(screen.getByTestId("settings-push-qr")).toBeDefined()
-    })
+    await user.click(screen.getByTestId("settings-push-weekly-enabled"))
+    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(
+      IpcChannel.PUSH_UPDATE_SETTINGS,
+      expect.objectContaining({ weeklyInsightsEnabled: false }),
+    )
   })
 
   test("sends a desktop test notification from settings without requiring phone pairing", async () => {
@@ -488,118 +452,6 @@ describe("SettingsPage", () => {
       body: "Desktop notifications are enabled for this app.",
     })
     expect(window.electronAPI?.invoke).not.toHaveBeenCalledWith(IpcChannel.NOTIFICATION_SHOW, expect.anything())
-  })
-
-  test("shows a friendly setup-required state before admin configuration is complete", async () => {
-    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
-      platform: "darwin",
-      featureFlags: {
-        pluginSystem: false,
-      },
-    })
-
-    window.electronAPI!.invoke = vi.fn(async (channel: string) => {
-      if (channel === IpcChannel.PUSH_GET_SETTINGS) {
-        return {
-          ...defaultPushSettings,
-          relayBaseUrl: "",
-        }
-      }
-
-      return null
-    }) as any
-
-    render(<SettingsPage />)
-
-    await navigateTo("notifications")
-    await waitFor(() => {
-      expect(screen.getByTestId("settings-push-card")).toBeDefined()
-    })
-
-    expect(screen.getByTestId("settings-push-status").textContent).toBe("Setup required")
-    expect(screen.getByTestId("settings-push-setup-state")).toBeDefined()
-    expect(screen.getByText("Phone notifications are not configured on this desktop yet.")).toBeDefined()
-    expect(screen.getByTestId("settings-push-pair").hasAttribute("disabled")).toBe(true)
-    expect(screen.queryByTestId("settings-push-error")).toBeNull()
-  })
-
-  test("cancels an active phone pairing session", async () => {
-    const user = userEvent.setup()
-    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
-      platform: "darwin",
-      featureFlags: {
-        pluginSystem: false,
-      },
-    })
-
-    render(<SettingsPage />)
-
-    await navigateTo("notifications")
-    await waitFor(() => {
-      expect(screen.getByTestId("settings-push-pair")).toBeDefined()
-    })
-
-    await user.click(screen.getByTestId("settings-push-pair"))
-
-    await waitFor(() => {
-      expect(screen.getByTestId("settings-push-pairing")).toBeDefined()
-    })
-
-    await user.click(screen.getByTestId("settings-push-cancel"))
-
-    expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.PUSH_CANCEL_PAIRING)
-    await waitFor(() => {
-      expect(screen.queryByTestId("settings-push-pairing")).toBeNull()
-    })
-  })
-
-  test("keeps preferences hidden until a phone is linked", async () => {
-    const user = userEvent.setup()
-    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
-      platform: "darwin",
-      featureFlags: {
-        pluginSystem: false,
-      },
-    })
-
-    window.electronAPI!.invoke = vi.fn(async (channel: string) => {
-      if (channel === IpcChannel.PUSH_GET_SETTINGS) {
-        return {
-          ...defaultPushSettings,
-          linkedDevice: {
-            endpoint: "https://push.example.com/subscription",
-            platform: "ios" as const,
-            linkedAt: "2026-04-16T10:00:00.000Z",
-          },
-        }
-      }
-
-      if (channel === IpcChannel.PUSH_SEND_TEST) {
-        return { ok: true }
-      }
-
-      if (channel === IpcChannel.PUSH_UNLINK_DEVICE) {
-        return defaultPushSettings
-      }
-
-      return null
-    }) as any
-
-    render(<SettingsPage />)
-
-    await navigateTo("notifications")
-    await waitFor(() => {
-      expect(screen.getByTestId("settings-push-status").textContent).toContain("Linked")
-    })
-
-    expect(screen.getByTestId("settings-push-linked-state")).toBeDefined()
-    expect(screen.getByTestId("settings-push-send-test").hasAttribute("disabled")).toBe(false)
-    expect(screen.queryByTestId("settings-push-weekly-day")).toBeNull()
-
-    await user.click(screen.getByTestId("settings-push-preferences-toggle"))
-
-    expect(screen.getByTestId("settings-push-weekly-day")).toBeDefined()
-    expect(screen.getByTestId("settings-push-quiet-start")).toBeDefined()
   })
 
   test("invokes plugin:setEnabled when the toggle switch is clicked", async () => {

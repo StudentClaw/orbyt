@@ -5,7 +5,7 @@ Last updated: 2026-04-22
 ## Orientation Note
 
 - **Target feature:** freeze the v1 curated skill inventory, directory layout, expanded `SKILL.md` frontmatter contract, and logical capability-request namespace mapped to real Canvas and Apple Calendar MCP tool names.
-- **Key dependencies:** [PLAN.md](../../../PLAN.md), [docs/features/03-skill-system.md](../../features/03-skill-system.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [packages/server/src/skills/SkillParser.ts](../../../packages/server/src/skills/SkillParser.ts), [packages/extensions/canvas-mcp/src/student-tool-contract.ts](../../../packages/extensions/canvas-mcp/src/student-tool-contract.ts), [packages/extensions/apple-calendar-mcp/src/server.ts](../../../packages/extensions/apple-calendar-mcp/src/server.ts), [packages/electron/src/codex/runtime.ts](../../../packages/electron/src/codex/runtime.ts).
+- **Key dependencies:** [PLAN.md](../../internal/PLAN.md), [docs/features/03-skill-system.md](../../features/03-skill-system.md), [docs/features/01-ai-harness.md](../../features/01-ai-harness.md), [packages/server/src/skills/SkillParser.ts](../../../packages/server/src/skills/SkillParser.ts), [packages/extensions/canvas-mcp/src/student-tool-contract.ts](../../../packages/extensions/canvas-mcp/src/student-tool-contract.ts), [packages/extensions/apple-calendar-mcp/src/server.ts](../../../packages/extensions/apple-calendar-mcp/src/server.ts), [packages/electron/src/codex/runtime.ts](../../../packages/electron/src/codex/runtime.ts).
 - **Constraints and boundaries:**
   - Do not change the feature spec file in this phase; this phase only locks rollout engineering contracts.
   - Do not implement parser changes yet; Phase 03 consumes this contract.
