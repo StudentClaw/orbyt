@@ -168,6 +168,21 @@ describe("build-macos-desktop-artifact", () => {
     ])
   })
 
+  test("inherits JIT entitlement for signed helper processes", () => {
+    const entitlementsPath = path.join(
+      import.meta.dir,
+      "..",
+      "packages",
+      "electron",
+      "build-resources",
+      "entitlements.mac.inherit.plist",
+    )
+    const plist = readFileSync(entitlementsPath, "utf8")
+
+    expect(plist).toContain("<key>com.apple.security.cs.allow-jit</key>")
+    expect(plist).toContain("<key>com.apple.security.personal-information.calendars</key>")
+  })
+
   test("stages the desktop app with the bundled server runtime dependency", () => {
     const packageJson = createStagePackageJson("/tmp/orbyt-stage", true) as {
       dependencies: Record<string, string>
