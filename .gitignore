@@ -11,7 +11,9 @@ package-lock.json
 # Local reference repos
 references/
 experiments/references/
-graphify-out/GRAPH_REPORT.md
+.reports/
+graphify-out/
+experiments/
 
 # Local build outputs
 build-logs/

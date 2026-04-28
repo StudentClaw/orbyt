@@ -87,6 +87,21 @@ jobs:
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify stable release commit is on prod
+        if: steps.release_meta.outputs.is_prerelease == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin prod:refs/remotes/origin/prod --no-tags
+          release_commit="$(git rev-parse HEAD^{commit})"
+
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/prod; then
+            echo "Stable releases must be tagged from a commit reachable from origin/prod." >&2
+            echo "Merge main into prod first, then tag the prod commit." >&2
+            exit 1
+          fi
+
       - name: Typecheck
         run: bun run typecheck
 

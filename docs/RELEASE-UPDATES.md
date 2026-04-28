@@ -6,7 +6,9 @@ Prerelease versions such as `1.2.3-beta.1` can be published as GitHub prerelease
 
 ## CI on Every Push
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatches.
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main` or `prod`, and manual dispatches.
+
+Use `main` as the development integration branch. Use `prod` as the stable production branch. Release PRs should merge `main` into `prod` only after CI is green and the code is ready to ship.
 
 The required job:
 
@@ -57,26 +59,29 @@ git commit -m "Release v1.2.3"
 git push -u origin release/v1.2.3
 ```
 
-After the release commit is on `main`, create and push a matching stable tag.
+After the release commit is merged from `main` into `prod`, create and push a matching stable tag from the `prod` commit.
 
 ```bash
-git switch main
-git pull --ff-only origin main
+git switch prod
+git pull --ff-only origin prod
 git tag v1.2.3
 git push origin v1.2.3
 ```
 
 You can also run the Release workflow manually with `workflow_dispatch`, but the checked-out code still needs to contain the matching app version.
+Stable release runs fail unless the release commit is reachable from `origin/prod`.
 
 ## Release Workflow
 
 `.github/workflows/release.yml` runs when a tag matching `v*.*.*` is pushed, or when manually dispatched with a version.
+Plain stable versions must be tagged from `prod`; prerelease versions remain available for non-production validation.
 
 The workflow has three jobs:
 
 1. `preflight`
    - Resolves the release version and tag.
    - Marks plain `x.y.z` versions as stable releases and prerelease-looking versions as prereleases.
+   - Verifies stable releases are tagged from a commit reachable from `origin/prod`.
    - Runs `bun install --frozen-lockfile`.
    - Runs `bun run typecheck`.
    - Finds the previous release tag for generated release notes.

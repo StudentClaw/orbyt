@@ -1,2 +1,0 @@
-packages/server/src/memory/prompts/daily-distillation.md
-packages/server/src/memory/prompts/weekly-distillation.md
