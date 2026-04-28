@@ -16,6 +16,12 @@ import type {
 export const IpcChannel = {
   APP_GET_PATH: "app:get-path",
   APP_GET_BOOTSTRAP: "app:get-bootstrap",
+  APP_UPDATE_GET_STATE: "app:update-get-state",
+  APP_UPDATE_CHECK: "app:update-check",
+  APP_UPDATE_DOWNLOAD: "app:update-download",
+  APP_UPDATE_INSTALL: "app:update-install",
+  APP_UPDATE_SET_MODE: "app:update-set-mode",
+  APP_UPDATE_STATE: "app:update-state",
   NOTIFICATION_SHOW: "notification:show",
   TRAY_UPDATE_BADGE: "tray:update-badge",
   FILE_OPEN_DIALOG: "file:open-dialog",
@@ -57,6 +63,47 @@ export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
 export type CodexAuthResult = {
   readonly status: "connected" | "failed"
   readonly error?: string
+}
+
+export type DesktopUpdateMode = "automatic" | "prompt"
+
+export type DesktopUpdateStatus =
+  | "disabled"
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error"
+
+export type DesktopUpdateErrorContext = "check" | "download" | "install" | null
+
+export type DesktopUpdateState = {
+  readonly enabled: boolean
+  readonly mode: DesktopUpdateMode
+  readonly status: DesktopUpdateStatus
+  readonly currentVersion: string
+  readonly availableVersion: string | null
+  readonly downloadedVersion: string | null
+  readonly checkedAt: string | null
+  readonly downloadPercent: number | null
+  readonly message: string | null
+  readonly errorContext: DesktopUpdateErrorContext
+}
+
+export type DesktopUpdateModeResult = {
+  readonly state: DesktopUpdateState
+}
+
+export type DesktopUpdateCheckResult = {
+  readonly checked: boolean
+  readonly state: DesktopUpdateState
+}
+
+export type DesktopUpdateActionResult = {
+  readonly accepted: boolean
+  readonly completed: boolean
+  readonly state: DesktopUpdateState
 }
 
 export type PluginInstallBundledParams = {
@@ -258,6 +305,11 @@ export type PluginRevealPermissionSettingsResult =
 export type IpcInvokeArgsMap = {
   [IpcChannel.APP_GET_PATH]: [name: string]
   [IpcChannel.APP_GET_BOOTSTRAP]: []
+  [IpcChannel.APP_UPDATE_GET_STATE]: []
+  [IpcChannel.APP_UPDATE_CHECK]: []
+  [IpcChannel.APP_UPDATE_DOWNLOAD]: []
+  [IpcChannel.APP_UPDATE_INSTALL]: []
+  [IpcChannel.APP_UPDATE_SET_MODE]: [params: { mode: DesktopUpdateMode }]
   [IpcChannel.NOTIFICATION_SHOW]: [options: { title: string; body: string }]
   [IpcChannel.TRAY_UPDATE_BADGE]: [options: { count: number }]
   [IpcChannel.FILE_OPEN_DIALOG]: [options?: {
@@ -298,6 +350,11 @@ export type IpcInvokeArgsMap = {
 export type IpcInvokeResultMap = {
   [IpcChannel.APP_GET_PATH]: string
   [IpcChannel.APP_GET_BOOTSTRAP]: DesktopBootstrap
+  [IpcChannel.APP_UPDATE_GET_STATE]: DesktopUpdateState
+  [IpcChannel.APP_UPDATE_CHECK]: DesktopUpdateCheckResult
+  [IpcChannel.APP_UPDATE_DOWNLOAD]: DesktopUpdateActionResult
+  [IpcChannel.APP_UPDATE_INSTALL]: DesktopUpdateActionResult
+  [IpcChannel.APP_UPDATE_SET_MODE]: DesktopUpdateModeResult
   [IpcChannel.NOTIFICATION_SHOW]: void
   [IpcChannel.TRAY_UPDATE_BADGE]: void
   [IpcChannel.FILE_OPEN_DIALOG]: string | null
@@ -333,6 +390,7 @@ export type IpcInvokeResultMap = {
 }
 
 export type IpcEventPayloadMap = {
+  [IpcChannel.APP_UPDATE_STATE]: DesktopUpdateState
   [IpcChannel.PLUGIN_LIFECYCLE]: PluginLifecycleEvent
   [IpcChannel.PLUGIN_READINESS]: PluginReadinessEvent
 }

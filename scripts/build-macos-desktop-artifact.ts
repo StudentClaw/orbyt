@@ -53,7 +53,9 @@ export function createMacPackagingConfig(options: {
   outputDir: string
   signed: boolean
   afterSignPath?: string
+  updateRepository?: string
 }) {
+  const publishConfig = resolveGitHubPublishConfig(options.updateRepository)
   return {
     appId: options.appId,
     productName: options.productName,
@@ -78,6 +80,7 @@ export function createMacPackagingConfig(options: {
         to: "skills",
       },
     ],
+    ...(publishConfig ? { publish: [publishConfig] } : {}),
     afterSign: options.afterSignPath ?? path.join(options.stageAppDir, "build-resources", "notarize.mjs"),
     mac: {
       target: ["dmg", "zip"],
@@ -103,6 +106,29 @@ export function createMacPackagingConfig(options: {
       },
       identity: options.signed ? undefined : null,
     },
+  }
+}
+
+export function resolveGitHubPublishConfig(updateRepository?: string): {
+  readonly provider: "github"
+  readonly owner: string
+  readonly repo: string
+  readonly releaseType: "release"
+} | undefined {
+  const rawRepository = updateRepository?.trim()
+    || process.env.ORBYT_DESKTOP_UPDATE_REPOSITORY?.trim()
+    || process.env.GITHUB_REPOSITORY?.trim()
+    || ""
+  const [owner, repo, ...rest] = rawRepository.split("/")
+  if (!owner || !repo || rest.length > 0) {
+    return undefined
+  }
+
+  return {
+    provider: "github",
+    owner,
+    repo,
+    releaseType: "release",
   }
 }
 
@@ -409,6 +435,7 @@ export function createStagePackageJson(stageAppDir: string, signed: boolean) {
       "@orbyt/server": "file:vendor/server",
       "@orbyt/shared": "file:vendor/shared",
       "@orbyt/shared-runtime": "file:vendor/shared-runtime",
+      "electron-updater": electronPackageJson.dependencies["electron-updater"],
       "web-push": electronPackageJson.dependencies["web-push"],
       "ws": electronPackageJson.dependencies.ws,
     },

@@ -81,10 +81,33 @@ describe("GeneralSection", () => {
         setPreferences: mockSetPreferences,
       },
     })
+    const updateState = {
+      enabled: true,
+      mode: "automatic" as const,
+      status: "idle" as const,
+      currentVersion: "0.1.0",
+      availableVersion: null,
+      downloadedVersion: null,
+      checkedAt: null,
+      downloadPercent: null,
+      message: null,
+      errorContext: null,
+    }
     window.electronAPI = {
       getBootstrap: vi.fn().mockResolvedValue(null),
       codexAuthStart: vi.fn().mockResolvedValue({ status: "connected" as const }),
-      invoke: vi.fn().mockResolvedValue("/tmp/custom-graph"),
+      invoke: vi.fn(async (channel: IpcChannel, params?: unknown) => {
+        if (channel === IpcChannel.APP_UPDATE_GET_STATE) {
+          return updateState
+        }
+        if (channel === IpcChannel.APP_UPDATE_SET_MODE) {
+          return { state: { ...updateState, mode: (params as { mode: "automatic" | "prompt" }).mode } }
+        }
+        if (channel === IpcChannel.APP_UPDATE_CHECK) {
+          return { checked: true, state: { ...updateState, message: "Orbyt is up to date." } }
+        }
+        return "/tmp/custom-graph"
+      }) as NonNullable<Window["electronAPI"]>["invoke"],
       send: vi.fn(),
       on: vi.fn().mockReturnValue(() => {}),
     }
@@ -138,5 +161,19 @@ describe("GeneralSection", () => {
       expect(mockSetPreferences).toHaveBeenCalledWith({ memoryGraphPath: null })
     })
     expect(screen.getByTestId("settings-memory-graph-mode").textContent).toContain("default Documents location")
+  })
+
+  test("shows desktop update controls and changes install mode", async () => {
+    render(<GeneralSection />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-desktop-updates-card").textContent).toContain("Orbyt 0.1.0")
+    })
+
+    await userEvent.click(screen.getByTestId("settings-updates-mode-prompt"))
+
+    await waitFor(() => {
+      expect(window.electronAPI?.invoke).toHaveBeenCalledWith(IpcChannel.APP_UPDATE_SET_MODE, { mode: "prompt" })
+    })
   })
 })
