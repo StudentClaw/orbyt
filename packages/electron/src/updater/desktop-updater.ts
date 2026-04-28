@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron"
-import { autoUpdater } from "electron-updater"
+import electronUpdater from "electron-updater"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import {
@@ -26,6 +26,8 @@ import {
   updateAvailable,
   updateMode,
 } from "./update-state.js"
+
+const { autoUpdater } = electronUpdater
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 30_000
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000
