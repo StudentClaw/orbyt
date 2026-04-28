@@ -103,6 +103,7 @@ export interface ThreadRuntimeManagerService {
   readonly respondToApproval: (
     approvalRequestId: string,
     decision: ProviderApprovalDecision,
+    options?: { rememberDecision?: boolean },
   ) => Promise<{
     approvalRequestId: string
     threadId: string
@@ -663,13 +664,13 @@ export function createThreadRuntimeManager(
     },
     listPendingApprovals: () =>
       Array.from(slots.values()).flatMap((slot) => slot.runtime.listPendingApprovals()),
-    respondToApproval: async (approvalRequestId, decision) => {
+    respondToApproval: async (approvalRequestId, decision, options) => {
       for (const slot of slots.values()) {
         const approvals = slot.runtime.listPendingApprovals()
         if (!approvals.some((approval) => approval.id === approvalRequestId)) {
           continue
         }
-        return slot.runtime.respondToApproval(approvalRequestId, decision)
+        return slot.runtime.respondToApproval(approvalRequestId, decision, options)
       }
 
       return {

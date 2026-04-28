@@ -156,10 +156,16 @@ export function healthCheck(
 /**
  * Reuses an authenticated local runtime when possible, otherwise spawns and verifies a new one.
  */
+export type CanvasCredentialsLaunchConfig = {
+  readonly baseUrl: string
+  readonly token: string
+}
+
 export async function spawnServer(
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
   launchContext: ServerLaunchContext = {},
+  canvasCredentials?: CanvasCredentialsLaunchConfig,
 ): Promise<ServerProcess> {
   const port = Number(process.env.SERVER_PORT ?? 8787)
   const dbPath = process.env.DB_PATH ?? `${process.env.HOME}/.orbyt/data.db`
@@ -178,7 +184,7 @@ export async function spawnServer(
   }
 
   const launchSpec = resolveServerLaunchSpec(launchContext)
-  const child = spawnServerChild(launchSpec, port, dbPath, orbytHome, auth, gateway, codexIsolation)
+  const child = spawnServerChild(launchSpec, port, dbPath, orbytHome, auth, gateway, codexIsolation, canvasCredentials)
   pipeChildOutput(child)
   const childError = createChildErrorTracker(child)
 
@@ -274,6 +280,7 @@ function spawnServerChild(
   auth: WsHandshakeAuth,
   gateway?: PluginGatewayLaunchConfig,
   codexIsolation?: CodexIsolationConfig,
+  canvasCredentials?: CanvasCredentialsLaunchConfig,
 ): ChildProcess {
   const child = spawn(launchSpec.command, launchSpec.args, {
     env: {
@@ -296,6 +303,10 @@ function spawnServerChild(
         PLUGIN_GATEWAY_MCP_URL: gateway.mcpUrl,
         PLUGIN_GATEWAY_MCP_BEARER_TOKEN: gateway.mcpBearerToken,
         PLUGIN_GATEWAY_MCP_SERVER_NAME: gateway.mcpServerName,
+      } : {}),
+      ...(canvasCredentials ? {
+        CANVAS_BASE_URL: canvasCredentials.baseUrl,
+        CANVAS_TOKEN: canvasCredentials.token,
       } : {}),
     },
     stdio: "pipe",

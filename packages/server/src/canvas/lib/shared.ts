@@ -1,25 +1,21 @@
-import { Schema } from "@effect/schema"
-import { type CallToolResult } from "@modelcontextprotocol/sdk/types.js"
-import { CanvasApiError, CanvasPermissionError, type CanvasCourse, type SourceType } from "@orbyt/contracts"
-import { decodeCourseId } from "../ids.js"
-import { CanvasClient } from "../canvas-client.js"
-import type { CanvasPluginCredentials } from "../runtime.js"
-import { formatCanvasError, summarizeTextResult, validateContract } from "../utils.js"
+import { CanvasApiError, CanvasPermissionError, type CanvasCourse } from "@orbyt/contracts"
+import { decodeCourseId } from "./ids.js"
+import { CanvasClient, type CanvasCredentials } from "./canvas-client.js"
 
-export type CanvasToolDependencies = {
-  now: () => Date
-  getCredentials: () => CanvasPluginCredentials
-  createClient?: (credentials: CanvasPluginCredentials) => CanvasClient
-  workspaceRoot?: string
-  writableRoots?: string[]
+export type CanvasApiDependencies = {
+  readonly now: () => Date
+  readonly getCredentials: () => CanvasCredentials
+  readonly createClient?: (credentials: CanvasCredentials) => CanvasClient
+  readonly workspaceRoot?: string
+  readonly writableRoots?: string[]
 }
 
-export function getCanvasClient(deps: CanvasToolDependencies): CanvasClient {
+export function getCanvasClient(deps: CanvasApiDependencies): CanvasClient {
   return getCanvasClientForBaseUrl(deps)
 }
 
 export function getCanvasClientForBaseUrl(
-  deps: CanvasToolDependencies,
+  deps: CanvasApiDependencies,
   baseUrl?: string,
 ): CanvasClient {
   const credentials = deps.getCredentials()
@@ -67,30 +63,6 @@ export async function requireCourse(
   return course
 }
 
-export function successResult<A, I, R>(
-  schema: Schema.Schema<A, I, never>,
-  data: I,
-  resource: string,
-): CallToolResult {
-  const structured = validateContract(schema, data, resource)
-  return {
-    content: [{ type: "text", text: summarizeTextResult(structured) }],
-    structuredContent: structured as Record<string, unknown>,
-  }
-}
-
-export function errorResult(error: unknown): CallToolResult {
-  const formatted = formatCanvasError(error)
-  return {
-    content: [{ type: "text", text: formatted.message }],
-    isError: true,
-  }
-}
-
-export function requestedSources(sources?: SourceType[]): SourceType[] {
-  return sources && sources.length > 0 ? sources : ["assignment"]
-}
-
 export function isPermissionError(error: unknown): error is CanvasPermissionError {
   return error instanceof CanvasPermissionError
 }
@@ -99,11 +71,11 @@ export function isNotFoundError(error: unknown): error is CanvasApiError {
   return error instanceof CanvasApiError && error.statusCode === 404
 }
 
-export function getWorkspaceRoot(deps: CanvasToolDependencies): string {
+export function getWorkspaceRoot(deps: CanvasApiDependencies): string {
   return deps.workspaceRoot ?? process.env.CODEX_WORKSPACE_ROOT ?? process.env.PWD ?? process.cwd()
 }
 
-export function getWritableRoots(deps: CanvasToolDependencies): string[] {
+export function getWritableRoots(deps: CanvasApiDependencies): string[] {
   if (deps.writableRoots && deps.writableRoots.length > 0) {
     return deps.writableRoots
   }

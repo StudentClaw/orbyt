@@ -156,7 +156,9 @@ export function createPluginGatewayController(options: {
   }
 
   function resolveToolTarget(exposedToolName: string): ResolvedToolTarget {
-    const running = currentSnapshot.tools.find((entry) => entry.exposedToolName === exposedToolName)
+    const running = currentSnapshot.tools.find(
+      (entry) => entry.exposedToolName === exposedToolName,
+    )
     if (running) {
       return {
         state: "running",

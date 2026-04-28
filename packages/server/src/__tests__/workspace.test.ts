@@ -203,7 +203,8 @@ describe("workspace operations", () => {
     )
 
     expect(row?.cwd).toBe(tmpFolder)
-    expect(row?.access_mode).toBe("default")
+    // Permission system removed: every new thread defaults to full access.
+    expect(row?.access_mode).toBe("full")
   })
 
   test("relinkWorkspace updates thread session cwd and clears provider thread bindings", async () => {
@@ -249,6 +250,9 @@ describe("workspace operations", () => {
   test("setThreadAccessMode persists the mode and clears bound provider threads", async () => {
     const service = createOrchestrationService(makeDeps(database))
     const { workspaceId } = await service.createWorkspace("cmd-13a", tmpFolder)
+    // Permission system removed: new threads default to "full"; switch to
+    // "default" so the access-mode change actually flips and triggers the
+    // provider-session reset that this test asserts on.
     const { threadId } = await service.createThread("cmd-13b", workspaceId, "Scoped chat")
 
     db.run(
@@ -256,7 +260,7 @@ describe("workspace operations", () => {
       ["provider-thread-1", JSON.stringify({ resumeCursor: { threadId: "provider-thread-1" } }), "stale", threadId],
     )
 
-    const result = await service.setThreadAccessMode("cmd-13c", threadId, "full")
+    const result = await service.setThreadAccessMode("cmd-13c", threadId, "default")
 
     const threadRow = database.get<{ access_mode: string }>(
       "SELECT access_mode FROM orchestration_threads WHERE id = ?",
@@ -267,8 +271,8 @@ describe("workspace operations", () => {
       [threadId],
     )
 
-    expect(result).toEqual({ threadId, accessMode: "full" })
-    expect(threadRow?.access_mode).toBe("full")
+    expect(result).toEqual({ threadId, accessMode: "default" })
+    expect(threadRow?.access_mode).toBe("default")
     expect(sessionRow?.provider_thread_id).toBeNull()
     expect(sessionRow?.runtime_payload).toBeNull()
     expect(sessionRow?.last_error).toBeNull()

@@ -363,6 +363,8 @@ export const ProviderPendingApproval = Schema.Struct({
   command: Schema.NullOr(Schema.String),
   cwd: Schema.NullOr(Schema.String),
   availableDecisions: Schema.Array(ProviderApprovalDecision),
+  toolKey: Schema.NullOr(Schema.String),
+  toolLabel: Schema.NullOr(Schema.String),
 })
 
 /**
@@ -537,6 +539,7 @@ export const RetryProviderInitializeResult = Schema.Struct({
 export const RespondToProviderApprovalParams = Schema.Struct({
   approvalRequestId: Schema.String,
   decision: ProviderApprovalDecision,
+  rememberDecision: Schema.optional(Schema.Boolean),
 })
 
 export const RespondToProviderApprovalResult = Schema.Struct({

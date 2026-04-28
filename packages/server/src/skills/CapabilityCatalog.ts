@@ -26,6 +26,10 @@ type ToolMapping = {
   readonly capabilityKeys: readonly LogicalCapabilityKey[]
 }
 
+// Canvas tools that the AI sees, all served by the consolidated canvas-mcp
+// plugin (cache-backed). Live Canvas REST calls now happen in-process via
+// CanvasApiClient; the live MCP plugin and its write-capable tool set were
+// removed during consolidation.
 const CANVAS_SELF_READ: readonly string[] = [
   "get_my_upcoming_assignments",
   "get_my_submission_status",
@@ -36,35 +40,7 @@ const CANVAS_SELF_READ: readonly string[] = [
 
 const CANVAS_SHARED_READ: readonly string[] = [
   "list_courses",
-  "get_course_details",
-  "get_course_content_overview",
-  "list_pages",
-  "get_page_content",
-  "get_page_details",
-  "get_front_page",
   "list_assignments",
-  "get_assignment_details",
-  "list_modules",
-  "list_module_items",
-  "get_course_structure",
-  "list_course_files",
-  "list_discussion_topics",
-  "get_discussion_topic_details",
-  "list_discussion_entries",
-  "get_discussion_entry_details",
-  "get_discussion_with_replies",
-  "list_conversations",
-  "get_conversation_details",
-  "get_unread_count",
-  "search_canvas_tools",
-]
-
-const CANVAS_FILE_DOWNLOAD: readonly string[] = ["download_course_file"]
-
-const CANVAS_STUDENT_WRITE: readonly string[] = [
-  "post_discussion_entry",
-  "reply_to_discussion_entry",
-  "mark_conversations_read",
 ]
 
 const APPLE_CALENDAR_READ_CALENDARS: readonly string[] = ["getCalendars"]
@@ -87,8 +63,6 @@ function entries(
 const MAPPINGS: readonly ToolMapping[] = [
   ...entries("canvas-mcp", CANVAS_SELF_READ, "canvas.self.read"),
   ...entries("canvas-mcp", CANVAS_SHARED_READ, "canvas.shared.read"),
-  ...entries("canvas-mcp", CANVAS_FILE_DOWNLOAD, "canvas.files.download"),
-  ...entries("canvas-mcp", CANVAS_STUDENT_WRITE, "canvas.student.write"),
   ...entries("apple-calendar-mcp", APPLE_CALENDAR_READ_CALENDARS, "calendar.calendars.read"),
   ...entries("apple-calendar-mcp", APPLE_CALENDAR_READ_EVENTS, "calendar.events.read"),
   ...entries("apple-calendar-mcp", APPLE_CALENDAR_WRITE_EVENTS, "calendar.events.write"),

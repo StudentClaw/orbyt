@@ -764,6 +764,7 @@ async function handleProviderMethod(
           id,
           decoded.approvalRequestId,
           decoded.decision,
+          { rememberDecision: decoded.rememberDecision === true },
         ),
       )
     }

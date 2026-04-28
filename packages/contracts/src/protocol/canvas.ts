@@ -63,6 +63,7 @@ export const CanvasStudentCourseGradeSummary = Schema.Struct({
   currentGrade: Schema.optional(Schema.String),
   finalScore: Schema.optional(Schema.Number),
   finalGrade: Schema.optional(Schema.String),
+  units: Schema.optional(Schema.Number),
 })
 
 export const CanvasGetMyCourseGradesParams = Schema.Struct({})

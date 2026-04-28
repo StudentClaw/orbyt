@@ -110,6 +110,8 @@ export function createControlledRuntimeFactory(): ControlledRuntimeFactory {
           command: "echo test",
           cwd: "/repo",
           availableDecisions: ["approve", "deny"],
+          toolKey: "cmd:echo",
+          toolLabel: "echo",
         }
         pendingApprovals.set(approvalId, approval)
         await input.onApprovalRequest(approval)

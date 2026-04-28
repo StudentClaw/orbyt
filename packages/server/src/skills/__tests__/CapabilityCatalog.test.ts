@@ -3,21 +3,22 @@ import { logicalKeysForTool, isReadOnlyCapabilityKey } from "../CapabilityCatalo
 
 describe("CapabilityCatalog.logicalKeysForTool", () => {
   test("maps canvas shared reads to canvas.shared.read", () => {
-    expect(logicalKeysForTool("canvas-mcp", "get_page_content")).toEqual(["canvas.shared.read"])
-    expect(logicalKeysForTool("canvas-mcp", "list_modules")).toEqual(["canvas.shared.read"])
+    expect(logicalKeysForTool("canvas-mcp", "list_courses")).toEqual(["canvas.shared.read"])
+    expect(logicalKeysForTool("canvas-mcp", "list_assignments")).toEqual(["canvas.shared.read"])
   })
 
   test("maps canvas self-scoped reads to canvas.self.read", () => {
     expect(logicalKeysForTool("canvas-mcp", "get_my_upcoming_assignments")).toEqual(["canvas.self.read"])
   })
 
-  test("maps canvas file download to canvas.files.download and flags it non-read-only", () => {
-    expect(logicalKeysForTool("canvas-mcp", "download_course_file")).toEqual(["canvas.files.download"])
-  })
-
-  test("maps canvas student-write actions to canvas.student.write", () => {
-    expect(logicalKeysForTool("canvas-mcp", "post_discussion_entry")).toEqual(["canvas.student.write"])
-    expect(logicalKeysForTool("canvas-mcp", "mark_conversations_read")).toEqual(["canvas.student.write"])
+  // After consolidating into a single read-only canvas-mcp plugin
+  // (cache-backed), file download and write actions are no longer exposed
+  // via MCP. The capability keys remain in LOGICAL_CAPABILITY_KEYS as
+  // stable identifiers for SkillPolicyGate, but no tool maps to them.
+  test("file download and write actions are no longer mapped to any tool", () => {
+    expect(logicalKeysForTool("canvas-mcp", "download_course_file")).toEqual([])
+    expect(logicalKeysForTool("canvas-mcp", "post_discussion_entry")).toEqual([])
+    expect(logicalKeysForTool("canvas-mcp", "mark_conversations_read")).toEqual([])
   })
 
   test("maps Apple Calendar getCalendars / events read / events write / calendars write", () => {

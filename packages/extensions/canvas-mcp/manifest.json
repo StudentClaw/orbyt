@@ -1,8 +1,8 @@
 {
   "id": "canvas-mcp",
-  "name": "Canvas Assistant",
-  "description": "Student-facing Canvas tools for assignments, grades, discussions, messages, and course content",
-  "version": "0.1.0",
+  "name": "Canvas",
+  "description": "Read-only Canvas tools backed by the local SQLite cache the server refreshes from the Canvas REST API.",
+  "version": "0.2.0",
   "transport": {
     "type": "local_stdio",
     "entry": "dist/index.js"
@@ -10,157 +10,39 @@
   "permissions": [
     "assignments",
     "grades",
-    "announcements",
-    "modules",
-    "pages",
-    "files",
-    "discussions",
-    "messages"
+    "modules"
   ],
   "auth": {
-    "type": "manual_token",
-    "instructions": "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
-    "fields": [
-      {
-        "key": "baseUrl",
-        "label": "Canvas base URL",
-        "type": "base_url",
-        "required": true,
-        "placeholder": "https://myschool.instructure.com"
-      },
-      {
-        "key": "token",
-        "label": "Canvas access token",
-        "type": "secret",
-        "required": true,
-        "placeholder": "Paste your Canvas access token"
-      }
-    ]
+    "type": "none"
   },
   "tools": [
     {
+      "name": "list_courses",
+      "description": "List the student's Canvas courses from the local cache."
+    },
+    {
       "name": "get_my_upcoming_assignments",
-      "description": "List upcoming assignments across the student's active Canvas courses."
+      "description": "List upcoming assignments from the local cache."
     },
     {
       "name": "get_my_submission_status",
-      "description": "Show the student's submitted, missing, and overdue assignment status."
+      "description": "Show submitted, pending, and overdue assignments from the local cache."
     },
     {
       "name": "get_my_course_grades",
-      "description": "Show the student's current grades across active Canvas courses."
+      "description": "Show current Canvas grades from the local cache."
     },
     {
       "name": "get_my_todo_items",
-      "description": "List the student's current Canvas todo items."
+      "description": "List Canvas todo items from the local cache."
     },
     {
       "name": "get_my_peer_reviews_todo",
-      "description": "List peer reviews the student still needs to complete."
-    },
-    {
-      "name": "list_courses",
-      "description": "List Canvas courses visible to the authenticated student."
-    },
-    {
-      "name": "get_course_details",
-      "description": "Fetch detailed information for one Canvas course."
-    },
-    {
-      "name": "get_course_content_overview",
-      "description": "Summarize pages, modules, and syllabus content for a Canvas course."
-    },
-    {
-      "name": "list_pages",
-      "description": "List readable pages in a Canvas course."
-    },
-    {
-      "name": "get_page_content",
-      "description": "Fetch the readable content for a Canvas page."
-    },
-    {
-      "name": "get_page_details",
-      "description": "Fetch metadata for a Canvas page."
-    },
-    {
-      "name": "get_front_page",
-      "description": "Fetch the front page for a Canvas course when it is visible to the student."
+      "description": "List peer reviews still owed by the student from the local cache."
     },
     {
       "name": "list_assignments",
-      "description": "List assignments visible to the student in a Canvas course."
-    },
-    {
-      "name": "get_assignment_details",
-      "description": "Fetch details for a Canvas assignment visible to the student from IDs or a full Canvas assignment URL."
-    },
-    {
-      "name": "list_modules",
-      "description": "List readable modules in a Canvas course."
-    },
-    {
-      "name": "list_module_items",
-      "description": "List readable module items for a Canvas module."
-    },
-    {
-      "name": "get_course_structure",
-      "description": "Return the readable module and item structure for a Canvas course."
-    },
-    {
-      "name": "list_course_files",
-      "description": "List Canvas files visible to the student in a course."
-    },
-    {
-      "name": "list_discussion_topics",
-      "description": "List discussion topics visible to the student in a Canvas course."
-    },
-    {
-      "name": "get_discussion_topic_details",
-      "description": "Fetch metadata for a readable Canvas discussion topic."
-    },
-    {
-      "name": "list_discussion_entries",
-      "description": "List readable entries for a Canvas discussion topic."
-    },
-    {
-      "name": "get_discussion_entry_details",
-      "description": "Fetch details for a readable Canvas discussion entry."
-    },
-    {
-      "name": "get_discussion_with_replies",
-      "description": "Fetch a Canvas discussion topic with its visible replies."
-    },
-    {
-      "name": "list_conversations",
-      "description": "List Canvas conversations visible to the student."
-    },
-    {
-      "name": "get_conversation_details",
-      "description": "Fetch details for a Canvas conversation visible to the student."
-    },
-    {
-      "name": "get_unread_count",
-      "description": "Fetch the student's unread Canvas conversation count."
-    },
-    {
-      "name": "search_canvas_tools",
-      "description": "Discover the student-facing Canvas MCP tool surface."
-    },
-    {
-      "name": "post_discussion_entry",
-      "description": "Post a new entry to a Canvas discussion when the student is allowed to participate."
-    },
-    {
-      "name": "reply_to_discussion_entry",
-      "description": "Reply to a Canvas discussion entry when the student is allowed to participate."
-    },
-    {
-      "name": "mark_conversations_read",
-      "description": "Mark one or more Canvas conversations as read."
-    },
-    {
-      "name": "download_course_file",
-      "description": "Download a readable Canvas file into the active workspace or another allowed writable path."
+      "description": "List cached Canvas assignments, optionally filtered by course."
     }
   ],
   "author": "orbyt",

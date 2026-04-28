@@ -3,7 +3,6 @@ import {
   parseExtensionManifestSync,
   type ExtensionManifest as CanvasManifest,
 } from "@orbyt/contracts"
-import { canvasStudentReplacementToolInventory } from "./student-tool-contract.js"
 
 export const CanvasManifestSchema = ExtensionManifest
 
@@ -11,36 +10,24 @@ export type { CanvasManifest }
 
 export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
   id: "canvas-mcp",
-  name: "Canvas Assistant",
-  description: "Student-facing Canvas tools for assignments, grades, discussions, messages, and course content",
-  version: "0.1.0",
+  name: "Canvas",
+  description: "Read-only Canvas tools backed by the local SQLite cache the server refreshes from the Canvas REST API.",
+  version: "0.2.0",
   transport: {
     type: "local_stdio",
     entry: "dist/index.js",
   },
-  permissions: ["assignments", "grades", "announcements", "modules", "pages", "files", "discussions", "messages"],
-  auth: {
-    type: "manual_token",
-    instructions:
-      "Generate a Canvas access token in Canvas under Settings > Approved Integrations > New Access Token.",
-    fields: [
-      {
-        key: "baseUrl",
-        label: "Canvas base URL",
-        type: "base_url",
-        required: true,
-        placeholder: "https://myschool.instructure.com",
-      },
-      {
-        key: "token",
-        label: "Canvas access token",
-        type: "secret",
-        required: true,
-        placeholder: "Paste your Canvas access token",
-      },
-    ],
-  },
-  tools: canvasStudentReplacementToolInventory.map(({ name, description }) => ({ name, description })),
+  permissions: ["assignments", "grades", "modules"],
+  auth: { type: "none" },
+  tools: [
+    { name: "list_courses", description: "List the student's Canvas courses from the local cache." },
+    { name: "get_my_upcoming_assignments", description: "List upcoming assignments from the local cache." },
+    { name: "get_my_submission_status", description: "Show submitted, pending, and overdue assignments from the local cache." },
+    { name: "get_my_course_grades", description: "Show current Canvas grades from the local cache." },
+    { name: "get_my_todo_items", description: "List Canvas todo items from the local cache." },
+    { name: "get_my_peer_reviews_todo", description: "List peer reviews still owed by the student from the local cache." },
+    { name: "list_assignments", description: "List cached Canvas assignments, optionally filtered by course." },
+  ],
   author: "orbyt",
   homepage: "https://github.com/Orbyt/orbyt",
 })

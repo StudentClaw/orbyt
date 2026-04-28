@@ -47,7 +47,7 @@ export function DashboardHeader({
       <Button
         type="button"
         size="default"
-        className="w-full sm:w-auto"
+        className="w-full text-white sm:w-auto"
         disabled={planDisabled}
         data-testid="plan-my-week"
         onClick={onPlanWeek}

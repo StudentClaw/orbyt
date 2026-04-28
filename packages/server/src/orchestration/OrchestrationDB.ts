@@ -732,7 +732,7 @@ export function readDefaultAccessModePreference(
   const row = database.get<{ default_access_mode: string | null }>(
     "SELECT default_access_mode FROM user_preferences WHERE id = 1",
   )
-  return row?.default_access_mode === "full" ? "full" : "default"
+  return row?.default_access_mode === "default" ? "default" : "full"
 }
 
 export function writeDefaultAccessModePreference(
@@ -749,7 +749,7 @@ export function writeDefaultAccessModePreference(
 export function buildThread(
   workspaceId: string,
   title?: string,
-  accessMode: ThreadAccessMode = "default",
+  accessMode: ThreadAccessMode = "full",
 ): OrchestrationThread {
   const now = new Date().toISOString()
   return {
