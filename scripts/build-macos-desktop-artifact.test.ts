@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import {
   createBuildLogPath,
+  createElectronBuilderArgs,
   createMacPackagingConfig,
   createStagePackageJson,
   detectMacSigningMode,
@@ -137,6 +138,25 @@ describe("build-macos-desktop-artifact", () => {
       arch: "arm64",
       exists: (candidate) => candidate === "/repo/release/mac-arm64/Orbyt.app",
     })).toBe("/repo/release/mac-arm64/Orbyt.app")
+  })
+
+  test("builds electron-builder args without overriding mac targets to dmg only", () => {
+    expect(createElectronBuilderArgs({
+      stageAppDir: "/tmp/orbyt-stage",
+      arch: "arm64",
+      releaseDir: "/tmp/orbyt-release",
+    })).toEqual([
+      "x",
+      "--install=fallback",
+      "electron-builder",
+      "--projectDir",
+      "/tmp/orbyt-stage",
+      "--mac",
+      "--arm64",
+      "--publish",
+      "never",
+      "--config.directories.output=/tmp/orbyt-release",
+    ])
   })
 
   test("stages the desktop app with the bundled server runtime dependency", () => {

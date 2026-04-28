@@ -441,6 +441,25 @@ export function createStagePackageJson(stageAppDir: string, signed: boolean) {
   }
 }
 
+export function createElectronBuilderArgs(options: {
+  stageAppDir: string
+  arch: AppleBridgeArch
+  releaseDir: string
+}) {
+  return [
+    "x",
+    "--install=fallback",
+    "electron-builder",
+    "--projectDir",
+    options.stageAppDir,
+    "--mac",
+    `--${options.arch === "x64" ? "x64" : "arm64"}`,
+    "--publish",
+    "never",
+    "--config.directories.output=" + options.releaseDir,
+  ]
+}
+
 function installStageAppDependencies(stageAppDir: string, verbose: boolean, logger?: BuildLogger): void {
   runCommand("bun", [
     "install",
@@ -596,19 +615,11 @@ function buildDesktopArtifact(options: {
 
   const builderEnv = normalizeAppleApiKeyEnv(process.env, stageAppDir)
   logger.phase("Running electron-builder packaging")
-  runCommand("bun", [
-    "x",
-    "--install=fallback",
-    "electron-builder",
-    "--projectDir",
+  runCommand("bun", createElectronBuilderArgs({
     stageAppDir,
-    "--mac",
-    "dmg",
-    `--${options.arch === "x64" ? "x64" : "arm64"}`,
-    "--publish",
-    "never",
-    "--config.directories.output=" + releaseDir,
-  ], {
+    arch: options.arch,
+    releaseDir,
+  }), {
     cwd: options.repoRoot,
     verbose,
     logger,
