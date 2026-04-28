@@ -10,7 +10,6 @@
     "test": "bun test src --max-concurrency=1"
   },
   "dependencies": {
-    "@effect/platform": "^0.96.0",
     "@effect/schema": "^0.75.5",
     "@openai/codex": "^0.119.0",
     "@orbyt/contracts": "workspace:*",

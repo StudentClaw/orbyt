@@ -52,6 +52,7 @@ describe("desktop updater IPC", () => {
       },
     }))
     mock.module("electron-updater", () => ({
+      default: { autoUpdater: updater },
       autoUpdater: updater,
     }))
 
