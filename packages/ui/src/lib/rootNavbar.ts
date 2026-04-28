@@ -31,12 +31,12 @@ export function shouldShowRootNavbar(pathname: string): boolean {
 }
 
 export function extractSettingsPluginId(pathname: string): string | null {
-  if (!pathname.startsWith("/settings/plugins/")) {
+  if (!pathname.startsWith("/plugins/") && !pathname.startsWith("/settings/plugins/")) {
     return null
   }
 
   const segments = pathname.split("/").filter(Boolean)
-  return segments[2] ?? null
+  return segments[0] === "settings" ? (segments[2] ?? null) : (segments[1] ?? null)
 }
 
 export function formatPluginLabel(pluginId: string): string {
@@ -89,7 +89,7 @@ export function resolveRootNavbarContext({
     return { kind: "title", title: "Study Profile", rightSlot: null }
   }
 
-  if (pathname === "/settings/plugins") {
+  if (pathname === "/plugins" || pathname === "/settings/plugins") {
     return { kind: "title", title: "Plugins", rightSlot: null }
   }
 
@@ -102,7 +102,6 @@ export function resolveRootNavbarContext({
     return {
       kind: "breadcrumb",
       breadcrumbs: [
-        { label: "Settings" },
         { label: "Plugins" },
         { label: pluginName ?? formatPluginLabel(pluginId) },
       ],

@@ -114,6 +114,7 @@ describe("AppSidebar activity badge", () => {
     render(<AppSidebar />)
 
     expect(screen.getByTestId("sidebar-settings-link")).toBeDefined()
+    expect(screen.getByTestId("sidebar-plugins-link")).toBeDefined()
     expect(screen.getByLabelText("Settings")).toBeDefined()
   })
 
@@ -126,5 +127,11 @@ describe("AppSidebar activity badge", () => {
     render(<AppSidebar />)
     expect(screen.getByTestId("sidebar-settings-link")).toBeDefined()
     expect(screen.getByLabelText("Settings")).toBeDefined()
+  })
+
+  test("renders plugins as a main sidebar link", () => {
+    render(<AppSidebar />)
+    expect(screen.getByTestId("sidebar-plugins-link").getAttribute("href")).toBe("/plugins")
+    expect(screen.getByText("Plugins")).toBeDefined()
   })
 })

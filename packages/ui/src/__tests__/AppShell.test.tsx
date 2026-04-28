@@ -265,12 +265,11 @@ describe("AppShell", () => {
   })
 
   test("shows plugin detail breadcrumbs in the root navbar", () => {
-    shellMocks.pathname = "/settings/plugins/canvas-mcp"
+    shellMocks.pathname = "/plugins/canvas-mcp"
 
     render(<AppShell />)
 
     expect(screen.getByLabelText("breadcrumb")).toBeDefined()
-    expect(screen.getByText("Settings")).toBeDefined()
     expect(screen.getByText("Plugins")).toBeDefined()
     expect(screen.getByText("Canvas Assistant")).toBeDefined()
     expect(screen.queryByTestId("chat-status-badge")).toBeNull()

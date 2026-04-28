@@ -5,6 +5,7 @@ import { AssignmentDetailPage } from "@/pages/AssignmentDetailPage"
 import { ChatPage } from "@/pages/ChatPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
 import { SettingsPage } from "@/pages/SettingsPage"
+import { PluginsPage } from "@/pages/PluginsPage"
 import { ActivityPage } from "@/pages/ActivityPage"
 import type { SettingsSection } from "@/components/settings/SettingsSidebar"
 import { createAppHistory } from "@/lib/routerHistory"
@@ -57,14 +58,12 @@ const onboardingRoute = createRoute({
 
 function resolveSettingsPath(
   section: SettingsSection,
-): "/settings" | "/settings/study-profile" | "/settings/plugins" | "/settings/notifications" {
+): "/settings" | "/settings/study-profile" | "/settings/notifications" {
   switch (section) {
     case "general":
       return "/settings"
     case "study-profile":
       return "/settings/study-profile"
-    case "connections":
-      return "/settings/plugins"
     case "notifications":
       return "/settings/notifications"
   }
@@ -77,8 +76,6 @@ function SettingsGeneralRouteComponent() {
     <SettingsPage
       activeSection="general"
       onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
-      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
-      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
     />
   )
 }
@@ -90,21 +87,17 @@ function SettingsStudyProfileRouteComponent() {
     <SettingsPage
       activeSection="study-profile"
       onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
-      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
-      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
     />
   )
 }
 
-function SettingsConnectionsRouteComponent() {
+function PluginsRouteComponent() {
   const navigate = useNavigate()
 
   return (
-    <SettingsPage
-      activeSection="connections"
-      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
-      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
-      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+    <PluginsPage
+      onPluginSelect={(pluginId) => void navigate({ to: "/plugins/$pluginId", params: { pluginId } })}
+      onPluginBack={() => void navigate({ to: "/plugins" })}
     />
   )
 }
@@ -114,12 +107,10 @@ function SettingsPluginDetailRouteComponent() {
   const { pluginId } = settingsPluginDetailRoute.useParams()
 
   return (
-    <SettingsPage
-      activeSection="connections"
+    <PluginsPage
       selectedPluginId={pluginId}
-      onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
-      onPluginSelect={(nextPluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId: nextPluginId } })}
-      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
+      onPluginSelect={(nextPluginId) => void navigate({ to: "/plugins/$pluginId", params: { pluginId: nextPluginId } })}
+      onPluginBack={() => void navigate({ to: "/plugins" })}
     />
   )
 }
@@ -131,8 +122,6 @@ function SettingsNotificationsRouteComponent() {
     <SettingsPage
       activeSection="notifications"
       onSectionSelect={(section) => void navigate({ to: resolveSettingsPath(section) })}
-      onPluginSelect={(pluginId) => void navigate({ to: "/settings/plugins/$pluginId", params: { pluginId } })}
-      onPluginBack={() => void navigate({ to: "/settings/plugins" })}
     />
   )
 }
@@ -151,11 +140,23 @@ const settingsStudyProfileRoute = createRoute({
 
 const settingsConnectionsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/settings/plugins",
-  component: SettingsConnectionsRouteComponent,
+  path: "/plugins",
+  component: PluginsRouteComponent,
 })
 
 const settingsPluginDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/plugins/$pluginId",
+  component: SettingsPluginDetailRouteComponent,
+})
+
+const legacySettingsConnectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/plugins",
+  component: PluginsRouteComponent,
+})
+
+const legacySettingsPluginDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings/plugins/$pluginId",
   component: SettingsPluginDetailRouteComponent,
@@ -184,6 +185,8 @@ const routeTree = rootRoute.addChildren([
   settingsStudyProfileRoute,
   settingsConnectionsRoute,
   settingsPluginDetailRoute,
+  legacySettingsConnectionsRoute,
+  legacySettingsPluginDetailRoute,
   settingsNotificationsRoute,
   activityRoute,
 ])
