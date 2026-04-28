@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { createBunTestDatabase, runBunMigrations } from "./db-test-helpers.js"
 
-const LATEST_SCHEMA_VERSION = 23
+const LATEST_SCHEMA_VERSION = 24
 const EXPECTED_SCHEMA_VERSIONS = Array.from(
   { length: LATEST_SCHEMA_VERSION },
   (_, index) => index + 1,
@@ -57,6 +57,12 @@ describe("Database migrations", () => {
     expect(tables).toContain("student_dna")
     expect(tables).toContain("onboarding_answers")
     expect(tables).toContain("card_weights")
+
+    const archivedCourseworkColumns = db
+      .query<{ name: string }, []>("PRAGMA table_info(archived_coursework_items)")
+      .all()
+      .map((column) => column.name)
+    expect(archivedCourseworkColumns).toContain("payload")
 
     db.close()
   })
