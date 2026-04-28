@@ -179,6 +179,7 @@ export interface WsRpcClient {
     readonly respondToApproval: (
       approvalRequestId: string,
       decision: "approve" | "deny",
+      options?: { rememberDecision?: boolean },
     ) => Promise<RespondToProviderApprovalResult>
     readonly onRuntimeEvent: (
       listener: (event: ProviderRuntimeEvent, sequence: number) => void,
@@ -358,10 +359,11 @@ function createProviderApi(transport: WsTransport): WsRpcClient["provider"] {
       transport.request<RetryProviderInitializeResult>(RPC_METHODS.PROVIDER_RETRY_INITIALIZE, {}),
     disconnectProvider: () =>
       transport.request<void>(RPC_METHODS.PROVIDER_DISCONNECT, {}),
-    respondToApproval: (approvalRequestId, decision) =>
+    respondToApproval: (approvalRequestId, decision, options) =>
       transport.request<RespondToProviderApprovalResult>(RPC_METHODS.PROVIDER_RESPOND_TO_APPROVAL, {
         approvalRequestId,
         decision,
+        rememberDecision: options?.rememberDecision === true,
       }),
     onRuntimeEvent: (listener, options) =>
       transport.subscribe(

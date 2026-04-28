@@ -78,12 +78,28 @@ async function ensureServerProcess(): Promise<ServerProcess> {
       })
       pluginGateway = gateway
 
+      // Read Canvas credentials from the encrypted plugin vault and forward
+      // them to the server process. The server's CanvasApiClient hits Canvas
+      // REST directly (the live MCP plugin was removed during consolidation),
+      // so it needs CANVAS_BASE_URL + CANVAS_TOKEN at startup.
+      const canvasCreds = (() => {
+        try {
+          const stored = runtime.vault.read("canvas-mcp")
+          if (stored && typeof stored.baseUrl === "string" && typeof stored.token === "string") {
+            return { baseUrl: stored.baseUrl, token: stored.token }
+          }
+          return null
+        } catch {
+          return null
+        }
+      })()
+
       const nextServerProcess = await spawnServer(gateway.config, {
         userDataPath: app.getPath("userData"),
       }, {
         isPackaged: app.isPackaged,
         resourcesPath: process.resourcesPath,
-      })
+      }, canvasCreds ?? undefined)
       serverProcess = nextServerProcess
 
       pushManager = createPushManager({

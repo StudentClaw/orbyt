@@ -488,6 +488,8 @@ describe("useChat", () => {
           command: "rm -rf ./tmp",
           cwd: "/repo",
           availableDecisions: ["approve", "deny"],
+          toolKey: "cmd:rm",
+          toolLabel: "rm",
         },
       ],
     }
@@ -498,6 +500,6 @@ describe("useChat", () => {
       await result.current.respondToApproval("approve")
     })
 
-    expect(hookMocks.respondToApproval).toHaveBeenCalledWith("approval-1", "approve")
+    expect(hookMocks.respondToApproval).toHaveBeenCalledWith("approval-1", "approve", undefined)
   })
 })

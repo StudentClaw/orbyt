@@ -1,5 +1,4 @@
 import { Context, Effect, Layer } from "effect"
-import { Schema } from "@effect/schema"
 import {
   CanvasAssignmentDetailsParams,
   CanvasAssignmentDetailsResult,
@@ -13,26 +12,18 @@ import {
   CanvasCourseStructureResult,
   CanvasDownloadCourseFileParams,
   CanvasDownloadCourseFileResult,
-  CanvasGetMyCourseGradesResult,
-  CanvasGetMyPeerReviewsTodoResult,
   CanvasGetMySubmissionStatusParams,
   CanvasGetMySubmissionStatusResult,
-  CanvasGetMyTodoItemsResult,
-  CanvasGetMyUpcomingAssignmentsResult,
-  CanvasGetFrontPageResult,
-  CanvasPageLookupResult,
   CanvasListAssignmentsParams,
   CanvasListAssignmentsResult,
-  CanvasListCoursesResult,
   PUSH_CHANNELS,
   type CanvasStudentCourseGradeSummary,
   type CanvasStudentPeerReviewTodo,
   type CanvasStudentTodoItem,
   type Course,
   type CourseWorkItem,
-  type GatewayToolCallFailure,
 } from "@orbyt/contracts"
-import { PluginGateway, type PluginGatewayService } from "../mcp/PluginGateway.js"
+import { CanvasApi, type CanvasApiService } from "./CanvasApi.js"
 import { PushBus, type PushBusService } from "../ws/PushBus.js"
 import { Database, type DatabaseService } from "../db/Database.js"
 import { createMemoryPaths } from "../memory/paths.js"
@@ -46,19 +37,8 @@ import { ensureCanvasCourseMemoryNodes } from "../memory/course-nodes.js"
 import { MemorizeService } from "../memory/service.js"
 import { parseDatedReadingSchedule } from "./dated-reading-schedule.js"
 
-const TOOL_LIST_COURSES = "canvas.list_courses"
-const TOOL_GET_MY_UPCOMING_ASSIGNMENTS = "canvas.get_my_upcoming_assignments"
-const TOOL_GET_MY_SUBMISSION_STATUS = "canvas.get_my_submission_status"
-const TOOL_GET_MY_COURSE_GRADES = "canvas.get_my_course_grades"
-const TOOL_GET_MY_TODO_ITEMS = "canvas.get_my_todo_items"
-const TOOL_GET_MY_PEER_REVIEWS_TODO = "canvas.get_my_peer_reviews_todo"
-const TOOL_GET_ASSIGNMENT_DETAILS = "canvas.get_assignment_details"
-const TOOL_LIST_ASSIGNMENTS = "canvas.list_assignments"
-const TOOL_GET_COURSE_CONTENT_OVERVIEW = "canvas.get_course_content_overview"
-const TOOL_GET_COURSE_STRUCTURE = "canvas.get_course_structure"
-const TOOL_DOWNLOAD_COURSE_FILE = "canvas.download_course_file"
-const TOOL_GET_FRONT_PAGE = "canvas.get_front_page"
-const TOOL_GET_PAGE_CONTENT = "canvas.get_page_content"
+// Canvas tool names previously routed through the plugin gateway have been
+// replaced with direct CanvasApiClient method calls. See ./CanvasApiClient.ts.
 
 type SubmissionBucket = "submitted" | "pending" | "overdue"
 
@@ -179,10 +159,6 @@ function logError(context: string, error: unknown): void {
   process.stderr.write(`[CanvasSync] ${context}: ${message}\n`)
 }
 
-function logGatewayFailure(context: string, failure: GatewayToolCallFailure): void {
-  process.stderr.write(`[CanvasSync] ${context} (${failure.reason}): ${failure.message}\n`)
-}
-
 async function flushMemoryPromotion(
   memoryPromotionFlush?: CanvasMemoryPromotionFlush,
 ): Promise<void> {
@@ -197,64 +173,6 @@ async function flushMemoryPromotion(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
-}
-
-function readToolText(result: unknown): string | null {
-  if (!isRecord(result) || !Array.isArray(result.content)) {
-    return null
-  }
-
-  for (const item of result.content) {
-    if (isRecord(item) && typeof item.text === "string" && item.text.trim().length > 0) {
-      return item.text.trim()
-    }
-  }
-
-  return null
-}
-
-function readStructuredToolResult(
-  toolName: string,
-  result: unknown,
-): { ok: true; data: unknown } | { ok: false; message: string } {
-  if (!isRecord(result)) {
-    return {
-      ok: false,
-      message: `${toolName} returned an invalid tool response.`,
-    }
-  }
-
-  if (result.isError === true) {
-    return {
-      ok: false,
-      message: readToolText(result) ?? `${toolName} returned a tool error.`,
-    }
-  }
-
-  if ("structuredContent" in result) {
-    return {
-      ok: true,
-      data: result.structuredContent,
-    }
-  }
-
-  return {
-    ok: false,
-    message: `${toolName} returned no structured content.`,
-  }
-}
-
-function decodeResult<A>(
-  schema: Schema.Schema<A, any, never>,
-  toolName: string,
-  raw: unknown,
-): A {
-  try {
-    return Schema.decodeUnknownSync(schema)(raw)
-  } catch (error) {
-    logError(`failed to decode ${toolName} result`, error)
-    throw error
-  }
 }
 
 function toNullableNumber(value: number | undefined): number | null {
@@ -478,26 +396,6 @@ function upsertCourses(database: DatabaseService, courses: readonly Course[]): v
   }
 }
 
-async function callDecodedTool<A>(
-  gateway: PluginGatewayService,
-  toolName: string,
-  args: Record<string, unknown>,
-  schema: Schema.Schema<A, any, never>,
-): Promise<A> {
-  const callResult = await gateway.callTool(toolName, args)
-  if (!callResult.ok) {
-    logGatewayFailure(`${toolName} call failed`, callResult)
-    throw new Error(callResult.message)
-  }
-
-  const toolResult = readStructuredToolResult(toolName, callResult.result)
-  if (!toolResult.ok) {
-    throw new Error(toolResult.message)
-  }
-
-  return decodeResult(schema, toolName, toolResult.data)
-}
-
 function readCourses(database: DatabaseService): Course[] {
   const rows = database.query<CourseRow>(
     `SELECT id, name, code, professor, canvas_id, term, last_sync_at FROM courses ORDER BY name ASC`,
@@ -686,28 +584,21 @@ function markMissingSourceItemsStale(
 }
 
 async function fetchAssignmentSourcePage(
-  gateway: PluginGatewayService,
+  apiClient: CanvasApiService,
   source: AssignmentSourceRow,
 ) {
   const lookup = sourcePageIdFromUrl(source.url)
   if (lookup.type === "front") {
-    return callDecodedTool(
-      gateway,
-      TOOL_GET_FRONT_PAGE,
-      { courseId: source.canvas_course_id },
-      CanvasGetFrontPageResult,
-    )
+    return apiClient.getFrontPage({ courseId: source.canvas_course_id })
   }
-  return callDecodedTool(
-    gateway,
-    TOOL_GET_PAGE_CONTENT,
-    { courseId: source.canvas_course_id, pageId: lookup.pageId },
-    CanvasPageLookupResult,
-  )
+  return apiClient.getPageContent({
+    courseId: source.canvas_course_id,
+    pageId: lookup.pageId,
+  })
 }
 
 async function syncRememberedAssignmentSources(
-  gateway: PluginGatewayService,
+  apiClient: CanvasApiService,
   database: DatabaseService,
   sources: readonly AssignmentSourceRow[],
   now: Date,
@@ -722,7 +613,7 @@ async function syncRememberedAssignmentSources(
     }
 
     try {
-      const result = await fetchAssignmentSourcePage(gateway, source)
+      const result = await fetchAssignmentSourcePage(apiClient, source)
       const page = result.page
       const body = page.body ?? ""
       const parsedItems = source.parser === "dated_reading_schedule"
@@ -785,7 +676,7 @@ async function syncRememberedAssignmentSources(
 }
 
 export function createSyncService(
-  gateway: PluginGatewayService,
+  apiClient: CanvasApiService,
   pushBus: PushBusService,
   database: DatabaseService,
   memoryPathsOverride?: MemoryPaths,
@@ -802,10 +693,10 @@ export function createSyncService(
 
     try {
       const [coursesResult, upcomingAssignments, submissionStatus, courseGrades] = await Promise.all([
-        callDecodedTool(gateway, TOOL_LIST_COURSES, {}, CanvasListCoursesResult),
-        callDecodedTool(gateway, TOOL_GET_MY_UPCOMING_ASSIGNMENTS, {}, CanvasGetMyUpcomingAssignmentsResult),
-        callDecodedTool(gateway, TOOL_GET_MY_SUBMISSION_STATUS, {}, CanvasGetMySubmissionStatusResult),
-        callDecodedTool(gateway, TOOL_GET_MY_COURSE_GRADES, {}, CanvasGetMyCourseGradesResult),
+        apiClient.listCourses(),
+        apiClient.getMyUpcomingAssignments(),
+        apiClient.getMySubmissionStatus(),
+        apiClient.getMyCourseGrades(),
       ])
 
       const courses = [...coursesResult.courses].sort(courseSort)
@@ -817,19 +708,24 @@ export function createSyncService(
       })
 
       const [todoResult, peerResult] = await Promise.allSettled([
-        callDecodedTool(gateway, TOOL_GET_MY_TODO_ITEMS, {}, CanvasGetMyTodoItemsResult),
-        callDecodedTool(gateway, TOOL_GET_MY_PEER_REVIEWS_TODO, {}, CanvasGetMyPeerReviewsTodoResult),
+        apiClient.getMyTodoItems(),
+        apiClient.getMyPeerReviewsTodo(),
       ])
 
-      const todoItems: CanvasStudentTodoItem[] =
-        todoResult.status === "fulfilled" ? todoResult.value.items.slice() : []
+      const todoItems = (todoResult.status === "fulfilled"
+        ? todoResult.value.items.slice()
+        : []) as CanvasStudentTodoItem[]
       if (todoResult.status === "rejected") logError("optional canvas todo sync failed", todoResult.reason)
 
-      const peerReviewsTodo: CanvasStudentPeerReviewTodo[] =
-        peerResult.status === "fulfilled" ? peerResult.value.items.slice() : []
+      const peerReviewsTodo = (peerResult.status === "fulfilled"
+        ? peerResult.value.items.slice()
+        : []) as CanvasStudentPeerReviewTodo[]
       if (peerResult.status === "rejected") logError("optional canvas peer review sync failed", peerResult.reason)
 
-      const assignmentRecords = extractAssignmentMap(upcomingAssignments.items, submissionStatus)
+      const assignmentRecords = extractAssignmentMap(
+        upcomingAssignments.items,
+        submissionStatus as unknown as CanvasGetMySubmissionStatusResult,
+      )
 
       database.transaction(() => {
         upsertCourses(database, courses)
@@ -845,7 +741,7 @@ export function createSyncService(
       const confirmedRules = projectAssignmentSourceRules(database, memoryPaths)
       projectAssignmentSourceDiscoveryHints(database, memoryPaths, confirmedRules)
       await syncRememberedAssignmentSources(
-        gateway,
+        apiClient,
         database,
         readEnabledAssignmentSources(database),
         new Date(),
@@ -917,7 +813,7 @@ export function createSyncService(
   async function getAssignmentDetails(
     params: CanvasAssignmentDetailsParams,
   ): Promise<CanvasAssignmentDetailsResult> {
-    return callDecodedTool(gateway, TOOL_GET_ASSIGNMENT_DETAILS, params, CanvasAssignmentDetailsResult)
+    return apiClient.getAssignmentDetails(params) as Promise<CanvasAssignmentDetailsResult>
   }
 
   function archiveAssignment(
@@ -1023,30 +919,25 @@ export function createSyncService(
   async function listAssignments(
     params: CanvasListAssignmentsParams,
   ): Promise<CanvasListAssignmentsResult> {
-    return callDecodedTool(gateway, TOOL_LIST_ASSIGNMENTS, params, CanvasListAssignmentsResult)
+    return apiClient.listAssignments(params) as Promise<CanvasListAssignmentsResult>
   }
 
   async function getCourseContentOverview(
     params: CanvasCourseContentOverviewParams,
   ): Promise<CanvasCourseContentOverviewResult> {
-    return callDecodedTool(
-      gateway,
-      TOOL_GET_COURSE_CONTENT_OVERVIEW,
-      params,
-      CanvasCourseContentOverviewResult,
-    )
+    return apiClient.getCourseContentOverview(params) as Promise<CanvasCourseContentOverviewResult>
   }
 
   async function getCourseStructure(
     params: CanvasCourseStructureParams,
   ): Promise<CanvasCourseStructureResult> {
-    return callDecodedTool(gateway, TOOL_GET_COURSE_STRUCTURE, params, CanvasCourseStructureResult)
+    return apiClient.getCourseStructure(params) as Promise<CanvasCourseStructureResult>
   }
 
   async function downloadCourseFile(
     params: CanvasDownloadCourseFileParams,
   ): Promise<CanvasDownloadCourseFileResult> {
-    return callDecodedTool(gateway, TOOL_DOWNLOAD_COURSE_FILE, params, CanvasDownloadCourseFileResult)
+    return apiClient.downloadCourseFile(params) as Promise<CanvasDownloadCourseFileResult>
   }
 
   return {
@@ -1070,11 +961,11 @@ export function createSyncService(
 export const CanvasSyncServiceLive = Layer.effect(
   CanvasSyncService,
   Effect.gen(function* () {
-    const gateway = yield* PluginGateway
+    const apiClient = yield* CanvasApi
     const pushBus = yield* PushBus
     const database = yield* Database
     const memorize = yield* MemorizeService
-    return createSyncService(gateway, pushBus, database, undefined, async () => {
+    return createSyncService(apiClient, pushBus, database, undefined, async () => {
       await memorize.runIfNeeded(new Date(), { trigger: "auto" })
     })
   }),

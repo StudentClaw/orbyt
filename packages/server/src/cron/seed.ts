@@ -3,6 +3,8 @@ import { computeNextCronRunAt } from "./schedule-math.js"
 
 const HEARTBEAT_NAME = "heartbeat"
 const DAILY_INSIGHT_NAME = "daily-insight"
+const CANVAS_SYNC_NAME = "canvas-sync"
+const CANVAS_SYNC_DISPATCH_KEY = "canvas-sync"
 
 const HEARTBEAT_PROMPT_PLACEHOLDER =
   "(prompt is built dynamically by the executor from SOUL.md, HEARTBEAT.md, and the working buffer; this field is unused for the heartbeat job)"
@@ -13,6 +15,12 @@ const DAILY_INSIGHT_PROMPT_PLACEHOLDER =
 function nextHeartbeatRun(now: Date): number {
   // Run the first heartbeat ~5 minutes after seed, then every 30m thereafter.
   return now.getTime() + 5 * 60 * 1000
+}
+
+function nextCanvasSyncRun(now: Date): number {
+  // First run ~30s after seed so the dedicated cron path takes over from the
+  // synchronous startup sync; subsequent runs every 30m via scheduleValue.
+  return now.getTime() + 30 * 1000
 }
 
 function nextDailyInsightRun(now: Date, tz: string): number {
@@ -41,17 +49,18 @@ export interface SeedOptions {
   readonly includeDailyInsight?: boolean
 }
 
-/** Seeds the heartbeat (and optionally the daily-insight) job rows when none exist. */
+/** Seeds the heartbeat, canvas-sync, and optionally the daily-insight job rows when none exist. */
 export function seedDefaultJobs(
   store: CronStoreShape,
   options: SeedOptions = {},
-): { heartbeatId?: string; dailyInsightId?: string } {
+): { heartbeatId?: string; dailyInsightId?: string; canvasSyncId?: string } {
   const now = options.now ?? new Date()
 
   const existing = store.listJobs()
   const haveHeartbeat = existing.some((j) => j.name === HEARTBEAT_NAME)
   const haveDailyInsight = existing.some((j) => j.name === DAILY_INSIGHT_NAME)
-  const out: { heartbeatId?: string; dailyInsightId?: string } = {}
+  const haveCanvasSync = existing.some((j) => j.name === CANVAS_SYNC_NAME)
+  const out: { heartbeatId?: string; dailyInsightId?: string; canvasSyncId?: string } = {}
 
   if (!haveHeartbeat) {
     const job = store.createJob({
@@ -79,6 +88,19 @@ export function seedDefaultJobs(
       nextRunAt: nextDailyInsightRun(now, tz),
     })
     out.dailyInsightId = job.id
+  }
+
+  if (!haveCanvasSync) {
+    const job = store.createJob({
+      name: CANVAS_SYNC_NAME,
+      scheduleKind: "every",
+      scheduleValue: "30m",
+      sessionTarget: null,
+      payloadKind: "internalTask",
+      payloadContent: CANVAS_SYNC_DISPATCH_KEY,
+      nextRunAt: nextCanvasSyncRun(now),
+    })
+    out.canvasSyncId = job.id
   }
 
   return out

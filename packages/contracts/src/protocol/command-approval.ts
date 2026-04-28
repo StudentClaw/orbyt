@@ -794,3 +794,4 @@ export function shouldAutoApproveShellCommand(
 ): boolean {
   return classifyShellCommandForApproval(command).autoApprove
 }
+

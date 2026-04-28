@@ -335,6 +335,116 @@ function simplifyApprovalDecisionChoices(
   return Array.from(decisions)
 }
 
+function deriveCommandArgv0(command: string | null): string | null {
+  if (!command) return null
+  const trimmed = command.trim()
+  if (trimmed.length === 0) return null
+  // First whitespace-delimited token; strip a leading path so e.g. /usr/bin/curl
+  // shares a sticky decision with `curl` invoked from PATH.
+  const head = trimmed.split(/\s+/, 1)[0] ?? ""
+  const slashIdx = head.lastIndexOf("/")
+  return slashIdx >= 0 ? head.slice(slashIdx + 1) : head
+}
+
+function deriveServerFromPermissionKey(key: string): string | null {
+  // Codex sends permission keys like `mcp_servers.<server>.<tool>` (gateway
+  // namespace hop) or `<server>.<tool>` (direct). Pull the server segment.
+  const parts = key.split(".")
+  if (parts.length >= 3 && parts[0] === "mcp_servers" && parts[1]) {
+    return parts[1]
+  }
+  if (parts.length >= 2 && parts[0]) {
+    return parts[0]
+  }
+  return null
+}
+
+function deriveServerFromToolName(toolName: string): string | null {
+  // Gateway-namespaced names: "canvas.list_courses" → server "canvas".
+  const dotIndex = toolName.indexOf(".")
+  if (dotIndex > 0) {
+    return toolName.slice(0, dotIndex)
+  }
+  return null
+}
+
+function derivePermissionToolKey(params: unknown): {
+  toolKey: string | null
+  toolLabel: string | null
+} {
+  if (!isRecord(params)) {
+    return { toolKey: null, toolLabel: null }
+  }
+
+  // Per-server identity: one approval covers every tool exposed by the same
+  // MCP server, since they share the same trust boundary anyway. Tighten to
+  // per-tool later if needed.
+  const explicitServer = readString(params, "serverName") ?? readString(params, "server")
+  if (explicitServer) {
+    return { toolKey: `mcp:${explicitServer}`, toolLabel: explicitServer }
+  }
+
+  const toolName = readString(params, "toolName") ?? readString(params, "tool")
+  if (toolName) {
+    const namespacedServer = deriveServerFromToolName(toolName)
+    if (namespacedServer) {
+      return { toolKey: `mcp:${namespacedServer}`, toolLabel: namespacedServer }
+    }
+  }
+
+  // Codex >= 0.120 sends per-tool permission keys (e.g.
+  // `mcp_servers.orbyt.canvas.list_courses`). Pull the server segment so the
+  // sticky decision applies to every tool of that server.
+  if (isRecord(params.permissions) && !Array.isArray(params.permissions)) {
+    const keys = Object.keys(params.permissions)
+    const servers = new Set<string>()
+    for (const key of keys) {
+      const server = deriveServerFromPermissionKey(key)
+      if (server) servers.add(server)
+    }
+    if (servers.size === 1) {
+      const [server] = Array.from(servers)
+      return { toolKey: `mcp:${server}`, toolLabel: server ?? null }
+    }
+    if (keys.length > 0) {
+      // Multi-server (rare): fall back to a stable fingerprint so distinct
+      // sets stay distinct.
+      const sorted = [...keys].sort()
+      return {
+        toolKey: `perm:${sorted.join("|")}`,
+        toolLabel: keys.length === 1 ? keys[0]! : `${keys.length} permissions`,
+      }
+    }
+  }
+
+  const itemId = readString(params, "itemId")
+  return itemId ? { toolKey: `perm:${itemId}`, toolLabel: itemId } : { toolKey: null, toolLabel: null }
+}
+
+function deriveApprovalToolMeta(
+  method: PendingApprovalEntry["method"],
+  params: unknown,
+): { toolKey: string | null; toolLabel: string | null } {
+  if (method === "item/commandExecution/requestApproval") {
+    const command = readString(params, "command") ?? null
+    const argv0 = deriveCommandArgv0(command)
+    if (argv0) {
+      return { toolKey: `cmd:${argv0}`, toolLabel: argv0 }
+    }
+    return { toolKey: null, toolLabel: null }
+  }
+
+  if (method === "item/fileChange/requestApproval") {
+    const path = readString(params, "path") ?? readString(params, "filePath")
+    if (path) {
+      return { toolKey: `file:${path}`, toolLabel: path }
+    }
+    return { toolKey: null, toolLabel: null }
+  }
+
+  return derivePermissionToolKey(params)
+}
+
 export function mapPendingApprovalEntry(
   requestId: string | number,
   method:
@@ -342,16 +452,20 @@ export function mapPendingApprovalEntry(
     | "item/fileChange/requestApproval"
     | "item/permissions/requestApproval",
   params: unknown,
-  activeTurn: ActiveTurn,
+  activeTurn: ActiveTurn | null,
 ): PendingApprovalEntry {
   const approvalRequestId = String(requestId)
   const itemId = readString(params, "itemId") ?? approvalRequestId
   const reason = readString(params, "reason") ?? null
+  const { toolKey, toolLabel } = deriveApprovalToolMeta(method, params)
+
+  const localThreadId = activeTurn?.localThreadId ?? readString(params, "threadId") ?? ""
+  const localTurnId = activeTurn?.localTurnId ?? readString(params, "turnId") ?? ""
 
   const approval: ProviderPendingApproval = {
     id: approvalRequestId,
-    threadId: activeTurn.localThreadId as ProviderPendingApproval["threadId"],
-    turnId: activeTurn.localTurnId as ProviderPendingApproval["turnId"],
+    threadId: localThreadId as ProviderPendingApproval["threadId"],
+    turnId: localTurnId as ProviderPendingApproval["turnId"],
     kind:
       method === "item/commandExecution/requestApproval"
         ? "command"
@@ -373,6 +487,8 @@ export function mapPendingApprovalEntry(
       method === "item/commandExecution/requestApproval"
         ? simplifyApprovalDecisionChoices(isRecord(params) ? params.availableDecisions : null)
         : ["approve", "deny"],
+    toolKey,
+    toolLabel,
   }
 
   return {
@@ -535,23 +651,46 @@ export function normalizeSessionCwd(cwd: string | null | undefined): string | nu
   return normalized.length > 0 ? normalized : null
 }
 
-export function getThreadStartPolicy(accessMode: ThreadAccessMode): {
-  approvalPolicy: "untrusted" | "never"
+export function getThreadStartPolicy(_accessMode: ThreadAccessMode): {
+  approvalPolicy: "untrusted" | "never" | "on-request"
   sandbox: "workspace-write" | "danger-full-access"
 } {
-  if (accessMode === "full") {
-    return {
-      approvalPolicy: "never",
-      sandbox: "danger-full-access",
-    }
+  // Permission system removed: every thread runs with full access. The
+  // accessMode argument is retained so existing call sites compile, but the
+  // returned policy never depends on it.
+  return {
+    approvalPolicy: "never",
+    sandbox: "danger-full-access",
+  }
+}
+
+// Builds the accept reply for `item/permissions/requestApproval`. Echoing
+// back the requested permissions with the requested scope mirrors a user
+// picking "Allow". An empty `permissions` map would be read by Codex as a
+// denial — surfacing to the AI as `user rejected MCP tool call` — so when
+// the params don't contain anything actionable we fall back to a wildcard.
+export function buildPermissionApprovalReply(
+  params: unknown,
+  options: { scope?: "turn" | "always" } = {},
+): {
+  permissions: Record<string, unknown>
+  scope: "turn" | "always"
+} {
+  const scope = options.scope ?? "always"
+  const candidate =
+    isRecord(params) && isRecord(params.permissions) ? params.permissions : null
+  // `isRecord` treats arrays as records (typeof "object"); guard against
+  // arrays explicitly so an array-shaped payload doesn't get echoed back.
+  const requestedPermissions =
+    candidate && !Array.isArray(candidate) ? candidate : null
+
+  if (requestedPermissions && Object.keys(requestedPermissions).length > 0) {
+    return { permissions: requestedPermissions, scope }
   }
 
-  return {
-    // Keep the safer workspace-write sandbox for default threads, but do not
-    // force provider-side permission prompts for MCP tool calls.
-    approvalPolicy: "never",
-    sandbox: "workspace-write",
-  }
+  // Fallback: Codex treats `permissions: {}` as denial. A wildcard tells
+  // Codex the user accepted whatever was being requested.
+  return { permissions: { "*": "always" }, scope }
 }
 
 // ============================================================================

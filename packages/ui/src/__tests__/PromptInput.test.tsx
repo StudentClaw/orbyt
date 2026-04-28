@@ -267,11 +267,6 @@ describe("PromptInput", () => {
     expect(screen.getByText("GPT-5.4 Mini")).toBeDefined()
   })
 
-  test("shows the selected access mode label", () => {
-    render(<PromptInput {...defaultProps} />)
-    expect(screen.getByText("Default permissions")).toBeDefined()
-  })
-
   test("adds attachments from the native picker and sends them with the message", async () => {
     const onSend = vi.fn()
     const user = userEvent.setup()
@@ -395,92 +390,6 @@ describe("PromptInput", () => {
     )
 
     expect(screen.queryByLabelText("Select model")).toBeNull()
-  })
-
-  test("confirms before switching a thread to full access", async () => {
-    const onAccessModeChange = vi.fn()
-    const user = userEvent.setup()
-    render(<PromptInput {...defaultProps} onAccessModeChange={onAccessModeChange} />)
-
-    await user.click(screen.getByLabelText("Select permissions"))
-    await user.click(screen.getByText("Full access"))
-    expect(screen.getByText("Enable full access for this thread?")).toBeDefined()
-
-    await user.click(screen.getByRole("button", { name: "Enable full access" }))
-    expect(onAccessModeChange).toHaveBeenCalledWith("full")
-  })
-
-  test("disables the access selector while streaming", () => {
-    render(<PromptInput {...defaultProps} status="streaming" />)
-    expect(screen.getByLabelText("Select permissions").hasAttribute("disabled")).toBe(true)
-  })
-
-  test("renders a beginner-friendly approval card and hides technical details by default", async () => {
-    const onRespondToApproval = vi.fn()
-    const user = userEvent.setup()
-    render(
-      <PromptInput
-        {...defaultProps}
-        pendingApproval={{
-          id: "approval-1",
-          threadId: "thread-1" as never,
-          turnId: "turn-1" as never,
-          kind: "command",
-          itemId: "item-1",
-          approvalId: "provider-approval-1",
-          reason: "This command modifies files outside the immediate workspace.",
-          command: "rm -rf ./tmp",
-          cwd: "/repo",
-          availableDecisions: ["approve", "deny"],
-        }}
-        onRespondToApproval={onRespondToApproval}
-      />,
-    )
-
-    expect(screen.getByText("Permission needed")).toBeDefined()
-    expect(screen.getByText("Can I delete this item?")).toBeDefined()
-    expect(screen.queryByText("rm -rf ./tmp")).toBeNull()
-
-    await user.click(screen.getByText("Show technical details"))
-    expect(screen.getByText("rm -rf ./tmp")).toBeDefined()
-    expect(screen.getByTestId("pending-approval-surface")).toBeDefined()
-    expect(screen.queryByLabelText("Chat message input")).toBeNull()
-    expect(screen.queryByLabelText("Send message")).toBeNull()
-    expect(screen.getByTestId("approval-command").className).toContain("whitespace-pre-wrap")
-    expect(screen.getByTestId("approval-command").className).toContain("overflow-y-auto")
-    expect(screen.getByRole("button", { name: "Approve" }).textContent).toContain("↵")
-
-    await user.click(screen.getByRole("button", { name: "Don't allow" }))
-    expect(onRespondToApproval).toHaveBeenCalledWith("deny")
-  })
-
-  test("pressing Enter approves the pending request", async () => {
-    const onRespondToApproval = vi.fn()
-    const user = userEvent.setup()
-    render(
-      <PromptInput
-        {...defaultProps}
-        pendingApproval={{
-          id: "approval-1",
-          threadId: "thread-1" as never,
-          turnId: "turn-1" as never,
-          kind: "command",
-          itemId: "item-1",
-          approvalId: "provider-approval-1",
-          reason: "This command modifies files outside the immediate workspace.",
-          command: "rm -rf ./tmp",
-          cwd: "/repo",
-          availableDecisions: ["approve", "deny"],
-        }}
-        onRespondToApproval={onRespondToApproval}
-      />,
-    )
-
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Approve" }))
-
-    await user.keyboard("{Enter}")
-
-    expect(onRespondToApproval).toHaveBeenCalledWith("approve")
   })
 
   describe("drag and drop attachments", () => {

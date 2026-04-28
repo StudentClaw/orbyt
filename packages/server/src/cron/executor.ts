@@ -5,6 +5,7 @@ import { CronAgentRunner, HEARTBEAT_THREAD_ID, DAILY_INSIGHT_THREAD_ID } from ".
 import { ProactiveMemory } from "../proactive/index.js"
 import { Database } from "../db/Database.js"
 import { CronStore } from "./store.js"
+import { CanvasSyncService } from "../canvas/CanvasSyncService.js"
 import { createReminderJob } from "./reminder-tool.js"
 import { loadInsightContext } from "./insight-context.js"
 import {
@@ -49,6 +50,7 @@ export const MockCronExecutorLive = Layer.effect(
 
 const NAME_HEARTBEAT = "heartbeat"
 const NAME_DAILY_INSIGHT = "daily-insight"
+const NAME_CANVAS_SYNC = "canvas-sync"
 
 function safeReadFile(path: string): string {
   if (!existsSync(path)) return ""
@@ -68,6 +70,8 @@ function safeReadFile(path: string): string {
  *   - agentTurn:daily-insight → runs the job's payloadContent verbatim against
  *                               the insight thread (prompt is wired in step 5)
  *   - agentTurn:other       → runs payloadContent against the heartbeat thread
+ *   - internalTask:canvas-sync → invokes CanvasSyncService.sync() directly; no
+ *                                agent turn, no thread.
  */
 export const CronExecutorLive = Layer.effect(
   CronExecutor,
@@ -76,14 +80,18 @@ export const CronExecutorLive = Layer.effect(
     const memory = yield* ProactiveMemory
     const database = yield* Database
     const store = yield* CronStore
+    const canvasSync = yield* CanvasSyncService
 
     const runHeartbeat = async (job: CronJob): Promise<ExecutionResult> => {
       const heartbeatScope = safeReadFile(memory.paths.heartbeatFile)
       const notes = memory.listActiveNotes()
+      const ctx = loadInsightContext(database)
       const prompt = buildHeartbeatPrompt({
         heartbeatScope,
         workingBufferNotes: notes,
         nowIso: new Date().toISOString(),
+        upcomingCoursework: ctx.upcomingCoursework,
+        todaysSessions: ctx.todaysSessions,
       })
 
       try {
@@ -94,6 +102,12 @@ export const CronExecutorLive = Layer.effect(
             memory.addNote({ text: note.text, ttlHours: note.ttlHours })
           } catch (err) {
             process.stderr.write(`heartbeat WB_ADD rejected: ${String(err)}\n`)
+          }
+        }
+        for (const reminder of directives.reminders) {
+          const result = createReminderJob(store, reminder)
+          if (!result.ok) {
+            process.stderr.write(`heartbeat reminder rejected: ${result.reason}\n`)
           }
         }
         return { status: "success", output: directives.cleanedReply || raw.trim() }
@@ -146,6 +160,15 @@ export const CronExecutorLive = Layer.effect(
       }
     }
 
+    const runCanvasSync = async (): Promise<ExecutionResult> => {
+      try {
+        await canvasSync.sync()
+        return { status: "success", output: `${NAME_CANVAS_SYNC} ok at ${new Date().toISOString()}` }
+      } catch (err) {
+        return { status: "failed", error: String(err) }
+      }
+    }
+
     return {
       run: async (job) => {
         switch (job.payloadKind) {
@@ -155,6 +178,12 @@ export const CronExecutorLive = Layer.effect(
             if (job.name === NAME_HEARTBEAT) return runHeartbeat(job)
             if (job.name === NAME_DAILY_INSIGHT) return runDailyInsight(job)
             return runAgentTurnDirect(job, HEARTBEAT_THREAD_ID)
+          case "internalTask":
+            if (job.name === NAME_CANVAS_SYNC) return runCanvasSync()
+            return {
+              status: "failed",
+              error: `unknown internalTask name: ${job.name}`,
+            }
           default:
             return {
               status: "failed",

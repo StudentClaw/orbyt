@@ -68,11 +68,13 @@ function entryFromSuccess(
   if (job.name === "heartbeat") {
     const ack = checkHeartbeatAck(output)
     if (ack.suppress) return null
+    const body = truncate(ack.remainder.length > 0 ? ack.remainder : output, 240)
+    if (body.length === 0) return null
     return {
       category: "cron",
       type: "heartbeat.alert",
       title: "Heartbeat alert",
-      body: truncate(ack.remainder.length > 0 ? ack.remainder : output, 240),
+      body,
       notify: true,
       priority: 2,
     }

@@ -339,7 +339,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           localTurnId: work.turnId,
           content: work.content,
           cwd: executionCwd,
-          accessMode: thread?.accessMode ?? "default",
+          accessMode: thread?.accessMode ?? "full",
           model: work.model,
           onToken: async (token, index) => {
             if (activeTurns.get(work.turnId)?.interrupted) {
@@ -988,8 +988,8 @@ export const OrchestrationServiceLive = Layer.scoped(
         recordReceipt(commandId, "completed", {})
         await receiptBus.resolve(commandId, {})
       },
-      respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
-        const result = await codexCli.respondToApproval(approvalRequestId, decision)
+      respondToProviderApproval: async (commandId, approvalRequestId, decision, options) => {
+        const result = await codexCli.respondToApproval(approvalRequestId, decision, options)
         if (result.resolved) {
           await publishRuntimeEvent({
             type: "provider.approvalResolved",

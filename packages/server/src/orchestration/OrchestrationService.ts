@@ -170,6 +170,7 @@ export interface OrchestrationServiceShape {
     commandId: string,
     approvalRequestId: string,
     decision: ProviderApprovalDecision,
+    options?: { rememberDecision?: boolean },
   ) => Promise<RespondToProviderApprovalResult>
   readonly shutdown: () => Promise<void>
 }
@@ -1173,7 +1174,7 @@ async function getSnapshot(deps: OrchestrationRuntimeDeps): Promise<Orchestratio
 function buildThread(
   workspaceId: string,
   title?: string,
-  accessMode: OrchestrationThread["accessMode"] = "default",
+  accessMode: OrchestrationThread["accessMode"] = "full",
 ): OrchestrationThread {
   const now = new Date().toISOString()
   return {
@@ -1193,7 +1194,7 @@ function readDefaultAccessModePreference(
   const row = database.get<{ default_access_mode: string | null }>(
     "SELECT default_access_mode FROM user_preferences WHERE id = 1",
   )
-  return row?.default_access_mode === "full" ? "full" : "default"
+  return row?.default_access_mode === "default" ? "default" : "full"
 }
 
 function writeDefaultAccessModePreference(
@@ -1992,7 +1993,7 @@ export const OrchestrationServiceLive = Layer.scoped(
           localTurnId: work.turnId,
           content: work.content,
           cwd: executionCwd,
-          accessMode: thread?.accessMode ?? "default",
+          accessMode: thread?.accessMode ?? "full",
           model: work.model,
           studentState: proactiveMemory.readSoul(),
           onToken: async (token, index) => {
@@ -2754,8 +2755,8 @@ export const OrchestrationServiceLive = Layer.scoped(
         recordReceipt(commandId, "completed", {})
         await receiptBus.resolve(commandId, {})
       },
-      respondToProviderApproval: async (commandId, approvalRequestId, decision) => {
-        const result = await threadRuntimeManager.respondToApproval(approvalRequestId, decision)
+      respondToProviderApproval: async (commandId, approvalRequestId, decision, options) => {
+        const result = await threadRuntimeManager.respondToApproval(approvalRequestId, decision, options)
         if (result.resolved) {
           await publishRuntimeEvent({
             type: "provider.approvalResolved",

@@ -23,6 +23,7 @@ import {
   ORBYT_GATEWAY_TOKEN_ENV,
   buildCodexAppServerArgs,
   buildInitializeParams,
+  buildPermissionApprovalReply,
   emitReasoningText,
   emitTextByPhase,
   findActiveTurnByProviderIds,
@@ -198,6 +199,7 @@ export interface CodexCliService {
   readonly respondToApproval: (
     approvalRequestId: string,
     decision: ProviderApprovalDecision,
+    options?: { rememberDecision?: boolean },
   ) => Promise<{
     approvalRequestId: string
     threadId: string
@@ -230,6 +232,14 @@ export function createCodexRuntimeInstance(
   const providerThreadIds = new Map<string, string>()
   const activeProviderTurns = new Map<string, ActiveTurn>()
   const pendingApprovalRequests = new Map<string, PendingApprovalEntry>()
+  // Approvals that arrived before any active turn was registered for the
+  // matching provider thread. Drained from `sendTurn` once the turn is
+  // pre-registered. Keyed by providerThreadId; absent thread keyed by "".
+  const pendingUnroutedApprovals = new Map<string, PendingApprovalEntry[]>()
+  // Session-sticky decisions keyed by `toolKey`. Populated when the user
+  // checks "Don't ask again for this tool". Cleared when the codex process
+  // tears down — no persistence across restarts.
+  const rememberedDecisions = new Map<string, ProviderApprovalDecision>()
   const artifactPreambleSentThreads = new Set<string>()
   let child: ChildProcessWithoutNullStreams | null = null
   let output: readline.Interface | null = null
@@ -260,6 +270,8 @@ export function createCodexRuntimeInstance(
     }
     pending = new Map()
     pendingApprovalRequests.clear()
+    pendingUnroutedApprovals.clear()
+    rememberedDecisions.clear()
 
     if (currentOutput) {
       currentOutput.removeAllListeners()
@@ -379,6 +391,117 @@ export function createCodexRuntimeInstance(
     }
   }
 
+  // Build the JSON-RPC reply payload Codex expects for each approval method.
+  // Centralised so the live `respondToApproval` path, the sticky-decision
+  // shortcut, and the static auto-allowlist all produce the exact same
+  // shape — divergence here is what previously surfaced as
+  // `user rejected MCP tool call`.
+  const buildApprovalReplyPayload = (
+    entry: PendingApprovalEntry,
+    decision: ProviderApprovalDecision,
+    options: { sticky?: boolean } = {},
+  ): unknown => {
+    if (
+      entry.method === "item/commandExecution/requestApproval"
+      || entry.method === "item/fileChange/requestApproval"
+    ) {
+      return { decision: decision === "approve" ? "accept" : "decline" }
+    }
+    // Permissions: approve echoes back the requested permission set; deny
+    // sends `permissions: {}` which Codex treats as a denial.
+    if (decision === "approve") {
+      return buildPermissionApprovalReply(entry.rawParams, {
+        scope: options.sticky ? "always" : "turn",
+      })
+    }
+    return { permissions: {}, scope: "turn" }
+  }
+
+  const surfaceApproval = async (entry: PendingApprovalEntry): Promise<void> => {
+    // Sticky decision recorded earlier this session via "Don't ask again".
+    // We only ever remember an "approve" — denies always re-prompt, so a
+    // single accidental click can't silently sink every future tool call.
+    if (entry.approval.toolKey) {
+      const sticky = rememberedDecisions.get(entry.approval.toolKey)
+      if (sticky === "approve") {
+        console.log(
+          "[CodexCli] applying remembered approve:",
+          entry.approval.toolKey,
+        )
+        writeMessage({
+          id: entry.requestId,
+          result: buildApprovalReplyPayload(entry, sticky, { sticky: true }),
+        })
+        return
+      }
+    }
+
+    const localTurnId = entry.approval.turnId
+    const activeTurn = localTurnId
+      ? activeProviderTurns.get(localTurnId)
+      : undefined
+
+    if (activeTurn) {
+      // Local thread/turn ids are already on the entry — UI filter (which
+      // matches by local threadId) will accept it.
+      pendingApprovalRequests.set(entry.approval.id, entry)
+      await activeTurn.onApprovalRequest(entry.approval)
+      return
+    }
+
+    // No active turn yet — Codex can send `item/permissions/requestApproval`
+    // before `turn/start` has resolved. Buffer the entry until the turn
+    // registers; do NOT put it in pendingApprovalRequests yet because at this
+    // point entry.approval.threadId is the provider thread id, which the UI
+    // selector (matching local thread ids) would reject anyway.
+    const providerThreadId = readString(entry.rawParams, "threadId") ?? ""
+    const bucket = pendingUnroutedApprovals.get(providerThreadId) ?? []
+    bucket.push(entry)
+    pendingUnroutedApprovals.set(providerThreadId, bucket)
+    console.log(
+      "[CodexCli] buffering unrouted approval:",
+      entry.method,
+      entry.approval.toolKey ?? "(no toolKey)",
+      `bucket=${providerThreadId || "(no thread)"}`,
+    )
+  }
+
+  const drainPendingUnroutedApprovals = async (
+    providerThreadId: string,
+    activeTurn: ActiveTurn,
+  ): Promise<void> => {
+    const buckets: PendingApprovalEntry[][] = []
+    const keyed = pendingUnroutedApprovals.get(providerThreadId)
+    if (keyed) {
+      buckets.push(keyed)
+      pendingUnroutedApprovals.delete(providerThreadId)
+    }
+    // Also drain entries that arrived without any threadId hint at all.
+    if (providerThreadId !== "") {
+      const orphans = pendingUnroutedApprovals.get("")
+      if (orphans) {
+        buckets.push(orphans)
+        pendingUnroutedApprovals.delete("")
+      }
+    }
+    for (const bucket of buckets) {
+      for (const entry of bucket) {
+        // Re-bind to the new active turn so the UI selector (which matches
+        // local threadId) finds this approval.
+        const rebound: PendingApprovalEntry = {
+          ...entry,
+          approval: {
+            ...entry.approval,
+            threadId: activeTurn.localThreadId as PendingApprovalEntry["approval"]["threadId"],
+            turnId: activeTurn.localTurnId as PendingApprovalEntry["approval"]["turnId"],
+          },
+        }
+        pendingApprovalRequests.set(rebound.approval.id, rebound)
+        await activeTurn.onApprovalRequest(rebound.approval)
+      }
+    }
+  }
+
   const handleServerRequest = async (message: JsonRpcMessage): Promise<void> => {
     const method =
       "method" in message && typeof message.method === "string" ? message.method : null
@@ -386,11 +509,36 @@ export function createCodexRuntimeInstance(
       return
     }
 
+    // Diagnostic for approval routing — keep until the new flow is confirmed
+    // working in default mode for the canvas MCP path.
+    if (method.endsWith("/requestApproval")) {
+      console.log(
+        "[CodexCli] server request:",
+        method,
+        JSON.stringify("params" in message ? message.params : null),
+      )
+    }
+
     if (
       method !== "item/commandExecution/requestApproval"
       && method !== "item/fileChange/requestApproval"
       && method !== "item/permissions/requestApproval"
     ) {
+      // Unknown approval-shaped methods (e.g. `item/fileRead/requestApproval`
+      // or future Codex variants) get routed through the same prompt UI as
+      // the known methods. Treat as a permissions-style request so the UI
+      // shows a generic Approve/Deny choice.
+      if (method.endsWith("/requestApproval")) {
+        const params = "params" in message ? message.params : null
+        const entry = mapPendingApprovalEntry(
+          message.id,
+          "item/permissions/requestApproval",
+          params,
+          null,
+        )
+        await surfaceApproval(entry)
+        return
+      }
       writeMessage({
         id: message.id,
         error: {
@@ -402,26 +550,10 @@ export function createCodexRuntimeInstance(
     }
 
     const params = "params" in message ? message.params : null
-    const providerThreadId = readString(params, "threadId") ?? null
-    const providerTurnId = readString(params, "turnId") ?? null
-    const activeTurn = findActiveTurnByProviderIds(
-      activeProviderTurns,
-      providerThreadId,
-      providerTurnId,
-    )
 
-    if (!activeTurn) {
-      const denialResult =
-        method === "item/permissions/requestApproval"
-          ? { permissions: {}, scope: "turn" }
-          : { decision: "decline" }
-      writeMessage({
-        id: message.id,
-        result: denialResult,
-      })
-      return
-    }
-
+    // Static auto-approve allowlist for harmless read-only shell commands
+    // (e.g. `pwd`, `ls`). This is a build-time policy, not user-visible
+    // permission, so it stays in front of the prompt path.
     if (
       method === "item/commandExecution/requestApproval"
       && shouldAutoApproveShellCommand(readString(params, "command") ?? null)
@@ -433,9 +565,16 @@ export function createCodexRuntimeInstance(
       return
     }
 
+    const providerThreadId = readString(params, "threadId") ?? null
+    const providerTurnId = readString(params, "turnId") ?? null
+    const activeTurn = findActiveTurnByProviderIds(
+      activeProviderTurns,
+      providerThreadId,
+      providerTurnId,
+    )
+
     const entry = mapPendingApprovalEntry(message.id, method, params, activeTurn)
-    pendingApprovalRequests.set(entry.approval.id, entry)
-    await activeTurn.onApprovalRequest(entry.approval)
+    await surfaceApproval(entry)
   }
 
   const handleNotification = async (message: JsonRpcMessage) => {
@@ -787,7 +926,7 @@ export function createCodexRuntimeInstance(
   const ensureProviderThread = async (
     localThreadId: string,
     requestedCwd?: string | null,
-    accessMode: ThreadAccessMode = "default",
+    accessMode: ThreadAccessMode = "full",
     requestedModel?: string | null,
   ): Promise<string> => {
     const normalizedRequestedCwd = normalizeSessionCwd(requestedCwd)
@@ -939,7 +1078,7 @@ export function createCodexRuntimeInstance(
       const providerThreadId = await ensureProviderThread(
         input.localThreadId,
         input.cwd,
-        input.accessMode ?? "default",
+        input.accessMode ?? "full",
         input.model,
       )
       await runtimeStore.updateState({
@@ -997,6 +1136,11 @@ export function createCodexRuntimeInstance(
       }
       activeProviderTurns.set(input.localTurnId, activeTurn)
 
+      // Drain any approval requests that arrived before this turn was
+      // registered. Without this, requests sent during the `turn/start`
+      // round-trip would have been silently auto-declined.
+      await drainPendingUnroutedApprovals(providerThreadId, activeTurn)
+
       let response: TurnStartResponse
       try {
         response = await sendRequest<TurnStartResponse>("turn/start", {
@@ -1042,7 +1186,7 @@ export function createCodexRuntimeInstance(
     listPendingApprovals: () => {
       return Array.from(pendingApprovalRequests.values()).map((entry) => entry.approval)
     },
-    respondToApproval: async (approvalRequestId, decision) => {
+    respondToApproval: async (approvalRequestId, decision, options = {}) => {
       const entry = pendingApprovalRequests.get(approvalRequestId)
       if (!entry) {
         return {
@@ -1054,24 +1198,17 @@ export function createCodexRuntimeInstance(
         }
       }
 
-      const result =
-        entry.method === "item/commandExecution/requestApproval"
-          ? { decision: decision === "approve" ? "accept" : "decline" }
-          : entry.method === "item/fileChange/requestApproval"
-            ? { decision: decision === "approve" ? "accept" : "decline" }
-            : {
-                permissions:
-                  decision === "approve"
-                  && isRecord(entry.rawParams)
-                  && isRecord(entry.rawParams.permissions)
-                    ? entry.rawParams.permissions
-                    : {},
-                scope: "turn",
-              }
+      // Only remember "approve" — never silently re-deny. A user who picks
+      // "Don't allow" once should still see the next prompt for the same
+      // tool, even if the checkbox was ticked.
+      const sticky = Boolean(options.rememberDecision)
+      if (sticky && decision === "approve" && entry.approval.toolKey) {
+        rememberedDecisions.set(entry.approval.toolKey, "approve")
+      }
 
       writeMessage({
         id: entry.requestId,
-        result,
+        result: buildApprovalReplyPayload(entry, decision, { sticky }),
       })
       pendingApprovalRequests.delete(approvalRequestId)
 

@@ -6,7 +6,7 @@ export type CronScheduleKind = Schema.Schema.Type<typeof CronScheduleKind>
 export const CronSessionTarget = Schema.Literal("main", "isolated")
 export type CronSessionTarget = Schema.Schema.Type<typeof CronSessionTarget>
 
-export const CronPayloadKind = Schema.Literal("agentTurn", "reminder")
+export const CronPayloadKind = Schema.Literal("agentTurn", "reminder", "internalTask")
 export type CronPayloadKind = Schema.Schema.Type<typeof CronPayloadKind>
 
 export const CronRunStatus = Schema.Literal("running", "success", "failed")

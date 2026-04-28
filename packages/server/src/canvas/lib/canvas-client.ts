@@ -25,7 +25,11 @@ import {
   CanvasUpcomingEvent,
 } from "@orbyt/contracts"
 import { Schema } from "@effect/schema"
-import type { CanvasPluginCredentials } from "./runtime.js"
+
+export type CanvasCredentials = {
+  baseUrl: string
+  token: string
+}
 
 type FetchImpl = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
@@ -40,7 +44,7 @@ export class CanvasClient {
   readonly #token: string
   readonly #fetchImpl: FetchImpl
 
-  constructor(credentials: CanvasPluginCredentials, options?: { fetchImpl?: FetchImpl }) {
+  constructor(credentials: CanvasCredentials, options?: { fetchImpl?: FetchImpl }) {
     this.#baseUrl = credentials.baseUrl.replace(/\/+$/, "")
     this.#token = credentials.token
     this.#fetchImpl = options?.fetchImpl ?? fetch

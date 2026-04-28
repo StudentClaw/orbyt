@@ -23,7 +23,7 @@ function input(overrides: Partial<PolicyInput>): PolicyInput {
   return {
     skill: makeSkill({}),
     grantedKeys: [],
-    toolCall: { server: "canvas-mcp", toolName: "get_page_content" },
+    toolCall: { server: "canvas-mcp", toolName: "list_courses" },
     ...overrides,
   }
 }
@@ -34,7 +34,7 @@ describe("SkillPolicyGate.evaluateSkillPolicy - allow path", () => {
       input({
         skill: makeSkill({ tier: "custom", requestedCapabilities: ["canvas.shared.read"] }),
         grantedKeys: ["canvas.shared.read"],
-        toolCall: { server: "canvas-mcp", toolName: "get_page_content" },
+        toolCall: { server: "canvas-mcp", toolName: "list_courses" },
       }),
     )
     expect(result.decision).toBe("allow")
@@ -45,7 +45,7 @@ describe("SkillPolicyGate.evaluateSkillPolicy - allow path", () => {
       input({
         skill: makeSkill({ tier: "curated", requestedCapabilities: ["canvas.shared.read"] }),
         grantedKeys: [],
-        toolCall: { server: "canvas-mcp", toolName: "get_page_content" },
+        toolCall: { server: "canvas-mcp", toolName: "list_courses" },
       }),
     )
     expect(result.decision).toBe("allow")
@@ -59,7 +59,7 @@ describe("SkillPolicyGate.evaluateSkillPolicy - deny path", () => {
       input({
         skill: makeSkill({ requestedCapabilities: ["canvas.self.read"] }),
         grantedKeys: ["canvas.shared.read"],
-        toolCall: { server: "canvas-mcp", toolName: "get_page_content" },
+        toolCall: { server: "canvas-mcp", toolName: "list_courses" },
       }),
     )
     expect(result.decision).toBe("deny")

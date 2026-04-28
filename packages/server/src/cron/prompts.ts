@@ -4,24 +4,71 @@ import {
 } from "../proactive/index.js"
 import type { ActivityFeedEntry } from "@orbyt/contracts"
 
+export interface UpcomingCourseworkItem {
+  readonly course: string
+  readonly title: string
+  readonly dueAt: string | null
+}
+
+export interface PlannedSessionItem {
+  readonly start: string
+  readonly end: string
+  readonly title: string
+}
+
 export interface HeartbeatPromptInput {
   readonly heartbeatScope: string
   readonly workingBufferNotes: ReadonlyArray<WorkingBufferNote>
   readonly nowIso: string
+  readonly upcomingCoursework: ReadonlyArray<UpcomingCourseworkItem>
+  readonly todaysSessions: ReadonlyArray<PlannedSessionItem>
+}
+
+function formatCoursework(
+  items: ReadonlyArray<UpcomingCourseworkItem>,
+): string {
+  if (items.length === 0) return "(no upcoming items)"
+  return items
+    .map((c) =>
+      `- ${c.course}: ${c.title}${c.dueAt ? ` (due ${c.dueAt})` : ""}`,
+    )
+    .join("\n")
+}
+
+function formatSessions(items: ReadonlyArray<PlannedSessionItem>): string {
+  if (items.length === 0) return "(no sessions today)"
+  return items.map((s) => `- ${s.start}–${s.end} ${s.title}`).join("\n")
 }
 
 export function buildHeartbeatPrompt(input: HeartbeatPromptInput): string {
   return [
-    "You are the Orbyt heartbeat. Your job is to silently scan for anything the student should be reminded of right now.",
+    "You are the Orbyt heartbeat. You run every 30 minutes. Your only job is to scan",
+    "the student's near-term schedule and quietly flag or pre-schedule anything",
+    "acute. Default behavior is silence.",
     "",
-    "Reply protocol — strict:",
-    "  - If nothing needs attention, reply EXACTLY: HEARTBEAT_OK",
-    "  - If something does need attention, reply with one short paragraph (≤3 sentences) describing it.",
-    "  - Do not greet, do not narrate, do not explain your process.",
+    "Reply protocol — strict. Pick exactly one of:",
+    "  A. If nothing is acute, reply EXACTLY: HEARTBEAT_OK",
+    "  B. If something needs the student NOW (next ~60 min), reply with one short",
+    "     paragraph (≤2 sentences). No greetings, no narration of your process.",
     "",
-    "You may also plant a note for your future self. To do so, append a separate line at the end of your reply, in this exact format:",
+    "Independent of A/B, you MAY append directive lines below your reply. Each on",
+    "its own line, exact format. Multiple of each are allowed.",
+    "",
+    "  REMINDER: at=<ISO-8601 future timestamp> | <title> | <body>",
+    "      Schedules a native push at that time. No further LLM call will run.",
+    "      Use this for: \"15 min before a study session starts\", \"1h before an",
+    "      assignment due\", \"at the moment a packed window begins\".",
     "  WB_ADD: ttl=<hours> | <free-form note text>",
-    "Multiple WB_ADD lines are allowed. They will be parsed and added to the working buffer.",
+    "      Plants a note for your future heartbeats to see. Use sparingly.",
+    "",
+    "Rules of thumb:",
+    "  - Prefer REMINDER over narrative replies. A scheduled push beats a card the",
+    "    user has to notice.",
+    "  - Do not re-fire reminders for the same item across heartbeats — check the",
+    "    working buffer for prior WB_ADD markers before re-scheduling.",
+    "  - \"Acute\" means: starts/due in the next 60 min, or the student is currently",
+    "    inside a scheduled study window with nothing logged.",
+    "  - 7-day-out coursework is NOT acute. Leave it for the daily-insight agent.",
     "",
     `Now (ISO): ${input.nowIso}`,
     "",
@@ -30,6 +77,14 @@ export function buildHeartbeatPrompt(input: HeartbeatPromptInput): string {
       ? input.heartbeatScope
       : "(scope file is empty — surface only urgent items)",
     "</heartbeat_scope>",
+    "",
+    "<upcoming_coursework window=7d>",
+    formatCoursework(input.upcomingCoursework),
+    "</upcoming_coursework>",
+    "",
+    "<todays_sessions>",
+    formatSessions(input.todaysSessions),
+    "</todays_sessions>",
     "",
     "<working_buffer>",
     formatNotesForPrompt(input.workingBufferNotes),
@@ -42,20 +97,36 @@ const WB_ADD_PATTERN = /^WB_ADD:\s*ttl=(\d+(?:\.\d+)?)\s*\|\s*(.+)$/
 export interface ParsedAgentDirectives {
   readonly cleanedReply: string
   readonly notes: ReadonlyArray<{ ttlHours: number; text: string }>
+  readonly reminders: ReadonlyArray<ParsedReminderDirective>
 }
 
-/** Strips WB_ADD: lines from the agent's reply and extracts them as structured notes. */
+/**
+ * Strips WB_ADD: and REMINDER: lines from the agent's reply and extracts them
+ * as structured directives.
+ */
 export function parseAgentDirectives(reply: string): ParsedAgentDirectives {
   const lines = reply.split(/\r?\n/)
   const kept: string[] = []
   const notes: { ttlHours: number; text: string }[] = []
+  const reminders: ParsedReminderDirective[] = []
   for (const line of lines) {
-    const match = WB_ADD_PATTERN.exec(line.trim())
-    if (match) {
-      const ttl = Number.parseFloat(match[1] ?? "")
-      const text = (match[2] ?? "").trim()
+    const trimmed = line.trim()
+    const wbMatch = WB_ADD_PATTERN.exec(trimmed)
+    if (wbMatch) {
+      const ttl = Number.parseFloat(wbMatch[1] ?? "")
+      const text = (wbMatch[2] ?? "").trim()
       if (Number.isFinite(ttl) && ttl > 0 && text.length > 0) {
         notes.push({ ttlHours: ttl, text })
+        continue
+      }
+    }
+    const remMatch = REMINDER_PATTERN.exec(trimmed)
+    if (remMatch) {
+      const at = (remMatch[1] ?? "").trim()
+      const title = (remMatch[2] ?? "").trim()
+      const body = (remMatch[3] ?? "").trim()
+      if (at && title && body && Number.isFinite(Date.parse(at))) {
+        reminders.push({ at, title, body })
         continue
       }
     }
@@ -64,6 +135,7 @@ export function parseAgentDirectives(reply: string): ParsedAgentDirectives {
   return {
     cleanedReply: kept.join("\n").trim(),
     notes,
+    reminders,
   }
 }
 
@@ -78,16 +150,8 @@ export interface DailyInsightPromptInput {
   readonly soul: string
   readonly nowIso: string
   readonly recentInsights: ReadonlyArray<InsightHistoryEntry>
-  readonly upcomingCoursework: ReadonlyArray<{
-    readonly course: string
-    readonly title: string
-    readonly dueAt: string | null
-  }>
-  readonly todaysSessions: ReadonlyArray<{
-    readonly start: string
-    readonly end: string
-    readonly title: string
-  }>
+  readonly upcomingCoursework: ReadonlyArray<UpcomingCourseworkItem>
+  readonly todaysSessions: ReadonlyArray<PlannedSessionItem>
 }
 
 function formatInsightHistory(entries: ReadonlyArray<InsightHistoryEntry>): string {
@@ -102,22 +166,6 @@ function formatInsightHistory(entries: ReadonlyArray<InsightHistoryEntry>): stri
       return `- [${e.createdAt}] [${status}] ${e.title}: ${e.body}`
     })
     .join("\n")
-}
-
-function formatCoursework(
-  items: DailyInsightPromptInput["upcomingCoursework"],
-): string {
-  if (items.length === 0) return "(no upcoming items)"
-  return items
-    .map((c) =>
-      `- ${c.course}: ${c.title}${c.dueAt ? ` (due ${c.dueAt})` : ""}`,
-    )
-    .join("\n")
-}
-
-function formatSessions(items: DailyInsightPromptInput["todaysSessions"]): string {
-  if (items.length === 0) return "(no sessions today)"
-  return items.map((s) => `- ${s.start}–${s.end} ${s.title}`).join("\n")
 }
 
 export function buildDailyInsightPrompt(input: DailyInsightPromptInput): string {
