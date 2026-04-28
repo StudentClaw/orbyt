@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { IpcChannel } from "@orbyt/contracts"
+import { useState } from "react"
+import type { SettingsSection } from "@/components/settings/SettingsSidebar"
 
-async function navigateTo(section: "general" | "connections" | "notifications" | "study-profile") {
+async function navigateTo(section: "general" | "notifications" | "study-profile") {
   await userEvent.click(screen.getByTestId(`settings-nav-${section}`))
 }
 
@@ -61,6 +63,29 @@ vi.mock("@/rpc/appRuntime", () => ({
 }))
 
 import { SettingsPage } from "../pages/SettingsPage"
+import { PluginsPage } from "../pages/PluginsPage"
+
+type TestSection = SettingsSection | "connections"
+
+function renderSettingsPage(initialSection?: TestSection) {
+  if (!initialSection) {
+    return render(<SettingsPage />)
+  }
+
+  if (initialSection === "connections") {
+    return render(<PluginsPage />)
+  }
+
+  const controlledInitialSection = initialSection
+
+  function ControlledSettingsPage() {
+    const [activeSection, setActiveSection] = useState<SettingsSection>(controlledInitialSection)
+
+    return <SettingsPage activeSection={activeSection} onSectionSelect={setActiveSection} />
+  }
+
+  return render(<ControlledSettingsPage />)
+}
 
 describe("SettingsPage", () => {
   const defaultPushSettings = {
@@ -292,13 +317,15 @@ describe("SettingsPage", () => {
       },
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    const rendered = renderSettingsPage("connections")
+    expect(screen.getByTestId("plugins-page")).toBeDefined()
+    expect(screen.queryByTestId("settings-sidebar")).toBeNull()
     expect(screen.getAllByText("Plugins").length).toBeGreaterThan(0)
     expect(screen.getByTestId("settings-plugin-disabled")).toBeDefined()
     expect(screen.queryByTestId("settings-codex-card")).toBeNull()
 
+    rendered.unmount()
+    render(<SettingsPage />)
     await navigateTo("notifications")
     await waitFor(() => {
       expect(screen.getByTestId("settings-push-card")).toBeDefined()
@@ -314,9 +341,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
     })
@@ -342,9 +367,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-row-canvas-mcp")).toBeDefined()
     })
@@ -369,9 +392,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
 
     expect(screen.getAllByText("Canvas Assistant").length).toBeGreaterThan(0)
@@ -398,9 +419,7 @@ describe("SettingsPage", () => {
       status: "syncing",
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-registry")).toBeDefined()
     })
@@ -621,9 +640,7 @@ describe("SettingsPage", () => {
       return null
     }) as any
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     const toggle = await screen.findByRole("switch", { name: /Enable Canvas Assistant|Disable Canvas Assistant/ })
     fireEvent.click(toggle)
 
@@ -675,9 +692,7 @@ describe("SettingsPage", () => {
       }
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     const row = await screen.findByTestId("settings-plugin-row-canvas-mcp")
     await waitFor(() => {
       expect(within(row).getByText("discovered")).toBeDefined()
@@ -721,9 +736,7 @@ describe("SettingsPage", () => {
       return null
     }) as any
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     const row = await screen.findByTestId("settings-plugin-row-canvas-mcp")
     await waitFor(() => {
       expect(within(row).getByText("error")).toBeDefined()
@@ -765,9 +778,7 @@ describe("SettingsPage", () => {
       return null
     }) as any
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-apple-calendar-mcp"))
     const readinessCard = await screen.findByTestId("settings-plugin-readiness-card-apple-calendar-mcp")
     expect(screen.getByTestId("settings-plugin-readiness-body-apple-calendar-mcp").textContent)
@@ -820,9 +831,7 @@ describe("SettingsPage", () => {
       }
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-apple-calendar-mcp"))
     await screen.findByTestId("settings-plugin-readiness-card-apple-calendar-mcp")
     expect(screen.getByTestId("settings-plugin-readiness-body-apple-calendar-mcp").textContent)
@@ -888,9 +897,7 @@ describe("SettingsPage", () => {
       return null
     }) as any
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
@@ -926,9 +933,7 @@ describe("SettingsPage", () => {
       },
     })
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
@@ -980,9 +985,7 @@ describe("SettingsPage", () => {
       return null
     }) as any
 
-    render(<SettingsPage />)
-
-    await navigateTo("connections")
+    renderSettingsPage("connections")
     await user.click(await screen.findByTestId("settings-plugin-manage-canvas-mcp"))
     await waitFor(() => {
       expect(screen.getByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()

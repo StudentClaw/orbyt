@@ -17,7 +17,7 @@ interface MarkdownContentProps {
 
 const SENTINEL_REGEX = /\[\[ARTIFACT:([^\]]+)\]\]/g
 const URL_SCHEME_REGEX = /^[A-Za-z][A-Za-z\d+.-]*:/
-const APP_ROUTE_PREFIXES = ["/chat", "/settings", "/activity", "/onboarding", "/assignments"] as const
+const APP_ROUTE_PREFIXES = ["/chat", "/settings", "/plugins", "/activity", "/onboarding", "/assignments"] as const
 
 function renderWithChips(children: ReactNode, enabled: boolean): ReactNode {
   if (!enabled) return children

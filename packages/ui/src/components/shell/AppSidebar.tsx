@@ -15,6 +15,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Activity01Icon,
   DashboardSquare01Icon,
+  PuzzleIcon,
   Settings01Icon,
 } from "@hugeicons/core-free-icons"
 import { useRuntimeActivityUnreadCount } from "@/hooks/useAppRuntime"
@@ -26,6 +27,7 @@ const sidebarBrandIcon = new URL("../../../public/favicon.svg", import.meta.url)
 const navItems = [
   { label: "Dashboard", path: "/", icon: DashboardSquare01Icon },
   { label: "Activity", path: "/activity", icon: Activity01Icon },
+  { label: "Plugins", path: "/plugins", icon: PuzzleIcon },
 ] as const
 
 export function AppSidebar() {
@@ -66,8 +68,12 @@ export function AppSidebarContent() {
         <SidebarMenu className={sidebarOpen ? "window-no-drag mt-4" : "window-no-drag mt-2 items-center"}>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.path}>
-              <SidebarMenuButton asChild tooltip={item.label} isActive={currentPath === item.path}>
-                <Link to={item.path}>
+              <SidebarMenuButton
+                asChild
+                tooltip={item.label}
+                isActive={item.path === "/" ? currentPath === item.path : currentPath.startsWith(item.path)}
+              >
+                <Link to={item.path} data-testid={item.path === "/plugins" ? "sidebar-plugins-link" : undefined}>
                   <HugeiconsIcon icon={item.icon} size={18} />
                   <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                 </Link>
