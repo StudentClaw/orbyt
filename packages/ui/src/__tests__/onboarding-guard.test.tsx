@@ -18,6 +18,15 @@ vi.mock("@tanstack/react-router", () => ({
     return options?.select ? options.select(state) : state
   },
   useNavigate: () => hookMocks.navigateFn,
+  useCanGoBack: () => false,
+  useRouter: () => ({
+    history: {
+      back: vi.fn(),
+      forward: vi.fn(),
+      subscribe: vi.fn(() => () => {}),
+      location: { state: { __TSR_index: 0 } },
+    },
+  }),
 }))
 
 vi.mock("@/hooks/useAppRuntime", () => ({

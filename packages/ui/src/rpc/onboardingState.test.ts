@@ -118,10 +118,11 @@ describe("onboardingState", () => {
 
   describe("skipOnboardingStep", () => {
     test("marks step as skipped and advances", () => {
+      goToOnboardingStep(1)
       skipOnboardingStep()
       const state = getOnboardingState()
-      expect(state.currentStep).toBe(1)
-      expect(state.steps[0].status).toBe("skipped")
+      expect(state.currentStep).toBe(2)
+      expect(state.steps[1].status).toBe("skipped")
     })
 
     test("marks step as skipped on non-required steps", () => {
@@ -250,6 +251,11 @@ describe("onboardingState", () => {
             provider: null,
             connectedAt: null,
           }),
+          getDna: vi.fn().mockResolvedValue({
+            answers: null,
+            dna: null,
+            cardWeights: [],
+          }),
           setOverallStatus: vi.fn().mockResolvedValue({ ok: true }),
           setAiAuth: vi.fn().mockResolvedValue({
             status: "connected" as const,
@@ -265,7 +271,7 @@ describe("onboardingState", () => {
       expect(client.onboarding.setOverallStatus).toHaveBeenCalledWith({ status: "completed" })
     })
 
-    test("server hydration promotes connected Codex auth to completed onboarding", async () => {
+    test("server hydration preserves connected Codex auth without completing onboarding", async () => {
       const client = {
         onboarding: {
           getSnapshot: vi.fn().mockResolvedValue({
@@ -276,6 +282,11 @@ describe("onboardingState", () => {
             status: "connected" as const,
             provider: "codex",
             connectedAt: "2026-04-14T00:00:00.000Z",
+          }),
+          getDna: vi.fn().mockResolvedValue({
+            answers: null,
+            dna: null,
+            cardWeights: [],
           }),
           setOverallStatus: vi.fn().mockResolvedValue({ ok: true }),
           setAiAuth: vi.fn().mockResolvedValue({
@@ -289,8 +300,8 @@ describe("onboardingState", () => {
       await hydrateOnboardingStateFromServer(client)
 
       expect(getOnboardingState().aiAuthStatus).toBe("connected")
-      expect(isOnboardingComplete()).toBe(true)
-      expect(client.onboarding.setOverallStatus).toHaveBeenCalledWith({ status: "completed" })
+      expect(isOnboardingComplete()).toBe(false)
+      expect(client.onboarding.setOverallStatus).not.toHaveBeenCalled()
     })
   })
 
