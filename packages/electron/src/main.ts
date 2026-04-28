@@ -11,6 +11,7 @@ import { createPluginRuntime } from "./plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "./push/push-manager.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
 import { createTray } from "./tray/tray.js"
+import { registerStableAutoUpdates, stopStableAutoUpdates } from "./updater/desktop-updater.js"
 import { createWindow } from "./window/window-manager.js"
 
 app.setName("Orbyt")
@@ -179,6 +180,7 @@ if (gotSingleInstanceLock) {
   app.whenReady()
     .then(async () => {
       await bootstrap()
+      registerStableAutoUpdates()
 
       app.on("activate", async () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -203,6 +205,7 @@ if (gotSingleInstanceLock) {
 
 app.on("before-quit", () => {
   isQuitting = true
+  stopStableAutoUpdates()
   void pluginManager?.dispose()
   pluginManager = null
   pushManager?.stop()

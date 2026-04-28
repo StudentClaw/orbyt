@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { IpcChannel } from "@orbyt/contracts"
+import { IpcChannel, type DesktopUpdateMode, type DesktopUpdateState } from "@orbyt/contracts"
 import { useTheme, type Theme } from "@/hooks/useTheme"
 import { useRuntimeBootstrap, useRuntimeServerConfig } from "@/hooks/useAppRuntime"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
@@ -91,6 +91,8 @@ export function GeneralSection() {
   const [pickerState, setPickerState] = useState<"idle" | "opening">("idle")
   const [codexLogoutState, setCodexLogoutState] = useState<"idle" | "pending" | "done" | "error">("idle")
   const [codexConnectState, setCodexConnectState] = useState<"idle" | "connecting" | "connected" | "error">("idle")
+  const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null)
+  const [updateActionState, setUpdateActionState] = useState<"idle" | "pending" | "error">("idle")
 
   useEffect(() => {
     let cancelled = false
@@ -110,6 +112,35 @@ export function GeneralSection() {
 
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!window.electronAPI?.invoke) {
+      return () => {}
+    }
+
+    void window.electronAPI.invoke(IpcChannel.APP_UPDATE_GET_STATE)
+      .then((state) => {
+        if (!cancelled) {
+          setUpdateState(state)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUpdateActionState("error")
+        }
+      })
+
+    const unsubscribe = window.electronAPI.on?.(IpcChannel.APP_UPDATE_STATE, (state) => {
+      setUpdateState(state)
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
     }
   }, [])
 
@@ -187,6 +218,70 @@ export function GeneralSection() {
     }
   }
 
+  async function setDesktopUpdateMode(mode: DesktopUpdateMode) {
+    if (!window.electronAPI?.invoke) {
+      setUpdateActionState("error")
+      return
+    }
+
+    setUpdateActionState("pending")
+    try {
+      const result = await window.electronAPI.invoke(IpcChannel.APP_UPDATE_SET_MODE, { mode })
+      setUpdateState(result.state)
+      setUpdateActionState("idle")
+    } catch {
+      setUpdateActionState("error")
+    }
+  }
+
+  async function checkForDesktopUpdate() {
+    if (!window.electronAPI?.invoke) {
+      setUpdateActionState("error")
+      return
+    }
+
+    setUpdateActionState("pending")
+    try {
+      const result = await window.electronAPI.invoke(IpcChannel.APP_UPDATE_CHECK)
+      setUpdateState(result.state)
+      setUpdateActionState("idle")
+    } catch {
+      setUpdateActionState("error")
+    }
+  }
+
+  async function downloadDesktopUpdate() {
+    if (!window.electronAPI?.invoke) {
+      setUpdateActionState("error")
+      return
+    }
+
+    setUpdateActionState("pending")
+    try {
+      const result = await window.electronAPI.invoke(IpcChannel.APP_UPDATE_DOWNLOAD)
+      setUpdateState(result.state)
+      setUpdateActionState("idle")
+    } catch {
+      setUpdateActionState("error")
+    }
+  }
+
+  async function installDesktopUpdate() {
+    if (!window.electronAPI?.invoke) {
+      setUpdateActionState("error")
+      return
+    }
+
+    setUpdateActionState("pending")
+    try {
+      const result = await window.electronAPI.invoke(IpcChannel.APP_UPDATE_INSTALL)
+      setUpdateState(result.state)
+      setUpdateActionState("idle")
+    } catch {
+      setUpdateActionState("error")
+    }
+  }
+
   async function browseForMemoryGraphPath() {
     if (!window.electronAPI?.invoke) {
       setSaveState("error")
@@ -235,6 +330,90 @@ export function GeneralSection() {
         </CardContent>
       </Card>
 
+      <Card data-testid="settings-desktop-updates-card">
+        <CardHeader>
+          <CardTitle>Updates</CardTitle>
+          <CardDescription>
+            {updateState
+              ? `Orbyt ${updateState.currentVersion}`
+              : "Loading desktop update status"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Update install mode">
+            <Button
+              type="button"
+              variant={updateState?.mode === "automatic" ? "default" : "outline"}
+              onClick={() => void setDesktopUpdateMode("automatic")}
+              disabled={!updateState || updateActionState === "pending"}
+              data-testid="settings-updates-mode-automatic"
+            >
+              Automatic
+            </Button>
+            <Button
+              type="button"
+              variant={updateState?.mode === "prompt" ? "default" : "outline"}
+              onClick={() => void setDesktopUpdateMode("prompt")}
+              disabled={!updateState || updateActionState === "pending"}
+              data-testid="settings-updates-mode-prompt"
+            >
+              Prompt
+            </Button>
+          </div>
+
+          <p className="text-sm text-muted-foreground" data-testid="settings-updates-status">
+            {updateState
+              ? updateState.message
+                ?? (updateState.enabled ? "Orbyt will check for stable updates in the background." : "Desktop updates are disabled.")
+              : "Waiting for desktop bridge."}
+          </p>
+
+          {updateState?.status === "downloading" && typeof updateState.downloadPercent === "number" && (
+            <p className="text-sm text-muted-foreground" data-testid="settings-updates-progress">
+              Downloading {Math.round(updateState.downloadPercent)}%
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void checkForDesktopUpdate()}
+              disabled={!updateState?.enabled || updateActionState === "pending" || updateState.status === "checking" || updateState.status === "downloading"}
+              data-testid="settings-updates-check"
+            >
+              {updateState?.status === "checking" ? "Checking..." : "Check for Updates"}
+            </Button>
+            {updateState?.status === "available" && updateState.mode === "prompt" && (
+              <Button
+                type="button"
+                onClick={() => void downloadDesktopUpdate()}
+                disabled={updateActionState === "pending"}
+                data-testid="settings-updates-download"
+              >
+                Download Update
+              </Button>
+            )}
+            {updateState?.status === "downloaded" && updateState.mode === "prompt" && (
+              <Button
+                type="button"
+                onClick={() => void installDesktopUpdate()}
+                disabled={updateActionState === "pending"}
+                data-testid="settings-updates-install"
+              >
+                Restart and Install
+              </Button>
+            )}
+          </div>
+
+          {updateActionState === "error" && (
+            <p className="text-sm text-destructive" data-testid="settings-updates-error">
+              Desktop update controls are unavailable.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card data-testid="settings-memory-graph-card">
         <CardHeader>
           <CardTitle>Memory Graph</CardTitle>
@@ -272,7 +451,7 @@ export function GeneralSection() {
               : loadState === "error"
                 ? "Could not load the current graph location."
                 : pathMode === "default"
-                  ? "Using the default location (~/.orbyt/memory/graph)."
+                  ? "Using the default Documents location."
                   : "Using a custom graph location."}
           </p>
 

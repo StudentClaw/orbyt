@@ -7,6 +7,7 @@ import {
   createMacPackagingConfig,
   createStagePackageJson,
   detectMacSigningMode,
+  resolveGitHubPublishConfig,
   resolvePackagedAppPath,
   stageMacPackagedExtensions,
   verifyAppleBridgeVersion,
@@ -74,6 +75,31 @@ describe("build-macos-desktop-artifact", () => {
     })
   })
 
+  test("adds stable GitHub updater publish metadata when a repository is configured", () => {
+    const config = createMacPackagingConfig({
+      productName: "Orbyt",
+      appId: "com.orbyt.app",
+      stageAppDir: "/tmp/orbyt-stage",
+      outputDir: "/tmp/orbyt-release",
+      signed: true,
+      updateRepository: "orbyt/orbyt",
+    })
+
+    expect(config).toMatchObject({
+      publish: [{
+        provider: "github",
+        owner: "orbyt",
+        repo: "orbyt",
+        releaseType: "release",
+      }],
+    })
+  })
+
+  test("ignores invalid updater repository slugs", () => {
+    expect(resolveGitHubPublishConfig("invalid")).toBeUndefined()
+    expect(resolveGitHubPublishConfig("one/two/three")).toBeUndefined()
+  })
+
   test("enables signed packaging only when all mac signing secrets are present", () => {
     expect(detectMacSigningMode({
       CSC_LINK: "https://example.com/cert.p12",
@@ -120,6 +146,7 @@ describe("build-macos-desktop-artifact", () => {
 
     expect(packageJson.dependencies["@orbyt/server"]).toBe("file:vendor/server")
     expect(packageJson.dependencies["@orbyt/contracts"]).toBe("file:vendor/contracts")
+    expect(packageJson.dependencies["electron-updater"]).toBe("^6.6.2")
   })
 
   test("stages the matching per-arch Apple bridge into packaged extensions", () => {
