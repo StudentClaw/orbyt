@@ -53,6 +53,10 @@ export class CanvasClient {
     }, options)
   }
 
+  async getCourse(courseId: string, options?: RequestOptions): Promise<CanvasCourse> {
+    return this.request(`/api/v1/courses/${courseId}`, CanvasCourse, {}, options)
+  }
+
   async getCoursesWithEnrollments(options?: RequestOptions): Promise<CanvasCourseWithEnrollments[]> {
     return this.paginate("/api/v1/users/self/courses", CanvasCourseWithEnrollments, {
       enrollment_state: "active",

@@ -197,15 +197,23 @@ function registerStudentSelfTools(server: McpServer, deps: CanvasToolDependencie
       try {
         const client = getCanvasClient(deps)
         const courses = await client.getCoursesWithEnrollments()
-        const summaries = courses.map((course) => {
+
+        const courseDetails = await Promise.all(
+          courses.map((c) =>
+            client.getCourse(String(c.id)).catch(() => null),
+          ),
+        )
+
+        const summaries = courses.map((course, i) => {
           const enrollment = course.enrollments?.[0]
+          const detail = courseDetails[i]
           return {
             course: normalizeCourse(course),
             currentScore: enrollment?.grades?.current_score ?? enrollment?.computed_current_score ?? undefined,
             currentGrade: enrollment?.grades?.current_grade ?? enrollment?.computed_current_grade ?? undefined,
             finalScore: enrollment?.grades?.final_score ?? enrollment?.computed_final_score ?? undefined,
             finalGrade: enrollment?.grades?.final_grade ?? enrollment?.computed_final_grade ?? undefined,
-            units: course.credits ?? undefined,
+            units: detail?.credit_hours ?? undefined,
           }
         })
 
