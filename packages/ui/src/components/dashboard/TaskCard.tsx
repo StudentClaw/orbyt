@@ -1,5 +1,5 @@
 import { Archive } from "lucide-react"
-import { formatCountdown } from "./dashboard-model"
+import { formatCountdownCompact } from "./dashboard-model"
 import type { PrioritizedItem } from "./priority-model"
 import { resolvedBorderColor } from "./task-card-style"
 
@@ -10,12 +10,6 @@ interface TaskCardProps {
   readonly accentColor?: string
   readonly onClick?: () => void
   readonly onArchive?: () => void
-}
-
-function dueLabel(item: PrioritizedItem, now: Date): string {
-  const raw = formatCountdown(item.effectiveDueAt, now)
-  if (raw === "Overdue") return "Overdue"
-  return `Due in ${raw}`
 }
 
 function formatPoints(pointsPossible: number): string {
@@ -50,6 +44,7 @@ function normalizeSubmissionStatus(submissionStatus?: string): string | null {
     case "graded":
       return "Graded"
     case "submitted":
+    case "pending_review":
       return "Submitted"
     case "unsubmitted":
     case "not_submitted":
@@ -69,7 +64,13 @@ export function TaskCard({
   onClick,
   onArchive,
 }: TaskCardProps) {
-  const hours = (item.estimatedMinutes / 60).toFixed(item.estimatedMinutes % 60 === 0 ? 0 : 1)
+  const countdown = formatCountdownCompact(item.effectiveDueAt, now)
+  const countdownLabel =
+    countdown === "overdue"
+      ? "overdue"
+      : /^(\d+[mh]|now)$/.test(countdown)
+        ? `due in ${countdown}`
+        : `due ${countdown}`
   const submissionLabel = normalizeSubmissionStatus(item.submissionStatus)
   const hasMetadata = item.pointsPossible !== undefined || submissionLabel !== null
   const borderColor = resolvedBorderColor(item, now, accentColor)
@@ -93,11 +94,8 @@ export function TaskCard({
           <p className={`pr-9 font-medium leading-snug ${featured ? "text-base" : "text-sm"}`}>
             {item.title}
           </p>
-          <p className={`${featured ? "mt-2" : "mt-1"} text-xs text-muted-foreground`}>
-            {dueLabel(item, now)}
-          </p>
           {hasMetadata ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className={`${featured ? "mt-2" : "mt-1"} flex flex-wrap gap-1.5`}>
               {item.pointsPossible !== undefined ? (
                 <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                   {formatPoints(item.pointsPossible)}
@@ -118,7 +116,7 @@ export function TaskCard({
             featured ? "text-sm font-medium" : "text-xs"
           }`}
         >
-          {hours}h
+          {countdownLabel}
         </div>
       </button>
       {onArchive ? (

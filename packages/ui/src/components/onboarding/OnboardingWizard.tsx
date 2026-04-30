@@ -56,11 +56,6 @@ export function OnboardingWizard() {
     persistOnboardingState()
   }, [state])
 
-  useEffect(() => {
-    if (phase !== "ai-connect") return
-    void getPrimaryWsRpcClient().provider.retryInitialize().catch(() => undefined)
-  }, [phase])
-
   const advanceAndGo = (next: WizardPhase): void => {
     advanceOnboardingStep()
     setPhase(next)
@@ -118,24 +113,29 @@ export function OnboardingWizard() {
         throw new Error(result.error ?? "Sign-in did not complete.")
       }
 
-      setAiAuthStatus("connected")
       const client = getPrimaryWsRpcClient()
-      // Best-effort: OAuth itself succeeded, so don't fail the user-visible flow
-      // if persistence or runtime reload errors. The runtime reconnects on retry.
-      await Promise.allSettled([
-        client.onboarding.setAiAuth({ status: "connected", provider: "codex" }),
-        client.provider.retryInitialize(),
-      ])
+      void client.onboarding
+        .setAiAuth({ status: "connected", provider: "codex" })
+        .catch(() => undefined)
+      const initResult = await client.provider.retryInitialize().catch((err: unknown) => {
+        throw err instanceof Error
+          ? err
+          : new Error("Codex signed in, but the runtime did not start. Please retry.")
+      })
+      if (!initResult.started) {
+        throw new Error("Codex signed in, but the runtime did not start. Please retry.")
+      }
+      setAiAuthStatus("connected")
     } finally {
       aiConnectInFlight.current = false
     }
   }
 
-  const handleAiContinue = (status: "connected" | "skipped"): void => {
-    setAiAuthStatus(status)
+  const handleAiContinue = (): void => {
+    setAiAuthStatus("connected")
     void getPrimaryWsRpcClient().onboarding.setAiAuth({
-      status,
-      provider: status === "connected" ? "codex" : null,
+      status: "connected",
+      provider: "codex",
     }).catch(() => undefined)
     advanceAndGo("canvas-sync")
   }

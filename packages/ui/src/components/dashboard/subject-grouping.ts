@@ -47,7 +47,7 @@ export function classifyAssignmentScope(item: PrioritizedItem, now: Date): Filte
 
 function isFinishedAssignment(item: PrioritizedItem): boolean {
   const status = item.submissionStatus?.trim().toLowerCase()
-  return status === "submitted" || status === "graded"
+  return status === "submitted" || status === "graded" || status === "pending_review"
 }
 
 export function filterItemsByScope(

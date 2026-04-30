@@ -429,7 +429,11 @@ async function handleCanvasMethod(
       return encodeSuccess(id, await dependencies.canvasSync.downloadCourseFile(decoded))
     }
     case RPC_METHODS.CANVAS_SYNC:
-      void dependencies.canvasSync.sync()
+      void dependencies.canvasSync.sync().catch(() => {
+        // Errors are already surfaced via the canvas-sync-progress push channel
+        // and the activity feed (when triggered by the cron). Swallow here so
+        // the WS dispatch doesn't generate an unhandled rejection.
+      })
       return encodeSuccess(id, { queued: true })
     default:
       return null

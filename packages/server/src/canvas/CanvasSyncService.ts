@@ -756,6 +756,7 @@ export function createSyncService(
         progress: 0,
         status: "error",
       })
+      throw error
     }
   }
 
