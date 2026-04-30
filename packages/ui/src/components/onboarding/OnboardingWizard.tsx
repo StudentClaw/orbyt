@@ -56,6 +56,11 @@ export function OnboardingWizard() {
     persistOnboardingState()
   }, [state])
 
+  useEffect(() => {
+    if (phase !== "ai-connect") return
+    void getPrimaryWsRpcClient().provider.retryInitialize().catch(() => undefined)
+  }, [phase])
+
   const advanceAndGo = (next: WizardPhase): void => {
     advanceOnboardingStep()
     setPhase(next)
@@ -136,12 +141,10 @@ export function OnboardingWizard() {
   }
 
   const handleCanvasVerify = async (): Promise<boolean> => {
-    try {
-      const courses = await getPrimaryWsRpcClient().canvas.listCourses()
-      return courses.length > 0
-    } catch {
-      return false
-    }
+    // Successful Canvas reach = creds work. Empty course list is fine because
+    // background sync hasn't populated the cache yet on first connection.
+    await getPrimaryWsRpcClient().canvas.listCourses()
+    return true
   }
 
   const handleCanvasStartBackgroundSync = (): void => {
@@ -198,7 +201,6 @@ export function OnboardingWizard() {
         return (
           <AiConnectPhase
             dna={liveDna}
-            status={state.aiAuthStatus}
             onConnect={handleAiConnect}
             onContinue={handleAiContinue}
             onBack={goBack}

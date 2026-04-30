@@ -6,13 +6,12 @@ import { useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 
 interface AiConnectPhaseProps {
   dna: StudentDna
-  status: "pending" | "connected" | "skipped"
   onConnect: () => Promise<void>
   onContinue: (status: "connected" | "skipped") => void
   onBack?: () => void
 }
 
-export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: AiConnectPhaseProps) {
+export function AiConnectPhase({ dna, onConnect, onContinue, onBack }: AiConnectPhaseProps) {
   const T = DNA_TOKENS
   const snapshot = useRuntimeOrchestrationSnapshot()
   const authState = snapshot?.providerRuntime.authState ?? "unknown"
@@ -20,7 +19,7 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
   const lastError = snapshot?.providerRuntime.lastError ?? null
 
   const [phase, setPhase] = useState<"idle" | "connecting" | "connected" | "error">(
-    authState === "authenticated" || status === "connected" ? "connected" : "idle",
+    authState === "authenticated" ? "connected" : "idle",
   )
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -30,13 +29,17 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
       setErrorMessage(null)
       return
     }
-    if (phase !== "connecting") return
     if (authState === "auth_required" || authState === "expired") {
-      setPhase("error")
-      setErrorMessage(lastError?.message ?? "Authentication did not complete.")
+      if (phase === "connecting") {
+        setPhase("error")
+        setErrorMessage(lastError?.message ?? "Authentication did not complete.")
+      } else if (phase === "connected") {
+        setPhase("idle")
+        setErrorMessage(null)
+      }
       return
     }
-    if (providerStatus === "offline" || providerStatus === "degraded") {
+    if (phase === "connecting" && (providerStatus === "offline" || providerStatus === "degraded")) {
       setPhase("error")
       setErrorMessage(lastError?.message ?? "Codex runtime is offline.")
     }

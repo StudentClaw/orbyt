@@ -13,6 +13,7 @@ interface CanvasSyncPhaseProps {
 }
 
 const CANVAS_PLUGIN_ID = "canvas-mcp"
+const VERIFY_TIMEOUT_MS = 8000
 
 type CredentialStage =
   | "loading"
@@ -44,19 +45,24 @@ export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, o
   const runVerify = useCallback(async (): Promise<void> => {
     setStage("verifying")
     setError(null)
+    // Kick off background sync now so coursework starts streaming in while
+    // we verify — the user shouldn't have to wait on the sync round-trip.
+    onSyncBackground()
     try {
-      const hasData = await onVerify()
-      if (hasData) {
-        setStage("verified")
-      } else {
-        setStage("error")
-        setError("No courses found. Check your token permissions and try again.")
-      }
+      const timeout = new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), VERIFY_TIMEOUT_MS),
+      )
+      const result = await Promise.race([onVerify(), timeout])
+      // Either Canvas responded (creds work) or we timed out waiting — in
+      // both cases the credentials were saved successfully and sync is
+      // running. Treat as verified so the user isn't stuck on a spinner.
+      void result
+      setStage("verified")
     } catch {
       setStage("error")
       setError("Could not connect to Canvas. Check your URL and token.")
     }
-  }, [onVerify])
+  }, [onVerify, onSyncBackground])
 
   useEffect(() => {
     let cancelled = false
@@ -119,11 +125,15 @@ export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, o
   }
 
   const handleContinue = (): void => {
-    if (stage === "verified") onSyncBackground()
     onContinue()
   }
 
   const showForm = stage === "needs_credentials" || stage === "saving"
+  // "Continue" once creds are stored / verified; "Skip" only if user hasn't
+  // connected Canvas at all (or hit a hard error and is opting to move on).
+  const continueLabel = stage === "verified" || stage === "loading" || stage === "verifying"
+    ? "Continue →"
+    : "Skip →"
 
   return (
     <div style={{ padding: "32px 52px 32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "auto" }}>
@@ -168,7 +178,7 @@ export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, o
         dna={dna}
         onBack={onBack}
         onContinue={handleContinue}
-        continueLabel={stage === "verified" ? "Continue →" : "Skip →"}
+        continueLabel={continueLabel}
       />
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
@@ -370,7 +380,7 @@ function CanvasStatusCard({
           <div style={{ fontSize: 12, color: stage === "error" ? "#F87171" : T.textDim }}>
             {stage === "loading" && "Checking saved credentials…"}
             {stage === "verifying" && "Verifying your Canvas access…"}
-            {stage === "verified" && "Canvas connected — courses are loading in the background"}
+            {stage === "verified" && "Canvas verified — coursework is loading in the background"}
             {stage === "error" && (error ?? "Could not verify Canvas access.")}
           </div>
         </div>

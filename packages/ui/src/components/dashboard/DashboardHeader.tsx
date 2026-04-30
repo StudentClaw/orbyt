@@ -65,6 +65,8 @@ export function DashboardHeader({
           opacity: planDisabled ? 0.6 : 1,
           boxShadow: planDisabled ? "none" : "0 4px 18px rgba(59,130,246,0.45)",
           transition: "transform 0.15s, box-shadow 0.2s, background 0.2s",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
         }}
       >
         <CalendarClock className="h-4 w-4" aria-hidden />
