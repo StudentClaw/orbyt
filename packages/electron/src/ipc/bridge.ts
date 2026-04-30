@@ -50,7 +50,14 @@ import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 import { PluginRuntimeLogBuffer } from "../plugins/plugin-runtime-log-buffer.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "../push/push-manager.js"
+import {
+  writeCanvasCredentialsFile,
+  clearCanvasCredentialsFile,
+} from "../plugins/canvas-credentials-file.js"
+import { verifyCanvasCredentials } from "../plugins/canvas-credentials-verify.js"
 import { createWorkspaceFileSearch } from "./workspace-file-search.js"
+
+const CANVAS_PLUGIN_ID = "canvas-mcp"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 let defaultPushManager: PushManager | null = null
@@ -308,6 +315,31 @@ export function registerIpcHandlers(
 
       shell.showItemInFolder(filePath)
       return true
+    },
+  )
+
+  registerHandler(
+    IPC_CHANNELS.SHELL_OPEN_EXTERNAL,
+    async (_event, params?: { url?: string }): Promise<{ ok: boolean }> => {
+      const raw = params?.url?.trim()
+      if (!raw) {
+        return { ok: false }
+      }
+      let parsed: URL
+      try {
+        parsed = new URL(raw)
+      } catch {
+        return { ok: false }
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return { ok: false }
+      }
+      try {
+        await shell.openExternal(parsed.toString())
+        return { ok: true }
+      } catch {
+        return { ok: false }
+      }
     },
   )
 
@@ -646,12 +678,53 @@ function registerPluginIpcHandlers(
 
   registerHandler(
     IpcChannel.PLUGIN_SAVE_AUTH,
-    (_event, params: PluginSaveAuthParams): PluginSaveAuthResult => {
+    async (_event, params: PluginSaveAuthParams): Promise<PluginSaveAuthResult> => {
       if (!bootstrap.featureFlags.pluginSystem) {
         return buildPluginAuthSaveResult(bootstrap, params.pluginId)
       }
 
-      return pluginAuthService.saveCredentials(params)
+      // Live-verify Canvas credentials before storing so a "configured" badge
+      // means the next sync will succeed. Other plugins skip this step.
+      // When the secret input is empty but a saved token already exists, fall
+      // back to the stored value so URL-only edits still verify successfully.
+      if (params.pluginId === CANVAS_PLUGIN_ID) {
+        const baseUrl = params.values?.baseUrl?.trim() ?? ""
+        let token = params.values?.token?.trim() ?? ""
+        if (baseUrl && !token) {
+          const existing = pluginAuthService.getCredentialMessage(params.pluginId)
+          const existingToken = existing?.payload.token?.trim() ?? ""
+          if (existingToken) token = existingToken
+        }
+        if (baseUrl && token) {
+          const verification = await verifyCanvasCredentials({ baseUrl, token })
+          if (!verification.ok) {
+            return {
+              ok: false,
+              pluginId: params.pluginId,
+              reason: "validation_failed",
+              error: verification.message,
+              fieldErrors: verification.fieldErrors,
+            }
+          }
+        }
+      }
+
+      const result = pluginAuthService.saveCredentials(params)
+
+      if (result.ok && params.pluginId === CANVAS_PLUGIN_ID) {
+        const merged = pluginAuthService.getCredentialMessage(params.pluginId)
+        const baseUrl = merged?.payload.baseUrl?.trim()
+        const token = merged?.payload.token?.trim()
+        if (baseUrl && token) {
+          try {
+            writeCanvasCredentialsFile({ baseUrl, token })
+          } catch (error) {
+            process.stderr.write(`Failed to write canvas credentials file: ${String(error)}\n`)
+          }
+        }
+      }
+
+      return result
     },
   )
 
@@ -662,6 +735,9 @@ function registerPluginIpcHandlers(
         return { ok: false }
       }
       pluginAuthService.clearCredentials(params.pluginId)
+      if (params.pluginId === CANVAS_PLUGIN_ID) {
+        clearCanvasCredentialsFile()
+      }
       return { ok: true }
     },
   )

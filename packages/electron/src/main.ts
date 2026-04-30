@@ -10,6 +10,7 @@ import { PluginManager } from "./plugins/plugin-manager.js"
 import { createPluginRuntime } from "./plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "./push/push-manager.js"
 import { spawnServer, type ServerProcess } from "./server/lifecycle.js"
+import { writeCanvasCredentialsFile, clearCanvasCredentialsFile } from "./plugins/canvas-credentials-file.js"
 import { createTray } from "./tray/tray.js"
 import { registerStableAutoUpdates, stopStableAutoUpdates } from "./updater/desktop-updater.js"
 import { createWindow } from "./window/window-manager.js"
@@ -94,6 +95,19 @@ async function ensureServerProcess(): Promise<ServerProcess> {
           return null
         }
       })()
+
+      // Mirror the vault into a hot-reloadable file the server reads on every
+      // request, so saving new credentials in the UI takes effect without a
+      // server restart. Cleared if no credentials are saved.
+      if (canvasCreds) {
+        try {
+          writeCanvasCredentialsFile(canvasCreds)
+        } catch (error) {
+          process.stderr.write(`Failed to write canvas credentials file: ${String(error)}\n`)
+        }
+      } else {
+        clearCanvasCredentialsFile()
+      }
 
       const nextServerProcess = await spawnServer(gateway.config, {
         userDataPath: app.getPath("userData"),

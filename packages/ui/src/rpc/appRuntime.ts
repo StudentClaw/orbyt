@@ -1,4 +1,5 @@
 import type { DesktopBootstrap } from "@orbyt/contracts"
+import { IpcChannel } from "@orbyt/contracts"
 import { createWsRpcClient, type WsRpcClient } from "./wsRpcClient"
 import { startActivityStateSync } from "./activityState"
 import { startCanvasStateSync, loadCanvasData } from "./canvasState"
@@ -80,6 +81,22 @@ export async function waitForPrimaryWsRpcClient(): Promise<WsRpcClient> {
 async function getRendererBootstrap(): Promise<DesktopBootstrap | null> {
   const electronBootstrap = await (window.electronAPI?.getBootstrap?.().catch(() => null) ?? null)
   return electronBootstrap ?? getStandaloneDevBootstrap()
+}
+
+const CANVAS_PLUGIN_ID = "canvas-mcp"
+
+async function triggerCanvasSyncIfConfigured(client: WsRpcClient): Promise<void> {
+  const invoke = window.electronAPI?.invoke
+  if (!invoke) return
+
+  try {
+    const result = await invoke(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId: CANVAS_PLUGIN_ID })
+    if (result?.status !== "configured") return
+    await client.canvas.sync()
+  } catch {
+    // Best-effort: a failed app-open sync should never block startup or surface to the user;
+    // the cron-driven sync will still run on its normal cadence.
+  }
 }
 
 function cacheBootstrap(bootstrap: DesktopBootstrap): void {
@@ -195,6 +212,8 @@ export function startAppRuntime(): Promise<void> {
         detail: "",
         error: null,
       })
+
+      void triggerCanvasSyncIfConfigured(client)
     } catch (error: unknown) {
       for (const cleanup of cleanups.reverse()) {
         cleanup()

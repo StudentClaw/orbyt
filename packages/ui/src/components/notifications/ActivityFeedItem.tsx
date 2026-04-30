@@ -1,11 +1,68 @@
 import { type ActivityFeedEntryWithMeta, removeActivityEntry } from "@/rpc/activityState"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
+import { Archive } from "lucide-react"
 import { getPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { IpcChannel, type DailyInsightPayload } from "@orbyt/contracts"
+import { MorningInsightCard } from "./MorningInsightCard"
+import { EveningInsightCard } from "./EveningInsightCard"
 
 interface ActivityFeedItemProps {
   readonly entry: ActivityFeedEntryWithMeta
   readonly index?: number
+}
+
+const THREE_HOURS_SEC = 3 * 60 * 60
+
+// Defensive client-side fallback for legacy entries written before the server
+// started normalizing course codes. New cron and reminder entries already
+// arrive with simplified codes from packages/server/src/cron/course-code.ts.
+const COURSE_CODE_TOKEN = /[A-Za-z0-9-]+_([A-Za-z0-9-]+)_[A-Za-z0-9_-]+/g
+
+function simplifyCourseCodes(text: string): string {
+  return text.replace(COURSE_CODE_TOKEN, (_match, kept: string) => kept)
+}
+
+function formatNotificationTime(iso: string | undefined): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  const then = date.getTime()
+  if (Number.isNaN(then)) return null
+
+  const now = new Date()
+  const diffSec = Math.max(0, Math.floor((now.getTime() - then) / 1000))
+
+  if (diffSec < 45) return "now"
+  if (diffSec < 3600) return `${Math.max(1, Math.round(diffSec / 60))}m ago`
+  if (diffSec < THREE_HOURS_SEC) return `${Math.round(diffSec / 3600)}h ago`
+
+  const time = date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+
+  if (sameDay(date, now)) return time
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (sameDay(date, yesterday)) return `Yesterday ${time}`
+
+  const diffDays = Math.floor(diffSec / 86400)
+  if (diffDays < 7) {
+    const weekday = date.toLocaleDateString(undefined, { weekday: "short" })
+    return `${weekday} ${time}`
+  }
+
+  const day = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${day} ${time}`
 }
 
 interface CategoryStyle {
@@ -44,7 +101,7 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     container: "bg-cyan-500/5 border-cyan-500/20",
     iconBg: "bg-cyan-500/15 text-cyan-400",
     badge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-    label: "Proactive",
+    label: "Orby",
   },
   reminder: {
     container: "bg-pink-500/5 border-pink-500/20",
@@ -54,8 +111,6 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
   },
 }
 
-const ACTABLE_CATEGORIES = new Set(["insight", "cron"])
-
 const DEFAULT_STYLE: CategoryStyle = {
   container: "bg-white/5 border-white/10",
   iconBg: "bg-white/10 text-muted-foreground",
@@ -63,10 +118,27 @@ const DEFAULT_STYLE: CategoryStyle = {
   label: "Other",
 }
 
-function CategoryIcon({ category }: { readonly category: string }) {
+function CategoryIcon({
+  category,
+  size = 18,
+}: {
+  readonly category: string
+  readonly size?: number
+}) {
+  const stroke = 1.8
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: stroke,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  }
   if (category === "canvas") {
     return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg {...common}>
         <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
         <path d="M6 12v5c3 3 9 3 12 0v-5" />
       </svg>
@@ -74,7 +146,7 @@ function CategoryIcon({ category }: { readonly category: string }) {
   }
   if (category === "insight") {
     return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg {...common}>
         <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
         <path d="M9 18h6M10 22h4" />
       </svg>
@@ -82,7 +154,7 @@ function CategoryIcon({ category }: { readonly category: string }) {
   }
   if (category === "planner") {
     return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg {...common}>
         <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
         <line x1="16" x2="16" y1="2" y2="6" />
         <line x1="8" x2="8" y1="2" y2="6" />
@@ -90,9 +162,18 @@ function CategoryIcon({ category }: { readonly category: string }) {
       </svg>
     )
   }
+  if (category === "cron") {
+    // Saturn — Orby's planetary mark.
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="4.5" />
+        <ellipse cx="12" cy="12" rx="10" ry="3.2" transform="rotate(-20 12 12)" />
+      </svg>
+    )
+  }
   // workflow / default
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg {...common}>
       <rect width="18" height="10" x="3" y="11" rx="2" />
       <circle cx="12" cy="5" r="2" />
       <path d="M12 7v4" />
@@ -104,31 +185,25 @@ function CategoryIcon({ category }: { readonly category: string }) {
 
 export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
   const navigate = useNavigate()
-  const [actedState, setActedState] = useState<boolean | null>(
-    entry.actedOn ?? null,
-  )
+  const [actedState] = useState<boolean | null>(entry.actedOn ?? null)
   const style = CATEGORY_STYLES[entry.category] ?? DEFAULT_STYLE
   const animationDelay = `${index * 40}ms`
-  const showActions =
-    ACTABLE_CATEGORIES.has(entry.category) && actedState === null
 
   const handleClick = () => {
-    if (entry.deepLink) {
-      navigate({ to: entry.deepLink })
-    }
-  }
+    const link = entry.deepLink
+    if (!link) return
 
-  const setActed = (acted: boolean) => async (
-    e: React.MouseEvent<HTMLButtonElement>,
-  ) => {
-    e.stopPropagation()
-    setActedState(acted)
-    try {
-      const client = getPrimaryWsRpcClient()
-      await client.activity.setActed({ id: entry.id, acted })
-    } catch {
-      setActedState(null)
+    if (/^https?:\/\//i.test(link)) {
+      const opener = window.electronAPI?.invoke
+      if (opener) {
+        void opener(IpcChannel.SHELL_OPEN_EXTERNAL, { url: link })
+        return
+      }
+      window.open(link, "_blank", "noopener,noreferrer")
+      return
     }
+
+    navigate({ to: link })
   }
 
   const dismissEntry = async (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -145,59 +220,83 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
     }
   }
 
+  const isInsight = entry.category === "insight"
+  const structured: DailyInsightPayload | undefined = entry.structured
+  const isClickable = Boolean(entry.deepLink) && !isInsight
+  const shouldSimplifyCodes = entry.category === "insight" || entry.category === "cron"
+  const displayTitle = shouldSimplifyCodes ? simplifyCourseCodes(entry.title) : entry.title
+  const displayBody =
+    entry.body && shouldSimplifyCodes ? simplifyCourseCodes(entry.body) : entry.body
+  const timestampIso = entry.createdAt ?? entry.receivedAt
+  const displayTime = formatNotificationTime(timestampIso)
+  const absoluteTime = timestampIso
+    ? new Date(timestampIso).toLocaleString()
+    : undefined
+
   return (
     <div
       className={`
-        group relative flex items-start gap-3 rounded-2xl
-        backdrop-blur-md border px-4 py-3 shadow-sm
+        group relative flex items-center gap-3 rounded-2xl
+        backdrop-blur-md border shadow-sm
         transition-all duration-200
         animate-[slide-in-down_0.2s_ease-out]
+        ${isInsight ? "px-5 py-4 border-2" : "px-4 py-3"}
         ${style.container}
-        ${entry.deepLink ? "cursor-pointer hover:bg-white/10 hover:border-white/20" : ""}
+        ${isClickable ? "cursor-pointer hover:bg-white/10 hover:border-white/20" : ""}
       `}
       style={{ animationDelay, animationFillMode: "both" }}
-      onClick={entry.deepLink ? handleClick : undefined}
+      onClick={isClickable ? handleClick : undefined}
       data-testid={`activity-item-${entry.id}`}
     >
-      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl ${style.iconBg}`}>
-        <CategoryIcon category={entry.category} />
+      <div
+        className={`flex shrink-0 items-center justify-center rounded-2xl ${
+          isInsight ? "h-11 w-11" : "h-10 w-10"
+        } ${style.iconBg}`}
+      >
+        <CategoryIcon category={entry.category} size={isInsight ? 22 : 20} />
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2">
-          <span
-            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${style.badge}`}
-          >
-            {style.label}
-          </span>
-        </div>
-        <p className="text-sm font-medium leading-snug">{entry.title}</p>
-        {entry.body && (
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{entry.body}</p>
-        )}
-        {showActions && (
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={setActed(true)}
-              className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-muted-foreground hover:bg-white/10"
-              data-testid={`activity-item-acted-${entry.id}`}
+      <div className="min-w-0 flex-1 pr-6">
+        {displayTime && (
+          <div className="mb-1 flex items-center">
+            <time
+              dateTime={timestampIso}
+              title={absoluteTime}
+              className="ml-auto pl-2 text-sm font-medium text-muted-foreground/80"
+              data-testid={`activity-item-time-${entry.id}`}
             >
-              Mark acted
-            </button>
-            <button
-              type="button"
-              onClick={setActed(false)}
-              className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-muted-foreground hover:bg-white/10"
-              data-testid={`activity-item-dismiss-${entry.id}`}
-            >
-              Dismiss
-            </button>
+              {displayTime}
+            </time>
           </div>
         )}
+        <p
+          className={`break-words font-semibold leading-snug ${
+            isInsight ? "text-xl" : "text-lg"
+          }`}
+        >
+          {displayTitle}
+        </p>
+        {isInsight && structured ? (
+          structured.slot === "morning" ? (
+            <MorningInsightCard payload={structured} entryId={entry.id} />
+          ) : (
+            <EveningInsightCard payload={structured} entryId={entry.id} />
+          )
+        ) : displayBody ? (
+          <p
+            className={`whitespace-pre-line break-words text-muted-foreground ${
+              isInsight
+                ? "mt-2 text-base leading-relaxed"
+                : "mt-1.5 text-base leading-relaxed"
+            }`}
+            data-testid={`activity-item-body-${entry.id}`}
+          >
+            {displayBody}
+          </p>
+        ) : null}
         {actedState !== null && (
           <p
-            className="mt-1.5 text-xs italic text-muted-foreground opacity-60"
+            className="mt-1.5 text-sm italic text-muted-foreground opacity-60"
             data-testid={`activity-item-acted-state-${entry.id}`}
           >
             {actedState ? "Marked acted" : "Dismissed"}
@@ -205,29 +304,15 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
         )}
       </div>
 
-      {entry.deepLink && (
-        <span
-          className="mt-1 shrink-0 text-muted-foreground opacity-40 transition-opacity duration-150 group-hover:opacity-70"
-          data-testid={`activity-item-link-${entry.id}`}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </span>
-      )}
-
       <button
         type="button"
         onClick={dismissEntry}
-        aria-label="Dismiss notification"
-        title="Dismiss"
-        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all duration-150 hover:bg-white/10 hover:text-foreground group-hover:opacity-70"
+        aria-label="Archive notification"
+        title="Archive"
+        className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-border/40 bg-background/40 text-muted-foreground opacity-0 transition-all duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/35 group-hover:opacity-100 group-focus-within:opacity-100"
         data-testid={`activity-item-close-${entry.id}`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
+        <Archive className="size-4" aria-hidden="true" />
       </button>
     </div>
   )

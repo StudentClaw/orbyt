@@ -1,0 +1,138 @@
+interface OrbytMarkProps {
+  readonly size?: number
+  readonly expanded?: boolean
+}
+
+const KEYFRAMES = `
+  @keyframes orbyt-bob      { 0%,100% { translate: 0 0px; } 50% { translate: 0 8px; } }
+  @keyframes orbyt-breathe  { 0%,100% { scale: 1; } 50% { scale: 1.035; } }
+  @keyframes orbyt-twinkle  {
+    0%, 100% { scale: 1;    opacity: 1;   }
+    45%      { scale: 0.5;  opacity: 0.5; }
+    50%      { scale: 0.35; opacity: 0.3; }
+    55%      { scale: 0.5;  opacity: 0.5; }
+  }
+`
+
+export function OrbytMark({ size = 180, expanded = false }: OrbytMarkProps) {
+  return (
+    <>
+      <style>{KEYFRAMES}</style>
+      <div
+        style={{
+          width: size,
+          height: size,
+          position: "relative",
+          display: "grid",
+          placeItems: "center",
+          transform: expanded ? "scale(11)" : "scale(1)",
+          opacity: expanded ? 0 : 1,
+          filter: expanded
+            ? "blur(28px)"
+            : "drop-shadow(0 0 28px rgba(0,110,254,0.55)) drop-shadow(0 0 8px rgba(116,176,255,0.4))",
+          transition:
+            "transform 1.3s cubic-bezier(0.65,0,0.35,1), opacity 1.3s ease-out, filter 1.3s ease-out",
+          animation:
+            "orbyt-bob 5.4s ease-in-out infinite, orbyt-breathe 4.6s ease-in-out infinite",
+        }}
+      >
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 128 128"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ position: "absolute", inset: 0, overflow: "visible" }}
+        >
+          <defs>
+            <filter
+              id="om-shadow"
+              x="15.1521%"
+              y="26.1236%"
+              width="97.4631%"
+              height="97.4632%"
+              filterUnits="userSpaceOnUse"
+              colorInterpolationFilters="sRGB"
+            >
+              <feFlood floodOpacity="0" result="BackgroundImageFix" />
+              <feColorMatrix
+                in="SourceAlpha"
+                type="matrix"
+                values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+                result="hardAlpha"
+              />
+              <feMorphology radius="2" operator="dilate" in="SourceAlpha" result="effect1_dropShadow" />
+              <feOffset dy="4" />
+              <feGaussianBlur stdDeviation="2.8" />
+              <feComposite in2="hardAlpha" operator="out" />
+              <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.14 0" />
+              <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
+              <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+            </filter>
+            <radialGradient
+              id="om-planet"
+              cx="0"
+              cy="0"
+              r="1"
+              gradientUnits="userSpaceOnUse"
+              gradientTransform="translate(35.4344 88.3361) rotate(-17.0764) scale(54.8614)"
+            >
+              <stop stopColor="#006EFE" />
+              <stop offset="1" stopColor="#010101" />
+            </radialGradient>
+            <linearGradient
+              id="om-ring"
+              gradientUnits="userSpaceOnUse"
+              x1="8.01325"
+              y1="97.5908"
+              x2="136.207"
+              y2="31.0947"
+            >
+              <stop stopColor="#74B0FF" />
+              <stop offset="0.514423" stopColor="#006EFE" />
+              <stop offset="1" stopColor="#004298" />
+              <animateTransform
+                attributeName="gradientTransform"
+                type="rotate"
+                from="0 64 64"
+                to="360 64 64"
+                dur="5s"
+                repeatCount="indefinite"
+              />
+            </linearGradient>
+          </defs>
+
+          <g filter="url(#om-shadow)">
+            <ellipse cx="63.8837" cy="70.8552" rx="41.1316" ry="41.1316" fill="url(#om-planet)" />
+          </g>
+
+          <path
+            d="M22.7519 70.8549C22.7519 76.3212 23.8185 81.5386 25.7544 86.3101C24.6426 87.3927 23.6031 88.4587 22.6388 89.5027C20.082 92.2709 18.2798 94.6482 17.0769 96.5635C19.3387 96.5681 22.3112 96.3131 26.0169 95.6276C27.4098 95.3699 28.8608 95.0596 30.3643 94.6984C33.4801 99.0708 37.4303 102.807 41.9821 105.676C22.1625 111.942 6.63799 112.019 2.5369 104.584C-1.57207 97.1333 6.81677 84.0049 22.7532 70.5564C22.7525 70.6558 22.7519 70.7553 22.7519 70.8549Z"
+            fill="url(#om-ring)"
+          />
+          <path
+            d="M85.503 35.8576C105.569 29.4297 121.328 29.2872 125.464 36.7868L125.604 37.0533C129.392 44.5842 120.912 57.6507 105.014 71.0082C105.014 70.9572 105.015 70.906 105.015 70.8549C105.015 65.3566 103.936 60.1104 101.978 55.3161C103.191 54.1448 104.321 52.9946 105.362 51.8677C107.918 49.0997 109.719 46.7216 110.922 44.8063C108.661 44.8018 105.689 45.0574 101.984 45.7428C100.466 46.0237 98.8788 46.3674 97.2299 46.7711C94.0765 42.4126 90.0897 38.697 85.503 35.8576Z"
+            fill="url(#om-ring)"
+          />
+
+          <path
+            d="M93.0907 33.6709C109.468 29.5199 121.865 30.2622 125.464 36.7872L125.604 37.0536C131.338 48.456 108.954 72.5512 75.273 91.1265C41.3279 109.848 8.7629 115.873 2.53626 104.583C-0.754747 98.6159 3.97211 89.0062 14.1728 78.5066C14.378 79.5461 14.7206 80.5394 15.2064 81.4776C16.8393 84.6302 19.9168 86.8165 24.0165 88.0504C23.5417 88.539 23.0821 89.0228 22.6388 89.5027C20.082 92.271 18.2792 94.6485 17.0762 96.5639C19.3381 96.5684 22.3106 96.3128 26.0162 95.6273C37.3789 93.5252 52.6086 87.9693 68.6521 79.1211C84.6957 70.2728 97.5208 60.3562 105.361 51.8674C107.918 49.0995 109.719 46.7219 110.922 44.8066C108.66 44.8022 105.688 45.0571 101.983 45.7425C101.041 45.9169 100.072 46.1165 99.0777 46.3384C99.5091 43.516 99.1809 40.8934 97.9931 38.6001C96.9312 36.5498 95.2584 34.9077 93.0907 33.6709Z"
+            fill="url(#om-ring)"
+          />
+
+          <g
+            style={{
+              transformOrigin: "73.48px 33.15px",
+              animation: "orbyt-twinkle 2.6s ease-in-out infinite",
+            }}
+          >
+            <path
+              d="M73.4809 16.0132C73.4809 25.4783 81.154 33.1513 90.6191 33.1513C81.154 33.1513 73.4809 40.8244 73.4809 50.2895C73.4809 40.8244 65.8079 33.1513 56.3428 33.1513C65.8079 33.1513 73.4809 25.4783 73.4809 16.0132Z"
+              fill="#D9D9D9"
+            />
+          </g>
+        </svg>
+      </div>
+    </>
+  )
+}

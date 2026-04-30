@@ -132,19 +132,6 @@ export function NotificationsSection() {
 
               <div className="flex items-center justify-between rounded-xl border p-3">
                 <div>
-                  <Label htmlFor="push-workflow-enabled">Workflow events</Label>
-                  <p className="text-sm text-muted-foreground">Notify when a workflow finishes.</p>
-                </div>
-                <Switch
-                  id="push-workflow-enabled"
-                  checked={settings.workflowEventsEnabled}
-                  onCheckedChange={(checked) => { void update({ workflowEventsEnabled: checked }) }}
-                  data-testid="settings-push-workflow-enabled"
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl border p-3">
-                <div>
                   <Label htmlFor="push-weekly-enabled">Weekly insights</Label>
                   <p className="text-sm text-muted-foreground">Send the scheduled weekly insight summary.</p>
                 </div>

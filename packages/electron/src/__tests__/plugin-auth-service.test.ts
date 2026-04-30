@@ -124,6 +124,8 @@ describe("PluginAuthService", () => {
     expect(authService.getStatus("canvas-mcp")).toEqual({
       pluginId: "canvas-mcp",
       status: "configured",
+      values: { baseUrl: "https://myschool.instructure.com" },
+      hasValue: { baseUrl: true, token: true },
     })
     expect(authService.getCredentialMessage("canvas-mcp")).toEqual({
       type: "plugin.credentials",

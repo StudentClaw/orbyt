@@ -626,9 +626,6 @@ async function syncRememberedAssignmentSources(
             now,
           })
         : []
-      console.log(
-        `[CanvasSync] remembered assignment source ${source.id} parsed ${parsedItems.length} item(s) for ${course.name} (${course.code})`,
-      )
       if (parsedItems.length === 0) {
         updateAssignmentSourceChecked(database, source.id, "No coursework items found in remembered source.", now)
         continue

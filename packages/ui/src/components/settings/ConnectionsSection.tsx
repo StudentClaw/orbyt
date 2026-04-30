@@ -135,7 +135,8 @@ function buildEmptyAuthValues(auth: ExtensionAuthManualTokenSchema): AuthFormVal
 }
 
 function getAuthStatusVariant(status?: PluginAuthStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (!status || status.status === "not_configured") return "secondary"
+  if (!status) return "secondary"
+  if (status.status === "not_configured") return "destructive"
   if (status.status === "error") return "destructive"
   return "default"
 }
@@ -268,19 +269,30 @@ function isValidCanvasBaseUrl(value: string): boolean {
   }
 }
 
-function validateAuthField(field: ExtensionAuthField, value: string): string | null {
+function validateAuthField(
+  field: ExtensionAuthField,
+  value: string,
+  hasSavedValue: boolean,
+): string | null {
   const trimmed = value.trim()
-  if (field.required && trimmed.length === 0) return `${field.label} is required.`
+  if (field.required && trimmed.length === 0) {
+    if (field.type === "secret" && hasSavedValue) return null
+    return `${field.label} is required.`
+  }
   if (trimmed.length === 0) return null
   if (field.type === "base_url" && !isValidCanvasBaseUrl(trimmed)) return "Enter a valid HTTPS Canvas URL."
   if (field.type === "secret" && trimmed.length < MIN_SECRET_LENGTH) return `Enter at least ${MIN_SECRET_LENGTH} characters.`
   return null
 }
 
-function validateAuthValues(auth: ExtensionAuthManualTokenSchema, values: AuthFormValues): Record<string, string> {
+function validateAuthValues(
+  auth: ExtensionAuthManualTokenSchema,
+  values: AuthFormValues,
+  hasSavedValue: Readonly<Record<string, boolean>> = {},
+): Record<string, string> {
   const errors: Record<string, string> = {}
   for (const field of auth.fields) {
-    const err = validateAuthField(field, values[field.key] ?? "")
+    const err = validateAuthField(field, values[field.key] ?? "", hasSavedValue[field.key] ?? false)
     if (err) errors[field.key] = err
   }
   return errors
@@ -344,17 +356,20 @@ function MetadataBadge({ children }: { children: React.ReactNode }) {
 function PluginCard({
   entry,
   pendingPluginId,
+  authStatus,
   onSelect,
   onToggle,
 }: {
   entry: ExtensionRegistryEntry
   pendingPluginId: string | null
+  authStatus?: PluginAuthStatus
   onSelect: (pluginId: string) => void
   onToggle: (pluginId: string, enabled: boolean) => void
 }) {
   const pluginId = getEntryPluginId(entry)
   const isPending = pendingPluginId === pluginId
   const isInvalid = entry.kind === "invalid"
+  const isManualAuth = hasManualTokenAuth(entry)
 
   return (
     <div
@@ -391,6 +406,14 @@ function PluginCard({
           <Badge variant={getStatusBadgeVariant(entry)}>{entry.status}</Badge>
           {entry.kind === "available" && entry.readiness && (
             <MetadataBadge>{getReadinessLabel(entry.readiness)}</MetadataBadge>
+          )}
+          {isManualAuth && (
+            <Badge
+              variant={getAuthStatusVariant(authStatus)}
+              data-testid={`settings-plugin-card-auth-${pluginId}`}
+            >
+              {getAuthStatusLabel(authStatus)}
+            </Badge>
           )}
         </div>
         <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{getEntryDescription(entry)}</p>
@@ -652,29 +675,33 @@ function PluginDetailView({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {auth.fields.map((field) => (
-              <div key={field.key} className="space-y-2">
-                <Label htmlFor={`${pluginId}-${field.key}`}>{field.label}</Label>
-                <Input
-                  id={`${pluginId}-${field.key}`}
-                  type={getInputType(field)}
-                  placeholder={field.placeholder}
-                  value={values[field.key] ?? ""}
-                  onChange={(event) => {
-                    onChangeAuthField(field.key, event.target.value)
-                  }}
-                  data-testid={`settings-plugin-auth-input-${pluginId}-${field.key}`}
-                />
-                {fieldErrors[field.key] && (
-                  <p
-                    className="text-sm text-destructive"
-                    data-testid={`settings-plugin-auth-field-error-${pluginId}-${field.key}`}
-                  >
-                    {fieldErrors[field.key]}
-                  </p>
-                )}
-              </div>
-            ))}
+            {auth.fields.map((field) => {
+              const fieldHasSavedSecret = field.type === "secret" && (authStatus?.hasValue?.[field.key] ?? false)
+              const placeholder = fieldHasSavedSecret ? "Saved — leave blank to keep current" : field.placeholder
+              return (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={`${pluginId}-${field.key}`}>{field.label}</Label>
+                  <Input
+                    id={`${pluginId}-${field.key}`}
+                    type={getInputType(field)}
+                    placeholder={placeholder}
+                    value={values[field.key] ?? ""}
+                    onChange={(event) => {
+                      onChangeAuthField(field.key, event.target.value)
+                    }}
+                    data-testid={`settings-plugin-auth-input-${pluginId}-${field.key}`}
+                  />
+                  {fieldErrors[field.key] && (
+                    <p
+                      className="text-sm text-destructive"
+                      data-testid={`settings-plugin-auth-field-error-${pluginId}-${field.key}`}
+                    >
+                      {fieldErrors[field.key]}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {authStatus?.error && (
@@ -798,6 +825,32 @@ export function ConnectionsSection({
     })
   }
 
+  useEffect(() => {
+    setAuthForms((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const [pluginId, status] of Object.entries(authStatuses)) {
+        const savedValues = status?.values
+        if (!savedValues) continue
+        const formValues = current[pluginId]
+        if (!formValues) continue
+        const merged: AuthFormValues = { ...formValues }
+        let pluginChanged = false
+        for (const [key, value] of Object.entries(savedValues)) {
+          if (!merged[key] && value) {
+            merged[key] = value
+            pluginChanged = true
+          }
+        }
+        if (pluginChanged) {
+          next[pluginId] = merged
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [authStatuses])
+
   async function refreshAuthStatus(pluginId: string): Promise<void> {
     if (!window.electronAPI?.invoke) return
     const nextStatus = await window.electronAPI.invoke(IpcChannel.PLUGIN_GET_AUTH_STATUS, { pluginId })
@@ -846,7 +899,8 @@ export function ConnectionsSection({
 
     const pluginId = entry.manifest.id
     const values = authForms[pluginId] ?? buildEmptyAuthValues(entry.manifest.auth)
-    const localFieldErrors = validateAuthValues(entry.manifest.auth, values)
+    const hasSavedValue = authStatuses[pluginId]?.hasValue ?? {}
+    const localFieldErrors = validateAuthValues(entry.manifest.auth, values, hasSavedValue)
     setAuthFieldErrors((current) => ({ ...current, [pluginId]: localFieldErrors }))
 
     if (Object.keys(localFieldErrors).length > 0) {
@@ -860,7 +914,15 @@ export function ConnectionsSection({
     try {
       const result = await window.electronAPI.invoke(IpcChannel.PLUGIN_SAVE_AUTH, { pluginId, values })
       if (result.ok) {
-        setAuthStatuses((current) => ({ ...current, [pluginId]: { pluginId, status: result.status } }))
+        await refreshAuthStatus(pluginId)
+        setAuthForms((current) => {
+          const formValues = current[pluginId] ?? buildEmptyAuthValues(entry.manifest.auth)
+          const next: AuthFormValues = { ...formValues }
+          for (const field of entry.manifest.auth.fields) {
+            if (field.type === "secret") next[field.key] = ""
+          }
+          return { ...current, [pluginId]: next }
+        })
         setAuthFieldErrors((current) => ({ ...current, [pluginId]: {} }))
         return
       }
@@ -1227,6 +1289,7 @@ export function ConnectionsSection({
                     key={`${entry.installSource}:${getEntryPluginId(entry)}`}
                     entry={entry}
                     pendingPluginId={pendingPluginId}
+                    authStatus={hasManualTokenAuth(entry) ? authStatuses[getEntryPluginId(entry)] : undefined}
                     onSelect={(pluginId) => {
                       onSelectPlugin?.(pluginId)
                     }}

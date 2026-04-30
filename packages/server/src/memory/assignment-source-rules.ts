@@ -386,20 +386,6 @@ function resolveLocalCourseId(
   return slugMatches.length === 1 ? slugMatches[0]!.id : null
 }
 
-function logAssignmentSourceProjection(
-  rule: AssignmentSourceRule,
-  localCourseId: string | null,
-  courses: readonly CourseLookupRow[],
-): void {
-  const course = localCourseId ? courses.find((candidate) => candidate.id === localCourseId) : null
-  const target = course
-    ? `${course.name} (${course.code}, canvasId ${course.canvas_id ?? "none"})`
-    : "no local Canvas course match"
-  console.log(
-    `[CanvasSync] remembered assignment source ${rule.id} from ${rule.graphNodePath} -> ${target}`,
-  )
-}
-
 export function projectAssignmentSourceRules(
   database: DatabaseService,
   paths: MemoryPaths,
@@ -412,7 +398,6 @@ export function projectAssignmentSourceRules(
   for (const rule of rules) {
     seen.add(rule.id)
     const localCourseId = resolveLocalCourseId(rule, courses)
-    logAssignmentSourceProjection(rule, localCourseId, courses)
     database.execute(
       `INSERT INTO course_assignment_sources
          (id, local_course_id, canvas_course_id, source_kind, url, parser, purpose,

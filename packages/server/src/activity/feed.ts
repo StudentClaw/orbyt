@@ -37,9 +37,22 @@ type ActivityFeedRow = {
   readonly acted_on: number | null
   readonly acted_at: number | null
   readonly created_at: string
+  readonly structured_body: string | null
+}
+
+function parseStructured(
+  raw: string | null,
+): ActivityFeedEntry["structured"] | undefined {
+  if (raw === null || raw.length === 0) return undefined
+  try {
+    return JSON.parse(raw) as ActivityFeedEntry["structured"]
+  } catch {
+    return undefined
+  }
 }
 
 function toActivityFeedEntry(row: ActivityFeedRow): ActivityFeedEntry {
+  const structured = parseStructured(row.structured_body)
   return {
     id: row.id as ActivityFeedEntry["id"],
     category: row.category,
@@ -52,6 +65,7 @@ function toActivityFeedEntry(row: ActivityFeedRow): ActivityFeedEntry {
     ...(row.acted_on === null ? {} : { actedOn: row.acted_on === 1 }),
     ...(row.acted_at === null ? {} : { actedAt: row.acted_at }),
     createdAt: row.created_at,
+    ...(structured ? { structured } : {}),
   }
 }
 
@@ -180,7 +194,7 @@ export function loadActivityFeed(
 ): ReadonlyArray<ActivityFeedEntry> {
   const rows = database.query<ActivityFeedRow>(
     `SELECT id, category, type, title, body, priority, deep_link,
-            notify, acted_on, acted_at, created_at
+            notify, acted_on, acted_at, created_at, structured_body
        FROM activity_feed
       WHERE acted_on IS NULL
       ORDER BY created_at DESC
@@ -196,7 +210,7 @@ function loadRecentActivityEntries(database: DatabaseService, now: Date): Readon
 
   return database.query<ActivityFeedRow>(
     `SELECT id, category, type, title, body, priority, deep_link,
-            notify, acted_on, acted_at, created_at
+            notify, acted_on, acted_at, created_at, structured_body
      FROM activity_feed
      WHERE created_at >= ?
      ORDER BY created_at DESC`,
@@ -246,8 +260,8 @@ export async function recordActivityEntry({
 
   database.execute(
     `INSERT INTO activity_feed (
-       id, category, type, title, body, priority, deep_link, notify, created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       id, category, type, title, body, priority, deep_link, notify, created_at, structured_body
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       nextEntry.id,
       nextEntry.category,
@@ -258,6 +272,7 @@ export async function recordActivityEntry({
       nextEntry.deepLink ?? null,
       nextEntry.notify ? 1 : 0,
       createdAt,
+      nextEntry.structured ? JSON.stringify(nextEntry.structured) : null,
     ],
   )
 

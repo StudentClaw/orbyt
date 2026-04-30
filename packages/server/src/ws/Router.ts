@@ -89,6 +89,7 @@ type UserPreferencesRow = {
   calendar_integration: string
   memory_graph_path: string | null
   default_access_mode: string
+  dashboard_tour_completed_at: string | null
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -213,6 +214,7 @@ function toStudentPreference(row: UserPreferencesRow) {
     }),
     memoryGraphPathMode: memoryGraphOverride ? "custom" as const : "default" as const,
     defaultAccessMode: normalizeDefaultAccessMode(row.default_access_mode),
+    dashboardTourCompletedAt: row.dashboard_tour_completed_at,
   }
 }
 
@@ -1014,6 +1016,12 @@ async function handleOnboardingMethod(
         database.execute(
           "UPDATE user_preferences SET default_access_mode = ?, updated_at = ? WHERE id = 1",
           [decoded.defaultAccessMode, now],
+        )
+      }
+      if (decoded.dashboardTourCompletedAt !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET dashboard_tour_completed_at = ?, updated_at = ? WHERE id = 1",
+          [decoded.dashboardTourCompletedAt, now],
         )
       }
       const row = readUserPreferencesRow(database)

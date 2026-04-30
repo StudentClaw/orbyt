@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { DevOnboardingControls } from "@/components/dev/DevOnboardingControls"
 
 interface ThemeOptionProps {
   mode: Theme
@@ -98,13 +97,26 @@ export function GeneralSection() {
     let cancelled = false
 
     void waitForPrimaryWsRpcClient()
-      .then((client) => client.onboarding.getPreferences())
-      .then((preferences) => {
+      .then(async (client) => {
+        const aiAuthPromise = typeof client.onboarding.getAiAuth === "function"
+          ? client.onboarding.getAiAuth().catch(() => null)
+          : Promise.resolve(null)
+        const [preferences, aiAuth] = await Promise.all([
+          client.onboarding.getPreferences(),
+          aiAuthPromise,
+        ])
+        return { preferences, aiAuth }
+      })
+      .then(({ preferences, aiAuth }) => {
         if (cancelled) return
         setMemoryGraphPath(preferences.memoryGraphPath)
         setDraftPath(preferences.memoryGraphPath)
         setPathMode(preferences.memoryGraphPathMode)
         setLoadState("ready")
+        const codexConnected = aiAuth?.status === "connected" && aiAuth.provider === "codex"
+        if (!codexConnected) {
+          setCodexLogoutState("done")
+        }
       })
       .catch(() => {
         if (!cancelled) setLoadState("error")
@@ -541,7 +553,6 @@ export function GeneralSection() {
         </CardContent>
       </Card>
 
-      {import.meta.env.DEV && <DevOnboardingControls />}
     </div>
   )
 }

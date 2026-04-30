@@ -1,5 +1,6 @@
 import { Schema } from "@effect/schema"
 import { ActivityEntryId } from "./ids.js"
+import { DailyInsightPayload } from "./daily-insight.js"
 
 export const ActivityCategory = Schema.Literal(
   "canvas",
@@ -23,5 +24,11 @@ export const ActivityFeedEntry = Schema.Struct({
   actedOn: Schema.optional(Schema.NullOr(Schema.Boolean)),
   actedAt: Schema.optional(Schema.NullOr(Schema.Number)),
   createdAt: Schema.optional(Schema.String),
+  /**
+   * Structured payload for cards that render with custom layout (morning and
+   * evening daily-insight briefings). When absent, the renderer falls back to
+   * displaying `title` + `body` as plain text.
+   */
+  structured: Schema.optional(DailyInsightPayload),
 })
 export type ActivityFeedEntry = Schema.Schema.Type<typeof ActivityFeedEntry>

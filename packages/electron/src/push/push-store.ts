@@ -12,7 +12,6 @@ type PushStoreData = {
 
 const DEFAULT_SETTINGS: PhonePushSettings = {
   enabled: true,
-  workflowEventsEnabled: true,
   weeklyInsightsEnabled: true,
   quietHoursStart: "22:00",
   quietHoursEnd: "08:00",
@@ -26,7 +25,6 @@ function normalizeSettings(
 ): PhonePushSettings {
   return {
     enabled: patch.enabled ?? current.enabled,
-    workflowEventsEnabled: patch.workflowEventsEnabled ?? current.workflowEventsEnabled,
     weeklyInsightsEnabled: patch.weeklyInsightsEnabled ?? current.weeklyInsightsEnabled,
     quietHoursStart: patch.quietHoursStart ?? current.quietHoursStart,
     quietHoursEnd: patch.quietHoursEnd ?? current.quietHoursEnd,

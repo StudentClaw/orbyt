@@ -27,10 +27,6 @@ vi.mock("@/hooks/useAppRuntime", () => ({
   useSkills: runtimeHooks.useSkills,
 }))
 
-vi.mock("@/components/dev/DevOnboardingControls", () => ({
-  DevOnboardingControls: () => <div data-testid="dev-onboarding-controls" />,
-}))
-
 const codexAuthMocks = vi.hoisted(() => ({
   connectCodexAccount: vi.fn(),
 }))
@@ -86,7 +82,6 @@ function renderSettingsPage(initialSection?: TestSection) {
 describe("SettingsPage", () => {
   const defaultPushSettings = {
     enabled: true,
-    workflowEventsEnabled: true,
     weeklyInsightsEnabled: true,
     quietHoursStart: "22:00",
     quietHoursEnd: "08:00",
@@ -718,16 +713,24 @@ describe("SettingsPage", () => {
       },
     })
 
+    let canvasSaved = false
     window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string; values?: Record<string, string> }) => {
       if (channel === IpcChannel.PLUGIN_LIST) {
         return registryEntries
       }
 
       if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "canvas-mcp") {
-        return {
-          pluginId: "canvas-mcp",
-          status: "not_configured" as const,
-        }
+        return canvasSaved
+          ? {
+              pluginId: "canvas-mcp",
+              status: "configured" as const,
+              values: { baseUrl: "https://myschool.instructure.com" },
+              hasValue: { baseUrl: true, token: true },
+            }
+          : {
+              pluginId: "canvas-mcp",
+              status: "not_configured" as const,
+            }
       }
 
       if (channel === IpcChannel.PLUGIN_SAVE_AUTH) {
@@ -739,6 +742,7 @@ describe("SettingsPage", () => {
           },
         })
 
+        canvasSaved = true
         return {
           ok: true,
           pluginId: "canvas-mcp",

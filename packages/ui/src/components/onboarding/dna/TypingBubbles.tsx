@@ -72,12 +72,13 @@ export function TypingBubbles({ bubbles, dnaHue, isTyping, flipSize = false }: T
             key={i}
             style={{
               fontFamily: SERIF,
-              fontSize: isBig ? 38 : 19,
+              fontSize: isBig ? 50 : 24,
               fontStyle: isBig ? "normal" : "italic",
-              color: isBig ? T.text : T.textDim,
-              lineHeight: 1.15,
-              letterSpacing: "-0.015em",
-              minHeight: isBig ? 44 : 24,
+              fontWeight: 400,
+              color: isBig ? T.text : "rgba(245,247,251,0.78)",
+              lineHeight: 1.1,
+              letterSpacing: isBig ? "-0.025em" : "-0.01em",
+              minHeight: isBig ? 56 : 30,
             }}
           >
             {text}
@@ -86,7 +87,7 @@ export function TypingBubbles({ bubbles, dnaHue, isTyping, flipSize = false }: T
                 style={{
                   display: "inline-block",
                   width: isBig ? 3 : 2,
-                  height: isBig ? 36 : 18,
+                  height: isBig ? 44 : 22,
                   background: `oklch(0.75 0.22 ${dnaHue})`,
                   marginLeft: 3,
                   verticalAlign: "text-bottom",

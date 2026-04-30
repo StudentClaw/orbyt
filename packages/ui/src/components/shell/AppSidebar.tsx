@@ -20,7 +20,6 @@ import {
 } from "@hugeicons/core-free-icons"
 import { useRuntimeActivityUnreadCount } from "@/hooks/useAppRuntime"
 import { ChatHistory } from "./ChatHistory"
-import { ConnectionStatus } from "./ConnectionStatus"
 
 const sidebarBrandIcon = new URL("../../../public/favicon.svg", import.meta.url).href
 
@@ -73,13 +72,27 @@ export function AppSidebarContent() {
                 tooltip={item.label}
                 isActive={item.path === "/" ? currentPath === item.path : currentPath.startsWith(item.path)}
               >
-                <Link to={item.path} data-testid={item.path === "/plugins" ? "sidebar-plugins-link" : undefined}>
+                <Link
+                  to={item.path}
+                  data-testid={
+                    item.path === "/plugins"
+                      ? "sidebar-plugins-link"
+                      : item.path === "/activity"
+                        ? "sidebar-activity-link"
+                        : item.path === "/"
+                          ? "sidebar-dashboard-link"
+                          : undefined
+                  }
+                >
                   <HugeiconsIcon icon={item.icon} size={18} />
                   <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                 </Link>
               </SidebarMenuButton>
               {item.path === "/activity" && activityUnreadCount > 0 && (
-                <SidebarMenuBadge data-testid="activity-badge">
+                <SidebarMenuBadge
+                  data-testid="activity-badge"
+                  className="right-2 !top-1/2 h-5 min-w-5 -translate-y-1/2 rounded-full bg-blue-500 px-1.5 text-[11px] font-semibold leading-none text-white shadow-sm ring-2 ring-sidebar peer-hover/menu-button:text-white peer-data-active/menu-button:text-white peer-data-[size=default]/menu-button:top-1/2 peer-data-[size=lg]/menu-button:top-1/2 peer-data-[size=sm]/menu-button:top-1/2"
+                >
                   {activityUnreadCount > 99 ? "99+" : activityUnreadCount}
                 </SidebarMenuBadge>
               )}
@@ -100,17 +113,21 @@ export function AppSidebarContent() {
               : "window-no-drag mt-auto px-2 py-3"
           }
         >
-          <div className={sidebarOpen ? "flex items-center justify-between gap-3" : "flex justify-center"}>
-            {sidebarOpen ? <ConnectionStatus /> : null}
+          <div className={sidebarOpen ? "flex items-center" : "flex justify-center"}>
             <Button
               asChild
               variant="ghost"
-              size="icon-sm"
+              size={sidebarOpen ? "default" : "icon-sm"}
               aria-label="Settings"
-              className="shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className={
+                sidebarOpen
+                  ? "w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  : "shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }
             >
               <Link to="/settings" data-testid="sidebar-settings-link">
                 <HugeiconsIcon icon={Settings01Icon} size={18} />
+                {sidebarOpen ? <span>Settings</span> : null}
               </Link>
             </Button>
           </div>

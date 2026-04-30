@@ -424,10 +424,6 @@ export function createCodexRuntimeInstance(
     if (entry.approval.toolKey) {
       const sticky = rememberedDecisions.get(entry.approval.toolKey)
       if (sticky === "approve") {
-        console.log(
-          "[CodexCli] applying remembered approve:",
-          entry.approval.toolKey,
-        )
         writeMessage({
           id: entry.requestId,
           result: buildApprovalReplyPayload(entry, sticky, { sticky: true }),
@@ -458,12 +454,6 @@ export function createCodexRuntimeInstance(
     const bucket = pendingUnroutedApprovals.get(providerThreadId) ?? []
     bucket.push(entry)
     pendingUnroutedApprovals.set(providerThreadId, bucket)
-    console.log(
-      "[CodexCli] buffering unrouted approval:",
-      entry.method,
-      entry.approval.toolKey ?? "(no toolKey)",
-      `bucket=${providerThreadId || "(no thread)"}`,
-    )
   }
 
   const drainPendingUnroutedApprovals = async (
@@ -507,16 +497,6 @@ export function createCodexRuntimeInstance(
       "method" in message && typeof message.method === "string" ? message.method : null
     if (!method || !("id" in message) || message.id == null) {
       return
-    }
-
-    // Diagnostic for approval routing — keep until the new flow is confirmed
-    // working in default mode for the canvas MCP path.
-    if (method.endsWith("/requestApproval")) {
-      console.log(
-        "[CodexCli] server request:",
-        method,
-        JSON.stringify("params" in message ? message.params : null),
-      )
     }
 
     if (

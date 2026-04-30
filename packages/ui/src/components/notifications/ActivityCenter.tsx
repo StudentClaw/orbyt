@@ -3,13 +3,11 @@ import {
   useActivityFilter,
   useActivityUnreadCount,
   setActivityFilter,
-  markAllActivityRead,
   filterActivityEntries,
   type ActivityFilterCategory,
   type ActivityFeedEntryWithMeta,
 } from "@/rpc/activityState"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Button } from "@/components/ui/button"
 import { ActivityFeedItem } from "./ActivityFeedItem"
 
 const FILTER_TABS: ReadonlyArray<{ id: ActivityFilterCategory; label: string }> = [
@@ -81,17 +79,6 @@ export function ActivityCenter() {
             </span>
           )}
         </div>
-        {unreadCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => markAllActivityRead()}
-            className="text-xs text-muted-foreground hover:text-foreground"
-            data-testid="activity-mark-read"
-          >
-            Mark all read
-          </Button>
-        )}
       </div>
 
       {/* Glass filter tabs */}

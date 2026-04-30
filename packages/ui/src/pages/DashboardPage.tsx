@@ -1,8 +1,7 @@
 import * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
-import { WalkthroughOverlay } from "@/components/onboarding/WalkthroughOverlay"
-import { DASHBOARD_WALKTHROUGH_STEPS } from "@/components/onboarding/walkthrough-steps"
+import { IpcChannel, type PluginAuthStatus } from "@orbyt/contracts"
 import { useCardWeights } from "@/rpc/onboardingState"
 import { toast } from "sonner"
 import { useDashboard } from "@/hooks/useDashboard"
@@ -35,6 +34,8 @@ import { removeAssignmentDetailEntry, seedAssignmentPreview } from "@/rpc/assign
 const TOAST_ID_STALE = "dashboard-canvas-stale"
 const TOAST_ID_SYNC = "dashboard-canvas-sync"
 const TOAST_ID_PLANNER = "dashboard-planner-stream"
+const TOAST_ID_NOT_CONFIGURED = "dashboard-canvas-not-configured"
+const CANVAS_PLUGIN_ID = "canvas-mcp"
 const SUBMITTED_PAGE_SIZE = 12
 const SCHEDULING_SESSION_SKILL_ID = "scheduling-session"
 
@@ -66,6 +67,74 @@ function getCanvasSyncProgressCopy(progress: number): { title: string; descripti
     title: `Almost fresh (${percent}%)`,
     description: "Finishing the dashboard refresh with your newest coursework details.",
   }
+}
+
+type SyncStatus = "syncing" | "done" | "error" | null
+
+const SYNC_STAGE_CAPS = [14, 64, 94, 99, 100] as const
+const SYNC_TWEEN_STEP = 1
+const SYNC_DONE_STEP = 4
+const SYNC_MIN_HOLD_MS = 400
+const SYNC_TICK_MS = 40
+
+function useSmoothedSyncPercent(realProgress: number, status: SyncStatus): number {
+  const [displayed, setDisplayed] = useState(() => (status === "done" ? 100 : 0))
+  const stageRef = useRef(0)
+  const holdStartedRef = useRef<number | null>(null)
+  const realRef = useRef(realProgress)
+  const statusRef = useRef<SyncStatus>(status)
+  const prevStatusRef = useRef<SyncStatus>(status)
+
+  realRef.current = realProgress
+  statusRef.current = status
+
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = status
+    if (status === "syncing" && prev !== "syncing") {
+      stageRef.current = 0
+      holdStartedRef.current = null
+      setDisplayed(0)
+    }
+  }, [status])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const currentStatus = statusRef.current
+      if (currentStatus !== "syncing" && currentStatus !== "done") return
+      const real = realRef.current
+
+      setDisplayed((prev) => {
+        if (currentStatus === "done") {
+          return prev >= 100 ? 100 : Math.min(prev + SYNC_DONE_STEP, 100)
+        }
+
+        const stage = stageRef.current
+        const cap = SYNC_STAGE_CAPS[stage]
+        const target = Math.min(real, cap)
+
+        if (prev < target) {
+          holdStartedRef.current = null
+          return Math.min(prev + SYNC_TWEEN_STEP, target)
+        }
+
+        if (prev >= cap && real > cap && stage < SYNC_STAGE_CAPS.length - 1) {
+          const now = Date.now()
+          if (holdStartedRef.current === null) {
+            holdStartedRef.current = now
+          } else if (now - holdStartedRef.current >= SYNC_MIN_HOLD_MS) {
+            stageRef.current = stage + 1
+            holdStartedRef.current = null
+          }
+        }
+        return prev
+      })
+    }, SYNC_TICK_MS)
+
+    return () => window.clearInterval(id)
+  }, [])
+
+  return displayed
 }
 
 function derivePriorityItems(
@@ -197,28 +266,6 @@ export function DashboardPage() {
     return found?.weight ?? 0.5
   }, [cardWeights])
 
-  const [tourActive, setTourActive] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false
-    try {
-      if (sessionStorage.getItem("orbyt:pending-tour") === "1") return true
-    } catch { /* ignore */ }
-    return new URLSearchParams(window.location.search).get("tour") === "1"
-  })
-  const [tourStep, setTourStep] = useState(0)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (!tourActive) return
-    try { sessionStorage.removeItem("orbyt:pending-tour") } catch { /* ignore */ }
-    const url = new URL(window.location.href)
-    if (url.searchParams.get("tour")) {
-      url.searchParams.delete("tour")
-      window.history.replaceState(null, "", url.pathname + (url.search ? `?${url.searchParams}` : ""))
-    }
-  }, [tourActive])
-
-  const tourSteps = DASHBOARD_WALKTHROUGH_STEPS
-
   const handleInsightAction = useCallback(
     async (action: InsightAction) => {
       const workspace = snapshot?.workspaces[0]
@@ -309,6 +356,37 @@ export function DashboardPage() {
     plannedSessions,
   } = useDashboard()
 
+  const [canvasAuthStatus, setCanvasAuthStatus] = useState<PluginAuthStatus["status"] | null>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.invoke) return
+    let cancelled = false
+
+    const refresh = async (): Promise<void> => {
+      try {
+        const result = await window.electronAPI!.invoke(IpcChannel.PLUGIN_GET_AUTH_STATUS, {
+          pluginId: CANVAS_PLUGIN_ID,
+        })
+        if (cancelled) return
+        setCanvasAuthStatus(result?.status ?? null)
+      } catch {
+        if (!cancelled) setCanvasAuthStatus(null)
+      }
+    }
+
+    void refresh()
+    const off = window.electronAPI.on?.(IpcChannel.PLUGIN_LIFECYCLE, (payload) => {
+      if (payload.pluginId === CANVAS_PLUGIN_ID) void refresh()
+    })
+
+    return () => {
+      cancelled = true
+      off?.()
+    }
+  }, [])
+
+  const isCanvasNotConfigured = canvasAuthStatus === "not_configured"
+
   const now = useMemo(() => new Date(), [])
   const isSyncing = syncProgress?.status === "syncing"
   const priorityItems = derivePriorityItems(courses, upcomingAssignments, submissionStatus)
@@ -354,6 +432,22 @@ export function DashboardPage() {
     setFilter(scope)
     setSubmittedPage(0)
   }, [])
+  const handleCanvasRefresh = useCallback(() => {
+    if (isCanvasNotConfigured) {
+      toast.warning("Canvas isn't connected", {
+        description: "Add your Canvas URL and access token to sync your dashboard.",
+      })
+      return
+    }
+    void (async () => {
+      try {
+        const client = await waitForPrimaryWsRpcClient()
+        await client.canvas.sync()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to start Canvas sync.")
+      }
+    })()
+  }, [isCanvasNotConfigured])
   const submittedPageCount = Math.max(1, Math.ceil(submittedItems.length / SUBMITTED_PAGE_SIZE))
   const currentSubmittedPage = Math.min(submittedPage, submittedPageCount - 1)
   const pagedSubmittedItems = useMemo(() => {
@@ -381,6 +475,10 @@ export function DashboardPage() {
   }, [now, priorityItems])
 
   useEffect(() => {
+    if (isCanvasNotConfigured) {
+      toast.dismiss(TOAST_ID_STALE)
+      return
+    }
     if (isSyncing) {
       toast.dismiss(TOAST_ID_STALE)
       return
@@ -403,7 +501,30 @@ export function DashboardPage() {
             : "I could not confirm a fresh sync yet, so deadlines and grades may have changed.",
       },
     )
-  }, [isSyncing, lastSync])
+  }, [isSyncing, lastSync, isCanvasNotConfigured])
+
+  useEffect(() => {
+    if (!isCanvasNotConfigured) {
+      toast.dismiss(TOAST_ID_NOT_CONFIGURED)
+      return
+    }
+    toast.warning("Canvas isn't connected", {
+      id: TOAST_ID_NOT_CONFIGURED,
+      duration: Infinity,
+      description: "Add your Canvas URL and access token to see deadlines, grades, and todos.",
+      action: {
+        label: "Connect Canvas",
+        onClick: () => {
+          void navigate({ to: "/plugins/$pluginId", params: { pluginId: CANVAS_PLUGIN_ID } })
+        },
+      },
+    })
+  }, [isCanvasNotConfigured, navigate])
+
+  const displayedSyncPercent = useSmoothedSyncPercent(
+    syncProgress?.progress ?? 0,
+    syncProgress?.status ?? null,
+  )
 
   useEffect(() => {
     if (!syncProgress) {
@@ -411,9 +532,11 @@ export function DashboardPage() {
       return
     }
 
-    if (syncProgress.status === "syncing") {
+    const isFillingToDone = syncProgress.status === "done" && displayedSyncPercent < 100
+
+    if (syncProgress.status === "syncing" || isFillingToDone) {
       hasShownActiveSyncToast.current = true
-      const copy = getCanvasSyncProgressCopy(syncProgress.progress)
+      const copy = getCanvasSyncProgressCopy(displayedSyncPercent)
       toast.loading(copy.title, {
         id: TOAST_ID_SYNC,
         duration: Infinity,
@@ -442,7 +565,7 @@ export function DashboardPage() {
       duration: 6000,
       description: "Your saved dashboard is still here. Try again from Connections when you are ready.",
     })
-  }, [syncProgress])
+  }, [syncProgress, displayedSyncPercent])
 
   useEffect(() => {
     if (!plannerStreaming) {
@@ -483,7 +606,13 @@ export function DashboardPage() {
             planDisabled={!workspace}
           />
           <section aria-label="Coursework filters">
-            <DashboardFilterTabs value={filter} onChange={handleFilterChange} />
+            <DashboardFilterTabs
+              value={filter}
+              onChange={handleFilterChange}
+              onRefresh={handleCanvasRefresh}
+              isRefreshing={isSyncing}
+              refreshDisabled={isCanvasNotConfigured}
+            />
           </section>
           <div className="mt-7" data-testid="dashboard-assignments">
             {grouped.length === 0 ? (
@@ -541,12 +670,10 @@ export function DashboardPage() {
         </div>
       }
       right={(() => {
-        const widgets: Array<{ id: string; weight: number; node: React.ReactNode }> = [
-          {
-            id: "grade-insights",
-            weight: weightOf("grade-insights"),
-            node: <GradeInsightsWidget key="grade-insights" courses={courses} grades={courseGrades} />,
-          },
+        const gradeInsights = (
+          <GradeInsightsWidget key="grade-insights" courses={courses} grades={courseGrades} />
+        )
+        const remaining: Array<{ id: string; weight: number; node: React.ReactNode }> = [
           {
             id: "weekly-outlook",
             weight: weightOf("weekly-outlook"),
@@ -566,21 +693,10 @@ export function DashboardPage() {
             node: <AiInsightCard key="ai-insight" insight={undefined} onAction={handleInsightAction} />,
           },
         ]
-        widgets.sort((a, b) => b.weight - a.weight)
-        return <>{widgets.map((w) => w.node)}</>
+        remaining.sort((a, b) => b.weight - a.weight)
+        return <>{gradeInsights}{remaining.map((w) => w.node)}</>
       })()}
     />
-    {tourActive && (
-      <WalkthroughOverlay
-        steps={tourSteps}
-        currentStep={tourStep}
-        onNext={() => {
-          if (tourStep >= tourSteps.length - 1) setTourActive(false)
-          else setTourStep((s) => s + 1)
-        }}
-        onDismiss={() => setTourActive(false)}
-      />
-    )}
     </>
   )
 }

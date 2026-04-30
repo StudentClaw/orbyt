@@ -18,10 +18,56 @@ const activityUnreadCountAtom = createAtom<number>(
   0,
 )
 
+const LAST_READ_STORAGE_KEY = "orbyt:activity:last-read-at"
+const EPOCH_ISO = new Date(0).toISOString()
+
+function readPersistedLastReadAt(): string {
+  try {
+    if (typeof localStorage === "undefined") return EPOCH_ISO
+    return localStorage.getItem(LAST_READ_STORAGE_KEY) ?? EPOCH_ISO
+  } catch {
+    return EPOCH_ISO
+  }
+}
+
+function persistLastReadAt(value: string): void {
+  try {
+    if (typeof localStorage === "undefined") return
+    localStorage.setItem(LAST_READ_STORAGE_KEY, value)
+  } catch {
+    // best-effort; ignore quota/permission failures
+  }
+}
+
+const activityLastReadAtAtom = createAtom<string>(
+  "activity-last-read-at",
+  readPersistedLastReadAt(),
+)
+
 const activityFilterAtom = createAtom<ActivityFilterCategory>(
   "activity-filter",
   "all",
 )
+
+function computeUnreadCount(
+  entries: ReadonlyArray<ActivityFeedEntryWithMeta>,
+  lastReadAt: string,
+): number {
+  const cutoff = Date.parse(lastReadAt)
+  if (Number.isNaN(cutoff)) return entries.length
+  let count = 0
+  for (const entry of entries) {
+    const ts = Date.parse(entry.receivedAt)
+    if (Number.isNaN(ts) || ts > cutoff) count += 1
+  }
+  return count
+}
+
+function syncUnreadCount(): void {
+  const entries = appAtomRegistry.get(activityEntriesAtom)
+  const lastReadAt = appAtomRegistry.get(activityLastReadAtAtom)
+  appAtomRegistry.set(activityUnreadCountAtom, computeUnreadCount(entries, lastReadAt))
+}
 
 // --- Imperative getters/setters ---
 
@@ -42,12 +88,15 @@ export function setActivityFilter(filter: ActivityFilterCategory): void {
 }
 
 export function markAllActivityRead(): void {
+  const now = new Date().toISOString()
+  appAtomRegistry.set(activityLastReadAtAtom, now)
+  persistLastReadAt(now)
   appAtomRegistry.set(activityUnreadCountAtom, 0)
 }
 
 export function setActivityEntries(entries: ReadonlyArray<ActivityFeedEntryWithMeta>): void {
   appAtomRegistry.set(activityEntriesAtom, entries)
-  appAtomRegistry.set(activityUnreadCountAtom, entries.length)
+  syncUnreadCount()
 }
 
 export function removeActivityEntry(id: ActivityFeedEntry["id"]): void {
@@ -55,12 +104,7 @@ export function removeActivityEntry(id: ActivityFeedEntry["id"]): void {
   const next = current.filter((entry) => entry.id !== id)
   if (next.length === current.length) return
   appAtomRegistry.set(activityEntriesAtom, next)
-  const removedUnread = current.length - next.length
-  const currentUnread = appAtomRegistry.get(activityUnreadCountAtom)
-  appAtomRegistry.set(
-    activityUnreadCountAtom,
-    Math.max(0, currentUnread - removedUnread),
-  )
+  syncUnreadCount()
 }
 
 // --- Event application ---
@@ -104,11 +148,8 @@ export function applyActivityFeedUpsertEvent(data: {
       receivedAt: new Date().toISOString(),
     }
     appAtomRegistry.set(activityEntriesAtom, [newEntry, ...current])
-    appAtomRegistry.set(
-      activityUnreadCountAtom,
-      appAtomRegistry.get(activityUnreadCountAtom) + 1,
-    )
   }
+  syncUnreadCount()
 }
 
 // --- Pure derivation functions ---
@@ -149,7 +190,7 @@ export function startActivityStateSync(client: WsRpcClient): () => void {
         (a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt),
       )
       appAtomRegistry.set(activityEntriesAtom, sorted)
-      appAtomRegistry.set(activityUnreadCountAtom, sorted.length)
+      syncUnreadCount()
     })
     .catch(() => undefined)
 
@@ -204,5 +245,6 @@ export function useFilteredActivityEntries(): ReadonlyArray<ActivityFeedEntryWit
 export function resetActivityStateForTests(): void {
   appAtomRegistry.set(activityEntriesAtom, [])
   appAtomRegistry.set(activityUnreadCountAtom, 0)
+  appAtomRegistry.set(activityLastReadAtAtom, EPOCH_ISO)
   appAtomRegistry.set(activityFilterAtom, "all")
 }

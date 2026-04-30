@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { RuntimeStartupState } from "@/rpc/runtimeStartupState"
+import { OrbytMark } from "./OrbytMark"
 
 interface AppStartupScreenProps {
   readonly state: RuntimeStartupState
   readonly onRetry: () => void
+  readonly dismissing?: boolean
+  readonly fadeDurationMs?: number
 }
 
 const TOKENS = {
-  bg: "#0A0E1A",
+  bg: "#01040a",
   text: "#F5F7FB",
   textDim: "#9AA4B8",
   textFaint: "#5C6678",
@@ -15,34 +18,19 @@ const TOKENS = {
   line: "rgba(255,255,255,0.08)",
 } as const
 
-const STAGE_LABEL = "Connecting to Orbyt"
-
 const STAGE_MESSAGES: ReadonlyArray<string> = [
-  "Knocking on the door…",
-  "Handshake in progress…",
-  "Verifying it's really you…",
+  "Connecting to Orbyt…",
   "Picking up where we left off…",
-  "Rehydrating your conversations…",
-  "Dusting off yesterday's threads…",
   "Wrangling assignments into orbit…",
   "Filing the ones due tomorrow first…",
   "Pretending we didn't see the late ones…",
+  "Aligning the stars…",
 ]
-
-function resolveProgress(state: RuntimeStartupState): number {
-  if (state.phase === "bootstrapping") return 0.1
-  if (state.phase === "connecting") return 0.25
-  if (state.phase === "ready") return 1
-  // hydrating: nudge further along when canvas data is being fetched
-  const haystack = `${state.label} ${state.detail}`.toLowerCase()
-  if (haystack.includes("course") || haystack.includes("canvas")) return 0.8
-  return 0.55
-}
 
 const Starfield = () => {
   const stars = useMemo(
     () =>
-      Array.from({ length: 95 }, (_, i) => ({
+      Array.from({ length: 38 }, (_, i) => ({
         id: i,
         x: Math.random() * 100,
         y: Math.random() * 100,
@@ -84,109 +72,167 @@ const Starfield = () => {
   )
 }
 
-interface OrbProps {
-  readonly expanded: boolean
+interface ParticleFieldProps {
+  readonly count?: number
+  readonly paused?: boolean
 }
 
-const Orb = ({ expanded }: OrbProps) => {
-  const S = 128
+const ParticleField = ({ count = 120, paused = false }: ParticleFieldProps) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const rafRef = useRef<number>(0)
+  const pausedRef = useRef(paused)
+  pausedRef.current = paused
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+
+    let W = 0
+    let H = 0
+    let cx = 0
+    let cy = 0
+    const resize = () => {
+      const r = canvas.getBoundingClientRect()
+      W = Math.max(1, r.width)
+      H = Math.max(1, r.height)
+      cx = W / 2
+      cy = H / 2
+      canvas.width = Math.round(W * dpr)
+      canvas.height = Math.round(H * dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.fillStyle = "#050912"
+      ctx.fillRect(0, 0, W, H)
+    }
+    resize()
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(resize)
+      ro.observe(canvas)
+    }
+    window.addEventListener("resize", resize)
+
+    const palette: ReadonlyArray<readonly [number, number, number]> = [
+      [116, 176, 255],
+      [0, 110, 254],
+      [0, 66, 152],
+      [180, 210, 255],
+      [255, 255, 255],
+    ]
+
+    const TAU = Math.PI * 2
+    const particles = Array.from({ length: count }, () => {
+      const ringBias = Math.random()
+      const baseR = 70 + Math.pow(ringBias, 0.7) * 280
+      const cIdx = Math.random() < 0.06 ? 4 : Math.floor(Math.random() * 3)
+      const [r, g, b] = palette[cIdx]
+      return {
+        a: Math.random() * TAU,
+        rBase: baseR,
+        rJitter: 4 + Math.random() * 14,
+        rPhase: Math.random() * TAU,
+        rSpeed: 0.4 + Math.random() * 0.9,
+        w: (0.06 + 0.18 / Math.sqrt(baseR / 80)) * 0.55,
+        size: 0.4 + Math.pow(Math.random(), 2) * 2.2,
+        rgb: [r, g, b] as const,
+        alpha: 0.25 + Math.random() * 0.55,
+        twPhase: Math.random() * TAU,
+        twSpeed: 0.6 + Math.random() * 1.6,
+        squashY: 0.62,
+        trail: Math.random() < 0.18,
+        prevX: 0,
+        prevY: 0,
+      }
+    })
+
+    let t0 = performance.now()
+    const cosT = Math.cos(-0.42)
+    const sinT = Math.sin(-0.42)
+
+    const step = (now: number) => {
+      if (pausedRef.current) {
+        t0 = now
+        rafRef.current = requestAnimationFrame(step)
+        return
+      }
+      const dt = Math.min(0.05, (now - t0) / 1000)
+      t0 = now
+
+      ctx.globalCompositeOperation = "source-over"
+      ctx.fillStyle = "rgba(1, 4, 10, 0.28)"
+      ctx.fillRect(0, 0, W, H)
+
+      ctx.globalCompositeOperation = "lighter"
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]
+        p.a += p.w * dt
+        p.rPhase += p.rSpeed * dt
+
+        const r = p.rBase + Math.sin(p.rPhase) * p.rJitter
+        const lx = Math.cos(p.a) * r
+        const ly = Math.sin(p.a) * r * p.squashY
+        const x = cx + lx * cosT - ly * sinT
+        const y = cy + lx * sinT + ly * cosT
+
+        p.twPhase += p.twSpeed * dt
+        const tw = 0.65 + 0.35 * Math.sin(p.twPhase)
+        const a = p.alpha * tw
+
+        const [r0, g0, b0] = p.rgb
+
+        if (p.trail && p.prevX !== 0) {
+          ctx.strokeStyle = `rgba(${r0},${g0},${b0},${a * 0.35})`
+          ctx.lineWidth = p.size * 0.9
+          ctx.lineCap = "round"
+          ctx.beginPath()
+          ctx.moveTo(p.prevX, p.prevY)
+          ctx.lineTo(x, y)
+          ctx.stroke()
+        }
+
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, p.size * 4)
+        glow.addColorStop(0, `rgba(${r0},${g0},${b0},${a})`)
+        glow.addColorStop(0.4, `rgba(${r0},${g0},${b0},${a * 0.35})`)
+        glow.addColorStop(1, `rgba(${r0},${g0},${b0},0)`)
+        ctx.fillStyle = glow
+        ctx.beginPath()
+        ctx.arc(x, y, p.size * 4, 0, TAU)
+        ctx.fill()
+
+        ctx.fillStyle = `rgba(${r0},${g0},${b0},${Math.min(1, a * 1.5)})`
+        ctx.beginPath()
+        ctx.arc(x, y, p.size, 0, TAU)
+        ctx.fill()
+
+        p.prevX = x
+        p.prevY = y
+      }
+
+      rafRef.current = requestAnimationFrame(step)
+    }
+    step(performance.now())
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      if (ro) ro.disconnect()
+      window.removeEventListener("resize", resize)
+    }
+  }, [count])
+
   return (
-    <div
+    <canvas
+      ref={canvasRef}
       style={{
-        width: S,
-        height: S,
-        position: "relative",
-        display: "grid",
-        placeItems: "center",
-        transform: expanded ? "scale(11)" : "scale(1)",
-        opacity: expanded ? 0 : 1,
-        filter: expanded ? "blur(28px)" : "none",
-        transition:
-          "transform 1.3s cubic-bezier(0.65,0,0.35,1), opacity 1.3s ease-out, filter 1.3s ease-out",
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
       }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: -S * 0.45,
-          background:
-            "radial-gradient(circle at 50% 50%, oklch(0.65 0.2 235 / 0.3) 0%, transparent 60%)",
-          filter: "blur(26px)",
-          animation: "orb-breathe 4.5s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: S,
-          height: S * 0.3,
-          border: "1.5px solid oklch(0.7 0.18 235 / 0.6)",
-          borderRadius: "50%",
-          animation: "orb-r0 14s linear infinite",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            left: -3,
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: "oklch(0.88 0.2 235)",
-            boxShadow: "0 0 12px oklch(0.85 0.2 235)",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          width: S * 1.2,
-          height: S * 0.36,
-          border: "1px solid oklch(0.7 0.18 220 / 0.3)",
-          borderRadius: "50%",
-          animation: "orb-r1 22s linear infinite",
-        }}
-      />
-      <div
-        style={{
-          width: S * 0.42,
-          height: S * 0.42,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle at 35% 30%, oklch(0.92 0.13 235) 0%, oklch(0.6 0.22 235) 55%, oklch(0.32 0.2 270) 100%)",
-          boxShadow:
-            "0 0 30px oklch(0.65 0.2 235 / 0.7), inset -6px -6px 16px oklch(0.3 0.15 270 / 0.6)",
-          position: "relative",
-          animation: "orb-pulse 3.4s ease-in-out infinite",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: "12%",
-            left: "18%",
-            width: "28%",
-            height: "22%",
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.55)",
-            filter: "blur(2px)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            background:
-              "conic-gradient(from 0deg, transparent, oklch(0.95 0.05 235 / 0.14), transparent 50%, oklch(0.4 0.15 270 / 0.22), transparent)",
-            animation: "orb-surf 11s linear infinite",
-            mixBlendMode: "overlay",
-          }}
-        />
-      </div>
-    </div>
+    />
   )
 }
 
@@ -238,126 +284,22 @@ const StatusLine = ({ messages, intervalMs = 1500 }: StatusLineProps) => {
   )
 }
 
-interface ProgressRailProps {
-  readonly label: string
-  readonly progress: number
-  readonly complete: boolean
-}
-
-const ProgressRail = ({ label, progress, complete }: ProgressRailProps) => {
-  const fill = complete ? 1 : Math.max(0.05, Math.min(progress, 0.95))
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 20,
-        width: "100%",
-        maxWidth: 560,
-      }}
-    >
-      <div
-        style={{
-          width: 14,
-          height: 14,
-          borderRadius: "50%",
-          flexShrink: 0,
-          background: "oklch(0.78 0.18 235)",
-          boxShadow: "0 0 16px oklch(0.78 0.2 235 / 0.9)",
-          transform: complete ? "scale(1)" : "scale(1.3)",
-          transition: "all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
-          animation: complete ? "none" : "seg-dot-pulse 1.4s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          fontSize: 16,
-          fontFamily: "'JetBrains Mono', monospace",
-          letterSpacing: 0.6,
-          flexShrink: 0,
-          color: TOKENS.text,
-          transition: "color 0.4s",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          flex: 1,
-          height: 5,
-          borderRadius: 99,
-          background: "rgba(255,255,255,0.07)",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: 99,
-            background: complete
-              ? "oklch(0.78 0.18 235)"
-              : "linear-gradient(90deg, oklch(0.78 0.18 235), oklch(0.65 0.18 235))",
-            width: `${fill * 100}%`,
-            transition: "width 0.6s cubic-bezier(0.65,0,0.35,1)",
-            boxShadow: "0 0 10px oklch(0.78 0.2 235 / 0.7)",
-          }}
-        />
-        {!complete && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 99,
-              background:
-                "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
-              animation: "rail-shimmer 2s linear infinite",
-              pointerEvents: "none",
-            }}
-          />
-        )}
-      </div>
-      <div
-        style={{
-          width: 22,
-          height: 22,
-          flexShrink: 0,
-          display: "grid",
-          placeItems: "center",
-          opacity: complete ? 1 : 0,
-          transform: complete ? "scale(1)" : "scale(0.5)",
-          transition: "all 0.35s cubic-bezier(0.34,1.56,0.64,1)",
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
-          <path
-            d="M2 6.5L5 9.5L10 3.5"
-            stroke="oklch(0.85 0.18 235)"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </div>
-  )
-}
-
 const KEYFRAMES = `
   @keyframes sf-twinkle { 0%,100% { opacity: inherit; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
-  @keyframes orb-breathe { 0%,100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.12); opacity: 1; } }
-  @keyframes orb-pulse   { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-  @keyframes orb-surf    { to { transform: rotate(360deg); } }
-  @keyframes orb-r0 { from { transform: rotateZ(-25deg) rotate(0deg); } to { transform: rotateZ(-25deg) rotate(360deg); } }
-  @keyframes orb-r1 { from { transform: rotateZ(15deg) rotate(0deg); }  to { transform: rotateZ(15deg) rotate(-360deg); } }
-  @keyframes seg-dot-pulse { 0%,100% { box-shadow: 0 0 12px oklch(0.78 0.2 235 / 0.9); } 50% { box-shadow: 0 0 20px oklch(0.78 0.2 235); } }
-  @keyframes rail-shimmer {
-    0%   { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+  @keyframes orbyt-bob      { 0%,100% { translate: 0 0px; } 50% { translate: 0 8px; } }
+  @keyframes orbyt-breathe  { 0%,100% { scale: 1; } 50% { scale: 1.035; } }
+  @keyframes orbyt-twinkle  {
+    0%, 100% { scale: 1;    opacity: 1;   }
+    45%      { scale: 0.5;  opacity: 0.5; }
+    50%      { scale: 0.35; opacity: 0.3; }
+    55%      { scale: 0.5;  opacity: 0.5; }
   }
   @keyframes glow-well { 0%,100% { transform: scale(0.94); } 50% { transform: scale(1.07); } }
   @keyframes dot-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  @keyframes loader-shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
   @keyframes startup-bloom {
     0%   { opacity: 0; transform: scale(0.4); }
     30%  { opacity: 1; }
@@ -365,8 +307,12 @@ const KEYFRAMES = `
   }
 `
 
-export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
-  const progress = resolveProgress(state)
+export function AppStartupScreen({
+  state,
+  onRetry,
+  dismissing = false,
+  fadeDurationMs = 600,
+}: AppStartupScreenProps) {
   const isError = state.phase === "error"
   const isReady = state.phase === "ready"
   const headline = isError ? state.label : "Getting everything ready"
@@ -385,45 +331,37 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
         display: "flex",
         flexDirection: "column",
         zIndex: 100,
+        opacity: dismissing ? 0 : 1,
+        transition: `opacity ${fadeDurationMs}ms ease-out`,
+        pointerEvents: dismissing ? "none" : "auto",
       }}
     >
       <style>{KEYFRAMES}</style>
       <Starfield />
 
-      {/* top-left brand */}
+      {/* top-left wordmark */}
       <div
         style={{
           position: "absolute",
-          top: 28,
-          left: 32,
+          top: 24,
+          left: 28,
           zIndex: 5,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: 2,
-          textTransform: "uppercase",
-          color: TOKENS.textFaint,
-          opacity: isReady ? 0 : 0.55,
+          opacity: isReady ? 0 : 0.72,
           transition: "opacity 0.5s",
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 40 40" fill="none">
-          <ellipse
-            cx="20"
-            cy="22"
-            rx="18"
-            ry="5"
-            stroke={TOKENS.blueSoft}
-            strokeWidth="2.5"
-            transform="rotate(-25 20 22)"
-            fill="none"
-            opacity="0.85"
+        <svg
+          width="90"
+          height="31"
+          viewBox="0 0 350 120"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M46.592 95.104C39.5094 95.104 33.1094 93.9093 27.392 91.52C21.6747 89.0453 16.768 85.6747 12.672 81.408C8.66134 77.1413 5.54667 72.192 3.328 66.56C1.10934 60.928 0 54.912 0 48.512C0 42.1973 1.10934 36.224 3.328 30.592C5.54667 24.96 8.66134 20.0107 12.672 15.744C16.768 11.4773 21.6747 8.14933 27.392 5.75999C33.1094 3.37066 39.5094 2.17599 46.592 2.17599C53.6747 2.17599 60.0747 3.37066 65.792 5.75999C71.5094 8.14933 76.3734 11.4773 80.384 15.744C84.48 20.0107 87.6374 24.96 89.856 30.592C92.0747 36.224 93.184 42.24 93.184 48.64C93.184 54.9547 92.0747 60.928 89.856 66.56C87.6374 72.192 84.48 77.1413 80.384 81.408C76.3734 85.6747 71.5094 89.0453 65.792 91.52C60.0747 93.9093 53.6747 95.104 46.592 95.104ZM46.592 84.224C51.456 84.224 55.9787 83.328 60.16 81.536C64.3414 79.744 67.968 77.2267 71.04 73.984C74.1974 70.7413 76.6294 66.9867 78.336 62.72C80.0427 58.368 80.896 53.632 80.896 48.512C80.896 43.4773 80.0427 38.784 78.336 34.432C76.6294 30.08 74.24 26.3253 71.168 23.168C68.096 19.9253 64.4267 17.4507 60.16 15.744C55.9787 13.952 51.456 13.056 46.592 13.056C41.6427 13.056 37.0774 13.952 32.896 15.744C28.7147 17.4507 25.088 19.9253 22.016 23.168C18.944 26.3253 16.5547 30.08 14.848 34.432C13.1414 38.784 12.288 43.52 12.288 48.64C12.288 53.6747 13.1414 58.368 14.848 62.72C16.5547 66.9867 18.944 70.7413 22.016 73.984C25.088 77.2267 28.7147 79.744 32.896 81.536C37.0774 83.328 41.6427 84.224 46.592 84.224ZM107.459 93.44V46.72C107.459 40.9173 109.08 36.3947 112.323 33.152C115.651 29.824 120.216 28.16 126.019 28.16H139.459V38.272H128.195C125.379 38.272 123.16 39.0827 121.539 40.704C120.003 42.3253 119.235 44.5867 119.235 47.488V93.44H107.459ZM183.367 94.976C177.052 94.976 171.378 93.6107 166.343 90.88C161.308 88.1493 157.298 84.224 154.311 79.104C151.41 73.8987 149.959 67.6693 149.959 60.416V0H161.735V39.808H161.991C163.442 37.1627 165.319 34.8587 167.623 32.896C170.012 30.9333 172.7 29.3973 175.687 28.288C178.759 27.1787 181.959 26.624 185.287 26.624C191.346 26.624 196.764 27.9893 201.543 30.72C206.322 33.4507 210.076 37.3333 212.807 42.368C215.623 47.3173 217.031 53.2053 217.031 60.032C217.031 65.408 216.178 70.272 214.471 74.624C212.85 78.8907 210.546 82.56 207.559 85.632C204.572 88.704 201.031 91.0507 196.935 92.672C192.839 94.208 188.316 94.976 183.367 94.976ZM183.367 84.864C187.378 84.864 191.004 83.8827 194.247 81.92C197.575 79.9573 200.22 77.184 202.183 73.6C204.146 70.016 205.127 65.7493 205.127 60.8C205.127 56.0213 204.146 51.84 202.183 48.256C200.306 44.672 197.746 41.856 194.503 39.808C191.26 37.76 187.591 36.736 183.495 36.736C179.484 36.736 175.815 37.7173 172.487 39.68C169.244 41.6427 166.642 44.4587 164.679 48.128C162.802 51.712 161.863 55.9787 161.863 60.928C161.863 65.792 162.802 70.016 164.679 73.6C166.642 77.184 169.244 79.9573 172.487 81.92C175.815 83.8827 179.442 84.864 183.367 84.864ZM256.797 119.424V94.464C252.018 93.7813 247.752 92.2027 243.997 89.728C240.328 87.168 237.426 83.8827 235.293 79.872C233.16 75.776 232.093 71.1253 232.093 65.92V28.16H243.997V65.792C243.997 69.7173 244.85 73.1307 246.557 76.032C248.264 78.848 250.525 81.024 253.341 82.56C256.242 84.096 259.314 84.864 262.557 84.864C265.885 84.864 268.957 84.096 271.773 82.56C274.674 81.024 276.978 78.848 278.685 76.032C280.477 73.1307 281.373 69.7173 281.373 65.792V28.16H293.149V65.92C293.149 71.1253 292.082 75.7333 289.949 79.744C287.901 83.7547 285 87.04 281.245 89.6C277.576 92.0747 273.352 93.696 268.573 94.464V119.424H256.797ZM334.115 93.44C328.312 93.44 323.747 91.776 320.419 88.448C317.176 85.12 315.555 80.5973 315.555 74.88V11.776H327.331V74.112C327.331 76.928 328.099 79.1893 329.635 80.896C331.256 82.5173 333.475 83.328 336.291 83.328H349.475V93.44H334.115ZM304.291 38.272V28.16H349.731V38.272H304.291Z"
+            fill="white"
           />
-          <circle cx="20" cy="20" r="8" fill={TOKENS.blueSoft} />
         </svg>
-        Orbyt
       </div>
 
       {/* top-right status indicator */}
@@ -458,32 +396,61 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
         {isError ? "error" : "loading"}
       </div>
 
-      {/* center orb */}
-      <div style={{ flex: 1, display: "grid", placeItems: "center", position: "relative" }}>
+      {/* center stage — particles + logo */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          paddingTop: "6%",
+          paddingBottom: "2%",
+          minHeight: 0,
+        }}
+      >
+        <ParticleField count={120} paused={isReady || isError} />
+
         <div
           style={{
             position: "absolute",
-            width: 320,
-            height: 320,
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(96,165,250,0.14), transparent 65%)",
-            filter: "blur(6px)",
-            animation: "glow-well 3.6s ease-in-out infinite",
-            opacity: isReady ? 0 : 1,
-            transition: "opacity 0.5s",
+            inset: 0,
+            pointerEvents: "none",
+            background:
+              "radial-gradient(ellipse 180% 130% at 50% 44%, rgba(6,16,38,0.6) 0%, rgba(3,8,20,0.35) 45%, transparent 75%)",
           }}
         />
-        <Orb expanded={isReady} />
+
+        <div
+          style={{
+            position: "absolute",
+            width: 520,
+            height: 520,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(0,110,254,0.22) 0%, rgba(0,110,254,0.14) 22%, rgba(0,110,254,0.07) 44%, rgba(0,110,254,0.025) 65%, transparent 82%)",
+            filter: "blur(14px)",
+            animation: "glow-well 4.4s ease-in-out infinite",
+            opacity: isReady ? 0 : 1,
+            transition: "opacity 0.5s",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div style={{ position: "relative", zIndex: 2 }}>
+          <OrbytMark size={180} expanded={isReady} />
+        </div>
       </div>
 
       {/* bottom panel */}
       <div
         style={{
-          padding: "0 52px 52px",
+          padding: "0 52px 48px",
+          flexShrink: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 26,
+          gap: 18,
           opacity: isReady ? 0 : 1,
           transform: isReady ? "translateY(10px)" : "translateY(0)",
           transition: "opacity 0.45s, transform 0.45s",
@@ -493,10 +460,10 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
           <div
             style={{
               fontFamily: "'Instrument Serif', Georgia, serif",
-              fontSize: 27,
+              fontSize: 30,
               fontWeight: 400,
               color: TOKENS.text,
-              marginBottom: 10,
+              marginBottom: 14,
               letterSpacing: -0.3,
             }}
           >
@@ -507,7 +474,7 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
               {detail ?? "The local runtime did not finish booting."}
             </div>
           ) : (
-            <StatusLine messages={STAGE_MESSAGES} intervalMs={1500} />
+            <StatusLine messages={STAGE_MESSAGES} intervalMs={1400} />
           )}
         </div>
 
@@ -532,7 +499,30 @@ export function AppStartupScreen({ state, onRetry }: AppStartupScreenProps) {
             ↺ Retry
           </button>
         ) : (
-          <ProgressRail label={STAGE_LABEL} progress={progress} complete={isReady} />
+          <div
+            style={{
+              width: 240,
+              height: 2,
+              borderRadius: 99,
+              background: "rgba(255,255,255,0.07)",
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                height: "100%",
+                width: "40%",
+                background:
+                  "linear-gradient(90deg, transparent, #74B0FF, #006EFE, transparent)",
+                animation: "loader-shimmer 1.8s ease-in-out infinite",
+                boxShadow: "0 0 10px rgba(0,110,254,0.55)",
+              }}
+            />
+          </div>
         )}
       </div>
 

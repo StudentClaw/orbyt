@@ -12,13 +12,20 @@ interface ActiveHoursPhaseProps {
 }
 
 const MIN = 4
-const MAX = 26
+const MAX = 28
 
 function fmt(h: number): string {
-  const norm = h % 24
-  const suffix = norm < 12 || norm === 0 ? "AM" : "PM"
+  const norm = ((h % 24) + 24) % 24
+  const suffix = norm < 12 ? "AM" : "PM"
   const display = norm === 0 ? 12 : norm > 12 ? norm - 12 : norm
   return `${display}:00 ${suffix}`
+}
+
+function fmtShort(h: number): string {
+  const norm = ((h % 24) + 24) % 24
+  const suffix = norm < 12 ? "a" : "p"
+  const display = norm === 0 ? 12 : norm > 12 ? norm - 12 : norm
+  return `${display}${suffix}`
 }
 
 export function ActiveHoursPhase({ dna, initialStart = 7, initialEnd = 23, onSave, onBack }: ActiveHoursPhaseProps) {
@@ -55,18 +62,18 @@ export function ActiveHoursPhase({ dna, initialStart = 7, initialEnd = 23, onSav
     }
   }, [onMouseMove, onMouseUp])
 
-  const labelHours = [6, 9, 12, 15, 18, 21, 24]
+  const labelHours = [4, 8, 12, 16, 20, 24, 28]
 
   return (
     <div style={{ padding: "32px 52px 32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
       <div style={{ fontSize: 10, letterSpacing: "0.15em", color: T.textDim, textTransform: "uppercase", fontFamily: MONO, marginBottom: 14 }}>
         Phase 01 · Active Hours
       </div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 10px", fontWeight: 400 }}>
+      <h1 style={{ fontFamily: SERIF, fontSize: 56, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 12px", fontWeight: 400 }}>
         When is your <em style={{ fontStyle: "italic" }}>day</em>?
       </h1>
-      <p style={{ fontSize: 15, color: T.textDim, lineHeight: 1.55, marginBottom: 32, maxWidth: 480 }}>
-        Drag the handles to mark when you're awake and on. Orby only schedules inside your active window — never outside it.
+      <p style={{ fontSize: 15, color: T.textDim, lineHeight: 1.55, marginBottom: 32, maxWidth: 520 }}>
+        This is the window Orby will schedule study tasks, reminders, and check-ins inside. Drag the handles to mark when you're awake and on — nothing gets scheduled outside it.
       </p>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 28 }}>
@@ -126,8 +133,8 @@ export function ActiveHoursPhase({ dna, initialStart = 7, initialEnd = 23, onSav
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
           {labelHours.map((h) => (
-            <div key={h} style={{ fontSize: 9, color: T.textFaint, fontFamily: MONO, textAlign: "center", minWidth: 28 }}>
-              {fmt(h).split(" ")[0]}
+            <div key={h} style={{ fontSize: 10, color: T.textFaint, fontFamily: MONO, textAlign: "center", minWidth: 28 }}>
+              {fmtShort(h)}
             </div>
           ))}
         </div>

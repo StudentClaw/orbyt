@@ -29,10 +29,6 @@ vi.mock("@/hooks/useTheme", () => ({
   useTheme: themeMocks.useTheme,
 }))
 
-vi.mock("@/components/dev/DevOnboardingControls", () => ({
-  DevOnboardingControls: () => null,
-}))
-
 import { GeneralSection } from "../components/settings/GeneralSection"
 
 describe("GeneralSection", () => {

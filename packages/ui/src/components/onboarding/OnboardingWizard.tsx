@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import type { OnboardingAnswers, StudentDna } from "@orbyt/contracts"
-import { buildStudyDna } from "@orbyt/shared"
+import { buildStudyDna, DNA_QUESTIONS } from "@orbyt/shared"
 import {
   ONBOARDING_STEPS,
   advanceOnboardingStep,
@@ -43,6 +43,7 @@ export function OnboardingWizard() {
     return (stepDef?.id as WizardPhase) ?? "dna-discovery"
   })
   const [burstKey, setBurstKey] = useState(0)
+  const [activeHours, setActiveHours] = useState<{ startHour: number; endHour: number }>({ startHour: 7, endHour: 23 })
   const aiConnectInFlight = useRef(false)
 
   const liveAnswers = state.answers
@@ -85,8 +86,9 @@ export function OnboardingWizard() {
   }
 
   const handleHoursSave = ({ startHour, endHour }: { startHour: number; endHour: number }): void => {
+    setActiveHours({ startHour, endHour })
     const studyTimes = Array.from({ length: endHour - startHour }, (_, i) =>
-      `${String(startHour + i).padStart(2, "0")}:00`,
+      `${String((startHour + i) % 24).padStart(2, "0")}:00`,
     )
     void getPrimaryWsRpcClient().onboarding.setPreferences({ studyTimes }).catch(() => undefined)
     advanceAndGo("busy-grid")
@@ -174,9 +176,24 @@ export function OnboardingWizard() {
       case "cinematic-reveal":
         return <CinematicReveal dna={liveDna} onContinue={handleRevealContinue} />
       case "active-hours":
-        return <ActiveHoursPhase dna={liveDna} onSave={handleHoursSave} />
+        return (
+          <ActiveHoursPhase
+            dna={liveDna}
+            initialStart={activeHours.startHour}
+            initialEnd={activeHours.endHour}
+            onSave={handleHoursSave}
+          />
+        )
       case "busy-grid":
-        return <BusyGridPhase dna={liveDna} onSave={handleBusySave} onBack={goBack} />
+        return (
+          <BusyGridPhase
+            dna={liveDna}
+            startHour={activeHours.startHour}
+            endHour={activeHours.endHour}
+            onSave={handleBusySave}
+            onBack={goBack}
+          />
+        )
       case "ai-connect":
         return (
           <AiConnectPhase
@@ -211,6 +228,7 @@ export function OnboardingWizard() {
   const showNebula = phase === "dna-discovery"
   const answeredCount = Object.keys(liveAnswers).length
   const phaseLabel = ONBOARDING_STEPS.find((s) => s.id === phase)?.label ?? "Study DNA"
+  const dnaPercent = Math.round((answeredCount / DNA_QUESTIONS.length) * 100)
 
   return (
     <div
@@ -224,8 +242,15 @@ export function OnboardingWizard() {
         gridTemplateColumns: phase === "cinematic-reveal" ? "1fr" : "1.15fr 1fr",
         overflow: "hidden",
         transition: "background 1s",
+        animation: "wizard-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both",
       }}
     >
+      <style>{`
+        @keyframes wizard-enter {
+          from { opacity: 0; transform: scale(0.985); filter: blur(8px); }
+          to   { opacity: 1; transform: scale(1);     filter: blur(0); }
+        }
+      `}</style>
       <div style={{ position: "relative", overflow: "hidden" }}>{left}</div>
       {phase !== "cinematic-reveal" && (
         <div style={{
@@ -236,22 +261,57 @@ export function OnboardingWizard() {
           position: "relative",
           overflow: "hidden",
         }}>
-          <div style={{ position: "relative", zIndex: 2 }}>
+          <div style={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 28,
+          }}>
+            {phase === "dna-discovery" && (
+              <div style={{
+                fontSize: 12,
+                color: DNA_TOKENS.textDim,
+                letterSpacing: "0.22em",
+                textTransform: "uppercase",
+                fontFamily: MONO,
+              }}>
+                Student DNA · {dnaPercent}% complete
+              </div>
+            )}
             {showNebula
-              ? <MysteryNebula answered={answeredCount} total={11} hue={liveDna.hue} accentHue={liveDna.accentHue} burstKey={burstKey} />
+              ? <MysteryNebula answered={answeredCount} total={DNA_QUESTIONS.length} hue={liveDna.hue} accentHue={liveDna.accentHue} burstKey={burstKey} />
               : <DNACard dna={liveDna} answeredCount={answeredCount} large showStats />}
           </div>
-          <div style={{
-            position: "absolute",
-            bottom: 28,
-            fontSize: 10,
-            color: DNA_TOKENS.textFaint,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            fontFamily: MONO,
-          }}>
-            {phaseLabel}
-          </div>
+          {phase === "dna-discovery" ? (
+            <>
+              {answeredCount === 0 && (
+                <div style={{
+                  position: "absolute",
+                  bottom: 28,
+                  fontSize: 12,
+                  color: DNA_TOKENS.textFaint,
+                  letterSpacing: "0.22em",
+                  fontFamily: MONO,
+                }}>
+                  waiting to get to know you
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{
+              position: "absolute",
+              bottom: 28,
+              fontSize: 10,
+              color: DNA_TOKENS.textFaint,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              fontFamily: MONO,
+            }}>
+              {phaseLabel}
+            </div>
+          )}
         </div>
       )}
     </div>

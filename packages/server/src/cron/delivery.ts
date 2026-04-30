@@ -3,7 +3,7 @@ import { PUSH_CHANNELS, type ActivityFeedEntry, type CronJob } from "@orbyt/cont
 import { Database } from "../db/Database.js"
 import { PushBus } from "../ws/PushBus.js"
 import { recordActivityEntry } from "../activity/feed.js"
-import { checkHeartbeatAck } from "./prompts.js"
+import { simplifyCourseCode } from "./course-code.js"
 
 export interface DeliverySuccessInput {
   readonly job: CronJob
@@ -47,6 +47,22 @@ function truncate(text: string, max: number): string {
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`
 }
 
+const COURSE_CODE_TOKEN = /\b[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9_]+\b/g
+
+/**
+ * Apply the project-wide course-code rule to user-facing text. Any token that
+ * looks like `TERM_CODE_TITLE` collapses to the middle segment. The simplifier
+ * is conservative: tokens that don't match the pattern are left alone.
+ */
+function normalizeCourseCodes(text: string): string {
+  return text.replace(COURSE_CODE_TOKEN, (match) => simplifyCourseCode(match))
+}
+
+const REMINDER_TITLE = "Orby"
+
+const NAME_HEARTBEAT = "heartbeat"
+const NAME_DAILY_INSIGHT = "daily-insight"
+
 function entryFromSuccess(
   input: DeliverySuccessInput,
 ): Omit<ActivityFeedEntry, "id"> | null {
@@ -54,34 +70,26 @@ function entryFromSuccess(
 
   if (job.payloadKind === "reminder") {
     const reminder = safeParseReminder(job.payloadContent)
+    const rawBody = reminder?.body ?? reminder?.title ?? job.name
     return {
       category: "reminder",
       type: "reminder.fired",
-      title: reminder?.title ?? job.name,
-      body: reminder?.body ?? "",
+      title: REMINDER_TITLE,
+      body: normalizeCourseCodes(rawBody).trim(),
       notify: true,
       priority: 2,
     }
   }
 
-  // Heartbeat: HEARTBEAT_OK + ≤300 chars => suppress entirely.
-  if (job.name === "heartbeat") {
-    const ack = checkHeartbeatAck(output)
-    if (ack.suppress) return null
-    const body = truncate(ack.remainder.length > 0 ? ack.remainder : output, 240)
-    if (body.length === 0) return null
-    return {
-      category: "cron",
-      type: "heartbeat.alert",
-      title: "Heartbeat alert",
-      body,
-      notify: true,
-      priority: 2,
-    }
+  // Heartbeat and daily-insight write their entries directly inside the
+  // executor (where they have access to candidate metadata, deep links, and
+  // dedupe state). Skipping here prevents duplicate / generic cards.
+  if (job.name === NAME_HEARTBEAT || job.name === NAME_DAILY_INSIGHT) {
+    return null
   }
 
   return {
-    category: job.name === "daily-insight" ? "insight" : "cron",
+    category: "cron",
     type: `${job.name}.completed`,
     title: job.name,
     body: truncate(output, 240),

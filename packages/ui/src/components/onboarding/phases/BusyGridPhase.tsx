@@ -6,15 +6,24 @@ import { PhaseFooter } from "./PhaseFooter"
 interface BusyGridPhaseProps {
   dna: StudentDna
   initialCells?: ReadonlyArray<{ dayOfWeek: number; hourOfDay: number }>
+  startHour?: number
+  endHour?: number
   onSave: (cells: Array<{ dayOfWeek: number; hourOfDay: number }>) => void
   onBack?: () => void
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
-export function BusyGridPhase({ dna, initialCells, onSave, onBack }: BusyGridPhaseProps) {
+function fmtHourLabel(h: number): string {
+  const norm = ((h % 24) + 24) % 24
+  const suffix = norm < 12 ? "a" : "p"
+  const display = norm === 0 ? 12 : norm > 12 ? norm - 12 : norm
+  return `${display}${suffix}`
+}
+
+export function BusyGridPhase({ dna, initialCells, startHour = 8, endHour = 21, onSave, onBack }: BusyGridPhaseProps) {
   const T = DNA_TOKENS
+  const HOURS = Array.from({ length: Math.max(1, endHour - startHour) }, (_, i) => startHour + i)
   const [cells, setCells] = useState<Set<string>>(() => {
     const set = new Set<string>()
     if (initialCells) {
@@ -36,7 +45,7 @@ export function BusyGridPhase({ dna, initialCells, onSave, onBack }: BusyGridPha
   const handleSave = (): void => {
     const out = Array.from(cells).map((k) => {
       const [d, h] = k.split("-").map(Number)
-      return { dayOfWeek: d!, hourOfDay: h! }
+      return { dayOfWeek: d!, hourOfDay: h! % 24 }
     })
     onSave(out)
   }
@@ -46,7 +55,7 @@ export function BusyGridPhase({ dna, initialCells, onSave, onBack }: BusyGridPha
       <div style={{ fontSize: 10, letterSpacing: "0.15em", color: T.textDim, textTransform: "uppercase", fontFamily: MONO, marginBottom: 14 }}>
         Phase 02 · Weekly rhythm
       </div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 44, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 10px", fontWeight: 400 }}>
+      <h1 style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 12px", fontWeight: 400 }}>
         When are you <em style={{ fontStyle: "italic" }}>busy</em>?
       </h1>
       <p style={{ fontSize: 14, color: T.textDim, lineHeight: 1.5, marginBottom: 18, maxWidth: 480 }}>
@@ -63,7 +72,7 @@ export function BusyGridPhase({ dna, initialCells, onSave, onBack }: BusyGridPha
         ))}
         {HOURS.map((h) => (
           <div key={h} style={{ display: "contents" }}>
-            <div style={{ fontSize: 9, color: T.textFaint, fontFamily: MONO, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 3 }}>{h}</div>
+            <div style={{ fontSize: 9, color: T.textFaint, fontFamily: MONO, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 3 }}>{fmtHourLabel(h)}</div>
             {DAYS.map((_, d) => {
               const active = cells.has(`${d}-${h}`)
               return (

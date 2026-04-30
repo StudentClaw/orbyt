@@ -59,7 +59,7 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
       <div style={{ fontSize: 10, letterSpacing: "0.15em", color: T.textDim, textTransform: "uppercase", fontFamily: MONO, marginBottom: 14 }}>
         Phase 03 · AI Connection
       </div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 48, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 14px", fontWeight: 400 }}>
+      <h1 style={{ fontFamily: SERIF, fontSize: 58, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 14px", fontWeight: 400 }}>
         Give <em style={{ fontStyle: "italic" }}>Orby</em> a brain.
       </h1>
       <p style={{ fontSize: 15, color: T.textDim, lineHeight: 1.58, marginBottom: 28, maxWidth: 480 }}>
