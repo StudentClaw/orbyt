@@ -21,6 +21,7 @@ type CredentialStage =
   | "saving"
   | "verifying"
   | "verified"
+  | "verifying_slow"
   | "error"
 
 function isValidCanvasBaseUrl(value: string): boolean {
@@ -53,11 +54,19 @@ export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, o
         setTimeout(() => resolve("timeout"), VERIFY_TIMEOUT_MS),
       )
       const result = await Promise.race([onVerify(), timeout])
-      // Either Canvas responded (creds work) or we timed out waiting — in
-      // both cases the credentials were saved successfully and sync is
-      // running. Treat as verified so the user isn't stuck on a spinner.
-      void result
-      setStage("verified")
+      if (result === "timeout") {
+        // Canvas hasn't confirmed yet. Don't claim verified — surface a
+        // soft "still verifying" state so the user can continue but isn't
+        // told their credentials work when we don't actually know.
+        setStage("verifying_slow")
+        return
+      }
+      if (result === true) {
+        setStage("verified")
+        return
+      }
+      setStage("error")
+      setError("Canvas did not accept these credentials.")
     } catch {
       setStage("error")
       setError("Could not connect to Canvas. Check your URL and token.")
@@ -131,9 +140,15 @@ export function CanvasSyncPhase({ dna, onVerify, onSyncBackground, onContinue, o
   const showForm = stage === "needs_credentials" || stage === "saving"
   // "Continue" once creds are stored / verified; "Skip" only if user hasn't
   // connected Canvas at all (or hit a hard error and is opting to move on).
-  const continueLabel = stage === "verified" || stage === "loading" || stage === "verifying"
-    ? "Continue →"
-    : "Skip →"
+  // verifying_slow still shows "Continue" since creds were saved, but the
+  // status card honestly says we haven't confirmed Canvas accepted them.
+  const continueLabel =
+    stage === "verified" ||
+    stage === "loading" ||
+    stage === "verifying" ||
+    stage === "verifying_slow"
+      ? "Continue →"
+      : "Skip →"
 
   return (
     <div style={{ padding: "32px 52px 32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "auto" }}>
@@ -336,7 +351,8 @@ function CanvasStatusCard({
 }) {
   const T = DNA_TOKENS
   const isVerified = stage === "verified"
-  const isSpinning = stage === "loading" || stage === "verifying"
+  const isSpinning =
+    stage === "loading" || stage === "verifying" || stage === "verifying_slow"
 
   return (
     <div
@@ -380,6 +396,7 @@ function CanvasStatusCard({
           <div style={{ fontSize: 12, color: stage === "error" ? "#F87171" : T.textDim }}>
             {stage === "loading" && "Checking saved credentials…"}
             {stage === "verifying" && "Verifying your Canvas access…"}
+            {stage === "verifying_slow" && "Still verifying with Canvas. Coursework is syncing in the background — feel free to continue."}
             {stage === "verified" && "Canvas verified — coursework is loading in the background"}
             {stage === "error" && (error ?? "Could not verify Canvas access.")}
           </div>
