@@ -113,19 +113,18 @@ export function OnboardingWizard() {
         throw new Error(result.error ?? "Sign-in did not complete.")
       }
 
+      // auth.json is on disk and the IPC reports success — that's the
+      // authoritative signal that the user finished signing in. Persist the
+      // local "connected" state immediately so the UI can advance, then warm
+      // up the runtime in the background. retryInitialize spawns a fresh
+      // codex app-server and can hang if the child doesn't respond on stdio;
+      // we don't want that to keep the user stuck on the connecting screen.
+      setAiAuthStatus("connected")
       const client = getPrimaryWsRpcClient()
       void client.onboarding
         .setAiAuth({ status: "connected", provider: "codex" })
         .catch(() => undefined)
-      const initResult = await client.provider.retryInitialize().catch((err: unknown) => {
-        throw err instanceof Error
-          ? err
-          : new Error("Codex signed in, but the runtime did not start. Please retry.")
-      })
-      if (!initResult.started) {
-        throw new Error("Codex signed in, but the runtime did not start. Please retry.")
-      }
-      setAiAuthStatus("connected")
+      void client.provider.retryInitialize().catch(() => undefined)
     } finally {
       aiConnectInFlight.current = false
     }

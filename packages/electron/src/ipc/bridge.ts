@@ -383,6 +383,7 @@ export function registerIpcHandlers(
         settled = true
         clearTimeout(timer)
         clearInterval(poll)
+        clearInterval(fastPoll)
         try { watcher?.close() } catch { /* ignore */ }
         if (!proc.killed) {
           // Best-effort cleanup: codex may still be lingering after writing
@@ -443,8 +444,18 @@ export function registerIpcHandlers(
         watcher = null
       }
 
-      // Polling fallback in case fsWatch never fires (FSEvents quirks, codex
-      // writing auth.json to a slightly different path, etc). Cheap to run.
+      // Fast file-only poll: hits the disk every 250ms with a cheap statSync.
+      // This is the primary fallback when fsWatch misses an event — much faster
+      // than the 1s combined poll, and never blocks on a child process.
+      const fastPoll = setInterval(() => {
+        if (checkAuthJsonReady()) {
+          finish({ status: "connected" })
+        }
+      }, 250)
+
+      // Slower combined poll that also runs `codex login status`. Catches the
+      // rare case where auth.json mtime hasn't moved (e.g., codex re-affirmed
+      // an existing session) but the CLI nonetheless reports authenticated.
       const poll = setInterval(() => {
         if (checkAuthJsonReady() || checkLoginStatusReady()) {
           finish({ status: "connected" })
