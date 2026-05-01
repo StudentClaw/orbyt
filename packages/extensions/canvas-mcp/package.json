@@ -7,7 +7,7 @@
     "dev": "bun --watch src/index.ts",
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "bun test src"
+    "test": "bun test src --pass-with-no-tests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

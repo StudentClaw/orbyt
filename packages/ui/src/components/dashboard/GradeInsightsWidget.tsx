@@ -71,7 +71,11 @@ export function GradeInsightsWidget({ courses, grades }: GradeInsightsWidgetProp
         <h2 className="text-base font-semibold tracking-tight">Grade Insights</h2>
       </div>
 
-      <ChartContainer config={chartConfig} className="mb-5 !aspect-auto h-[260px] w-full">
+      <ChartContainer
+        config={chartConfig}
+        className="mb-5 !aspect-auto h-[260px] w-full"
+        data-testid="grade-insights-chart"
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 4, right: 4, left: 0, bottom: 24 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/60" />
