@@ -488,7 +488,7 @@ export function StudyProfileSection() {
         </CardContent>
       </Card>
 
-      <div
+      {(isDirty || saveState === "saving" || saveState === "error") && <div
         data-testid="sp-save-bar"
         className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center justify-between gap-3 rounded-xl border bg-background/85 px-4 py-3 backdrop-blur"
       >
@@ -520,7 +520,7 @@ export function StudyProfileSection() {
             {saveState === "saving" ? "Saving…" : "Save changes"}
           </Button>
         </div>
-      </div>
+      </div>}
 
       {blocker.status === "blocked" && (
         <LeaveConfirm

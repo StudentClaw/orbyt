@@ -18,6 +18,7 @@ import { SkillResolverLive, SkillManagementLive } from "./skills/index.js"
 import { PushBus, PushBusLive } from "./ws/PushBus.js"
 import { WebSocketServerService, WebSocketServerLive } from "./ws/WebSocketServer.js"
 import { CanvasSyncService, CanvasSyncServiceLive } from "./canvas/CanvasSyncService.js"
+import { CanvasApiLive } from "./canvas/CanvasApi.js"
 import { MemorizeService, MemorizeServiceLive } from "./memory/service.js"
 import { CronScheduler, CronServiceLive, CronStore, seedDefaultJobs } from "./cron/index.js"
 import { ProactiveMemoryLive } from "./proactive/index.js"
@@ -64,6 +65,7 @@ const MemorizeLive = MemorizeServiceLive.pipe(
 
 const CanvasSyncLive = CanvasSyncServiceLive.pipe(
   Layer.provideMerge(MemorizeLive),
+  Layer.provideMerge(CanvasApiLive),
   Layer.provideMerge(GatewayLive),
   Layer.provideMerge(CoreLive),
 )
@@ -75,6 +77,7 @@ const MemorizeTriggerLive = MemorizeTriggerServiceLive.pipe(
 )
 
 const CronLive = CronServiceLive.pipe(
+  Layer.provideMerge(CanvasSyncLive),
   Layer.provideMerge(ProviderLive),
   Layer.provideMerge(CoreLive),
 )
@@ -103,8 +106,6 @@ function writeStdout(message: string): void {
 function writeStderr(message: string): void {
   process.stderr.write(`${message}\n`)
 }
-
-const ONE_HOUR_MS = 60 * 60 * 1000
 
 const program = Effect.gen(function* () {
   const config = yield* ConfigService
@@ -164,13 +165,11 @@ const program = Effect.gen(function* () {
     },
   })
 
-  const hourlyTimer = setInterval(() => {
-    void canvasSync.sync().catch((error) => {
-      writeStderr(`Hourly canvas sync failed: ${String(error)}`)
-    })
-  }, ONE_HOUR_MS)
+  // Recurring canvas sync runs as a 30-min cron job (see seedDefaultJobs); the
+  // initial sync above warms the local cache so canvas-mcp tool calls return
+  // populated rows before the first cron tick.
 
-  // Seed heartbeat + daily-insight on first boot. Idempotent — checks for existing rows.
+  // Seed heartbeat + daily-insight + canvas-sync on first boot. Idempotent — checks for existing rows.
   try {
     seedDefaultJobs(cronStore, { includeDailyInsight: true })
   } catch (error) {
@@ -182,7 +181,6 @@ const program = Effect.gen(function* () {
   const shutdown = () => {
     writeStdout("")
     writeStdout("Shutting down...")
-    clearInterval(hourlyTimer)
     stopCron()
     stopMemorizeTrigger()
     orchestration.shutdown()

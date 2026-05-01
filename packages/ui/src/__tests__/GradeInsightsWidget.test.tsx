@@ -23,8 +23,8 @@ function makeGradeSummary(
 
 describe("GradeInsightsWidget", () => {
   const courses = [
-    makeCourse("c1", "CS 101", "Intro to CS"),
-    makeCourse("c2", "MATH 240", "Linear Algebra"),
+    makeCourse("c1", "202630_CS101_12345", "Intro to CS"),
+    makeCourse("c2", "202630_MATH240_23456", "Linear Algebra"),
   ]
 
   test("shows no grades when empty", () => {
@@ -33,21 +33,22 @@ describe("GradeInsightsWidget", () => {
     expect(screen.getByText("No grades yet")).toBeDefined()
   })
 
-  test("renders GPA and growth when grades exist", () => {
+  test("renders the grade chart when Canvas section grades exist", () => {
     const grades = [
       makeGradeSummary(courses[0], 90),
       makeGradeSummary(courses[1], 80, 75),
     ]
     render(<GradeInsightsWidget courses={courses} grades={grades} />)
     expect(screen.getByTestId("grade-insights-widget")).toBeDefined()
-    expect(screen.getByTestId("grade-gpa-value")).toBeDefined()
-    expect(screen.getByTestId("grade-growth-value")).toBeDefined()
-    expect(screen.getByTestId("grade-insights-view-all")).toBeDefined()
+    expect(screen.getByText("Grade Insights")).toBeDefined()
+    expect(screen.getByTestId("grade-insights-chart")).toBeDefined()
+    expect(screen.queryByTestId("no-grades")).toBeNull()
   })
 
-  test("shows improving growth when course trends up", () => {
-    const grades = [makeGradeSummary(courses[0], 70, 90)]
-    render(<GradeInsightsWidget courses={courses} grades={grades} />)
-    expect(screen.getByTestId("grade-growth-value").textContent).toContain("Improving")
+  test("skips non-Canvas section codes", () => {
+    const localCourse = makeCourse("local", "CS 101", "Intro to CS")
+    const grades = [makeGradeSummary(localCourse, 90)]
+    render(<GradeInsightsWidget courses={[localCourse]} grades={grades} />)
+    expect(screen.getByTestId("no-grades")).toBeDefined()
   })
 })

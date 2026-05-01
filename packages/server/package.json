@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@effect/schema": "^0.75.5",
-    "@openai/codex": "^0.119.0",
+    "@openai/codex": "^0.125.0",
     "@orbyt/contracts": "workspace:*",
     "@orbyt/shared": "workspace:*",
     "@orbyt/shared-runtime": "workspace:*",

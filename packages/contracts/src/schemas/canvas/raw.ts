@@ -34,6 +34,7 @@ export const CanvasCourse = Schema.Struct({
   term: Schema.optional(Schema.NullOr(CanvasTerm)),
   teacher: Schema.optional(Schema.NullOr(CanvasUser)),
   teachers: Schema.optional(Schema.NullOr(Schema.Array(CanvasUser))),
+  credit_hours: Schema.optional(Schema.NullOr(Schema.Number)),
   created_at: Schema.optional(Schema.NullOr(Schema.String)),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
   uuid: Schema.optional(Schema.NullOr(Schema.String)),

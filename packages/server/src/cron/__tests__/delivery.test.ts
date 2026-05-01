@@ -154,6 +154,43 @@ describe("CronDelivery", () => {
     expect(rows).toHaveLength(0)
   })
 
+  test("heartbeat with empty/whitespace output writes no card", async () => {
+    const bun = createBunTestDatabase(":memory:")
+    runBunMigrations(bun)
+    const dbService = createBunDatabaseService(bun)
+
+    const pushStub: PushBusService = {
+      registerClient: () => undefined,
+      removeClient: () => undefined,
+      subscribe: () => undefined,
+      publish: async () => 1,
+      publishTo: async () => 1,
+      getLastSequence: () => 0,
+    }
+
+    const layer = CronDeliveryLive.pipe(
+      Layer.provide(Layer.succeed(Database, dbService)),
+      Layer.provide(Layer.succeed(PushBus, pushStub)),
+    )
+    const delivery = Effect.runSync(
+      Effect.gen(function* () {
+        return yield* CronDelivery
+      }).pipe(Effect.provide(layer)),
+    )
+
+    await delivery.deliverSuccess({
+      job: makeJob({ name: "heartbeat", payloadKind: "agentTurn" }),
+      output: "   \n\t  ",
+    })
+    await delivery.deliverSuccess({
+      job: makeJob({ name: "heartbeat", payloadKind: "agentTurn" }),
+      output: "",
+    })
+
+    const rows = dbService.query<{ id: string }>(`SELECT id FROM activity_feed`)
+    expect(rows).toHaveLength(0)
+  })
+
   test("heartbeat alert is recorded with title 'Heartbeat alert'", async () => {
     const bun = createBunTestDatabase(":memory:")
     runBunMigrations(bun)

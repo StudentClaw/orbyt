@@ -283,7 +283,7 @@ export function ChatContainer({ variant = "panel", selection }: ChatContainerPro
         onAccessModeChange={(accessMode) => void setThreadAccessMode(accessMode)}
         accessModeUpdatePending={accessModeMutationPending}
         pendingApproval={currentPendingApproval}
-        onRespondToApproval={(decision) => void respondToApproval(decision)}
+        onRespondToApproval={(decision, options) => void respondToApproval(decision, options)}
         approvalDecisionPending={approvalDecisionPending}
         interruptPending={interruptPending}
         interruptError={interruptError}

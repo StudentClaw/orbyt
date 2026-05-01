@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   IpcChannel,
-  classifyShellCommandForApproval,
   type ChatModel,
   type ProviderApprovalDecision,
   type ProviderPendingApproval,
@@ -30,17 +29,8 @@ import {
 } from "@/components/ai/prompt-input"
 import { Button } from "@/components/ui/button"
 import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { ChatStatus } from "@/hooks/chat-model"
@@ -84,7 +74,10 @@ interface PromptInputProps {
   readonly onAccessModeChange: (accessMode: ThreadAccessMode) => void | Promise<void>
   readonly accessModeUpdatePending?: boolean
   readonly pendingApproval?: ProviderPendingApproval | null
-  readonly onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
+  readonly onRespondToApproval: (
+    decision: ProviderApprovalDecision,
+    options?: { rememberDecision?: boolean },
+  ) => void | Promise<void>
   readonly approvalDecisionPending?: boolean
   readonly interruptPending?: boolean
   readonly interruptError?: string | null
@@ -94,16 +87,10 @@ type ComposerAttachment = TurnAttachmentInput & {
   readonly id: string
 }
 
-type ApprovalTechnicalDetail = {
-  readonly label: string
-  readonly value: string
-  readonly code: boolean
-}
-
 type SlashCommandItem =
   | {
       readonly kind: "command"
-      readonly id: "model" | "default-permissions" | "full-access"
+      readonly id: "model"
       readonly name: string
       readonly description: string
     }
@@ -118,18 +105,6 @@ const BUILT_IN_SLASH_COMMANDS: readonly Extract<SlashCommandItem, { kind: "comma
     id: "model",
     name: "model",
     description: "Open the model selector",
-  },
-  {
-    kind: "command",
-    id: "default-permissions",
-    name: "default-permissions",
-    description: "Use per-command approval prompts",
-  },
-  {
-    kind: "command",
-    id: "full-access",
-    name: "full-access",
-    description: "Allow commands in this thread without per-command prompts",
   },
 ]
 
@@ -151,95 +126,6 @@ function findBuiltInSlashCommand(input: string): Extract<SlashCommandItem, { kin
   const commandName = input.trim().match(/^\/([a-z-]+)$/)?.[1]
   if (!commandName) return null
   return BUILT_IN_SLASH_COMMANDS.find((command) => command.name === commandName) ?? null
-}
-
-function DefaultPermissionsIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2.5" y="3" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.25" />
-      <path d="M5 6.25h2.5m-2.5 3.5h6" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      <path d="m8.75 6.25 1.75 1.5-1.75 1.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function FullAccessIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M8 1.75 12.5 3.5v3.4c0 2.87-1.74 4.97-4.5 6.85C5.24 11.87 3.5 9.77 3.5 6.9V3.5L8 1.75Z"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-      <path d="M8 5.1v3.1" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      <circle cx="8" cy="10.8" r=".7" fill="currentColor" />
-    </svg>
-  )
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="m3.5 8.5 2.5 2.5 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path d="M4.47 6.97a.75.75 0 0 1 1.06 0L8 9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" />
-    </svg>
-  )
-}
-
-function ShieldCueIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M8 1.75 12.5 3.5v3.4c0 2.87-1.74 4.97-4.5 6.85C5.24 11.87 3.5 9.77 3.5 6.9V3.5L8 1.75Z"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-      <path d="M8 4.75v3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      <circle cx="8" cy="10.2" r=".7" fill="currentColor" />
-    </svg>
-  )
-}
-
-function accessModeLabel(accessMode: ThreadAccessMode | null): string {
-  return accessMode === "full" ? "Full access" : "Default permissions"
-}
-
-function approvalTitle(): string {
-  return "Permission needed"
-}
-
-function approvalPromptCopy(approval: ProviderPendingApproval): {
-  readonly question: string
-  readonly detail: string
-} {
-  if (approval.kind === "command") {
-    const classification = classifyShellCommandForApproval(approval.command)
-    return {
-      question: classification.question,
-      detail: classification.detail,
-    }
-  }
-
-  if (approval.kind === "file-change") {
-    return {
-      question: "Can I change project files for this step?",
-      detail: "This would directly update files in the project.",
-    }
-  }
-
-  return {
-    question: "Can I grant this permission for this step?",
-    detail: "This would give the agent extra access for the current task.",
-  }
 }
 
 function toComposerAttachment(attachment: TurnAttachmentInput): ComposerAttachment {
@@ -280,117 +166,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("Unable to read pasted file."))
     reader.readAsDataURL(file)
   })
-}
-
-function ApprovalSurface({
-  approvalCopy,
-  approvalDecisionPending,
-  approvalTechnicalDetailsOpen,
-  technicalDetails,
-  onRespondToApproval,
-  onToggleTechnicalDetails,
-}: {
-  approvalCopy: { readonly question: string; readonly detail: string }
-  approvalDecisionPending: boolean
-  approvalTechnicalDetailsOpen: boolean
-  technicalDetails: readonly ApprovalTechnicalDetail[]
-  onRespondToApproval: (decision: ProviderApprovalDecision) => void | Promise<void>
-  onToggleTechnicalDetails: () => void
-}) {
-  return (
-    <form
-      className="rounded-[2rem] border border-amber-500/30 bg-card/90 px-4 py-4 shadow-sm backdrop-blur-sm"
-      data-testid="pending-approval-surface"
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (approvalDecisionPending) {
-          return
-        }
-        void onRespondToApproval("approve")
-      }}
-    >
-      <div className="flex min-h-[11rem] flex-col gap-4">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/12 text-amber-500">
-            <ShieldCueIcon className="size-4" />
-          </div>
-          <div className="min-w-0 space-y-1.5">
-            <h3 className="text-sm font-semibold text-foreground">{approvalTitle()}</h3>
-            <p className="text-sm text-foreground">{approvalCopy.question}</p>
-            <p className="text-sm text-muted-foreground">{approvalCopy.detail}</p>
-          </div>
-        </div>
-
-        {technicalDetails.length > 0 ? (
-          <div className="space-y-2">
-            <button
-              type="button"
-              className="w-fit text-xs text-muted-foreground underline-offset-4 hover:underline"
-              onClick={onToggleTechnicalDetails}
-            >
-              {approvalTechnicalDetailsOpen ? "Hide technical details" : "Show technical details"}
-            </button>
-            {approvalTechnicalDetailsOpen ? (
-              <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-2">
-                <div className="space-y-2 text-xs text-muted-foreground">
-                  {technicalDetails.map((entry) => (
-                    entry.code ? (
-                      <div key={`${entry.label}:${entry.value}`} className="space-y-1">
-                        <p className="font-medium text-foreground/90">{entry.label}</p>
-                        <pre
-                          className="max-h-40 overflow-x-auto overflow-y-auto rounded-2xl border border-border/60 bg-background/90 px-3 py-2 text-xs text-foreground whitespace-pre-wrap break-words"
-                          data-testid={entry.label === "Command" ? "approval-command" : undefined}
-                        >
-                          <code>{entry.value}</code>
-                        </pre>
-                      </div>
-                    ) : (
-                      <p key={`${entry.label}:${entry.value}`}>
-                        <span className="font-medium text-foreground/90">{entry.label}:</span>{" "}
-                        {entry.value}
-                      </p>
-                    )
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="mt-auto flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={approvalDecisionPending}
-            onClick={() => void onRespondToApproval("deny")}
-          >
-            Don&apos;t allow
-          </Button>
-          <Button
-            type="submit"
-            size="sm"
-            autoFocus
-            disabled={approvalDecisionPending}
-          >
-            {approvalDecisionPending ? (
-              "Waiting..."
-            ) : (
-              <>
-                <span>Approve</span>
-                <span
-                  aria-hidden="true"
-                  className="rounded-md border border-current/20 px-1 py-0.5 text-[10px] leading-none opacity-70"
-                >
-                  ↵
-                </span>
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </form>
-  )
 }
 
 function SlashCommandPicker({
@@ -496,12 +271,15 @@ export function PromptInput({
   availableModels,
   selectedModel,
   onModelChange,
-  accessMode,
-  onAccessModeChange,
-  accessModeUpdatePending = false,
-  pendingApproval = null,
-  onRespondToApproval,
-  approvalDecisionPending = false,
+  // Permission system removed: every thread runs with full access. The
+  // approval/access-mode props are accepted to keep the public component API
+  // stable for existing callers but are intentionally unused.
+  accessMode: _accessMode,
+  onAccessModeChange: _onAccessModeChange,
+  accessModeUpdatePending: _accessModeUpdatePending = false,
+  pendingApproval: _pendingApproval = null,
+  onRespondToApproval: _onRespondToApproval,
+  approvalDecisionPending: _approvalDecisionPending = false,
   interruptPending = false,
   interruptError = null,
   skills = [],
@@ -516,8 +294,6 @@ export function PromptInput({
   const [isComposerEmpty, setIsComposerEmpty] = useState(true)
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
-  const [fullAccessDialogOpen, setFullAccessDialogOpen] = useState(false)
-  const [approvalTechnicalDetailsOpen, setApprovalTechnicalDetailsOpen] = useState(false)
   const [showSkillPicker, setShowSkillPicker] = useState(false)
   const [skillFilter, setSkillFilter] = useState("")
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0)
@@ -544,43 +320,6 @@ export function PromptInput({
   const canPickAttachments = typeof window !== "undefined" && Boolean(window.electronAPI?.invoke)
   const attachmentControlsDisabled = !canPickAttachments || !isConnected || disabled || waitingForTurn
   const canDropFiles = !attachmentControlsDisabled && Boolean(typeof window !== "undefined" && window.electronAPI?.getPathForFile)
-  const accessControlDisabled =
-    !isConnected
-    || !accessMode
-    || waitingForTurn
-    || accessModeUpdatePending
-    || pendingApproval !== null
-    || approvalDecisionPending
-  const approvalCopy = pendingApproval ? approvalPromptCopy(pendingApproval) : null
-  const technicalDetails = pendingApproval
-    ? [
-        pendingApproval.command
-          ? {
-              label: "Command",
-              value: pendingApproval.command,
-              code: true,
-            }
-          : null,
-        pendingApproval.cwd
-          ? {
-              label: "Working folder",
-              value: pendingApproval.cwd,
-              code: false,
-            }
-          : null,
-        pendingApproval.reason
-          ? {
-              label: "Reason from Codex",
-              value: pendingApproval.reason,
-              code: false,
-            }
-          : null,
-      ].filter((entry): entry is ApprovalTechnicalDetail => entry !== null)
-    : []
-
-  useEffect(() => {
-    setApprovalTechnicalDetailsOpen(false)
-  }, [pendingApproval?.id])
 
   useLayoutEffect(() => {
     const footer = footerRef.current
@@ -735,18 +474,8 @@ export function PromptInput({
       } else {
         setModelSelectorOpen(true)
       }
-      return
     }
-    if (item.id === "default-permissions") {
-      if (accessMode !== "default") {
-        void onAccessModeChange("default")
-      }
-      return
-    }
-    if (item.id === "full-access" && accessMode !== "full") {
-      setFullAccessDialogOpen(true)
-    }
-  }, [accessMode, footerCompact, onAccessModeChange])
+  }, [footerCompact])
 
   const handleSkillTrigger = useCallback((filter: string, show: boolean) => {
     setShowSkillPicker(show)
@@ -1077,29 +806,9 @@ export function PromptInput({
     setAttachmentError(metadata.length === paths.length ? null : "Some pasted files could not be attached.")
   }, [disabled, isConnected, resolveAttachmentMetadata, waitingForTurn])
 
-  const handleDefaultAccessSelect = useCallback(() => {
-    if (accessMode !== "default") {
-      void onAccessModeChange("default")
-    }
-  }, [accessMode, onAccessModeChange])
-
-  const handleConfirmFullAccess = useCallback(async () => {
-    await onAccessModeChange("full")
-    setFullAccessDialogOpen(false)
-  }, [onAccessModeChange])
-
   return (
     <div className="relative border-t bg-background px-3 py-2.5">
-      {pendingApproval && approvalCopy ? (
-        <ApprovalSurface
-          approvalCopy={approvalCopy}
-          approvalDecisionPending={approvalDecisionPending}
-          approvalTechnicalDetailsOpen={approvalTechnicalDetailsOpen}
-          technicalDetails={technicalDetails}
-          onRespondToApproval={onRespondToApproval}
-          onToggleTechnicalDetails={() => setApprovalTechnicalDetailsOpen((current) => !current)}
-        />
-      ) : (
+      {(
         <div
           className="relative"
           data-testid="composer-area"
@@ -1212,7 +921,7 @@ export function PromptInput({
                 items={visibleSlashItems}
                 highlightedIndex={highlightedSkillIndex}
                 onHighlightChange={setHighlightedSkillIndex}
-                fullAccess={accessMode === "full"}
+                fullAccess={true}
                 onSelect={handleSlashCommandSelect}
                 onForkSkill={onForkSkill ? (skill) => {
                   setShowSkillPicker(false)
@@ -1361,53 +1070,6 @@ export function PromptInput({
                     />
                   ) : null}
 
-                  {!footerCompact ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        disabled={accessControlDisabled}
-                        aria-label="Select permissions"
-                        className={cn(
-                          "h-8 rounded-full border border-border/70 bg-muted/45 px-2.5 text-xs hover:bg-muted/70",
-                          accessMode === "full"
-                            ? "text-amber-500 hover:text-amber-500"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {accessMode === "full" ? (
-                          <FullAccessIcon className="size-3.5" />
-                        ) : (
-                          <DefaultPermissionsIcon className="size-3.5" />
-                        )}
-                        <span>{accessModeLabel(accessMode)}</span>
-                        <ChevronDownIcon className="size-3.5 opacity-70" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-64 rounded-3xl p-1.5">
-                      <DropdownMenuItem onSelect={handleDefaultAccessSelect} className="rounded-2xl py-2.5">
-                        <DefaultPermissionsIcon className="size-4 text-muted-foreground" />
-                        <span className="flex-1">Default permissions</span>
-                        {accessMode === "default" ? <CheckIcon className="size-4 text-foreground" /> : null}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          if (accessMode !== "full") {
-                            setFullAccessDialogOpen(true)
-                          }
-                        }}
-                        className="rounded-2xl py-2.5"
-                      >
-                        <FullAccessIcon className="size-4 text-amber-500" />
-                        <span className="flex-1">Full access</span>
-                        {accessMode === "full" ? <CheckIcon className="size-4 text-foreground" /> : null}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  ) : null}
-
                   {footerCompact ? (
                     <DropdownMenu open={compactControlsOpen} onOpenChange={setCompactControlsOpen}>
                       <DropdownMenuTrigger asChild>
@@ -1432,28 +1094,6 @@ export function PromptInput({
                             onOpenChange={setModelSelectorOpen}
                           />
                         </div>
-                        <DropdownMenuItem
-                          onSelect={handleDefaultAccessSelect}
-                          disabled={accessControlDisabled}
-                          className="rounded-2xl py-2.5"
-                        >
-                          <DefaultPermissionsIcon className="size-4 text-muted-foreground" />
-                          <span className="flex-1">Default permissions</span>
-                          {accessMode === "default" ? <CheckIcon className="size-4 text-foreground" /> : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={accessControlDisabled}
-                          onSelect={() => {
-                            if (accessMode !== "full") {
-                              setFullAccessDialogOpen(true)
-                            }
-                          }}
-                          className="rounded-2xl py-2.5"
-                        >
-                          <FullAccessIcon className="size-4 text-amber-500" />
-                          <span className="flex-1">Full access</span>
-                          {accessMode === "full" ? <CheckIcon className="size-4 text-foreground" /> : null}
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : null}
@@ -1504,39 +1144,6 @@ export function PromptInput({
           {interruptError}
         </p>
       ) : null}
-
-      <AlertDialog open={fullAccessDialogOpen} onOpenChange={setFullAccessDialogOpen}>
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <div className="mb-2 inline-flex size-12 items-center justify-center rounded-full bg-amber-500/12 text-amber-500">
-              <ShieldCueIcon className="size-6" />
-            </div>
-            <AlertDialogTitle>Enable full access for this thread?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Commands in this thread will run with full filesystem access and without further
-              per-command approval prompts.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setFullAccessDialogOpen(false)}
-              disabled={accessModeUpdatePending}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleConfirmFullAccess()}
-              disabled={accessModeUpdatePending}
-              className="bg-amber-500 text-[13px] text-amber-950 hover:bg-amber-400"
-            >
-              {accessModeUpdatePending ? "Switching..." : "Enable full access"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

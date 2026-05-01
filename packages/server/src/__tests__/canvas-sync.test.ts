@@ -11,8 +11,68 @@ import type { PluginGatewayService } from "../mcp/PluginGateway.js"
 import type { PushBusService } from "../ws/PushBus.js"
 import type { DatabaseService } from "../db/Database.js"
 import { createSyncService } from "../canvas/CanvasSyncService.js"
+import type { CanvasApiClient } from "../canvas/CanvasApiClient.js"
 import { createMemoryPaths } from "../memory/paths.js"
 import { createBunDatabaseService, runBunMigrations } from "./db-test-helpers.js"
+
+// Bridges the existing gateway stubs (which dispatch on `canvas.*` tool
+// names with a structuredContent payload) to the new CanvasApiClient
+// interface. Lets us keep the test setups intact while CanvasSyncService
+// switches from gateway-routed tool calls to direct API client method calls.
+function gatewayStubAsApiClient(gateway: PluginGatewayService): CanvasApiClient {
+  async function call(toolName: string, args: Record<string, unknown> = {}) {
+    const result = await gateway.callTool(toolName, args)
+    if (!result.ok) {
+      throw new Error(result.message)
+    }
+    const payload = result.result
+    if (payload && typeof payload === "object") {
+      // The gateway's tool-call envelope can carry an in-band `isError`
+      // signal (e.g., for permission failures the plugin handler surfaces).
+      // Treat that the same way the previous callDecodedTool helper did:
+      // throw, so optional Promise.allSettled paths correctly mark the
+      // entry as rejected.
+      if ((payload as { isError?: unknown }).isError === true) {
+        const content = (payload as { content?: Array<{ text?: string }> }).content
+        const text = content?.find((entry) => typeof entry.text === "string")?.text
+        throw new Error(text ?? `${toolName} returned a tool error.`)
+      }
+      if ("structuredContent" in payload) {
+        return (payload as { structuredContent: unknown }).structuredContent
+      }
+    }
+    return payload
+  }
+
+  return {
+    listCourses: async () => call("canvas.list_courses"),
+    getMyUpcomingAssignments: async (args?: { days?: number }) =>
+      call("canvas.get_my_upcoming_assignments", args ?? {}),
+    getMySubmissionStatus: async (args?: { courseId?: string }) =>
+      call("canvas.get_my_submission_status", args ?? {}),
+    getMyCourseGrades: async () => call("canvas.get_my_course_grades"),
+    getMyTodoItems: async () => call("canvas.get_my_todo_items"),
+    getMyPeerReviewsTodo: async (args?: { courseId?: string }) =>
+      call("canvas.get_my_peer_reviews_todo", args ?? {}),
+    getAssignmentDetails: async (args: Record<string, unknown>) =>
+      call("canvas.get_assignment_details", args),
+    listAssignments: async (args?: { courseId?: string; includeCompleted?: boolean }) =>
+      call("canvas.list_assignments", args ?? {}),
+    getCourseContentOverview: async (args?: { courseId?: string }) =>
+      call("canvas.get_course_content_overview", args ?? {}),
+    getCourseStructure: async (args?: { courseId?: string }) =>
+      call("canvas.get_course_structure", args ?? {}),
+    getFrontPage: async (args: { courseId: string }) =>
+      call("canvas.get_front_page", args),
+    getPageContent: async (args: { courseId: string; pageId: string }) =>
+      call("canvas.get_page_content", args),
+    downloadCourseFile: async (args: {
+      courseId: string
+      fileId: string
+      destinationPath?: string
+    }) => call("canvas.download_course_file", args),
+  } as unknown as CanvasApiClient
+}
 
 function createDatabaseService(db: BunDatabase): DatabaseService {
   return createBunDatabaseService(db)
@@ -216,7 +276,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, createEmptyMemoryPaths())
 
     await service.sync()
 
@@ -343,7 +403,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, createEmptyMemoryPaths())
 
     await service.sync()
     expect(service.getMySubmissionStatus().pending).toEqual([
@@ -418,7 +478,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, createEmptyMemoryPaths())
 
     await service.sync()
 
@@ -475,7 +535,7 @@ describe("CanvasSyncService", () => {
       })
     })
 
-    const service = createSyncService(gateway, pushBus, database, createEmptyMemoryPaths())
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, createEmptyMemoryPaths())
     const detail = await service.getAssignmentDetails({
       assignmentUrl: "https://canvas.example.edu/courses/1/assignments/101",
     })
@@ -600,7 +660,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, memoryPaths)
 
     await service.sync()
 
@@ -688,7 +748,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, memoryPaths)
     await service.sync()
 
     const nodePath = memoryPaths.courseIndex("myth")
@@ -804,7 +864,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, memoryPaths)
     await service.sync()
 
     expect(service.getMySubmissionStatus().overdue).toEqual([
@@ -924,7 +984,7 @@ describe("CanvasSyncService", () => {
       throw new Error(`Unexpected tool call: ${exposedToolName}`)
     })
 
-    const service = createSyncService(gateway, pushBus, database, memoryPaths)
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, memoryPaths)
     await service.sync()
 
     expect(service.getMySubmissionStatus().pending).toEqual([])
@@ -1052,7 +1112,7 @@ describe("CanvasSyncService", () => {
       )
     }
 
-    const service = createSyncService(gateway, pushBus, database, memoryPaths, flushPromotion)
+    const service = createSyncService(gatewayStubAsApiClient(gateway), pushBus, database, memoryPaths, flushPromotion)
 
     await service.sync()
 

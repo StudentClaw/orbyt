@@ -203,6 +203,8 @@ describe("chat UI state", () => {
         command: "rm -rf tmp",
         cwd: "/repo",
         availableDecisions: ["approve", "deny"],
+        toolKey: "cmd:rm",
+        toolLabel: "rm",
       },
     })
 

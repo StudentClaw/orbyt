@@ -254,18 +254,24 @@ export function useChat(selection?: ChatSelectionInput) {
     }
   }, [actions, currentThread])
 
-  const respondToApproval = useCallback(async (decision: ProviderApprovalDecision) => {
-    if (!currentPendingApproval) {
-      return
-    }
+  const respondToApproval = useCallback(
+    async (
+      decision: ProviderApprovalDecision,
+      options?: { rememberDecision?: boolean },
+    ) => {
+      if (!currentPendingApproval) {
+        return
+      }
 
-    setApprovalDecisionPendingId(currentPendingApproval.id)
-    try {
-      await actions.respondToApproval(currentPendingApproval.id, decision)
-    } finally {
-      setApprovalDecisionPendingId(null)
-    }
-  }, [actions, currentPendingApproval])
+      setApprovalDecisionPendingId(currentPendingApproval.id)
+      try {
+        await actions.respondToApproval(currentPendingApproval.id, decision, options)
+      } finally {
+        setApprovalDecisionPendingId(null)
+      }
+    },
+    [actions, currentPendingApproval],
+  )
 
   return {
     messages,

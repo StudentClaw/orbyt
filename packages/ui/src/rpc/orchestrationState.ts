@@ -695,8 +695,9 @@ export async function respondToProviderApproval(
   client: WsRpcClient,
   approvalRequestId: string,
   decision: ProviderApprovalDecision,
+  options?: { rememberDecision?: boolean },
 ): Promise<boolean> {
-  const result = await client.provider.respondToApproval(approvalRequestId, decision)
+  const result = await client.provider.respondToApproval(approvalRequestId, decision, options)
   return result.resolved
 }
 

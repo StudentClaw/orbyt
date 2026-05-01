@@ -206,8 +206,12 @@ export function useOrchestrationActions() {
         getPrimaryWsRpcClient().provider.startAuth(),
       retryProviderInitialize: () =>
         getPrimaryWsRpcClient().provider.retryInitialize(),
-      respondToApproval: (approvalRequestId: string, decision: "approve" | "deny") =>
-        respondToProviderApproval(getPrimaryWsRpcClient(), approvalRequestId, decision),
+      respondToApproval: (
+        approvalRequestId: string,
+        decision: "approve" | "deny",
+        options?: { rememberDecision?: boolean },
+      ) =>
+        respondToProviderApproval(getPrimaryWsRpcClient(), approvalRequestId, decision, options),
     }
   }, [])
 }
