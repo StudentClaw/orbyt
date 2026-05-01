@@ -428,12 +428,32 @@ async function handleCanvasMethod(
       if (typeof decoded === "string") return decoded
       return encodeSuccess(id, await dependencies.canvasSync.downloadCourseFile(decoded))
     }
+    case RPC_METHODS.CANVAS_GET_SYNC_STATUS:
+      return encodeSuccess(id, dependencies.canvasSync.getSyncStatus())
     case RPC_METHODS.CANVAS_SYNC:
-      void dependencies.canvasSync.sync().catch(() => {
-        // Errors are already surfaced via the canvas-sync-progress push channel
-        // and the activity feed (when triggered by the cron). Swallow here so
-        // the WS dispatch doesn't generate an unhandled rejection.
-      })
+      void dependencies.canvasSync.sync().then(
+        () => {
+          // A successful manual sync (e.g. onboarding finish) should clear any
+          // stale `canvas-sync.failed` cards left over from cron ticks that
+          // ran before the user saved creds. Cron's deliverSuccess does the
+          // same on its own; this handles the manual path.
+          dependencies.database.execute(
+            `UPDATE activity_feed
+                SET acted_on = 1, acted_at = ?
+              WHERE type = 'canvas-sync.failed'
+                AND acted_on IS NULL`,
+            [Date.now()],
+          )
+        },
+        (error) => {
+          // The `canvas-sync-progress` push channel publishes `status: "error"` so
+          // the dashboard can react, but the underlying error message is otherwise
+          // lost on this path (the cron path is what writes activity_feed). Log it
+          // so silent failures here are at least visible in the server console.
+          const message = error instanceof Error ? error.message : String(error)
+          process.stderr.write(`[CanvasSync] manual sync failed: ${message}\n`)
+        },
+      )
       return encodeSuccess(id, { queued: true })
     default:
       return null

@@ -256,19 +256,18 @@ export function ActivityFeedItem({ entry, index = 0 }: ActivityFeedItemProps) {
         <CategoryIcon category={entry.category} size={isInsight ? 22 : 20} />
       </div>
 
-      <div className="min-w-0 flex-1 pr-6">
-        {displayTime && (
-          <div className="mb-1 flex items-center">
-            <time
-              dateTime={timestampIso}
-              title={absoluteTime}
-              className="ml-auto pl-2 text-sm font-medium text-muted-foreground/80"
-              data-testid={`activity-item-time-${entry.id}`}
-            >
-              {displayTime}
-            </time>
-          </div>
-        )}
+      {displayTime && (
+        <time
+          dateTime={timestampIso}
+          title={absoluteTime}
+          className="absolute right-4 top-3 text-sm font-medium text-muted-foreground/80"
+          data-testid={`activity-item-time-${entry.id}`}
+        >
+          {displayTime}
+        </time>
+      )}
+
+      <div className="min-w-0 flex-1 pr-16">
         <p
           className={`break-words font-semibold leading-snug ${
             isInsight ? "text-xl" : "text-lg"

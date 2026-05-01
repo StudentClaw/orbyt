@@ -62,6 +62,13 @@ const REMINDER_TITLE = "Orby"
 
 const NAME_HEARTBEAT = "heartbeat"
 const NAME_DAILY_INSIGHT = "daily-insight"
+const NAME_CANVAS_SYNC = "canvas-sync"
+
+// CanvasAuthError happens when the user hasn't configured Canvas creds yet —
+// expected during onboarding and not actionable from the activity feed.
+function isCanvasAuthError(error: string): boolean {
+  return error.includes("CanvasAuthError") || error.includes("Canvas credentials not configured")
+}
 
 function entryFromSuccess(
   input: DeliverySuccessInput,
@@ -98,8 +105,18 @@ function entryFromSuccess(
   }
 }
 
-function entryFromFailure(input: DeliveryFailureInput): Omit<ActivityFeedEntry, "id"> {
+function entryFromFailure(
+  input: DeliveryFailureInput,
+): Omit<ActivityFeedEntry, "id"> | null {
   const { job, error } = input
+
+  // Don't pollute the feed with credential-not-configured noise. The Settings
+  // → Plugins surface is where the user fixes this; an activity card adds no
+  // signal once they've already saved creds.
+  if (job.name === NAME_CANVAS_SYNC && isCanvasAuthError(error)) {
+    return null
+  }
+
   return {
     category: "cron",
     type: `${job.name}.failed`,
@@ -116,7 +133,23 @@ export const CronDeliveryLive = Layer.effect(
     const database = yield* Database
     const pushBus = yield* PushBus
 
+    const dismissStaleCanvasSyncFailures = (): void => {
+      database.execute(
+        `UPDATE activity_feed
+            SET acted_on = 1, acted_at = ?
+          WHERE type = 'canvas-sync.failed'
+            AND acted_on IS NULL`,
+        [Date.now()],
+      )
+    }
+
     const deliverSuccess: CronDeliveryShape["deliverSuccess"] = async (input) => {
+      // A successful canvas-sync invalidates any prior failure cards (typically
+      // CanvasAuthError from before the user saved creds). Clear them so the
+      // feed reflects current state.
+      if (input.job.name === NAME_CANVAS_SYNC) {
+        dismissStaleCanvasSyncFailures()
+      }
       const entry = entryFromSuccess(input)
       if (!entry) return
       await recordActivityEntry({ database, pushBus, entry })
@@ -124,6 +157,7 @@ export const CronDeliveryLive = Layer.effect(
 
     const deliverFailure: CronDeliveryShape["deliverFailure"] = async (input) => {
       const entry = entryFromFailure(input)
+      if (!entry) return
       await recordActivityEntry({ database, pushBus, entry })
     }
 

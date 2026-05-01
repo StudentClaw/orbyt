@@ -811,12 +811,18 @@ export function createCodexRuntimeInstance(
         return
       }
 
+      // If `child` has already been nulled out, cleanupProcess() ran first —
+      // typically because a failure path (auth, rate limit, init error) called
+      // updateFailureState() and then cleanupProcess(failure). Don't clobber
+      // that failure state with a generic "idle" write here.
+      if (child === null) {
+        return
+      }
+
       if (pending.size === 0 && activeProviderTurns.size === 0) {
         void cleanupProcess()
         void runtimeStore.updateState({
           status: "idle",
-          authState: "authenticated",
-          lastError: null,
         })
         return
       }

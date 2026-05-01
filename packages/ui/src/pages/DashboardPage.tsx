@@ -351,6 +351,7 @@ export function DashboardPage() {
     submissionStatus,
     syncProgress,
     lastSync,
+    lastSyncError,
     plannerStreaming,
     calendarViewWeek,
     plannedSessions,
@@ -488,6 +489,18 @@ export function DashboardPage() {
       toast.dismiss(TOAST_ID_STALE)
       return
     }
+    // If a sync ran more recently than the last success and failed, surface
+    // the actual error message instead of the generic "snapshot" copy — the
+    // user needs to know *why* sync isn't working (token expired, network,
+    // etc.) so they can fix it.
+    if (lastSyncError) {
+      toast.warning("Canvas sync is failing", {
+        id: TOAST_ID_STALE,
+        duration: Infinity,
+        description: lastSyncError.message,
+      })
+      return
+    }
     toast.warning(
       staleness === "stale"
         ? "Canvas might be a little stale"
@@ -501,7 +514,7 @@ export function DashboardPage() {
             : "I could not confirm a fresh sync yet, so deadlines and grades may have changed.",
       },
     )
-  }, [isSyncing, lastSync, isCanvasNotConfigured])
+  }, [isSyncing, lastSync, lastSyncError, isCanvasNotConfigured])
 
   useEffect(() => {
     if (!isCanvasNotConfigured) {
@@ -520,6 +533,28 @@ export function DashboardPage() {
       },
     })
   }, [isCanvasNotConfigured, navigate])
+
+  // Auto-trigger a sync the first time the dashboard sees a configured Canvas
+  // with no synced data. Covers the case where the onboarding-triggered sync
+  // failed silently (or never ran) and the next cron tick is far away — without
+  // this the user just stares at the "Showing your saved Canvas snapshot"
+  // warning until the cron fires.
+  const initialSyncFiredRef = useRef(false)
+  useEffect(() => {
+    if (initialSyncFiredRef.current) return
+    if (canvasAuthStatus !== "configured") return
+    if (lastSync !== null) return
+    if (isSyncing) return
+    initialSyncFiredRef.current = true
+    void (async () => {
+      try {
+        const client = await waitForPrimaryWsRpcClient()
+        await client.canvas.sync()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to start Canvas sync.")
+      }
+    })()
+  }, [canvasAuthStatus, lastSync, isSyncing])
 
   const displayedSyncPercent = useSmoothedSyncPercent(
     syncProgress?.progress ?? 0,

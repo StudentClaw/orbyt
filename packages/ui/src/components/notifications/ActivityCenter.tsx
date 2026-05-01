@@ -119,7 +119,7 @@ export function ActivityCenter() {
 
       {/* Feed */}
       <ScrollArea className="flex-1">
-        <div className="px-5 pb-6 pt-3" data-testid="activity-feed-list">
+        <div className="px-5 pb-6 pt-1" data-testid="activity-feed-list">
           {filteredEntries.length === 0 && (
             <div className="mt-12 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 py-16 text-center backdrop-blur-md">
               <span className="mb-3 text-muted-foreground opacity-30">
@@ -134,7 +134,7 @@ export function ActivityCenter() {
 
           {groups.map((group) => (
             <div key={group.label}>
-              <p className="mb-2 mt-5 px-1 text-xs font-medium uppercase tracking-widest text-muted-foreground first:mt-2">
+              <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-widest text-muted-foreground first:mt-1">
                 {group.label}
               </p>
               <div className="space-y-1.5">

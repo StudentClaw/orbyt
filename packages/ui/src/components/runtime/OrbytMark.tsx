@@ -47,11 +47,10 @@ export function OrbytMark({ size = 180, expanded = false }: OrbytMarkProps) {
           <defs>
             <filter
               id="om-shadow"
-              x="15.1521%"
-              y="26.1236%"
-              width="97.4631%"
-              height="97.4632%"
-              filterUnits="userSpaceOnUse"
+              x="-20%"
+              y="-20%"
+              width="140%"
+              height="140%"
               colorInterpolationFilters="sRGB"
             >
               <feFlood floodOpacity="0" result="BackgroundImageFix" />

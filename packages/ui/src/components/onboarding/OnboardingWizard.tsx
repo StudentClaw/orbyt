@@ -161,6 +161,10 @@ export function OnboardingWizard() {
     if (tour) {
       try { sessionStorage.setItem("orbyt:pending-tour", "1") } catch { /* ignore */ }
     }
+    // Kick off a fresh Canvas sync as the user enters the dashboard so the
+    // first thing they see reflects their saved creds — without waiting up to
+    // 30m for the next cron tick.
+    void getPrimaryWsRpcClient().canvas.sync().catch(() => undefined)
     navigate({ to: "/" })
   }
 

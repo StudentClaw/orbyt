@@ -13,6 +13,7 @@ import {
   CanvasGetMyUpcomingAssignmentsResult,
   CanvasListAssignmentsResult,
   CanvasListCoursesResult,
+  CanvasSyncStatusSummary,
   OrchestrationDomainEvent,
   OrchestrationSnapshot,
   ProviderRuntimeEvent,
@@ -207,6 +208,7 @@ export interface WsRpcClient {
     readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
     readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
     readonly sync: () => Promise<void>
+    readonly getSyncStatus: () => Promise<Schema.Schema.Type<typeof CanvasSyncStatusSummary>>
     readonly onSyncProgress: (
       listener: (event: CanvasSyncProgressEvent) => void,
       options?: StreamSubscriptionOptions,
@@ -452,6 +454,11 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
         await transport.request(RPC_METHODS.CANVAS_DOWNLOAD_COURSE_FILE, params),
       ),
     sync: () => transport.request(RPC_METHODS.CANVAS_SYNC, {}).then(() => undefined),
+    getSyncStatus: async () =>
+      decode(
+        CanvasSyncStatusSummary,
+        await transport.request(RPC_METHODS.CANVAS_GET_SYNC_STATUS, {}),
+      ),
     onSyncProgress: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.CANVAS_SYNC_PROGRESS,

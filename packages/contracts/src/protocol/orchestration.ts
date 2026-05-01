@@ -98,6 +98,7 @@ export const RPC_METHODS = {
   CANVAS_GET_COURSE_STRUCTURE: "canvas.getCourseStructure",
   CANVAS_DOWNLOAD_COURSE_FILE: "canvas.downloadCourseFile",
   CANVAS_SYNC: "canvas.sync",
+  CANVAS_GET_SYNC_STATUS: "canvas.getSyncStatus",
   CANVAS_SUBSCRIBE_SYNC_PROGRESS: "canvas.subscribeSyncProgress",
   DASHBOARD_REFRESH: "dashboard.refresh",
   DASHBOARD_SUBSCRIBE_UPDATES: "dashboard.subscribeUpdates",

@@ -149,6 +149,7 @@ describe("Server integration", () => {
               overwritten: false,
               message: "downloaded",
             }),
+            getSyncStatus: () => ({ lastSuccessAt: null, lastError: null }),
           },
           skillResolver: {
             resolve: () => null,
