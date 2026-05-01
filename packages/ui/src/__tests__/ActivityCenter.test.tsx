@@ -60,10 +60,9 @@ describe("ActivityCenter", () => {
     }
   })
 
-  test("clicking mark-all-read calls markAllActivityRead", async () => {
+  test("does not render an inline mark-all-read button (handled by sidebar Activity link)", () => {
     render(<ActivityCenter />)
-    await userEvent.click(screen.getByTestId("activity-mark-read"))
-    expect(activityMocks.markAllRead).toHaveBeenCalledOnce()
+    expect(screen.queryByTestId("activity-mark-read")).toBeNull()
   })
 
   test("clicking a filter tab calls setActivityFilter", async () => {

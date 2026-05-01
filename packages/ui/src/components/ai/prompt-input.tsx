@@ -1265,34 +1265,3 @@ export const PromptInputCommandSeparator = ({
   ...props
 }: PromptInputCommandSeparatorProps) => <CommandSeparator className={cn(className)} {...props} />
 
-/** Demo component for preview */
-export default function PromptInputDemo() {
-  return (
-    <div className="size-full">
-      <PromptInput
-        multiple
-        onSubmit={message => {
-          console.log("Submitting message:", message)
-        }}
-      >
-        <PromptInputAttachments>
-          {attachment => <PromptInputAttachment data={attachment} />}
-        </PromptInputAttachments>
-        <PromptInputBody>
-          <PromptInputTextarea />
-        </PromptInputBody>
-        <PromptInputFooter>
-          <PromptInputTools>
-            <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger />
-              <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments />
-              </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
-          </PromptInputTools>
-          <PromptInputSubmit />
-        </PromptInputFooter>
-      </PromptInput>
-    </div>
-  )
-}

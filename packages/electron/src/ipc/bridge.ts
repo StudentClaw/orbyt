@@ -8,8 +8,8 @@ import {
   type OpenDialogOptions,
   type SaveDialogOptions,
 } from "electron"
-import { spawn } from "node:child_process"
-import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs"
+import { spawn, spawnSync } from "node:child_process"
+import { existsSync, mkdirSync, statSync, unlinkSync, watch as fsWatch, writeFileSync } from "node:fs"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
@@ -50,7 +50,14 @@ import { PluginEnabledStore } from "../plugins/plugin-enabled-store.js"
 import { PluginRuntimeLogBuffer } from "../plugins/plugin-runtime-log-buffer.js"
 import { createPluginRuntime } from "../plugins/plugin-runtime.js"
 import { createPushManager, type PushManager } from "../push/push-manager.js"
+import {
+  writeCanvasCredentialsFile,
+  clearCanvasCredentialsFile,
+} from "../plugins/canvas-credentials-file.js"
+import { verifyCanvasCredentials } from "../plugins/canvas-credentials-verify.js"
 import { createWorkspaceFileSearch } from "./workspace-file-search.js"
+
+const CANVAS_PLUGIN_ID = "canvas-mcp"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 let defaultPushManager: PushManager | null = null
@@ -311,43 +318,169 @@ export function registerIpcHandlers(
     },
   )
 
+  registerHandler(
+    IPC_CHANNELS.SHELL_OPEN_EXTERNAL,
+    async (_event, params?: { url?: string }): Promise<{ ok: boolean }> => {
+      const raw = params?.url?.trim()
+      if (!raw) {
+        return { ok: false }
+      }
+      let parsed: URL
+      try {
+        parsed = new URL(raw)
+      } catch {
+        return { ok: false }
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return { ok: false }
+      }
+      try {
+        await shell.openExternal(parsed.toString())
+        return { ok: true }
+      } catch {
+        return { ok: false }
+      }
+    },
+  )
+
   registerHandler(IPC_CHANNELS.CODEX_AUTH_START, (): Promise<CodexAuthResult> => {
     const codexPath = resolveCodexPath()
     const userDataPath = app.getPath("userData")
-    const disconnectedMarker = path.join(userDataPath, "codex-home", ".disconnected")
+    const codexHomePath = path.join(userDataPath, "codex-home")
+    const authJsonPath = path.join(codexHomePath, "auth.json")
+    const disconnectedMarker = path.join(codexHomePath, ".disconnected")
     if (existsSync(disconnectedMarker)) {
       try { unlinkSync(disconnectedMarker) } catch { /* ignore */ }
     }
+    // Capture pre-spawn auth.json state so the watcher can distinguish a
+    // freshly-written file from a stale one left over from prior sessions.
+    const previousAuthMtimeMs = (() => {
+      try {
+        return statSync(authJsonPath).mtimeMs
+      } catch {
+        return null
+      }
+    })()
     const env = buildIsolatedCodexEnv(userDataPath)
 
     return new Promise((resolve) => {
       const proc = spawn(codexPath, ["login"], {
         env,
-        stdio: "pipe",
+        stdio: ["ignore", "pipe", "pipe"],
         shell: process.platform === "win32",
       })
       const OAUTH_TIMEOUT_MS = 120_000
 
+      // Drain stdout/stderr so a full pipe buffer never blocks codex from exiting
+      // after it writes auth.json. Without this, a single verbose log line on
+      // success can deadlock the child process.
+      proc.stdout?.on("data", () => {})
+      proc.stderr?.on("data", () => {})
+
+      let settled = false
+      const finish = (result: CodexAuthResult): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        clearInterval(poll)
+        clearInterval(fastPoll)
+        try { watcher?.close() } catch { /* ignore */ }
+        if (!proc.killed) {
+          // Best-effort cleanup: codex may still be lingering after writing
+          // auth.json. We have the signal we need; let it go.
+          try { proc.kill() } catch { /* ignore */ }
+        }
+        resolve(result)
+      }
+
+      const checkAuthJsonReady = (): boolean => {
+        try {
+          const stats = statSync(authJsonPath)
+          if (stats.size <= 0) return false
+          if (previousAuthMtimeMs !== null && stats.mtimeMs <= previousAuthMtimeMs) {
+            return false
+          }
+          return true
+        } catch {
+          return false
+        }
+      }
+
+      const checkLoginStatusReady = (): boolean => {
+        try {
+          const status = spawnSync(codexPath, ["login", "status"], {
+            env,
+            encoding: "utf8",
+            shell: process.platform === "win32",
+            timeout: 4_000,
+          })
+          if (status.status !== 0) return false
+          const combined = `${status.stdout ?? ""}\n${status.stderr ?? ""}`.toLowerCase()
+          return combined.includes("logged in") || combined.includes("authenticated")
+        } catch {
+          return false
+        }
+      }
+
       const timer = setTimeout(() => {
-        proc.kill()
-        resolve({ status: "failed", error: "OAuth timed out" })
+        finish({ status: "failed", error: "OAuth timed out" })
       }, OAUTH_TIMEOUT_MS)
 
+      // Watch the codex-home directory for auth.json being (re)written. This is
+      // the authoritative success signal: codex login may print a final line and
+      // hang on stdin or otherwise fail to emit a clean "exit", but auth.json
+      // appearing with a fresh mtime means OAuth completed.
+      // Note: macOS FSEvents often delivers atomic rename events with a null or
+      // temp-file filename, so re-check on every event rather than filtering.
+      let watcher: ReturnType<typeof fsWatch> | null = null
+      try {
+        watcher = fsWatch(codexHomePath, () => {
+          if (checkAuthJsonReady()) {
+            finish({ status: "connected" })
+          }
+        })
+      } catch {
+        // If the watcher can't attach we fall back to process exit / timeout.
+        watcher = null
+      }
+
+      // Fast file-only poll: hits the disk every 250ms with a cheap statSync.
+      // This is the primary fallback when fsWatch misses an event — much faster
+      // than the 1s combined poll, and never blocks on a child process.
+      const fastPoll = setInterval(() => {
+        if (checkAuthJsonReady()) {
+          finish({ status: "connected" })
+        }
+      }, 250)
+
+      // Slower combined poll that also runs `codex login status`. Catches the
+      // rare case where auth.json mtime hasn't moved (e.g., codex re-affirmed
+      // an existing session) but the CLI nonetheless reports authenticated.
+      const poll = setInterval(() => {
+        if (checkAuthJsonReady() || checkLoginStatusReady()) {
+          finish({ status: "connected" })
+        }
+      }, 1_000)
+
       proc.on("exit", (code) => {
-        clearTimeout(timer)
+        // Prefer the file-based signal: codex sometimes exits non-zero after
+        // success (e.g., on stdin EOF) but auth.json is still valid.
+        if (checkAuthJsonReady() || checkLoginStatusReady()) {
+          finish({ status: "connected" })
+          return
+        }
         if (code === 0) {
-          resolve({ status: "connected" })
+          finish({ status: "connected" })
         } else {
-          resolve({ status: "failed", error: "Codex login failed" })
+          finish({ status: "failed", error: "Codex login failed" })
         }
       })
 
       proc.on("error", (err) => {
-        clearTimeout(timer)
         const message = (err as NodeJS.ErrnoException).code === "ENOENT"
           ? "Codex CLI not found. Install it with: npm install -g @openai/codex"
           : err.message
-        resolve({ status: "failed", error: message })
+        finish({ status: "failed", error: message })
       })
     })
   })
@@ -646,12 +779,53 @@ function registerPluginIpcHandlers(
 
   registerHandler(
     IpcChannel.PLUGIN_SAVE_AUTH,
-    (_event, params: PluginSaveAuthParams): PluginSaveAuthResult => {
+    async (_event, params: PluginSaveAuthParams): Promise<PluginSaveAuthResult> => {
       if (!bootstrap.featureFlags.pluginSystem) {
         return buildPluginAuthSaveResult(bootstrap, params.pluginId)
       }
 
-      return pluginAuthService.saveCredentials(params)
+      // Live-verify Canvas credentials before storing so a "configured" badge
+      // means the next sync will succeed. Other plugins skip this step.
+      // When the secret input is empty but a saved token already exists, fall
+      // back to the stored value so URL-only edits still verify successfully.
+      if (params.pluginId === CANVAS_PLUGIN_ID) {
+        const baseUrl = params.values?.baseUrl?.trim() ?? ""
+        let token = params.values?.token?.trim() ?? ""
+        if (baseUrl && !token) {
+          const existing = pluginAuthService.getCredentialMessage(params.pluginId)
+          const existingToken = existing?.payload.token?.trim() ?? ""
+          if (existingToken) token = existingToken
+        }
+        if (baseUrl && token) {
+          const verification = await verifyCanvasCredentials({ baseUrl, token })
+          if (!verification.ok) {
+            return {
+              ok: false,
+              pluginId: params.pluginId,
+              reason: "validation_failed",
+              error: verification.message,
+              fieldErrors: verification.fieldErrors,
+            }
+          }
+        }
+      }
+
+      const result = pluginAuthService.saveCredentials(params)
+
+      if (result.ok && params.pluginId === CANVAS_PLUGIN_ID) {
+        const merged = pluginAuthService.getCredentialMessage(params.pluginId)
+        const baseUrl = merged?.payload.baseUrl?.trim()
+        const token = merged?.payload.token?.trim()
+        if (baseUrl && token) {
+          try {
+            writeCanvasCredentialsFile({ baseUrl, token })
+          } catch (error) {
+            process.stderr.write(`Failed to write canvas credentials file: ${String(error)}\n`)
+          }
+        }
+      }
+
+      return result
     },
   )
 
@@ -662,6 +836,9 @@ function registerPluginIpcHandlers(
         return { ok: false }
       }
       pluginAuthService.clearCredentials(params.pluginId)
+      if (params.pluginId === CANVAS_PLUGIN_ID) {
+        clearCanvasCredentialsFile()
+      }
       return { ok: true }
     },
   )

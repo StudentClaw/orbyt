@@ -33,6 +33,8 @@ vi.mock("../rpc/appRuntime", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   RouterProvider: () => <div data-testid="app-router">Router ready</div>,
+  useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => unknown }) =>
+    select({ location: { pathname: appMocks.routerPathname } }),
 }))
 
 vi.mock("../components/ui/tooltip", () => ({

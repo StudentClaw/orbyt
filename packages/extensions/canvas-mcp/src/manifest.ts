@@ -18,7 +18,26 @@ export const canvasManifest: CanvasManifest = parseExtensionManifestSync({
     entry: "dist/index.js",
   },
   permissions: ["assignments", "grades", "modules"],
-  auth: { type: "none" },
+  auth: {
+    type: "manual_token",
+    instructions: "Generate a Canvas access token under Settings > Approved Integrations > New Access Token in Canvas.",
+    fields: [
+      {
+        key: "baseUrl",
+        label: "Canvas base URL",
+        type: "base_url",
+        required: true,
+        placeholder: "https://myschool.instructure.com",
+      },
+      {
+        key: "token",
+        label: "Canvas access token",
+        type: "secret",
+        required: true,
+        placeholder: "Paste your Canvas access token",
+      },
+    ],
+  },
   tools: [
     { name: "list_courses", description: "List the student's Canvas courses from the local cache." },
     { name: "get_my_upcoming_assignments", description: "List upcoming assignments from the local cache." },

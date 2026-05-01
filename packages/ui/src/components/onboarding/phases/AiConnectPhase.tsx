@@ -6,23 +6,21 @@ import { useRuntimeOrchestrationSnapshot } from "@/hooks/useAppRuntime"
 
 interface AiConnectPhaseProps {
   dna: StudentDna
-  status: "pending" | "connected" | "skipped"
   onConnect: () => Promise<void>
-  onContinue: (status: "connected" | "skipped") => void
+  onContinue: () => void
   onBack?: () => void
 }
 
-export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: AiConnectPhaseProps) {
+export function AiConnectPhase({ dna, onConnect, onContinue, onBack }: AiConnectPhaseProps) {
   const T = DNA_TOKENS
   const snapshot = useRuntimeOrchestrationSnapshot()
   const authState = snapshot?.providerRuntime.authState ?? "unknown"
-  const providerStatus = snapshot?.providerRuntime.status ?? "idle"
-  const lastError = snapshot?.providerRuntime.lastError ?? null
 
   const [phase, setPhase] = useState<"idle" | "connecting" | "connected" | "error">(
-    authState === "authenticated" || status === "connected" ? "connected" : "idle",
+    authState === "authenticated" ? "connected" : "idle",
   )
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [userCompletedAuth, setUserCompletedAuth] = useState(false)
 
   useEffect(() => {
     if (authState === "authenticated") {
@@ -30,23 +28,22 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
       setErrorMessage(null)
       return
     }
-    if (phase !== "connecting") return
-    if (authState === "auth_required" || authState === "expired") {
-      setPhase("error")
-      setErrorMessage(lastError?.message ?? "Authentication did not complete.")
-      return
+    if (
+      phase === "connected"
+      && !userCompletedAuth
+      && (authState === "auth_required" || authState === "expired")
+    ) {
+      setPhase("idle")
+      setErrorMessage(null)
     }
-    if (providerStatus === "offline" || providerStatus === "degraded") {
-      setPhase("error")
-      setErrorMessage(lastError?.message ?? "Codex runtime is offline.")
-    }
-  }, [authState, providerStatus, lastError, phase])
+  }, [authState, phase, userCompletedAuth])
 
   const handleConnect = async (): Promise<void> => {
     setPhase("connecting")
     setErrorMessage(null)
     try {
       await onConnect()
+      setUserCompletedAuth(true)
       setPhase("connected")
     } catch (err: unknown) {
       setPhase("error")
@@ -59,7 +56,7 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
       <div style={{ fontSize: 10, letterSpacing: "0.15em", color: T.textDim, textTransform: "uppercase", fontFamily: MONO, marginBottom: 14 }}>
         Phase 03 · AI Connection
       </div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 48, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 14px", fontWeight: 400 }}>
+      <h1 style={{ fontFamily: SERIF, fontSize: 58, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 14px", fontWeight: 400 }}>
         Give <em style={{ fontStyle: "italic" }}>Orby</em> a brain.
       </h1>
       <p style={{ fontSize: 15, color: T.textDim, lineHeight: 1.58, marginBottom: 28, maxWidth: 480 }}>
@@ -152,8 +149,9 @@ export function AiConnectPhase({ dna, status, onConnect, onContinue, onBack }: A
       <PhaseFooter
         dna={dna}
         onBack={onBack}
-        onContinue={() => onContinue(phase === "connected" ? "connected" : "skipped")}
-        continueLabel={phase === "connected" ? "Continue →" : "Continue without AI →"}
+        onContinue={onContinue}
+        continueDisabled={phase !== "connected"}
+        continueLabel={phase === "connected" ? "Continue →" : "Sign in to continue"}
       />
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>

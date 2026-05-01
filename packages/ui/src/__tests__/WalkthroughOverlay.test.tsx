@@ -75,7 +75,7 @@ describe("WalkthroughOverlay", () => {
     expect(screen.getByTestId("walkthrough-next").textContent).toBe("Got it")
   })
 
-  test("shows step counter", () => {
+  test("shows Orby step counter", () => {
     render(
       <WalkthroughOverlay
         steps={mockSteps}
@@ -84,6 +84,48 @@ describe("WalkthroughOverlay", () => {
         onDismiss={vi.fn()}
       />,
     )
-    expect(screen.getByText("1 / 2")).toBeDefined()
+    expect(screen.getByText("Orby · 1 / 2")).toBeDefined()
+  })
+
+  test("Back button is disabled on first step", () => {
+    render(
+      <WalkthroughOverlay
+        steps={mockSteps}
+        currentStep={0}
+        onNext={vi.fn()}
+        onDismiss={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    const back = screen.getByTestId("walkthrough-back") as HTMLButtonElement
+    expect(back.disabled).toBe(true)
+  })
+
+  test("Back button calls onBack on a non-first step", async () => {
+    const onBack = vi.fn()
+    render(
+      <WalkthroughOverlay
+        steps={mockSteps}
+        currentStep={1}
+        onNext={vi.fn()}
+        onDismiss={vi.fn()}
+        onBack={onBack}
+      />,
+    )
+    await userEvent.click(screen.getByTestId("walkthrough-back"))
+    expect(onBack).toHaveBeenCalledOnce()
+  })
+
+  test("renders progress dots for every step", () => {
+    render(
+      <WalkthroughOverlay
+        steps={mockSteps}
+        currentStep={0}
+        onNext={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    )
+    const progress = screen.getByTestId("walkthrough-progress")
+    expect(progress.children.length).toBe(mockSteps.length)
   })
 })

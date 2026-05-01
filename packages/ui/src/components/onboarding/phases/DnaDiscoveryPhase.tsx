@@ -238,21 +238,21 @@ export function DnaDiscoveryPhase({
                 rows={currentQ.multiline ? 4 : 1}
                 style={{
                   width: "100%",
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${textInput.trim() ? `oklch(0.7 0.2 ${dna.hue}/0.6)` : T.lineStrong}`,
-                  borderRadius: 14,
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1.5px solid ${textInput.trim() ? `oklch(0.7 0.2 ${dna.hue}/0.7)` : "rgba(255,255,255,0.22)"}`,
+                  borderRadius: 16,
                   outline: "none",
                   color: T.text,
-                  fontSize: 22,
+                  fontSize: 24,
                   fontFamily: SERIF,
-                  padding: "14px 16px",
+                  padding: "18px 20px",
                   resize: "none",
                   lineHeight: 1.4,
                   transition: "border-color 0.3s",
-                  boxShadow: textInput.trim() ? `0 0 0 2px oklch(0.6 0.2 ${dna.hue}/0.2)` : "none",
+                  boxShadow: textInput.trim() ? `0 0 0 2px oklch(0.6 0.2 ${dna.hue}/0.25)` : "none",
                 }}
               />
-              <div style={{ marginTop: 8, fontSize: 11, color: T.textFaint, fontFamily: MONO }}>
+              <div style={{ marginTop: 12, fontSize: 13, color: "rgba(245,247,251,0.55)", fontFamily: MONO, letterSpacing: "0.05em" }}>
                 {currentQ.multiline ? "↵ to send · Shift+↵ for new line" : "↵ to send"}
               </div>
             </form>
@@ -324,27 +324,27 @@ function WelcomeSplit({ questionCount, onStart }: { questionCount: number; onSta
       <div>
         <div
           style={{
-            fontSize: 11,
-            letterSpacing: "0.2em",
+            fontSize: 12,
+            letterSpacing: "0.22em",
             color: T.blueSoft,
             textTransform: "uppercase",
             fontFamily: MONO,
-            marginBottom: 18,
+            marginBottom: 20,
           }}
         >
-          Building your study profile
+          Meet your study coach
         </div>
         <h1
           style={{
             fontFamily: SERIF,
-            fontSize: 66,
+            fontSize: 78,
             lineHeight: 1.02,
             letterSpacing: "-0.025em",
-            margin: "0 0 24px",
+            margin: "0 0 26px",
             fontWeight: 400,
           }}
         >
-          {questionCount} questions.
+          Meet Orby.
           <br />
           <em
             style={{
@@ -354,11 +354,13 @@ function WelcomeSplit({ questionCount, onStart }: { questionCount: number; onSta
               WebkitTextFillColor: "transparent",
             }}
           >
-            One Study DNA.
+            Your AI study
+            <br />
+            partner.
           </em>
         </h1>
-        <p style={{ fontSize: 17, color: T.textDim, lineHeight: 1.6, margin: "0 0 30px", maxWidth: 440 }}>
-          Your answers build something alive on the right — revealed at the end. No right or wrong.
+        <p style={{ fontSize: 18, color: T.textDim, lineHeight: 1.55, margin: "0 0 32px", maxWidth: 480 }}>
+          Orby plans your week from Canvas, coaches you through assignments, and adapts to how you actually study.
         </p>
         <button
           onClick={onStart}
@@ -375,10 +377,10 @@ function WelcomeSplit({ questionCount, onStart }: { questionCount: number; onSta
             boxShadow: "0 8px 32px rgba(59,130,246,0.45)",
           }}
         >
-          Start →
+          Say Hi →
         </button>
       </div>
-      <div style={{ fontSize: 12, color: T.textFaint }}>Takes about 3 minutes.</div>
+      <div style={{ fontSize: 13, color: T.textFaint }}>{questionCount} questions · ~3 minutes</div>
     </div>
   )
 }

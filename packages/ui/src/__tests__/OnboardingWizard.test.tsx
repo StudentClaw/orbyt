@@ -108,16 +108,16 @@ describe("OnboardingWizard", () => {
 
   test("starts on the Study DNA welcome screen", () => {
     render(<OnboardingWizard />)
-    expect(screen.getByText("Building your study profile")).toBeDefined()
-    expect(screen.getByText("One Study DNA.")).toBeDefined()
-    expect(screen.getByRole("button", { name: /Start/ })).toBeDefined()
+    expect(screen.getByText("Meet your study coach")).toBeDefined()
+    expect(screen.getByText("Meet Orby.")).toBeDefined()
+    expect(screen.getByRole("button", { name: /Say Hi/ })).toBeDefined()
   })
 
-  test("clicking Start enters the first DNA question", async () => {
+  test("clicking Say Hi enters the first DNA question", async () => {
     const user = userEvent.setup()
     render(<OnboardingWizard />)
 
-    await user.click(screen.getByRole("button", { name: /Start/ }))
+    await user.click(screen.getByRole("button", { name: /Say Hi/ }))
 
     expect(screen.getByText(/1 \/ 11/)).toBeDefined()
   })

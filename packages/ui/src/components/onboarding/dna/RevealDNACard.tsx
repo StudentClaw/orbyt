@@ -53,7 +53,6 @@ export function RevealDNACard({ dna }: RevealDNACardProps) {
           <CompanionOrb size={110} mood="happy" energy={1} hue={hue} accentHue={accentHue} spawn />
         </div>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>{dna.icon}</div>
           <div style={{
             fontFamily: SERIF,
             fontSize: 40,

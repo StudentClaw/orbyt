@@ -75,6 +75,39 @@ export function formatCountdown(dueDate: string, now: Date = new Date()): string
 }
 
 /**
+ * Compact countdown matching the notification timestamp notation:
+ * "now", "5m", "3h", then "Mon 14:30" within a week, "May 7 14:30" beyond,
+ * "overdue" for past dates.
+ */
+export function formatCountdownCompact(dueDate: string, now: Date = new Date()): string {
+  const due = new Date(dueDate)
+  const diffMs = due.getTime() - now.getTime()
+
+  if (diffMs < 0) return "overdue"
+
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return "now"
+  if (diffSec < 3600) return `${Math.max(1, Math.round(diffSec / 60))}m`
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`
+
+  const time = due.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  if (diffSec < 7 * 86400) {
+    const weekday = due.toLocaleDateString(undefined, { weekday: "short" })
+    return `${weekday} ${time}`
+  }
+
+  const day = due.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${day} ${time}`
+}
+
+/**
  * Groups coursework items by their due date (YYYY-MM-DD string),
  * filtered to items within the given window of days from now.
  */

@@ -13,7 +13,24 @@
     "modules"
   ],
   "auth": {
-    "type": "none"
+    "type": "manual_token",
+    "instructions": "Generate a Canvas access token under Settings > Approved Integrations > New Access Token in Canvas.",
+    "fields": [
+      {
+        "key": "baseUrl",
+        "label": "Canvas base URL",
+        "type": "base_url",
+        "required": true,
+        "placeholder": "https://myschool.instructure.com"
+      },
+      {
+        "key": "token",
+        "label": "Canvas access token",
+        "type": "secret",
+        "required": true,
+        "placeholder": "Paste your Canvas access token"
+      }
+    ]
   },
   "tools": [
     {

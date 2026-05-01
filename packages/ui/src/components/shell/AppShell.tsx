@@ -54,6 +54,7 @@ import {
 import { useAssignmentDisplayTitle } from "@/rpc/assignmentDetailState"
 import type { PanelImperativeHandle } from "react-resizable-panels"
 import { AppSidebar, AppSidebarContent } from "./AppSidebar"
+import { TourController } from "@/components/onboarding/TourController"
 
 export function AppShell() {
   const routerState = useRouterState()
@@ -82,6 +83,7 @@ export function AppShell() {
   return (
     <SidebarProvider>
       <AppShellLayout />
+      <TourController />
     </SidebarProvider>
   )
 }

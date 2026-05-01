@@ -46,10 +46,6 @@ vi.mock("@/components/shell/ChatHistory", () => ({
   ChatHistory: () => <div data-testid="chat-history" />,
 }))
 
-vi.mock("@/components/shell/ConnectionStatus", () => ({
-  ConnectionStatus: () => <div data-testid="connection-status" />,
-}))
-
 import { AppSidebar } from "../components/shell/AppSidebar"
 
 describe("AppSidebar activity badge", () => {

@@ -119,6 +119,7 @@ function makeDeps() {
         getCourseContentOverview: async () => ({ course: undefined, pageCount: 0, moduleCount: 0, moduleItemCount: 0, frontPage: undefined, courses: undefined }),
         getCourseStructure: async () => ({ course: undefined, modules: [], courses: undefined }),
         downloadCourseFile: async () => ({ success: true, courseId: "course_1" as any, fileId: "file_1", filename: "file.txt", savedPath: "/tmp/file.txt", overwritten: false, message: "downloaded" }),
+        getSyncStatus: () => ({ lastSuccessAt: null, lastError: null }),
       },
       skillResolver: {
         resolve: () => null,

@@ -476,12 +476,13 @@ export function ChatHistory() {
   const canCreateChat = connectionStatus.phase === "connected"
 
   return (
-    <SidebarGroup>
+    <SidebarGroup data-testid="chat-folders-group">
       <SidebarGroupLabel>Folders</SidebarGroupLabel>
       <SidebarGroupAction
         title="Add folder"
         onClick={() => void handleAddFolder()}
         disabled={addingFolder}
+        data-testid="chat-add-folder"
         className="top-3 right-2 h-8 w-8 rounded-full border border-sidebar-border/60 bg-sidebar/80 text-sidebar-foreground shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       >
         <HugeiconsIcon icon={FolderAddIcon} size={18} />

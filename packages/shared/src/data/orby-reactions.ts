@@ -43,9 +43,9 @@ export const ORBY_MCQ_REACTIONS: Record<string, Record<string, string>> = {
 
 export const ORBY_OPEN_REACTIONS: Record<string, string> = {
   name:        "Good to meet you. I'll remember that.",
-  secretLove:  "The ones that cost us most always stick hardest.",
+  secretLove:  "Noted. I'll keep that one short and clean when it shows up.",
   wishBetter:  "That's exactly where I'll focus first.",
-  pastHabit:   "Knowing what broke before is half the fix.",
+  pastHabit:   "Good. We'll lean on what already works for you.",
   forWho:      "That's the anchor. I'll hold it with you.",
   successLook: "Specific goals are real goals. This one counts.",
 }

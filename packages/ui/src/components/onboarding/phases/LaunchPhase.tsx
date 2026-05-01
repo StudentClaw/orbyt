@@ -9,7 +9,6 @@ interface LaunchPhaseProps {
 
 const FEATURES = [
   "Adaptive schedule ✓",
-  "Streak system ✓",
   "AI tutor ✓",
   "Canvas synced ✓",
   "Gentle nudges ✓",
@@ -24,7 +23,7 @@ export function LaunchPhase({ dna, onTour, onSkipTour }: LaunchPhaseProps) {
       <div style={{ fontSize: 10, letterSpacing: "0.2em", color: `oklch(0.85 0.18 ${hue})`, textTransform: "uppercase", fontFamily: MONO, marginBottom: 16 }}>
         ✦ Launch ready
       </div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 68, lineHeight: 0.98, letterSpacing: "-0.03em", margin: "0 0 18px", fontWeight: 400 }}>
+      <h1 style={{ fontFamily: SERIF, fontSize: 78, lineHeight: 0.98, letterSpacing: "-0.03em", margin: "0 0 18px", fontWeight: 400 }}>
         Orbyt is<br />
         <em style={{
           fontStyle: "italic",
@@ -36,7 +35,7 @@ export function LaunchPhase({ dna, onTour, onSkipTour }: LaunchPhaseProps) {
         </em>, {dna.name}.
       </h1>
       <p style={{ fontSize: 16, color: T.textDim, lineHeight: 1.55, marginBottom: 26, maxWidth: 460 }}>
-        Your first week is drafted. Orby adapts as you go — miss a session, ace a test, panic at 2 AM. It'll meet you there.
+        Let's draft your first week. Orby adapts as you go — miss a session, ace a test, panic at 2 AM. It'll learn about you.
       </p>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 32, flexWrap: "wrap" }}>

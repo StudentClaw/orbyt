@@ -120,6 +120,7 @@ describe("OnboardingWizard — Codex OAuth flow", () => {
   test("after successful OAuth, persists status and re-initializes the runtime", async () => {
     const user = userEvent.setup()
     render(<OnboardingWizard />)
+    rpcMocks.retryInitialize.mockClear()
     await user.click(screen.getByRole("button", { name: /Connect/ }))
 
     expect(wizardMocks.setAiAuthStatus).toHaveBeenCalledWith("connected")
@@ -137,6 +138,7 @@ describe("OnboardingWizard — Codex OAuth flow", () => {
     })
     const user = userEvent.setup()
     render(<OnboardingWizard />)
+    rpcMocks.retryInitialize.mockClear()
     await user.click(screen.getByRole("button", { name: /Connect/ }))
 
     expect(wizardMocks.setAiAuthStatus).not.toHaveBeenCalled()

@@ -246,13 +246,25 @@ describe("registerIpcHandlers plugin reads", () => {
       status: "not_configured",
     })
 
-    const saved = await saveAuthHandler?.({}, {
-      pluginId: "canvas-mcp",
-      values: {
-        baseUrl: "https://myschool.instructure.com",
-        token: "12345678901234567890",
-      },
-    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ id: 1, name: "Test User" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch
+
+    let saved: unknown
+    try {
+      saved = await saveAuthHandler?.({}, {
+        pluginId: "canvas-mcp",
+        values: {
+          baseUrl: "https://myschool.instructure.com",
+          token: "12345678901234567890",
+        },
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
     expect(saved).toEqual({
       ok: true,
       pluginId: "canvas-mcp",
@@ -263,6 +275,8 @@ describe("registerIpcHandlers plugin reads", () => {
     expect(after).toEqual({
       pluginId: "canvas-mcp",
       status: "configured",
+      values: { baseUrl: "https://myschool.instructure.com" },
+      hasValue: { baseUrl: true, token: true },
     })
   })
 
@@ -412,7 +426,6 @@ describe("registerIpcHandlers plugin reads", () => {
       stop: () => undefined,
       getSettings: () => ({
         enabled: true,
-        workflowEventsEnabled: true,
         weeklyInsightsEnabled: true,
         quietHoursStart: "22:00",
         quietHoursEnd: "08:00",
@@ -421,7 +434,6 @@ describe("registerIpcHandlers plugin reads", () => {
       }),
       updateSettings: () => ({
         enabled: false,
-        workflowEventsEnabled: true,
         weeklyInsightsEnabled: true,
         quietHoursStart: "22:00",
         quietHoursEnd: "08:00",
