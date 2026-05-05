@@ -176,6 +176,19 @@ export class PluginAuthService {
   }
 
   getCredentialMessage(pluginId: string): PluginCredentialMessage | null {
+    const values = this.getCredentialEnvironment(pluginId)
+    if (!values) {
+      return null
+    }
+
+    return {
+      type: "plugin.credentials",
+      pluginId,
+      payload: values,
+    }
+  }
+
+  getCredentialEnvironment(pluginId: string): Record<string, string> | null {
     const record = this.getManualTokenRecord(pluginId)
     if (!record) {
       return null
@@ -192,11 +205,7 @@ export class PluginAuthService {
         return null
       }
 
-      return {
-        type: "plugin.credentials",
-        pluginId,
-        payload: validation.values,
-      }
+      return validation.values
     } catch {
       return null
     }

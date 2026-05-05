@@ -368,6 +368,66 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-token")).toBeDefined()
   })
 
+  test("renders Notion manual-token credentials from the manifest", async () => {
+    const notionEntry = {
+      kind: "available",
+      manifest: {
+        id: "notion-mcp",
+        name: "Notion",
+        description: "Official local Notion MCP server.",
+        version: "0.1.0",
+        transport: {
+          type: "local_stdio",
+          entry: "dist/index.js",
+        },
+        permissions: ["notion.workspace.read", "notion.content.write"],
+        auth: {
+          type: "manual_token",
+          instructions: "Create a Notion internal integration and paste its token.",
+          fields: [
+            {
+              key: "NOTION_TOKEN",
+              label: "Notion integration token",
+              type: "secret",
+              required: true,
+              placeholder: "ntn_...",
+            },
+          ],
+        },
+        tools: [{ name: "API-post-search", description: "Search Notion" }],
+        author: "orbyt",
+        homepage: "https://github.com/makenotion/notion-mcp-server",
+      },
+      installSource: "bundled",
+      status: "discovered",
+      enabled: true,
+    } as const
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+      if (channel === IpcChannel.PLUGIN_LIST) return [notionEntry]
+      if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "notion-mcp") {
+        return { pluginId: "notion-mcp", status: "not_configured" as const }
+      }
+      if (channel === IpcChannel.PLUGIN_GET_STATUS && params?.pluginId === "notion-mcp") return notionEntry
+      return null
+    }) as any
+
+    const user = userEvent.setup()
+    renderSettingsPage("connections")
+
+    await user.click(await screen.findByTestId("settings-plugin-manage-notion-mcp"))
+
+    expect(await screen.findByTestId("settings-plugin-auth-card-notion-mcp")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-auth-input-notion-mcp-NOTION_TOKEN")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-tool-notion-mcp-API-post-search")).toBeDefined()
+  })
+
   test("disables Canvas sync while a sync is already in progress", async () => {
     const user = userEvent.setup()
 

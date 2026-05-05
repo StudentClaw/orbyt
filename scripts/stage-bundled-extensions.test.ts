@@ -13,7 +13,9 @@ function createTempDir(): string {
   return dir
 }
 
-function writeRuntimeExtension(rootDir: string, pluginId: string): string {
+function writeRuntimeExtension(rootDir: string, pluginId: string, options: {
+  dependencies?: Record<string, string>
+} = {}): string {
   const extensionDir = path.join(rootDir, pluginId)
   mkdirSync(path.join(extensionDir, "dist"), { recursive: true })
   mkdirSync(path.join(extensionDir, "src"), { recursive: true })
@@ -39,7 +41,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
     version: "1.0.0",
     private: true,
     type: "module",
-    dependencies: pluginId === "canvas-mcp"
+    dependencies: options.dependencies ?? (pluginId === "canvas-mcp"
       ? {
         "@effect/schema": "^0.75.5",
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -49,7 +51,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
       : {
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@orbyt/contracts": "workspace:*",
-      },
+      }),
   }, null, 2))
   writeFileSync(path.join(extensionDir, "dist", "index.js"), `console.log("${pluginId}")\n`)
   writeFileSync(path.join(extensionDir, "dist", "server.test.js"), `console.log("${pluginId}-test")\n`)
@@ -181,15 +183,23 @@ describe("stageBundledExtensions", () => {
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const templateDir = writeRuntimeExtension(extensionsRoot, "template-mcp")
     const canvasDir = writeRuntimeExtension(extensionsRoot, "canvas-mcp")
+    const notionDir = writeRuntimeExtension(extensionsRoot, "notion-mcp", {
+      dependencies: {
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "@notionhq/notion-mcp-server": "2.2.1",
+        "@orbyt/contracts": "workspace:*",
+      },
+    })
 
     const packageJson = createBundledExtensionRuntimePackageJson({
       repoRoot,
-      extensionDirs: [templateDir, canvasDir],
+      extensionDirs: [templateDir, canvasDir, notionDir],
     })
 
     expect(packageJson.dependencies).toEqual({
       "@effect/schema": "^0.75.5",
       "@modelcontextprotocol/sdk": "^1.29.0",
+      "@notionhq/notion-mcp-server": "2.2.1",
       "@orbyt/contracts": "file:vendor/contracts",
       zod: "^4.1.12",
     })

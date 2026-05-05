@@ -1,0 +1,53 @@
+{
+  "id": "notion-mcp",
+  "name": "Notion",
+  "description": "Official local Notion MCP server wrapped for Orbyt's bundled stdio extension runtime.",
+  "version": "0.1.0",
+  "transport": {
+    "type": "local_stdio",
+    "entry": "dist/index.js"
+  },
+  "permissions": [
+    "notion.workspace.read",
+    "notion.content.write"
+  ],
+  "auth": {
+    "type": "manual_token",
+    "instructions": "Create a Notion internal integration, copy its integration secret, and connect the pages or data sources you want Orbyt to access.",
+    "fields": [
+      {
+        "key": "NOTION_TOKEN",
+        "label": "Notion integration token",
+        "type": "secret",
+        "required": true,
+        "placeholder": "ntn_..."
+      }
+    ]
+  },
+  "tools": [
+    { "name": "API-get-user", "description": "Retrieve a Notion user by id." },
+    { "name": "API-get-users", "description": "List users in the Notion workspace." },
+    { "name": "API-get-self", "description": "Retrieve the bot user associated with the Notion integration token." },
+    { "name": "API-post-search", "description": "Search Notion pages and data sources available to the integration." },
+    { "name": "API-get-block-children", "description": "Retrieve child blocks for a Notion block or page." },
+    { "name": "API-patch-block-children", "description": "Append child blocks to a Notion block or page." },
+    { "name": "API-retrieve-a-block", "description": "Retrieve a Notion block by id." },
+    { "name": "API-update-a-block", "description": "Update a Notion block." },
+    { "name": "API-delete-a-block", "description": "Delete or archive a Notion block." },
+    { "name": "API-retrieve-a-page", "description": "Retrieve a Notion page by id." },
+    { "name": "API-patch-page", "description": "Update a Notion page." },
+    { "name": "API-post-page", "description": "Create a Notion page." },
+    { "name": "API-retrieve-a-page-property", "description": "Retrieve a Notion page property item." },
+    { "name": "API-retrieve-a-comment", "description": "Retrieve comments for a Notion block or page." },
+    { "name": "API-create-a-comment", "description": "Create a Notion comment." },
+    { "name": "API-query-data-source", "description": "Query a Notion data source." },
+    { "name": "API-retrieve-a-data-source", "description": "Retrieve Notion data source metadata and schema." },
+    { "name": "API-update-a-data-source", "description": "Update a Notion data source." },
+    { "name": "API-create-a-data-source", "description": "Create a Notion data source." },
+    { "name": "API-list-data-source-templates", "description": "List templates available in a Notion data source." },
+    { "name": "API-retrieve-a-database", "description": "Retrieve Notion database metadata including data source ids." },
+    { "name": "API-move-page", "description": "Move a Notion page to a different parent." }
+  ],
+  "author": "orbyt",
+  "homepage": "https://github.com/makenotion/notion-mcp-server"
+}

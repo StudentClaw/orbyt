@@ -48,6 +48,7 @@ export type PluginManagerOptions = {
   getCredentialMessage?: (pluginId: string) => unknown | null
   prepareRuntime?: (record: AvailablePluginRegistryRecord) => Promise<PluginRuntimePreparation | null> | PluginRuntimePreparation | null
   cleanupRuntime?: (record: AvailablePluginRegistryRecord) => Promise<void> | void
+  shouldAutoStart?: (entry: Extract<ExtensionRegistryEntry, { kind: "available" }>) => boolean
   now?: () => Date
   scheduleTimeout?: typeof globalThis.setTimeout
   clearScheduledTimeout?: typeof globalThis.clearTimeout
@@ -114,6 +115,7 @@ export class PluginManager {
   private readonly getCredentialMessage: (pluginId: string) => unknown | null
   private readonly prepareRuntime: (record: AvailablePluginRegistryRecord) => Promise<PluginRuntimePreparation | null>
   private readonly cleanupRuntime: (record: AvailablePluginRegistryRecord) => Promise<void>
+  private readonly shouldAutoStart: (entry: Extract<ExtensionRegistryEntry, { kind: "available" }>) => boolean
   private readonly now: () => Date
   private readonly scheduleTimeout: typeof globalThis.setTimeout
   private readonly clearScheduledTimeout: typeof globalThis.clearTimeout
@@ -128,6 +130,7 @@ export class PluginManager {
     this.getCredentialMessage = options.getCredentialMessage ?? (() => null)
     this.prepareRuntime = async (record) => await (options.prepareRuntime?.(record) ?? null)
     this.cleanupRuntime = async (record) => await (options.cleanupRuntime?.(record) ?? undefined)
+    this.shouldAutoStart = options.shouldAutoStart ?? (() => true)
     this.now = options.now ?? (() => new Date())
     this.scheduleTimeout = options.scheduleTimeout ?? globalThis.setTimeout
     this.clearScheduledTimeout = options.clearScheduledTimeout ?? globalThis.clearTimeout
@@ -306,8 +309,10 @@ export class PluginManager {
   }
 
   async autoStartEnabled(): Promise<void> {
-    const enabled = this.list().filter((entry) => entry.kind === "available" && entry.enabled)
-    await Promise.all(enabled.map((entry) => this.start(entry.kind === "available" ? entry.manifest.id : entry.pluginId)))
+    const enabled = this.list().filter((entry): entry is Extract<ExtensionRegistryEntry, { kind: "available" }> => {
+      return entry.kind === "available" && entry.enabled && this.shouldAutoStart(entry)
+    })
+    await Promise.all(enabled.map((entry) => this.start(entry.manifest.id)))
   }
 
   async dispose(): Promise<void> {

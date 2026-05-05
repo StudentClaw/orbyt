@@ -71,6 +71,40 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   enabled: true,
 }
 
+const notionEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
+  kind: "available",
+  manifest: {
+    id: "notion-mcp",
+    name: "Notion",
+    description: "Notion extension",
+    version: "0.1.0",
+    transport: {
+      type: "local_stdio",
+      entry: "dist/index.js",
+    },
+    permissions: ["notion.workspace.read", "notion.content.write"],
+    auth: {
+      type: "manual_token",
+      instructions: "Paste your Notion integration token.",
+      fields: [
+        {
+          key: "NOTION_TOKEN",
+          label: "Notion integration token",
+          type: "secret",
+          required: true,
+          placeholder: "ntn_...",
+        },
+      ],
+    },
+    tools: [{ name: "API-post-search", description: "Search Notion" }],
+    author: "orbyt",
+    homepage: "https://github.com/makenotion/notion-mcp-server",
+  },
+  installSource: "bundled",
+  status: "discovered",
+  enabled: true,
+}
+
 const appleEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   kind: "available",
   manifest: {
@@ -600,6 +634,24 @@ describe("PluginManager", () => {
     expect(cleanupCalls).toBe(2)
     expect(firstSandbox.startCalls).toBe(1)
     expect(secondSandbox.startCalls).toBe(1)
+  })
+
+  test("skips enabled manual-token plugins during auto-start when credentials are not configured", async () => {
+    const sandbox = new FakeSandbox()
+    sandbox.listedTools = [{ name: "API-post-search", description: "Search Notion" }]
+    const manager = new PluginManager({
+      registry: createRegistry(notionEntry),
+      createSandbox: () => sandbox,
+      shouldAutoStart: (entry) => entry.manifest.auth.type !== "manual_token",
+    })
+
+    await manager.autoStartEnabled()
+
+    expect(sandbox.startCalls).toBe(0)
+    expect(manager.getStatus("notion-mcp")).toMatchObject({
+      kind: "available",
+      status: "discovered",
+    })
   })
 
   test("retries with backoff until a later attempt succeeds", async () => {
