@@ -27,6 +27,9 @@ export type ExtensionRuntimeReadiness = Schema.Schema.Type<typeof ExtensionRunti
 export const ExtensionInstallSource = Schema.Literal("system", "bundled", "user")
 export type ExtensionInstallSource = Schema.Schema.Type<typeof ExtensionInstallSource>
 
+export const ExtensionRuntimeHostPlatform = Schema.Literal("darwin", "linux", "win32")
+export type ExtensionRuntimeHostPlatform = Schema.Schema.Type<typeof ExtensionRuntimeHostPlatform>
+
 export const ExtensionToolSummary = Schema.Struct({
   name: Schema.String,
   description: Schema.String,
@@ -83,6 +86,7 @@ export const ExtensionManifest = Schema.Struct({
   description: Schema.String,
   version: Schema.String,
   transport: ExtensionTransport,
+  platforms: Schema.optional(Schema.Array(ExtensionRuntimeHostPlatform)),
   permissions: Schema.Array(Schema.String),
   auth: ExtensionAuthSchema,
   tools: Schema.Array(ExtensionToolSummary),

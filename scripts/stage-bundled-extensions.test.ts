@@ -14,6 +14,7 @@ function createTempDir(): string {
 }
 
 function writeRuntimeExtension(rootDir: string, pluginId: string, options: {
+  platforms?: string[]
   dependencies?: Record<string, string>
 } = {}): string {
   const extensionDir = path.join(rootDir, pluginId)
@@ -28,6 +29,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string, options: {
       type: "local_stdio",
       entry: "dist/index.js",
     },
+    ...(options.platforms ? { platforms: options.platforms } : {}),
     permissions: ["test.permission"],
     auth: {
       type: "none",
@@ -154,6 +156,32 @@ describe("stageBundledExtensions", () => {
     expect(() => stageBundledExtensions({ extensionsRoot, outputRoot, installDependencies: false })).not.toThrow()
     expect(existsSync(path.join(outputRoot, "apple-calendar-mcp", "manifest.json"))).toBe(true)
     expect(existsSync(path.join(outputRoot, "apple-calendar-mcp", "bridge", "CalendarAPIBridge"))).toBe(false)
+  })
+
+  test("excludes Darwin-only bundled extensions from Linux packaged resources", () => {
+    const repoRoot = createTempDir()
+    const extensionsRoot = path.join(repoRoot, "packages", "extensions")
+    const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
+    writeRuntimeExtension(extensionsRoot, "apple-calendar-mcp", { platforms: ["darwin"] })
+    writeRuntimeExtension(extensionsRoot, "canvas-mcp")
+
+    const stagedPluginIds = stageBundledExtensions({
+      extensionsRoot,
+      outputRoot,
+      installDependencies: false,
+      targetPlatform: "linux",
+    })
+
+    expect(stagedPluginIds).toEqual(["canvas-mcp"])
+    expect(existsSync(path.join(outputRoot, "canvas-mcp", "manifest.json"))).toBe(true)
+    expect(existsSync(path.join(outputRoot, "apple-calendar-mcp"))).toBe(false)
+    expect(JSON.parse(readFileSync(path.join(outputRoot, "package.json"), "utf8")).dependencies).toEqual({
+      "@effect/schema": "^0.75.5",
+      "@modelcontextprotocol/sdk": "^1.29.0",
+      "@orbyt/contracts": "file:vendor/contracts",
+      zod: "^4.1.12",
+    })
   })
 
   test("produces a staged resources tree that the registry reads unchanged in packaged mode", () => {

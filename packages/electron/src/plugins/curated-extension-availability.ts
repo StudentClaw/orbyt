@@ -21,7 +21,15 @@ function parseMacOsMajorVersion(systemVersion?: string): number | null {
   return Number.isFinite(major) ? major : null
 }
 
-export function isCuratedExtensionVisibleOnHost(pluginId: string, context: PluginAvailabilityContext): boolean {
+export function isCuratedExtensionVisibleOnHost(
+  pluginId: string,
+  context: PluginAvailabilityContext,
+  platforms?: readonly NodeJS.Platform[],
+): boolean {
+  if (platforms && platforms.length > 0 && !platforms.includes(context.platform)) {
+    return false
+  }
+
   if (pluginId !== APPLE_CALENDAR_PLUGIN_ID) {
     return true
   }

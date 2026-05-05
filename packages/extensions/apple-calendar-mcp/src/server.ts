@@ -44,6 +44,7 @@ export const appleCalendarManifest = parseExtensionManifestSync({
     type: "local_stdio",
     entry: "dist/index.js",
   },
+  platforms: ["darwin"],
   permissions: [
     "local_os.calendar.read",
     "local_os.calendar.write",

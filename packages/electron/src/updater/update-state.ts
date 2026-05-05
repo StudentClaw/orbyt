@@ -33,14 +33,15 @@ export function getAutoUpdateDisabledReason(args: {
   disabledByEnv: boolean
   hasUpdateFeedConfig: boolean
 }): string | null {
+  const supportedPlatforms: readonly NodeJS.Platform[] = ["darwin", "linux", "win32"]
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by environment configuration."
   }
   if (!args.isPackaged) {
     return "Automatic updates are only available in packaged production builds."
   }
-  if (args.platform !== "darwin") {
-    return "Automatic updates are currently available for macOS builds only."
+  if (!supportedPlatforms.includes(args.platform)) {
+    return "Automatic updates are not available for this platform."
   }
   if (!args.hasUpdateFeedConfig) {
     return "This build does not include an update feed."

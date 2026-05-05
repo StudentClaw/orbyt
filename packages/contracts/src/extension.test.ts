@@ -57,6 +57,15 @@ describe("Extension contracts", () => {
     expect(parsed.transport.type).toBe("local_stdio")
   })
 
+  test("manifest schema accepts optional runtime host platform constraints", () => {
+    const parsed = Schema.decodeUnknownSync(ExtensionManifest)({
+      ...validManifest,
+      platforms: ["darwin"],
+    })
+
+    expect(parsed.platforms).toEqual(["darwin"])
+  })
+
   test("transport schema rejects invalid transport type", () => {
     expect(() =>
       Schema.decodeUnknownSync(ExtensionTransport)({

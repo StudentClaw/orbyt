@@ -115,16 +115,34 @@ jobs:
           echo "previous_tag=$previous" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build macOS ${{ matrix.arch }}
+    name: Build ${{ matrix.label }}
     needs: preflight
-    runs-on: macos-15
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - arm64
-          - x64
+        include:
+          - label: macOS arm64
+            runner: macos-15
+            platform: mac
+            target: dmg
+            arch: arm64
+          - label: macOS x64
+            runner: macos-15
+            platform: mac
+            target: dmg
+            arch: x64
+          - label: Linux x64
+            runner: ubuntu-24.04
+            platform: linux
+            target: AppImage
+            arch: x64
+          - label: Windows x64
+            runner: windows-2025
+            platform: win
+            target: nsis
+            arch: x64
 
     steps:
       - name: Checkout
@@ -142,15 +160,16 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ matrix.platform }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-bun-
+            ${{ runner.os }}-${{ matrix.platform }}-${{ matrix.arch }}-bun-
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Build macOS artifact
+        if: matrix.platform == 'mac'
         shell: bash
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -186,6 +205,19 @@ jobs:
 
           bun scripts/build-macos-desktop-artifact.ts "${args[@]}"
 
+      - name: Build Windows/Linux artifact
+        if: matrix.platform != 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bun scripts/build-desktop-artifact.ts \
+            --platform "${{ matrix.platform }}" \
+            --target "${{ matrix.target }}" \
+            --app-version "${{ needs.preflight.outputs.version }}" \
+            --output-dir release \
+            --verbose
+
       - name: Collect release assets
         shell: bash
         run: |
@@ -196,6 +228,8 @@ jobs:
           for pattern in \
             "release/*.dmg" \
             "release/*.zip" \
+            "release/*.AppImage" \
+            "release/*.exe" \
             "release/*.blockmap" \
             "release/*.yml" \
             "build-logs/*.log"; do
@@ -204,7 +238,7 @@ jobs:
             done
           done
 
-          if [[ "${{ matrix.arch }}" != "arm64" ]]; then
+          if [[ "${{ matrix.platform }}" == "mac" && "${{ matrix.arch }}" != "arm64" ]]; then
             for manifest in release-publish/*-mac.yml; do
               [[ -f "$manifest" ]] || continue
               mv "$manifest" "${manifest%.yml}-${{ matrix.arch }}.yml"
@@ -214,7 +248,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-mac-${{ matrix.arch }}
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: release-publish/*
           if-no-files-found: error
 
@@ -240,7 +274,7 @@ jobs:
       - name: Download desktop artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: desktop-mac-*
+          pattern: desktop-*
           merge-multiple: true
           path: release-assets
 
@@ -262,7 +296,11 @@ jobs:
         run: |
           set -euo pipefail
           test -f release-assets/latest-mac.yml
+          test -f release-assets/latest.yml
+          test -f release-assets/latest-linux.yml
           compgen -G "release-assets/*.zip" > /dev/null
+          compgen -G "release-assets/*.exe" > /dev/null
+          compgen -G "release-assets/*.AppImage" > /dev/null
           compgen -G "release-assets/*.blockmap" > /dev/null
 
       - name: List release assets
@@ -282,6 +320,8 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
+            release-assets/*.AppImage
+            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
             release-assets/*.log
@@ -300,6 +340,8 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
+            release-assets/*.AppImage
+            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
             release-assets/*.log

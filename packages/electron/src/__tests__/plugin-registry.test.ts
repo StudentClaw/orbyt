@@ -102,6 +102,49 @@ describe("PluginRegistry", () => {
     })
   })
 
+  test("hides any manifest whose platform list excludes the current host", () => {
+    const bundledDir = createTempDir()
+    const userDir = createTempDir()
+
+    writeManifest(bundledDir, "linux-only-mcp", {
+      id: "linux-only-mcp",
+      name: "Linux Only",
+      description: "Linux-only test extension",
+      version: "1.0.0",
+      transport: {
+        type: "local_stdio",
+        entry: "dist/index.js",
+      },
+      platforms: ["linux"],
+      permissions: ["linux.read"],
+      auth: {
+        type: "none",
+      },
+      tools: [
+        { name: "linux_ping", description: "Ping Linux" },
+      ],
+      author: "orbyt",
+      homepage: "https://github.com/Orbyt/orbyt",
+    })
+
+    const registry = new PluginRegistry({
+      bundledCatalogDir: bundledDir,
+      userExtensionStoreDir: userDir,
+      availability: {
+        platform: "win32",
+      },
+    })
+
+    expect(registry.list()).toEqual([])
+    expect(registry.getStatus("linux-only-mcp")).toMatchObject({
+      kind: "available",
+      manifest: {
+        id: "linux-only-mcp",
+        platforms: ["linux"],
+      },
+    })
+  })
+
   test("hides Apple Calendar on unsupported macOS versions while leaving other bundled plugins visible", () => {
     const bundledDir = createTempDir()
     const userDir = createTempDir()
@@ -184,6 +227,9 @@ describe("PluginRegistry", () => {
       installSource: "bundled",
       status: "discovered",
       enabled: true,
+      manifest: {
+        platforms: ["darwin"],
+      },
     })
   })
 
