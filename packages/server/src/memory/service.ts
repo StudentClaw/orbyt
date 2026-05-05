@@ -21,19 +21,6 @@ function isGraphFolderEmpty(graphDir: string): boolean {
   return readdirSync(graphDir).length === 0
 }
 
-function logMemoryPaths(paths: ReturnType<typeof createMemoryPaths>, trigger: MemorizeRunTrigger): void {
-  console.log(
-    [
-      `[Memorize] memory paths resolved for ${trigger} run:`,
-      `  stateFile: ${paths.stateFile}`,
-      `  dailyDir: ${paths.dailyDir}`,
-      `  weeklyDir: ${paths.weeklyDir}`,
-      `  graphDir: ${paths.graphDir}`,
-      `  coursesDir: ${paths.coursesDir}`,
-    ].join("\n"),
-  )
-}
-
 export interface MemorizeRunOptions {
   readonly trigger?: MemorizeRunTrigger
 }
@@ -103,7 +90,6 @@ export const MemorizeServiceLive = Layer.effect(
         // from before a completed prior run.
         isRunning = true
         const paths = resolvePaths()
-        logMemoryPaths(paths, trigger)
         const store = new MemorizeStateStore(paths)
         const runner = new LiveMemorizeTurnRunner({ db, paths, store, distiller })
         try {

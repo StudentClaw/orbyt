@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process"
 export type StageBundledExtensionsOptions = {
   extensionsRoot: string
   outputRoot: string
+  targetPlatform?: NodeJS.Platform
   installDependencies?: boolean
 }
 
@@ -19,6 +20,11 @@ type PackageJson = {
   type?: string
   dependencies?: Record<string, string>
   packageManager?: string
+}
+
+type ExtensionManifestJson = {
+  id?: string
+  platforms?: string[]
 }
 
 function discoverBundledExtensionDirs(extensionsRoot: string): string[] {
@@ -39,6 +45,19 @@ function resolveRepoRoot(extensionsRoot: string): string {
 
 function readPackageJson(filePath: string): PackageJson {
   return JSON.parse(readFileSync(filePath, "utf8")) as PackageJson
+}
+
+function readExtensionManifest(filePath: string): ExtensionManifestJson {
+  return JSON.parse(readFileSync(filePath, "utf8")) as ExtensionManifestJson
+}
+
+function extensionSupportsTargetPlatform(extensionDir: string, targetPlatform: NodeJS.Platform): boolean {
+  const manifest = readExtensionManifest(path.join(extensionDir, "manifest.json"))
+  if (!manifest.platforms || manifest.platforms.length === 0) {
+    return true
+  }
+
+  return manifest.platforms.includes(targetPlatform)
 }
 
 function resolveBuiltAppleBridgePath(extensionDir: string): string | null {
@@ -245,11 +264,13 @@ function stageAppleBridge(extensionDir: string, stagedExtensionDir: string): voi
 
 export function stageBundledExtensions(options: StageBundledExtensionsOptions): string[] {
   const repoRoot = resolveRepoRoot(options.extensionsRoot)
+  const targetPlatform = options.targetPlatform ?? process.platform
   rmSync(options.outputRoot, { recursive: true, force: true })
   mkdirSync(options.outputRoot, { recursive: true })
 
   const stagedPluginIds: string[] = []
   const extensionDirs = discoverBundledExtensionDirs(options.extensionsRoot)
+    .filter((extensionDir) => extensionSupportsTargetPlatform(extensionDir, targetPlatform))
 
   for (const extensionDir of extensionDirs) {
     const pluginId = path.basename(extensionDir)
@@ -278,7 +299,13 @@ export function getDefaultStageOptions(): StageBundledExtensionsOptions {
 }
 
 if (import.meta.main) {
-  const options = getDefaultStageOptions()
+  const platformArg = process.argv.includes("--platform")
+    ? process.argv[process.argv.indexOf("--platform") + 1]
+    : undefined
+  const options = {
+    ...getDefaultStageOptions(),
+    ...(platformArg ? { targetPlatform: platformArg as NodeJS.Platform } : {}),
+  }
   const stagedPluginIds = stageBundledExtensions(options)
   process.stdout.write(`Staged bundled extensions: ${stagedPluginIds.join(", ")}\n`)
 }

@@ -409,11 +409,11 @@ function stageRuntimeWorkspacePackage(stageVendorDir: string, pkg: {
   writeFileSync(path.join(stageDir, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`, "utf8")
 }
 
-export function createStagePackageJson(stageAppDir: string, signed: boolean) {
+export function createStagePackageJson(stageAppDir: string, signed: boolean, appVersion = rootPackageJson.version) {
   const repoRoot = resolveRepoRoot()
   return {
     name: "orbyt-desktop-build",
-    version: rootPackageJson.version,
+    version: appVersion,
     packageManager: String(rootPackageJson.packageManager ?? "bun@1.3.5"),
     private: true,
     description: "Orbyt desktop build",
@@ -537,7 +537,7 @@ function stageDesktopApp(options: {
   options.logger.phase("Writing staged package manifest")
   writeFileSync(
     path.join(options.stageAppDir, "package.json"),
-    `${JSON.stringify(createStagePackageJson(options.stageAppDir, options.signed), null, 2)}\n`,
+    `${JSON.stringify(createStagePackageJson(options.stageAppDir, options.signed, options.appVersion), null, 2)}\n`,
     "utf8",
   )
 

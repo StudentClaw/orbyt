@@ -48,6 +48,7 @@ export const IpcChannel = {
   PLUGIN_CLEAR_AUTH: "plugin:clear-auth",
   CODEX_AUTH_LOGOUT: "codex:auth-logout",
   PLUGIN_REVEAL_PERMISSION_SETTINGS: "plugin:reveal-permission-settings",
+  SHELL_OPEN_EXTERNAL: "shell:open-external",
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -253,6 +254,8 @@ export type PluginAuthStatus = {
   readonly pluginId: string
   readonly status: PluginAuthStatusState
   readonly error?: string
+  readonly values?: Readonly<Record<string, string>>
+  readonly hasValue?: Readonly<Record<string, boolean>>
 }
 
 export type PluginSaveAuthFailureReason =
@@ -332,6 +335,7 @@ export type IpcInvokeArgsMap = {
   [IpcChannel.PLUGIN_CLEAR_AUTH]: [params: { pluginId: string }]
   [IpcChannel.CODEX_AUTH_LOGOUT]: []
   [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: [params: PluginRevealPermissionSettingsParams]
+  [IpcChannel.SHELL_OPEN_EXTERNAL]: [params: { url: string }]
 }
 
 export type IpcInvokeResultMap = {
@@ -369,6 +373,7 @@ export type IpcInvokeResultMap = {
   [IpcChannel.PLUGIN_CLEAR_AUTH]: { ok: boolean }
   [IpcChannel.CODEX_AUTH_LOGOUT]: { ok: boolean }
   [IpcChannel.PLUGIN_REVEAL_PERMISSION_SETTINGS]: PluginRevealPermissionSettingsResult
+  [IpcChannel.SHELL_OPEN_EXTERNAL]: { ok: boolean }
 }
 
 export type IpcEventPayloadMap = {

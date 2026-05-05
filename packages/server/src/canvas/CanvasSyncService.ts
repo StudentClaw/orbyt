@@ -20,6 +20,7 @@ import {
   type CanvasStudentCourseGradeSummary,
   type CanvasStudentPeerReviewTodo,
   type CanvasStudentTodoItem,
+  type CanvasSyncStatusSummary,
   type Course,
   type CourseWorkItem,
 } from "@orbyt/contracts"
@@ -147,6 +148,7 @@ export interface CanvasSyncServiceShape {
   readonly getCourseContentOverview: (params: CanvasCourseContentOverviewParams) => Promise<CanvasCourseContentOverviewResult>
   readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<CanvasCourseStructureResult>
   readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<CanvasDownloadCourseFileResult>
+  readonly getSyncStatus: () => CanvasSyncStatusSummary
 }
 
 export class CanvasSyncService extends Context.Tag("CanvasSyncService")<
@@ -157,6 +159,56 @@ export class CanvasSyncService extends Context.Tag("CanvasSyncService")<
 function logError(context: string, error: unknown): void {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
   process.stderr.write(`[CanvasSync] ${context}: ${message}\n`)
+}
+
+const CANVAS_SYNC_JOB_NAME = "canvas-sync"
+
+type CanvasSyncRunRow = {
+  finished_at: number | null
+  error: string | null
+}
+
+/**
+ * Reads the most recent successful and failed canvas-sync cron runs out of
+ * cron_runs. Used to hydrate the dashboard's lastSync atom on app start so
+ * the "Showing your saved Canvas snapshot" toast doesn't show falsely after
+ * a successful sync that left the courses table empty (or after an app
+ * restart wiped in-memory state).
+ */
+function readCanvasSyncStatus(database: DatabaseService): CanvasSyncStatusSummary {
+  const lastSuccess = database.get<CanvasSyncRunRow>(
+    `SELECT cr.finished_at, cr.error
+       FROM cron_runs cr
+       JOIN cron_jobs cj ON cj.id = cr.job_id
+      WHERE cj.name = ? AND cr.status = 'success'
+      ORDER BY cr.started_at DESC
+      LIMIT 1`,
+    [CANVAS_SYNC_JOB_NAME],
+  )
+  const lastFailure = database.get<CanvasSyncRunRow>(
+    `SELECT cr.finished_at, cr.error
+       FROM cron_runs cr
+       JOIN cron_jobs cj ON cj.id = cr.job_id
+      WHERE cj.name = ? AND cr.status = 'failed'
+      ORDER BY cr.started_at DESC
+      LIMIT 1`,
+    [CANVAS_SYNC_JOB_NAME],
+  )
+
+  const successAt = lastSuccess?.finished_at ?? null
+  const failureAt = lastFailure?.finished_at ?? null
+
+  const lastSuccessAt = successAt ? new Date(successAt).toISOString() : null
+
+  let lastError: CanvasSyncStatusSummary["lastError"] = null
+  if (failureAt && (!successAt || failureAt > successAt)) {
+    lastError = {
+      at: new Date(failureAt).toISOString(),
+      message: lastFailure?.error ?? "Canvas sync failed.",
+    }
+  }
+
+  return { lastSuccessAt, lastError }
 }
 
 async function flushMemoryPromotion(
@@ -626,9 +678,6 @@ async function syncRememberedAssignmentSources(
             now,
           })
         : []
-      console.log(
-        `[CanvasSync] remembered assignment source ${source.id} parsed ${parsedItems.length} item(s) for ${course.name} (${course.code})`,
-      )
       if (parsedItems.length === 0) {
         updateAssignmentSourceChecked(database, source.id, "No coursework items found in remembered source.", now)
         continue
@@ -759,6 +808,7 @@ export function createSyncService(
         progress: 0,
         status: "error",
       })
+      throw error
     }
   }
 
@@ -940,6 +990,10 @@ export function createSyncService(
     return apiClient.downloadCourseFile(params) as Promise<CanvasDownloadCourseFileResult>
   }
 
+  function getSyncStatus(): CanvasSyncStatusSummary {
+    return readCanvasSyncStatus(database)
+  }
+
   return {
     sync,
     listCourses,
@@ -955,6 +1009,7 @@ export function createSyncService(
     getCourseContentOverview,
     getCourseStructure,
     downloadCourseFile,
+    getSyncStatus,
   }
 }
 

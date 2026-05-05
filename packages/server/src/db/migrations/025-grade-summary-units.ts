@@ -3,13 +3,12 @@ import type { RuntimeSqliteDatabase } from "../runtime-sqlite.js"
 export const version = 25
 
 export function run(db: RuntimeSqliteDatabase): void {
-  const table = db
+  const tableExists = db
     .query<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'canvas_course_grade_summaries'",
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='canvas_course_grade_summaries'",
     )
     .get()
-
-  if (!table) return
+  if (!tableExists) return
 
   const columns = db
     .query<{ name: string }>("PRAGMA table_info(canvas_course_grade_summaries)")

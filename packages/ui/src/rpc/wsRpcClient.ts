@@ -13,6 +13,7 @@ import {
   CanvasGetMyUpcomingAssignmentsResult,
   CanvasListAssignmentsResult,
   CanvasListCoursesResult,
+  CanvasSyncStatusSummary,
   OrchestrationDomainEvent,
   OrchestrationSnapshot,
   ProviderRuntimeEvent,
@@ -207,6 +208,7 @@ export interface WsRpcClient {
     readonly getCourseStructure: (params: CanvasCourseStructureParams) => Promise<Schema.Schema.Type<typeof CanvasCourseStructureResult>>
     readonly downloadCourseFile: (params: CanvasDownloadCourseFileParams) => Promise<Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>>
     readonly sync: () => Promise<void>
+    readonly getSyncStatus: () => Promise<Schema.Schema.Type<typeof CanvasSyncStatusSummary>>
     readonly onSyncProgress: (
       listener: (event: CanvasSyncProgressEvent) => void,
       options?: StreamSubscriptionOptions,
@@ -228,6 +230,7 @@ export interface WsRpcClient {
     ) => () => void
   }
   readonly activity: {
+    readonly getFeed: () => Promise<ReadonlyArray<ActivityFeedEntry>>
     readonly generateWeeklyInsight: () => Promise<WeeklyInsight>
     readonly setActed: (params: { id: string; acted: boolean }) => Promise<{ ok: boolean }>
     readonly onFeedUpdate: (
@@ -451,6 +454,11 @@ function createCanvasApi(transport: WsTransport): WsRpcClient["canvas"] {
         await transport.request(RPC_METHODS.CANVAS_DOWNLOAD_COURSE_FILE, params),
       ),
     sync: () => transport.request(RPC_METHODS.CANVAS_SYNC, {}).then(() => undefined),
+    getSyncStatus: async () =>
+      decode(
+        CanvasSyncStatusSummary,
+        await transport.request(RPC_METHODS.CANVAS_GET_SYNC_STATUS, {}),
+      ),
     onSyncProgress: (listener, options) =>
       transport.subscribe(
         PUSH_CHANNELS.CANVAS_SYNC_PROGRESS,
@@ -518,6 +526,13 @@ function createMemoryApi(transport: WsTransport): WsRpcClient["memory"] {
 
 function createActivityApi(transport: WsTransport): WsRpcClient["activity"] {
   return {
+    getFeed: async () => {
+      const result = await transport.request<{ entries: ReadonlyArray<ActivityFeedEntry> }>(
+        RPC_METHODS.ACTIVITY_GET_FEED,
+        {},
+      )
+      return result.entries
+    },
     generateWeeklyInsight: () => transport.request(RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT, {}),
     setActed: (params) => transport.request(RPC_METHODS.ACTIVITY_SET_ACTED, params),
     onFeedUpdate: (listener, options) =>

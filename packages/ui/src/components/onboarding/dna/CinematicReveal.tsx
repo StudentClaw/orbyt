@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { StudentDna } from "@orbyt/contracts"
 import { RevealDNACard } from "./RevealDNACard"
 import { DenseParticles } from "./DenseParticles"
@@ -22,19 +22,63 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
     setTimeout(() => setPhase(2), 900)
   }
 
+  // Phase 2: any click or key press continues. Delay a beat so the click that
+  // dismissed the burst doesn't immediately skip the reveal.
+  const [canContinue, setCanContinue] = useState(false)
+  useEffect(() => {
+    if (phase !== 2) {
+      setCanContinue(false)
+      return
+    }
+    const armTimer = setTimeout(() => setCanContinue(true), 1600)
+    return () => clearTimeout(armTimer)
+  }, [phase])
+
+  useEffect(() => {
+    if (phase !== 2 || !canContinue) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+        e.preventDefault()
+        onContinue()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [phase, canContinue, onContinue])
+
   const shards = useMemo(
     () =>
-      Array.from({ length: 28 }).map((_, i) => {
-        const angle = (i / 28) * 360 + (Math.random() - 0.5) * 15
-        const dist = 200 + Math.random() * 180
+      Array.from({ length: 64 }).map((_, i) => {
+        const angle = (i / 64) * 360 + (Math.random() - 0.5) * 22
+        const dist = 220 + Math.random() * 280
         return {
           idx: i,
           angle,
           tx: Math.cos((angle * Math.PI) / 180) * dist,
           ty: Math.sin((angle * Math.PI) / 180) * dist,
-          sz: 4 + Math.random() * 8,
-          hue: ((h + (Math.random() - 0.5) * 120 + 360) % 360),
+          sz: 3 + Math.random() * 9,
+          hue: ((h + (Math.random() - 0.5) * 140 + 360) % 360),
           isCircle: i % 3 === 0,
+          delay: i * 0.008 + Math.random() * 0.05,
+          dur: 0.85 + Math.random() * 0.45,
+        }
+      }),
+    [h],
+  )
+
+  const sparkles = useMemo(
+    () =>
+      Array.from({ length: 24 }).map((_, i) => {
+        const angle = Math.random() * 360
+        const dist = 80 + Math.random() * 380
+        return {
+          idx: i,
+          tx: Math.cos((angle * Math.PI) / 180) * dist,
+          ty: Math.sin((angle * Math.PI) / 180) * dist,
+          sz: 2 + Math.random() * 3,
+          hue: ((h + (Math.random() - 0.5) * 200 + 360) % 360),
+          delay: 0.05 + Math.random() * 0.6,
+          dur: 1.0 + Math.random() * 0.6,
         }
       }),
     [h],
@@ -53,7 +97,7 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
         transition: "background 1s",
       }}
     >
-      <DenseParticles density={180} hue={h} intensity={phase >= 1 ? 1.4 : 1} />
+      <DenseParticles density={100} hue={h} intensity={phase >= 1 ? 1.1 : 0.85} />
 
       {/* Phase 0 + 1: headline + mystery card */}
       {phase < 2 && (
@@ -83,7 +127,7 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
           <h1
             style={{
               fontFamily: SERIF,
-              fontSize: 60,
+              fontSize: 70,
               margin: "0 0 36px",
               fontWeight: 400,
               lineHeight: 1.05,
@@ -142,8 +186,28 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
                     boxShadow: `0 0 ${s.sz * 3}px oklch(0.8 0.25 ${s.hue})`,
                     ["--tx" as string]: `${s.tx}px`,
                     ["--ty" as string]: `${s.ty}px`,
-                    animation: `shard-out 0.9s cubic-bezier(0.22,0.61,0.36,1) forwards`,
-                    animationDelay: `${s.idx * 0.012}s`,
+                    animation: `shard-out ${s.dur}s cubic-bezier(0.22,0.61,0.36,1) forwards`,
+                    animationDelay: `${s.delay}s`,
+                    willChange: "transform, opacity",
+                  }}
+                />
+              ))}
+              {sparkles.map((s) => (
+                <div
+                  key={`sp-${s.idx}`}
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    width: s.sz,
+                    height: s.sz,
+                    borderRadius: "50%",
+                    background: `oklch(0.95 0.2 ${s.hue})`,
+                    boxShadow: `0 0 ${s.sz * 6}px oklch(0.85 0.25 ${s.hue})`,
+                    ["--tx" as string]: `${s.tx}px`,
+                    ["--ty" as string]: `${s.ty}px`,
+                    animation: `sparkle-out ${s.dur}s ease-out forwards`,
+                    animationDelay: `${s.delay}s`,
                     willChange: "transform, opacity",
                   }}
                 />
@@ -157,25 +221,27 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
                   width: 30,
                   height: 30,
                   borderRadius: "50%",
-                  transform: "translate(-50%,-50%)",
                   background: `radial-gradient(circle, white, oklch(0.9 0.25 ${h}) 30%, transparent 70%)`,
                   animation: "flash-out 0.9s ease-out forwards",
                   willChange: "transform, opacity",
+                  transform: "translate(-50%,-50%) scale(0.5)",
                 }}
               />
-              {/* expanding ring */}
+              {/* expanding ring (scale-based, GPU friendly) */}
               <div
                 style={{
                   position: "absolute",
                   left: "50%",
                   top: "50%",
-                  width: 30,
-                  height: 30,
+                  width: 600,
+                  height: 600,
+                  marginLeft: -300,
+                  marginTop: -300,
                   borderRadius: "50%",
-                  transform: "translate(-50%,-50%)",
                   border: `2px solid oklch(0.85 0.28 ${h})`,
-                  animation: "ring-out 0.9s cubic-bezier(0.22,0.61,0.36,1) forwards",
+                  animation: "ring-scale 0.9s cubic-bezier(0.22,0.61,0.36,1) forwards",
                   willChange: "transform, opacity",
+                  transform: "scale(0.05)",
                 }}
               />
               {/* secondary ring */}
@@ -184,13 +250,32 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
                   position: "absolute",
                   left: "50%",
                   top: "50%",
-                  width: 30,
-                  height: 30,
+                  width: 600,
+                  height: 600,
+                  marginLeft: -300,
+                  marginTop: -300,
                   borderRadius: "50%",
-                  transform: "translate(-50%,-50%)",
                   border: `1.5px solid oklch(0.85 0.28 ${ah})`,
-                  animation: "ring-out 1.1s cubic-bezier(0.22,0.61,0.36,1) 0.15s forwards",
+                  animation: "ring-scale 1.1s cubic-bezier(0.22,0.61,0.36,1) 0.15s forwards",
                   willChange: "transform, opacity",
+                  transform: "scale(0.05)",
+                }}
+              />
+              {/* tertiary ring for extra punch */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  width: 600,
+                  height: 600,
+                  marginLeft: -300,
+                  marginTop: -300,
+                  borderRadius: "50%",
+                  border: `1px solid oklch(0.9 0.22 ${(h + 60) % 360})`,
+                  animation: "ring-scale 1.3s cubic-bezier(0.22,0.61,0.36,1) 0.3s forwards",
+                  willChange: "transform, opacity",
+                  transform: "scale(0.05)",
                 }}
               />
             </div>
@@ -201,6 +286,9 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
       {/* Phase 2: revealed card */}
       {phase === 2 && (
         <div
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (canContinue) onContinue() }}
           style={{
             position: "absolute",
             inset: 0,
@@ -212,6 +300,8 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
             textAlign: "center",
             padding: "40px",
             overflow: "auto",
+            cursor: canContinue ? "pointer" : "default",
+            outline: "none",
           }}
         >
           <div
@@ -231,64 +321,71 @@ export function CinematicReveal({ dna, onContinue }: CinematicRevealProps) {
           <h1
             style={{
               fontFamily: SERIF,
-              fontSize: 38,
+              fontSize: 46,
               margin: "0 0 22px",
               fontWeight: 400,
               lineHeight: 1.05,
+              letterSpacing: "-0.02em",
               animation: "fade-up 0.7s 0.15s backwards",
               willChange: "transform, opacity",
             }}
           >
             Here&apos;s <em style={{ fontStyle: "italic" }}>you</em>, {dna.name}.
           </h1>
-          <div style={{ animation: "card-reveal 1s 0.1s cubic-bezier(0.34,1.56,0.64,1) backwards", willChange: "transform, opacity" }}>
+          <div style={{ animation: "card-reveal 1s 0.1s cubic-bezier(0.34,1.56,0.64,1) backwards", willChange: "transform, opacity", pointerEvents: "none" }}>
             <RevealDNACard dna={dna} />
           </div>
-          <div style={{ marginTop: 24, animation: "fade-up 0.7s 1.6s backwards", willChange: "transform, opacity" }}>
-            <button
-              onClick={onContinue}
-              style={{
-                padding: "14px 36px",
-                borderRadius: 999,
-                border: "none",
-                background: `linear-gradient(135deg, oklch(0.55 0.22 ${h}), oklch(0.45 0.2 ${ah}))`,
-                color: "white",
-                fontSize: 16,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                boxShadow: `0 8px 28px oklch(0.5 0.22 ${h}/0.5)`,
-              }}
-            >
-              Continue →
-            </button>
+          <div
+            style={{
+              marginTop: 28,
+              fontSize: 12,
+              letterSpacing: "0.32em",
+              textTransform: "uppercase",
+              color: `oklch(0.78 0.18 ${h})`,
+              fontFamily: MONO,
+              opacity: canContinue ? 1 : 0,
+              animation: canContinue ? "continue-pulse 2.4s ease-in-out infinite" : "none",
+              transition: "opacity 0.6s",
+              willChange: "opacity",
+            }}
+          >
+            click anywhere to continue
           </div>
         </div>
       )}
 
       <style>{`
-        @keyframes fade-up { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fade-up { from{opacity:0;transform:translate3d(0,16px,0)} to{opacity:1;transform:translate3d(0,0,0)} }
         @keyframes ready-headline {
-          from { opacity: 0; transform: translateY(20px); filter: blur(12px); }
-          to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+          from { opacity: 0; transform: translate3d(0,18px,0) scale(0.97); }
+          to   { opacity: 1; transform: translate3d(0,0,0) scale(1); }
         }
         @keyframes shard-out {
           0%   { transform: translate(-50%,-50%) scale(0.4); opacity: 1; }
           70%  { opacity: 0.9; }
           100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0); opacity: 0; }
         }
+        @keyframes sparkle-out {
+          0%   { transform: translate(-50%,-50%) scale(0.2); opacity: 0; }
+          25%  { opacity: 1; }
+          100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1.4); opacity: 0; }
+        }
         @keyframes flash-out {
           0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.5); }
           20%  { opacity: 1; transform: translate(-50%,-50%) scale(8); }
           100% { opacity: 0; transform: translate(-50%,-50%) scale(20); }
         }
-        @keyframes ring-out {
-          0%   { width: 30px; height: 30px; opacity: 1; border-width: 2px; }
-          100% { width: 600px; height: 600px; opacity: 0; border-width: 0.5px; }
+        @keyframes ring-scale {
+          0%   { transform: scale(0.05); opacity: 1; }
+          100% { transform: scale(1); opacity: 0; }
         }
         @keyframes card-reveal {
-          from { opacity: 0; transform: scale(0.7) rotateY(20deg); filter: blur(20px); }
-          to   { opacity: 1; transform: scale(1) rotateY(0); filter: blur(0); }
+          from { opacity: 0; transform: scale(0.85) translate3d(0,12px,0); }
+          to   { opacity: 1; transform: scale(1) translate3d(0,0,0); }
+        }
+        @keyframes continue-pulse {
+          0%, 100% { opacity: 0.5; }
+          50%      { opacity: 1; }
         }
       `}</style>
     </div>

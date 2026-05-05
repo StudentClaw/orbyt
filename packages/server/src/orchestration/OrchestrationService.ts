@@ -37,7 +37,6 @@ import type {
   SetThreadAccessModeResult,
 } from "@orbyt/contracts"
 import { createId } from "@orbyt/shared-runtime"
-import { recordWorkflowCompletionActivity } from "../activity/feed.js"
 import { CodexCli, ProviderRuntimeFailure } from "../ai/CodexCli.js"
 import { ProviderRuntimeStore } from "../ai/ProviderRuntimeStore.js"
 import type { AppConfig } from "../config/defaults.js"
@@ -873,19 +872,6 @@ async function publishCompletedTurn(
     turnId: work.turnId as ProviderTurnId,
     output,
   })
-  try {
-    await recordWorkflowCompletionActivity({
-      database: deps.database,
-      pushBus: deps.pushBus,
-      turn: {
-        id: turn.id,
-        threadId: turn.threadId,
-        output,
-      },
-    })
-  } catch (error) {
-    process.stderr.write(`Failed to record workflow activity: ${String(error)}\n`)
-  }
   await publishDomainEvent(deps.pushBus, { type: "turn.completed", turn })
 }
 
@@ -1851,19 +1837,6 @@ export const OrchestrationServiceLive = Layer.scoped(
           turnId: turnId as never,
           output,
         })
-        try {
-          await recordWorkflowCompletionActivity({
-            database,
-            pushBus,
-            turn: {
-              id: turn.id,
-              threadId: turn.threadId,
-              output,
-            },
-          })
-        } catch (error) {
-          process.stderr.write(`Failed to record workflow activity: ${String(error)}\n`)
-        }
         await publishDomainEvent({ type: "turn.completed", turn })
         turnEventBus.publishTurnCompleted({
           turnId: turn.id,

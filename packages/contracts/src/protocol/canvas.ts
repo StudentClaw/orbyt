@@ -376,6 +376,15 @@ export const CanvasDownloadCourseFileResult = Schema.Struct({
   message: Schema.String,
 })
 
+export const CanvasSyncStatusError = Schema.Struct({
+  at: Schema.String,
+  message: Schema.String,
+})
+export const CanvasSyncStatusSummary = Schema.Struct({
+  lastSuccessAt: Schema.NullOr(Schema.String),
+  lastError: Schema.NullOr(CanvasSyncStatusError),
+})
+
 export const CanvasGetCourseworkParams = Schema.Struct({
   courseId: Schema.optional(CourseId),
   sources: Schema.optional(Schema.Array(Schema.Literal("assignment", "module", "page", "announcement"))),
@@ -518,6 +527,8 @@ export type CanvasMarkConversationsReadParams = Schema.Schema.Type<typeof Canvas
 export type CanvasMarkConversationsReadResult = Schema.Schema.Type<typeof CanvasMarkConversationsReadResult>
 export type CanvasDownloadCourseFileParams = Schema.Schema.Type<typeof CanvasDownloadCourseFileParams>
 export type CanvasDownloadCourseFileResult = Schema.Schema.Type<typeof CanvasDownloadCourseFileResult>
+export type CanvasSyncStatusSummary = Schema.Schema.Type<typeof CanvasSyncStatusSummary>
+export type CanvasSyncStatusError = Schema.Schema.Type<typeof CanvasSyncStatusError>
 export type CanvasGetCourseworkParams = Schema.Schema.Type<typeof CanvasGetCourseworkParams>
 export type CanvasGetCourseworkResult = Schema.Schema.Type<typeof CanvasGetCourseworkResult>
 export type CanvasGetCourseworkDetailByItem = Schema.Schema.Type<typeof CanvasGetCourseworkDetailByItem>

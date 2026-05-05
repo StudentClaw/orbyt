@@ -49,6 +49,40 @@ const canvasEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
   enabled: true,
 }
 
+const notionEntry: Extract<ExtensionRegistryEntry, { kind: "available" }> = {
+  kind: "available",
+  manifest: {
+    id: "notion-mcp",
+    name: "Notion",
+    description: "Notion integration",
+    version: "0.1.0",
+    transport: {
+      type: "local_stdio",
+      entry: "dist/index.js",
+    },
+    permissions: ["notion.workspace.read", "notion.content.write"],
+    auth: {
+      type: "manual_token",
+      instructions: "Paste your Notion integration token.",
+      fields: [
+        {
+          key: "NOTION_TOKEN",
+          label: "Notion integration token",
+          type: "secret",
+          required: true,
+          placeholder: "ntn_...",
+        },
+      ],
+    },
+    tools: [{ name: "API-post-search", description: "Search Notion" }],
+    author: "orbyt",
+    homepage: "https://github.com/makenotion/notion-mcp-server",
+  },
+  installSource: "bundled",
+  status: "discovered",
+  enabled: true,
+}
+
 function createTempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "orbyt-plugin-auth-"))
   tempDirs.push(dir)
@@ -124,6 +158,8 @@ describe("PluginAuthService", () => {
     expect(authService.getStatus("canvas-mcp")).toEqual({
       pluginId: "canvas-mcp",
       status: "configured",
+      values: { baseUrl: "https://myschool.instructure.com" },
+      hasValue: { baseUrl: true, token: true },
     })
     expect(authService.getCredentialMessage("canvas-mcp")).toEqual({
       type: "plugin.credentials",
@@ -182,6 +218,39 @@ describe("PluginAuthService", () => {
       ok: true,
       pluginId: "canvas-mcp",
       status: "configured",
+    })
+  })
+
+  test("returns scoped credential environment values for pre-spawn plugins", () => {
+    const authService = new PluginAuthService({
+      registry: createRegistry(notionEntry),
+      vault: createVault(createTempDir()),
+    })
+
+    authService.saveCredentials({
+      pluginId: "notion-mcp",
+      values: {
+        NOTION_TOKEN: "ntn_12345678901234567890",
+      },
+    })
+
+    expect(authService.getStatus("notion-mcp")).toEqual({
+      pluginId: "notion-mcp",
+      status: "configured",
+      values: {},
+      hasValue: {
+        NOTION_TOKEN: true,
+      },
+    })
+    expect(authService.getCredentialEnvironment("notion-mcp")).toEqual({
+      NOTION_TOKEN: "ntn_12345678901234567890",
+    })
+    expect(authService.getCredentialMessage("notion-mcp")).toEqual({
+      type: "plugin.credentials",
+      pluginId: "notion-mcp",
+      payload: {
+        NOTION_TOKEN: "ntn_12345678901234567890",
+      },
     })
   })
 })

@@ -4,28 +4,31 @@ import {
   parseAgentDirectives,
   checkHeartbeatAck,
 } from "../prompts.js"
+import { parseHeartbeatProtocol } from "../heartbeat-protocol.js"
+import type { HeartbeatCandidate } from "../heartbeat-candidates.js"
 
-const EMPTY_SCHEDULE = {
-  upcomingCoursework: [],
-  todaysSessions: [],
-} as const
+const NO_CANDIDATES: ReadonlyArray<HeartbeatCandidate> = []
 
 describe("buildHeartbeatPrompt", () => {
-  test("includes scope, working buffer, schedule sections, and reply protocol", () => {
+  test("includes scope, working buffer, sessions, and strict digest protocol", () => {
     const prompt = buildHeartbeatPrompt({
       heartbeatScope: "watch for missed deadlines",
       workingBufferNotes: [],
       nowIso: "2026-04-24T12:00:00.000Z",
-      ...EMPTY_SCHEDULE,
+      candidates: NO_CANDIDATES,
+      todaysSessions: [],
     })
-    expect(prompt).toContain("HEARTBEAT_OK")
-    expect(prompt).toContain("WB_ADD")
-    expect(prompt).toContain("REMINDER:")
+    expect(prompt).toContain("DIGEST:")
+    expect(prompt).toContain("SKIP")
     expect(prompt).toContain("watch for missed deadlines")
     expect(prompt).toContain("(no active notes)")
-    expect(prompt).toContain("(no upcoming items)")
     expect(prompt).toContain("(no sessions today)")
+    expect(prompt).toContain("nothing on fire this tick")
     expect(prompt).toContain("2026-04-24T12:00:00.000Z")
+    // Voice rules surface in the prompt body.
+    expect(prompt).toContain("lowercase by default")
+    expect(prompt).toContain("ALL CAPS")
+    expect(prompt).toContain("no emoji")
   })
 
   test("renders working-buffer notes inline", () => {
@@ -40,34 +43,109 @@ describe("buildHeartbeatPrompt", () => {
         },
       ],
       nowIso: "2026-04-24T12:00:00.000Z",
-      ...EMPTY_SCHEDULE,
+      candidates: NO_CANDIDATES,
+      todaysSessions: [],
     })
     expect(prompt).toContain("watch CS")
     expect(prompt).toContain("expires 2026-04-25T10:00:00.000Z")
   })
 
-  test("renders upcoming coursework and today's sessions when present", () => {
+  test("renders an imminent candidate and simplifies its course code", () => {
+    const candidates: HeartbeatCandidate[] = [
+      {
+        kind: "instant_imminent",
+        state: "due_soon",
+        itemId: "asg-1",
+        course: "2025FA_CS38_INTRO_PROGRAMMING",
+        title: "Lab 4",
+        assignmentType: "work",
+        dueAt: "2026-04-24T13:00:00.000Z",
+        dueAtMs: Date.parse("2026-04-24T13:00:00.000Z"),
+        minutesUntil: 60,
+        htmlUrl: "https://canvas.test/lab4",
+      },
+    ]
     const prompt = buildHeartbeatPrompt({
       heartbeatScope: "",
       workingBufferNotes: [],
       nowIso: "2026-04-24T12:00:00.000Z",
-      upcomingCoursework: [
-        { course: "CS-101", title: "Lab 4", dueAt: "2026-04-25T05:00:00.000Z" },
-        { course: "MATH-201", title: "Problem set", dueAt: null },
-      ],
-      todaysSessions: [
-        {
-          start: "2026-04-24T14:00:00.000Z",
-          end: "2026-04-24T15:30:00.000Z",
-          title: "Calc study",
-        },
-      ],
+      candidates,
+      todaysSessions: [],
     })
-    expect(prompt).toContain("CS-101: Lab 4 (due 2026-04-25T05:00:00.000Z)")
-    expect(prompt).toContain("MATH-201: Problem set")
-    expect(prompt).toContain(
-      "2026-04-24T14:00:00.000Z–2026-04-24T15:30:00.000Z Calc study",
+    expect(prompt).toContain("[IMMINENT] CS38 Lab 4")
+    expect(prompt).not.toContain("2025FA_CS38_INTRO_PROGRAMMING")
+    expect(prompt).toContain("type=work")
+  })
+
+  test("renders schedule_later candidates with kind and timing", () => {
+    const candidates: HeartbeatCandidate[] = [
+      {
+        kind: "schedule_later",
+        state: "starting_soon",
+        itemId: "asg-2",
+        course: "2025FA_CHEM230_GENERAL_CHEMISTRY",
+        title: "Quiz 4",
+        assignmentType: "assessment",
+        dueAt: "2026-04-24T16:00:00.000Z",
+        dueAtMs: Date.parse("2026-04-24T16:00:00.000Z"),
+        minutesUntil: 240,
+        htmlUrl: null,
+        scheduleAtIso: "2026-04-24T15:45:00.000Z",
+      },
+    ]
+    const prompt = buildHeartbeatPrompt({
+      heartbeatScope: "",
+      workingBufferNotes: [],
+      nowIso: "2026-04-24T12:00:00.000Z",
+      candidates,
+      todaysSessions: [],
+    })
+    expect(prompt).toContain("[UPCOMING] CHEM230 Quiz 4")
+    expect(prompt).toContain("type=assessment")
+    expect(prompt).toContain("in 240 min")
+  })
+})
+
+describe("heartbeat parser integration with prompt-style replies", () => {
+  test("DIGEST line yields a digest decision", () => {
+    const out = parseHeartbeatProtocol(
+      "DIGEST: BRO chem exam in 2 hrs. also that phys prelab is due tonight, plus cs38 lab 4 still floating.",
     )
+    expect(out.decision).toBe("digest")
+    if (out.decision === "digest") {
+      expect(out.body).toContain("BRO")
+      expect(out.body).toContain("phys prelab")
+    }
+  })
+
+  test("SKIP yields a skip decision", () => {
+    expect(parseHeartbeatProtocol("SKIP").decision).toBe("skip")
+  })
+
+  test("any other content is treated as skip", () => {
+    expect(parseHeartbeatProtocol("just narration").decision).toBe("skip")
+    expect(parseHeartbeatProtocol("").decision).toBe("skip")
+  })
+
+  test("emoji and ascii separator dashes are sanitized out of the digest body", () => {
+    const out = parseHeartbeatProtocol(
+      "DIGEST: yo \u{1F525} chem exam in 2 hrs - also a phys prelab tonight",
+    )
+    expect(out.decision).toBe("digest")
+    if (out.decision === "digest") {
+      expect(out.body).not.toContain("\u{1F525}")
+      expect(out.body).not.toContain(" - ")
+    }
+  })
+
+  test("unicode dashes are stripped from the digest body", () => {
+    const out = parseHeartbeatProtocol(
+      "DIGEST: yo — chem exam soon – prelab tonight",
+    )
+    expect(out.decision).toBe("digest")
+    if (out.decision === "digest") {
+      expect(out.body).not.toMatch(/[‐-―−]/)
+    }
   })
 })
 
@@ -144,26 +222,11 @@ describe("parseAgentDirectives", () => {
   })
 })
 
-describe("checkHeartbeatAck", () => {
+describe("checkHeartbeatAck (legacy)", () => {
   test("HEARTBEAT_OK alone suppresses delivery", () => {
     expect(checkHeartbeatAck("HEARTBEAT_OK")).toEqual({
       suppress: true,
       remainder: "",
     })
-  })
-
-  test("HEARTBEAT_OK with short trailing comment still suppresses", () => {
-    const ack = checkHeartbeatAck("HEARTBEAT_OK\nNothing notable today.")
-    expect(ack.suppress).toBe(true)
-    expect(ack.remainder).toBe("Nothing notable today.")
-  })
-
-  test("HEARTBEAT_OK followed by a long alert does NOT suppress", () => {
-    const long = "x".repeat(400)
-    expect(checkHeartbeatAck(`HEARTBEAT_OK\n${long}`).suppress).toBe(false)
-  })
-
-  test("missing HEARTBEAT_OK never suppresses", () => {
-    expect(checkHeartbeatAck("Something urgent — pay attention").suppress).toBe(false)
   })
 })

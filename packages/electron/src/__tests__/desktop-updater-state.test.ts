@@ -39,14 +39,30 @@ describe("desktop updater state", () => {
 
     expect(getAutoUpdateDisabledReason({
       isPackaged: true,
-      platform: "linux",
+      platform: "darwin",
       disabledByEnv: false,
-      hasUpdateFeedConfig: true,
-    })).toContain("macOS")
+      hasUpdateFeedConfig: false,
+    })).toContain("update feed")
 
     expect(getAutoUpdateDisabledReason({
       isPackaged: true,
       platform: "darwin",
+      disabledByEnv: false,
+      hasUpdateFeedConfig: true,
+    })).toBeNull()
+  })
+
+  test("enables packaged Windows and Linux updates when a feed is configured", () => {
+    expect(getAutoUpdateDisabledReason({
+      isPackaged: true,
+      platform: "linux",
+      disabledByEnv: false,
+      hasUpdateFeedConfig: true,
+    })).toBeNull()
+
+    expect(getAutoUpdateDisabledReason({
+      isPackaged: true,
+      platform: "win32",
       disabledByEnv: false,
       hasUpdateFeedConfig: true,
     })).toBeNull()

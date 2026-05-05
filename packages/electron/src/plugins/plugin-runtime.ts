@@ -10,6 +10,8 @@ import { PluginManager } from "./plugin-manager.js"
 import { PluginVault, resolvePluginVaultDir } from "./plugin-vault.js"
 import { PluginEnabledStore } from "./plugin-enabled-store.js"
 import { PluginRuntimeLogBuffer } from "./plugin-runtime-log-buffer.js"
+import type { AvailablePluginRegistryRecord } from "./plugin-registry.js"
+import type { PluginRuntimePreparation } from "./plugin-runtime-preparation.js"
 
 export type PluginRuntime = {
   readonly registry: PluginRegistry
@@ -19,6 +21,33 @@ export type PluginRuntime = {
   readonly enabledStore: PluginEnabledStore
   readonly appleCalendarBridgeManager: AppleCalendarBridgeManager
   readonly runtimeLogs: PluginRuntimeLogBuffer
+}
+
+const NOTION_PLUGIN_ID = "notion-mcp"
+
+export function prepareNotionMcpRuntime(
+  record: AvailablePluginRegistryRecord,
+  authService: Pick<PluginAuthService, "getCredentialEnvironment">,
+): PluginRuntimePreparation | null {
+  if (record.entry.manifest.id !== NOTION_PLUGIN_ID) {
+    return null
+  }
+
+  const env = authService.getCredentialEnvironment(NOTION_PLUGIN_ID)
+  const token = env?.NOTION_TOKEN
+  if (!token) {
+    return {
+      readiness: "error",
+      lastError: "Notion credentials are not configured. Save a Notion integration token in Settings > Connections.",
+    }
+  }
+
+  return {
+    readiness: "ready",
+    env: {
+      NOTION_TOKEN: token,
+    },
+  }
 }
 
 export function createPluginRuntime(options: {
@@ -60,11 +89,11 @@ export function createPluginRuntime(options: {
     emitRuntimeLog,
     getCredentialMessage: (pluginId) => authService.getCredentialMessage(pluginId),
     prepareRuntime: async (record) => {
-      if (record.entry.manifest.id !== "apple-calendar-mcp") {
-        return null
+      if (record.entry.manifest.id === "apple-calendar-mcp") {
+        return appleCalendarBridgeManager.ensureReady()
       }
 
-      return appleCalendarBridgeManager.ensureReady()
+      return prepareNotionMcpRuntime(record, authService)
     },
     cleanupRuntime: async (record) => {
       if (record.entry.manifest.id !== "apple-calendar-mcp") {
@@ -72,6 +101,13 @@ export function createPluginRuntime(options: {
       }
 
       await appleCalendarBridgeManager.stop()
+    },
+    shouldAutoStart: (entry) => {
+      if (entry.manifest.auth.type !== "manual_token") {
+        return true
+      }
+
+      return authService.getStatus(entry.manifest.id)?.status === "configured"
     },
     enabledStore,
   })

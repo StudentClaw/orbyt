@@ -18,6 +18,7 @@ export const StudentPreference = Schema.Struct({
   memoryGraphPath: Schema.String,
   memoryGraphPathMode: Schema.Literal("default", "custom"),
   defaultAccessMode: DefaultAccessMode,
+  dashboardTourCompletedAt: Schema.NullOr(Schema.String),
 })
 export type StudentPreference = Schema.Schema.Type<typeof StudentPreference>
 
@@ -32,5 +33,6 @@ export const UpdatePreferencesParams = Schema.Struct({
   calendarIntegration: Schema.optional(CalendarIntegration),
   memoryGraphPath: Schema.optional(Schema.NullOr(Schema.String)),
   defaultAccessMode: Schema.optional(DefaultAccessMode),
+  dashboardTourCompletedAt: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type UpdatePreferencesParams = Schema.Schema.Type<typeof UpdatePreferencesParams>

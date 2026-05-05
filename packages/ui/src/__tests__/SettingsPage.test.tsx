@@ -27,10 +27,6 @@ vi.mock("@/hooks/useAppRuntime", () => ({
   useSkills: runtimeHooks.useSkills,
 }))
 
-vi.mock("@/components/dev/DevOnboardingControls", () => ({
-  DevOnboardingControls: () => <div data-testid="dev-onboarding-controls" />,
-}))
-
 const codexAuthMocks = vi.hoisted(() => ({
   connectCodexAccount: vi.fn(),
 }))
@@ -86,7 +82,6 @@ function renderSettingsPage(initialSection?: TestSection) {
 describe("SettingsPage", () => {
   const defaultPushSettings = {
     enabled: true,
-    workflowEventsEnabled: true,
     weeklyInsightsEnabled: true,
     quietHoursStart: "22:00",
     quietHoursEnd: "08:00",
@@ -371,6 +366,66 @@ describe("SettingsPage", () => {
     expect(await screen.findByTestId("settings-plugin-auth-card-canvas-mcp")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-baseUrl")).toBeDefined()
     expect(screen.getByTestId("settings-plugin-auth-input-canvas-mcp-token")).toBeDefined()
+  })
+
+  test("renders Notion manual-token credentials from the manifest", async () => {
+    const notionEntry = {
+      kind: "available",
+      manifest: {
+        id: "notion-mcp",
+        name: "Notion",
+        description: "Official local Notion MCP server.",
+        version: "0.1.0",
+        transport: {
+          type: "local_stdio",
+          entry: "dist/index.js",
+        },
+        permissions: ["notion.workspace.read", "notion.content.write"],
+        auth: {
+          type: "manual_token",
+          instructions: "Create a Notion internal integration and paste its token.",
+          fields: [
+            {
+              key: "NOTION_TOKEN",
+              label: "Notion integration token",
+              type: "secret",
+              required: true,
+              placeholder: "ntn_...",
+            },
+          ],
+        },
+        tools: [{ name: "API-post-search", description: "Search Notion" }],
+        author: "orbyt",
+        homepage: "https://github.com/makenotion/notion-mcp-server",
+      },
+      installSource: "bundled",
+      status: "discovered",
+      enabled: true,
+    } as const
+
+    runtimeHooks.useRuntimeBootstrap.mockReturnValue({
+      platform: "darwin",
+      featureFlags: {
+        pluginSystem: true,
+      },
+    })
+    window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string }) => {
+      if (channel === IpcChannel.PLUGIN_LIST) return [notionEntry]
+      if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "notion-mcp") {
+        return { pluginId: "notion-mcp", status: "not_configured" as const }
+      }
+      if (channel === IpcChannel.PLUGIN_GET_STATUS && params?.pluginId === "notion-mcp") return notionEntry
+      return null
+    }) as any
+
+    const user = userEvent.setup()
+    renderSettingsPage("connections")
+
+    await user.click(await screen.findByTestId("settings-plugin-manage-notion-mcp"))
+
+    expect(await screen.findByTestId("settings-plugin-auth-card-notion-mcp")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-auth-input-notion-mcp-NOTION_TOKEN")).toBeDefined()
+    expect(screen.getByTestId("settings-plugin-tool-notion-mcp-API-post-search")).toBeDefined()
   })
 
   test("disables Canvas sync while a sync is already in progress", async () => {
@@ -718,16 +773,24 @@ describe("SettingsPage", () => {
       },
     })
 
+    let canvasSaved = false
     window.electronAPI!.invoke = vi.fn(async (channel: string, params?: { pluginId: string; values?: Record<string, string> }) => {
       if (channel === IpcChannel.PLUGIN_LIST) {
         return registryEntries
       }
 
       if (channel === IpcChannel.PLUGIN_GET_AUTH_STATUS && params?.pluginId === "canvas-mcp") {
-        return {
-          pluginId: "canvas-mcp",
-          status: "not_configured" as const,
-        }
+        return canvasSaved
+          ? {
+              pluginId: "canvas-mcp",
+              status: "configured" as const,
+              values: { baseUrl: "https://myschool.instructure.com" },
+              hasValue: { baseUrl: true, token: true },
+            }
+          : {
+              pluginId: "canvas-mcp",
+              status: "not_configured" as const,
+            }
       }
 
       if (channel === IpcChannel.PLUGIN_SAVE_AUTH) {
@@ -739,6 +802,7 @@ describe("SettingsPage", () => {
           },
         })
 
+        canvasSaved = true
         return {
           ok: true,
           pluginId: "canvas-mcp",

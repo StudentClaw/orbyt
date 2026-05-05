@@ -111,6 +111,7 @@ function makeDependencies() {
         overwritten: false,
         message: "downloaded",
       }),
+      getSyncStatus: () => ({ lastSuccessAt: null, lastError: null }),
     },
     skillResolver: {
       resolve: () => null,

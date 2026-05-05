@@ -1,5 +1,4 @@
 import { CalendarClock } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 interface DashboardHeaderProps {
   readonly title: string
@@ -44,17 +43,35 @@ export function DashboardHeader({
           </span>
         </p>
       </div>
-      <Button
+      <button
         type="button"
-        size="default"
-        className="w-full text-white sm:w-auto"
         disabled={planDisabled}
         data-testid="plan-my-week"
         onClick={onPlanWeek}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: "10px 24px",
+          borderRadius: 999,
+          border: "none",
+          cursor: planDisabled ? "not-allowed" : "pointer",
+          background: planDisabled ? "rgba(59,130,246,0.35)" : "rgb(59,130,246)",
+          color: "white",
+          fontSize: 14,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          opacity: planDisabled ? 0.6 : 1,
+          boxShadow: planDisabled ? "none" : "0 4px 18px rgba(59,130,246,0.45)",
+          transition: "transform 0.15s, box-shadow 0.2s, background 0.2s",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
       >
         <CalendarClock className="h-4 w-4" aria-hidden />
         <span>{planLabel}</span>
-      </Button>
+      </button>
     </header>
   )
 }

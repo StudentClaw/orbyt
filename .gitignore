@@ -1,5 +1,6 @@
 .DS_Store
 .superpowers/
+.obsidian/
 node_modules/
 **/node_modules/
 dist/

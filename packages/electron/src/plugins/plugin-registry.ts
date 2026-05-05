@@ -166,7 +166,10 @@ export class PluginRegistry {
   list(): ExtensionRegistryEntry[] {
     const availability = this.getAvailabilityContext()
     return this.listRecords()
-      .filter((record) => isCuratedExtensionVisibleOnHost(getEntryPluginId(record.entry), availability))
+      .filter((record) => {
+        const platforms = record.entry.kind === "available" ? record.entry.manifest.platforms : undefined
+        return isCuratedExtensionVisibleOnHost(getEntryPluginId(record.entry), availability, platforms)
+      })
       .map((record) => record.entry)
   }
 

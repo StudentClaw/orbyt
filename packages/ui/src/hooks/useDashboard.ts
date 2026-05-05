@@ -11,10 +11,12 @@ import {
   useCanvasCourses,
   useCanvasSyncProgress,
   useCanvasLastSync,
+  useCanvasLastSyncError,
   useCanvasSubmissionStatus,
   useCanvasTodoItems,
   useCanvasPeerReviewTodo,
   useCanvasUpcomingAssignments,
+  type CanvasLastSyncError,
   type CanvasSyncProgress,
   type CanvasSubmissionStatusBuckets,
 } from "@/rpc/canvasState"
@@ -40,6 +42,7 @@ export interface DashboardData {
   readonly peerReviewTodo: ReadonlyArray<CanvasStudentPeerReviewTodo>
   readonly syncProgress: CanvasSyncProgress | null
   readonly lastSync: string | null
+  readonly lastSyncError: CanvasLastSyncError | null
   readonly sections: DashboardSectionsMap
   readonly plannedSessions: ReadonlyArray<PlannedSession>
   readonly pendingCheckIns: ReadonlyArray<PendingCheckIn>
@@ -57,6 +60,7 @@ export function useDashboard(): DashboardData {
     peerReviewTodo: useCanvasPeerReviewTodo(),
     syncProgress: useCanvasSyncProgress(),
     lastSync: useCanvasLastSync(),
+    lastSyncError: useCanvasLastSyncError(),
     sections: useDashboardSections(),
     plannedSessions: usePlannedSessions(),
     pendingCheckIns: usePendingCheckIns(),

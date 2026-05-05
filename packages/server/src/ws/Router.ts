@@ -42,7 +42,7 @@ import {
 } from "@orbyt/contracts"
 import type { WebSocket } from "ws"
 import type { AppConfig } from "../config/defaults.js"
-import { generateWeeklyInsight, setActivityActedOn } from "../activity/feed.js"
+import { generateWeeklyInsight, loadActivityFeed, setActivityActedOn } from "../activity/feed.js"
 import type { OrchestrationServiceShape } from "../orchestration/OrchestrationService.js"
 import type { PushBusService } from "./PushBus.js"
 import type { ServerReadinessService } from "../runtime/ServerReadiness.js"
@@ -89,6 +89,7 @@ type UserPreferencesRow = {
   calendar_integration: string
   memory_graph_path: string | null
   default_access_mode: string
+  dashboard_tour_completed_at: string | null
 }
 
 type RpcRequest = Schema.Schema.Type<typeof RpcRequestEnvelope>
@@ -213,6 +214,7 @@ function toStudentPreference(row: UserPreferencesRow) {
     }),
     memoryGraphPathMode: memoryGraphOverride ? "custom" as const : "default" as const,
     defaultAccessMode: normalizeDefaultAccessMode(row.default_access_mode),
+    dashboardTourCompletedAt: row.dashboard_tour_completed_at,
   }
 }
 
@@ -276,6 +278,8 @@ async function handleActivityMethod(
   const { id, method } = request
 
   switch (method) {
+    case RPC_METHODS.ACTIVITY_GET_FEED:
+      return encodeSuccess(id, { entries: loadActivityFeed(dependencies.database) })
     case RPC_METHODS.ACTIVITY_GENERATE_WEEKLY_INSIGHT:
       return encodeSuccess(id, await generateWeeklyInsight({
         database: dependencies.database,
@@ -424,8 +428,32 @@ async function handleCanvasMethod(
       if (typeof decoded === "string") return decoded
       return encodeSuccess(id, await dependencies.canvasSync.downloadCourseFile(decoded))
     }
+    case RPC_METHODS.CANVAS_GET_SYNC_STATUS:
+      return encodeSuccess(id, dependencies.canvasSync.getSyncStatus())
     case RPC_METHODS.CANVAS_SYNC:
-      void dependencies.canvasSync.sync()
+      void dependencies.canvasSync.sync().then(
+        () => {
+          // A successful manual sync (e.g. onboarding finish) should clear any
+          // stale `canvas-sync.failed` cards left over from cron ticks that
+          // ran before the user saved creds. Cron's deliverSuccess does the
+          // same on its own; this handles the manual path.
+          dependencies.database.execute(
+            `UPDATE activity_feed
+                SET acted_on = 1, acted_at = ?
+              WHERE type = 'canvas-sync.failed'
+                AND acted_on IS NULL`,
+            [Date.now()],
+          )
+        },
+        (error) => {
+          // The `canvas-sync-progress` push channel publishes `status: "error"` so
+          // the dashboard can react, but the underlying error message is otherwise
+          // lost on this path (the cron path is what writes activity_feed). Log it
+          // so silent failures here are at least visible in the server console.
+          const message = error instanceof Error ? error.message : String(error)
+          process.stderr.write(`[CanvasSync] manual sync failed: ${message}\n`)
+        },
+      )
       return encodeSuccess(id, { queued: true })
     default:
       return null
@@ -1012,6 +1040,12 @@ async function handleOnboardingMethod(
         database.execute(
           "UPDATE user_preferences SET default_access_mode = ?, updated_at = ? WHERE id = 1",
           [decoded.defaultAccessMode, now],
+        )
+      }
+      if (decoded.dashboardTourCompletedAt !== undefined) {
+        database.execute(
+          "UPDATE user_preferences SET dashboard_tour_completed_at = ?, updated_at = ? WHERE id = 1",
+          [decoded.dashboardTourCompletedAt, now],
         )
       }
       const row = readUserPreferencesRow(database)

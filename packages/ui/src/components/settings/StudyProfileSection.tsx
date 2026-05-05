@@ -4,6 +4,7 @@ import { useBlocker } from "@tanstack/react-router"
 import type { OnboardingAnswers, StudentDna } from "@orbyt/contracts"
 import { buildStudyDna } from "@orbyt/shared"
 import { waitForPrimaryWsRpcClient } from "@/rpc/appRuntime"
+import { useWsConnectionStatus } from "@/rpc/wsConnectionState"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -82,6 +83,7 @@ export function StudyProfileSection() {
   const [retakeDna, setRetakeDna] = useState<StudentDna | null>(null)
   const [baseline, setBaseline] = useState<Baseline | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
+  const wsStatus = useWsConnectionStatus()
 
   const isDirty = useMemo(() => {
     if (!baseline) return false
@@ -258,6 +260,19 @@ export function StudyProfileSection() {
   }
 
   if (loadState === "loading") {
+    const isOffline = wsStatus.phase === "reconnecting" || wsStatus.phase === "disconnected"
+    if (isOffline) {
+      return (
+        <div data-testid="study-profile-waiting" className="rounded-xl border border-border bg-muted/30 p-6">
+          <p className="font-medium">
+            {wsStatus.phase === "reconnecting" ? "Reconnecting to the local service…" : "Not connected to the local service."}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your study profile will load as soon as the connection is restored.
+          </p>
+        </div>
+      )
+    }
     return (
       <div data-testid="study-profile-loading" className="space-y-4">
         <div className="h-8 w-48 animate-pulse rounded bg-muted" />
@@ -488,9 +503,11 @@ export function StudyProfileSection() {
         </CardContent>
       </Card>
 
-      {(isDirty || saveState === "saving" || saveState === "error") && <div
+      <div
         data-testid="sp-save-bar"
-        className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center justify-between gap-3 rounded-xl border bg-background/85 px-4 py-3 backdrop-blur"
+        data-visible={isDirty || saveState === "saving" || saveState === "error"}
+        aria-hidden={!(isDirty || saveState === "saving" || saveState === "error")}
+        className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center justify-between gap-3 rounded-xl border bg-background/85 px-4 py-3 backdrop-blur transition-all duration-300 ease-out data-[visible=false]:pointer-events-none data-[visible=false]:translate-y-2 data-[visible=false]:opacity-0 data-[visible=true]:translate-y-0 data-[visible=true]:opacity-100"
       >
         <p className="text-xs text-muted-foreground" style={{ fontFamily: MONO }}>
           {saveState === "saving"
@@ -520,7 +537,7 @@ export function StudyProfileSection() {
             {saveState === "saving" ? "Saving…" : "Save changes"}
           </Button>
         </div>
-      </div>}
+      </div>
 
       {blocker.status === "blocked" && (
         <LeaveConfirm

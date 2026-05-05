@@ -77,9 +77,22 @@ export class PluginAuthService {
         }
       }
 
+      const fields = record.entry.manifest.auth.fields
+      const values: Record<string, string> = {}
+      const hasValue: Record<string, boolean> = {}
+      for (const field of fields) {
+        const stored = validation.values[field.key] ?? ""
+        hasValue[field.key] = stored.length > 0
+        if (field.type !== "secret") {
+          values[field.key] = stored
+        }
+      }
+
       return {
         pluginId,
         status: "configured",
+        values,
+        hasValue,
       }
     } catch (error) {
       return {
@@ -110,7 +123,26 @@ export class PluginAuthService {
       }
     }
 
-    const validation = validateCredentialValues(record.entry.manifest.auth.fields, params.values)
+    const fields = record.entry.manifest.auth.fields
+    const merged: Record<string, string> = { ...params.values }
+    let storedSnapshot: Record<string, string> | null = null
+    try {
+      storedSnapshot = this.options.vault.read(params.pluginId)
+    } catch {
+      storedSnapshot = null
+    }
+    if (storedSnapshot) {
+      for (const field of fields) {
+        if (field.type !== "secret") continue
+        const incoming = (merged[field.key] ?? "").trim()
+        const existing = (storedSnapshot[field.key] ?? "").trim()
+        if (incoming.length === 0 && existing.length > 0) {
+          merged[field.key] = existing
+        }
+      }
+    }
+
+    const validation = validateCredentialValues(fields, merged)
     if (!validation.ok) {
       return {
         ok: false,
@@ -144,6 +176,19 @@ export class PluginAuthService {
   }
 
   getCredentialMessage(pluginId: string): PluginCredentialMessage | null {
+    const values = this.getCredentialEnvironment(pluginId)
+    if (!values) {
+      return null
+    }
+
+    return {
+      type: "plugin.credentials",
+      pluginId,
+      payload: values,
+    }
+  }
+
+  getCredentialEnvironment(pluginId: string): Record<string, string> | null {
     const record = this.getManualTokenRecord(pluginId)
     if (!record) {
       return null
@@ -160,11 +205,7 @@ export class PluginAuthService {
         return null
       }
 
-      return {
-        type: "plugin.credentials",
-        pluginId,
-        payload: validation.values,
-      }
+      return validation.values
     } catch {
       return null
     }

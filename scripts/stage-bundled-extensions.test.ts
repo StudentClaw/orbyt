@@ -13,7 +13,10 @@ function createTempDir(): string {
   return dir
 }
 
-function writeRuntimeExtension(rootDir: string, pluginId: string): string {
+function writeRuntimeExtension(rootDir: string, pluginId: string, options: {
+  platforms?: string[]
+  dependencies?: Record<string, string>
+} = {}): string {
   const extensionDir = path.join(rootDir, pluginId)
   mkdirSync(path.join(extensionDir, "dist"), { recursive: true })
   mkdirSync(path.join(extensionDir, "src"), { recursive: true })
@@ -26,6 +29,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
       type: "local_stdio",
       entry: "dist/index.js",
     },
+    ...(options.platforms ? { platforms: options.platforms } : {}),
     permissions: ["test.permission"],
     auth: {
       type: "none",
@@ -39,7 +43,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
     version: "1.0.0",
     private: true,
     type: "module",
-    dependencies: pluginId === "canvas-mcp"
+    dependencies: options.dependencies ?? (pluginId === "canvas-mcp"
       ? {
         "@effect/schema": "^0.75.5",
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -49,7 +53,7 @@ function writeRuntimeExtension(rootDir: string, pluginId: string): string {
       : {
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@orbyt/contracts": "workspace:*",
-      },
+      }),
   }, null, 2))
   writeFileSync(path.join(extensionDir, "dist", "index.js"), `console.log("${pluginId}")\n`)
   writeFileSync(path.join(extensionDir, "dist", "server.test.js"), `console.log("${pluginId}-test")\n`)
@@ -154,6 +158,32 @@ describe("stageBundledExtensions", () => {
     expect(existsSync(path.join(outputRoot, "apple-calendar-mcp", "bridge", "CalendarAPIBridge"))).toBe(false)
   })
 
+  test("excludes Darwin-only bundled extensions from Linux packaged resources", () => {
+    const repoRoot = createTempDir()
+    const extensionsRoot = path.join(repoRoot, "packages", "extensions")
+    const outputRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")
+    writeContractsPackage(repoRoot)
+    writeRuntimeExtension(extensionsRoot, "apple-calendar-mcp", { platforms: ["darwin"] })
+    writeRuntimeExtension(extensionsRoot, "canvas-mcp")
+
+    const stagedPluginIds = stageBundledExtensions({
+      extensionsRoot,
+      outputRoot,
+      installDependencies: false,
+      targetPlatform: "linux",
+    })
+
+    expect(stagedPluginIds).toEqual(["canvas-mcp"])
+    expect(existsSync(path.join(outputRoot, "canvas-mcp", "manifest.json"))).toBe(true)
+    expect(existsSync(path.join(outputRoot, "apple-calendar-mcp"))).toBe(false)
+    expect(JSON.parse(readFileSync(path.join(outputRoot, "package.json"), "utf8")).dependencies).toEqual({
+      "@effect/schema": "^0.75.5",
+      "@modelcontextprotocol/sdk": "^1.29.0",
+      "@orbyt/contracts": "file:vendor/contracts",
+      zod: "^4.1.12",
+    })
+  })
+
   test("produces a staged resources tree that the registry reads unchanged in packaged mode", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
@@ -181,15 +211,23 @@ describe("stageBundledExtensions", () => {
     const extensionsRoot = path.join(repoRoot, "packages", "extensions")
     const templateDir = writeRuntimeExtension(extensionsRoot, "template-mcp")
     const canvasDir = writeRuntimeExtension(extensionsRoot, "canvas-mcp")
+    const notionDir = writeRuntimeExtension(extensionsRoot, "notion-mcp", {
+      dependencies: {
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "@notionhq/notion-mcp-server": "2.2.1",
+        "@orbyt/contracts": "workspace:*",
+      },
+    })
 
     const packageJson = createBundledExtensionRuntimePackageJson({
       repoRoot,
-      extensionDirs: [templateDir, canvasDir],
+      extensionDirs: [templateDir, canvasDir, notionDir],
     })
 
     expect(packageJson.dependencies).toEqual({
       "@effect/schema": "^0.75.5",
       "@modelcontextprotocol/sdk": "^1.29.0",
+      "@notionhq/notion-mcp-server": "2.2.1",
       "@orbyt/contracts": "file:vendor/contracts",
       zod: "^4.1.12",
     })

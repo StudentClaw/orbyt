@@ -177,6 +177,7 @@ function formatSubmissionStatus(value?: string): string | null {
     case "graded":
       return "Graded"
     case "submitted":
+    case "pending_review":
       return "Submitted"
     case "unsubmitted":
     case "not_submitted":

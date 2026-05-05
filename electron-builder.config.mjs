@@ -56,6 +56,17 @@ export default {
         "Orbyt needs full calendar access to create and update study sessions, deadlines, and other events you ask it to manage.",
     },
   },
+  linux: {
+    target: ["AppImage"],
+    executableName: "orbyt",
+    icon: path.join(repoRoot, "packages", "electron", "resources", "icon.png"),
+    category: "Education",
+  },
+  win: {
+    target: ["nsis"],
+    icon: path.join(repoRoot, "packages", "electron", "resources", "icon.png"),
+    signAndEditExecutable: false,
+  },
   dmg: {
     contents: [
       { x: 130, y: 220 },

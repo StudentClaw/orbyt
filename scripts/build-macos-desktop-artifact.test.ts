@@ -193,6 +193,14 @@ describe("build-macos-desktop-artifact", () => {
     expect(packageJson.dependencies["electron-updater"]).toBe("^6.6.2")
   })
 
+  test("uses the release app version for staged mac packaging", () => {
+    const packageJson = createStagePackageJson("/tmp/orbyt-stage", true, "0.2.1") as {
+      version: string
+    }
+
+    expect(packageJson.version).toBe("0.2.1")
+  })
+
   test("stages the matching per-arch Apple bridge into packaged extensions", () => {
     const repoRoot = createTempDir()
     const extensionsRoot = path.join(repoRoot, "packages", "electron", "dist", "resources", "extensions")

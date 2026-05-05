@@ -51,6 +51,16 @@ const canvasPeerReviewTodoAtom = createAtom<ReadonlyArray<CanvasStudentPeerRevie
 const canvasSyncProgressAtom = createAtom<CanvasSyncProgress | null>("canvas-sync-progress", null)
 const canvasLastSyncAtom = createAtom<string | null>("canvas-last-sync", null)
 
+export interface CanvasLastSyncError {
+  readonly at: string
+  readonly message: string
+}
+
+const canvasLastSyncErrorAtom = createAtom<CanvasLastSyncError | null>(
+  "canvas-last-sync-error",
+  null,
+)
+
 export function getCourses(): ReadonlyArray<Course> {
   return appAtomRegistry.get(canvasCoursesAtom)
 }
@@ -173,11 +183,20 @@ export function setLastSync(timestamp: string | null): void {
   appAtomRegistry.set(canvasLastSyncAtom, timestamp)
 }
 
+export function getLastSyncError(): CanvasLastSyncError | null {
+  return appAtomRegistry.get(canvasLastSyncErrorAtom)
+}
+
+export function setLastSyncError(error: CanvasLastSyncError | null): void {
+  appAtomRegistry.set(canvasLastSyncErrorAtom, error)
+}
+
 export function applyCanvasSyncProgressEvent(data: CanvasSyncProgress): void {
   appAtomRegistry.set(canvasSyncProgressAtom, data)
 
   if (data.status === "done") {
     appAtomRegistry.set(canvasLastSyncAtom, new Date().toISOString())
+    appAtomRegistry.set(canvasLastSyncErrorAtom, null)
   }
 }
 
@@ -227,7 +246,7 @@ let loadInFlight: Promise<void> | null = null
 export async function loadCanvasData(client: WsRpcClient): Promise<void> {
   if (loadInFlight) return loadInFlight
   loadInFlight = (async () => {
-    const [courses, upcomingAssignments, submissionStatus, courseGrades, todoItems, peerReviewTodo] =
+    const [courses, upcomingAssignments, submissionStatus, courseGrades, todoItems, peerReviewTodo, syncStatus] =
       await Promise.all([
         client.canvas.listCourses(),
         client.canvas.getMyUpcomingAssignments(),
@@ -235,6 +254,7 @@ export async function loadCanvasData(client: WsRpcClient): Promise<void> {
         client.canvas.getMyCourseGrades(),
         client.canvas.getMyTodoItems(),
         client.canvas.getMyPeerReviewsTodo(),
+        client.canvas.getSyncStatus().catch(() => null),
       ])
 
     setCourses(courses)
@@ -244,12 +264,18 @@ export async function loadCanvasData(client: WsRpcClient): Promise<void> {
     setTodoItems(todoItems)
     setPeerReviewTodo(peerReviewTodo)
 
-    const latestSync = [...courses]
+    // Prefer the persisted cron-run timestamp — it survives app restarts and
+    // is correct even when a successful sync returned 0 enrolled courses.
+    // Fall back to the courses-derived value for older builds without the
+    // persistent status feed.
+    const persistedLastSync = syncStatus?.lastSuccessAt ?? null
+    const coursesLastSync = [...courses]
       .map((c) => c.lastSyncAt)
       .filter((s): s is string => Boolean(s))
       .sort()
       .at(-1) ?? null
-    setLastSync(latestSync)
+    setLastSync(persistedLastSync ?? coursesLastSync)
+    setLastSyncError(syncStatus?.lastError ?? null)
   })().finally(() => {
     loadInFlight = null
   })
@@ -307,6 +333,10 @@ export function useCanvasLastSync(): string | null {
   return useAtomValue(canvasLastSyncAtom)
 }
 
+export function useCanvasLastSyncError(): CanvasLastSyncError | null {
+  return useAtomValue(canvasLastSyncErrorAtom)
+}
+
 /**
  * Title for a coursework item that appears in synced Canvas lists (upcoming + submission buckets).
  * Subscribes to canvas atoms so navbar labels update when sync completes.
@@ -337,4 +367,5 @@ export function resetCanvasStateForTests(): void {
   appAtomRegistry.set(canvasPeerReviewTodoAtom, [])
   appAtomRegistry.set(canvasSyncProgressAtom, null)
   appAtomRegistry.set(canvasLastSyncAtom, null)
+  appAtomRegistry.set(canvasLastSyncErrorAtom, null)
 }

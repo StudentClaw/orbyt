@@ -24,6 +24,11 @@ import * as migration022 from "./022-archived-coursework-items.js"
 import * as migration023 from "./023-dna-onboarding-repair.js"
 import * as migration024 from "./024-archived-coursework-payload.js"
 import * as migration025 from "./025-grade-summary-units.js"
+import * as migration026 from "./026-heartbeat-fire-log.js"
+import * as migration027 from "./027-coursework-assignment-type.js"
+import * as migration028 from "./028-dashboard-tour-completion.js"
+import * as migration029 from "./029-activity-feed-structured-body.js"
+import * as migration030 from "./030-cron-internal-task.js"
 
 type SqlMigration = {
   readonly version: number
@@ -61,6 +66,11 @@ const migrations: ReadonlyArray<SqlMigration | ProgrammaticMigration> = [
   migration023,
   migration024,
   migration025,
+  migration026,
+  migration027,
+  migration028,
+  migration029,
+  migration030,
 ]
 
 export function runMigrations(db: RuntimeSqliteDatabase): void {

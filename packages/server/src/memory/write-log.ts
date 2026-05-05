@@ -1,14 +1,7 @@
 export function logMemoryWrite(
-  kind: string,
-  filePath: string,
-  content: string,
+  _kind: string,
+  _filePath: string,
+  _content: string,
 ): void {
-  console.log(
-    [
-      `[Memorize] wrote ${kind}: ${filePath}`,
-      "--- memory content start ---",
-      content.trimEnd(),
-      "--- memory content end ---",
-    ].join("\n"),
-  )
+  // no-op in production; memory write events are not persisted to stdout.
 }
